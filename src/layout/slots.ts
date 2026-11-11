@@ -29,6 +29,8 @@ const PASS_CAP = 12;
 /** Starts searched while the best result so far still has a crossing or a blocked node. */
 const RESTARTS = 1;
 const EPS = 1e-9;
+/** Slack for bounds that add up their terms in another order than the cost they bound. */
+const BOUND_MARGIN = 1e-6;
 /** Nodes are shrunk by this much (slot units) before an edge is tested against them. */
 const INSET = 0.1;
 
@@ -87,6 +89,11 @@ export class Placement {
   private readonly segCount: number[];
   /** Bounding box [x0, y0, x1, y1] of every edge path. */
   private readonly box: Float64Array;
+  /** Rectangle [x0, y0, x1, y1] of every node, shrunk by INSET; the y values follow the lane offsets. */
+  private readonly rect: Float64Array;
+  /** Crossings of every edge pair and blocked nodes of every edge in the assignment `baseTotal` belongs to. */
+  private readonly baseCross: Int32Array;
+  private readonly baseBlocked: Int32Array;
   private readonly stamp: number[];
   private stampNow = 0;
   /** Number of cost evaluations; `total` is the only whole-assignment one. */
@@ -125,6 +132,9 @@ export class Placement {
     this.segs = edges.map(() => new Float64Array(SEG * MAX_SEGS));
     this.segCount = edges.map(() => 0);
     this.box = new Float64Array(edges.length * 4);
+    this.rect = new Float64Array(lane.length * 4);
+    this.baseCross = new Int32Array(edges.length * edges.length);
+    this.baseBlocked = new Int32Array(edges.length * lane.length);
     this.stamp = edges.map(() => 0);
     this.rebuild();
   }
@@ -163,6 +173,20 @@ export class Placement {
       this.offset[l] = acc;
       acc += this.rows[l] ?? 1;
     }
+    this.refreshRects();
+  }
+
+  private refreshRects(): void {
+    for (let i = 0; i < this.n; i++) this.refreshRect(i);
+  }
+
+  private refreshRect(i: number): void {
+    const k = i * 4;
+    const y = this.y(i);
+    this.rect[k] = (this.col[i] ?? 0) + INSET;
+    this.rect[k + 1] = y + INSET;
+    this.rect[k + 2] = (this.col[i] ?? 0) + (this.span[i] ?? 1) - INSET;
+    this.rect[k + 3] = y + 1 - INSET;
   }
 
   free(lane: number, row: number, col: number, span: number, self: number, other = -1): boolean {
@@ -199,45 +223,35 @@ export class Placement {
     const xa = ca + sa / 2;
     const xb = cb + sb / 2;
     let n = 0;
-    const put = (x0: number, y0: number, x1: number, y1: number, leg = 0): void => {
-      if (Math.abs(x0 - x1) < EPS && Math.abs(y0 - y1) < EPS) return;
-      const k = n * SEG;
-      out[k] = Math.min(x0, x1);
-      out[k + 1] = Math.min(y0, y1);
-      out[k + 2] = Math.max(x0, x1);
-      out[k + 3] = Math.max(y0, y1);
-      out[k + 4] = leg;
-      n++;
-    };
     if (cb >= ca + sa) {
       // Forward: out of the source's far side, along row boundaries, into the target's near side.
       const x1 = ca + sa;
       if (ya === yb) {
-        put(xa, ya, xb, yb);
+        n = put(out, n, xa, ya, xb, yb);
       } else if (x1 === cb) {
-        put(xa, ya, x1, ya);
-        put(x1, ya, x1, yb, ya < yb ? 1 : -1);
-        put(x1, yb, xb, yb);
+        n = put(out, n, xa, ya, x1, ya);
+        n = put(out, n, x1, ya, x1, yb, ya < yb ? 1 : -1);
+        n = put(out, n, x1, yb, xb, yb);
       } else {
         const ym = yb > ya ? yb - 0.5 : yb + 0.5;
-        put(xa, ya, x1, ya);
-        put(x1, ya, x1, ym, ya < ym ? 1 : -1);
-        put(x1, ym, cb, ym, ya < ym ? 1 : -1);
-        put(cb, ym, cb, yb, ym < yb ? 1 : -1);
-        put(cb, yb, xb, yb);
+        n = put(out, n, xa, ya, x1, ya);
+        n = put(out, n, x1, ya, x1, ym, ya < ym ? 1 : -1);
+        n = put(out, n, x1, ym, cb, ym, ya < ym ? 1 : -1);
+        n = put(out, n, cb, ym, cb, yb, ym < yb ? 1 : -1);
+        n = put(out, n, cb, yb, xb, yb);
       }
     } else if (ca >= cb + sb) {
       // Backward: down or up from the source, back along a row boundary, into the target.
       const ym = yb > ya ? ya + 0.5 : ya - 0.5;
-      put(xa, ya, xa, ym);
+      n = put(out, n, xa, ya, xa, ym);
       const topAtLow = yb > ya ? xa < xb : xb < xa;
-      put(xa, ym, xb, ym, yb === ya ? 0 : topAtLow ? 1 : -1);
-      put(xb, ym, xb, yb);
+      n = put(out, n, xa, ym, xb, ym, yb === ya ? 0 : topAtLow ? 1 : -1);
+      n = put(out, n, xb, ym, xb, yb);
     } else {
       const lo = Math.max(ca, cb);
       const hi = Math.min(ca + sa, cb + sb);
       const x = (lo + hi) / 2;
-      put(x, ya, x, yb);
+      n = put(out, n, x, ya, x, yb);
     }
     this.segCount[e] = n;
     let x0 = Infinity;
@@ -250,22 +264,23 @@ export class Placement {
       x1 = Math.max(x1, out[k * SEG + 2] ?? 0);
       y1 = Math.max(y1, out[k * SEG + 3] ?? 0);
     }
-    this.box.set([x0, y0, x1, y1], e * 4);
+    this.box[e * 4] = x0;
+    this.box[e * 4 + 1] = y0;
+    this.box[e * 4 + 2] = x1;
+    this.box[e * 4 + 3] = y1;
   }
 
   private length(e: number): number {
     const s = this.segs[e];
+    if (!s) return 0;
     let total = 0;
     for (let k = 0; k < (this.segCount[e] ?? 0); k++) {
-      total += (s?.[k * SEG + 2] ?? 0) - (s?.[k * SEG] ?? 0) + (s?.[k * SEG + 3] ?? 0) - (s?.[k * SEG + 1] ?? 0);
+      total += (s[k * SEG + 2] ?? 0) - (s[k * SEG] ?? 0) + (s[k * SEG + 3] ?? 0) - (s[k * SEG + 1] ?? 0);
     }
     return total;
   }
 
   private crossings(e: number, f: number): number {
-    const s = this.segs[e];
-    const t = this.segs[f];
-    if (!s || !t) return 0;
     const bx = this.box;
     if (
       (bx[e * 4 + 2] ?? 0) < (bx[f * 4] ?? 0) - EPS ||
@@ -275,6 +290,9 @@ export class Placement {
     ) {
       return 0;
     }
+    const s = this.segs[e];
+    const t = this.segs[f];
+    if (!s || !t) return 0;
     let n = 0;
     for (let i = 0; i < (this.segCount[e] ?? 0); i++) {
       const ih = s[i * SEG + 1] === s[i * SEG + 3];
@@ -284,7 +302,10 @@ export class Placement {
           n += forcedCrossing(s, i * SEG, t, j * SEG, ih);
           continue;
         }
-        const [h, hk, v, vk] = ih ? [s, i * SEG, t, j * SEG] : [t, j * SEG, s, i * SEG];
+        const h = ih ? s : t;
+        const hk = ih ? i * SEG : j * SEG;
+        const v = ih ? t : s;
+        const vk = ih ? j * SEG : i * SEG;
         const hy = h[hk + 1] ?? 0;
         const vx = v[vk] ?? 0;
         if (vx > (h[hk] ?? 0) + EPS && vx < (h[hk + 2] ?? 0) - EPS && hy > (v[vk + 1] ?? 0) + EPS && hy < (v[vk + 3] ?? 0) - EPS) n++;
@@ -294,20 +315,29 @@ export class Placement {
   }
 
   private blocked(e: number, node: number): number {
+    const bx = this.box;
+    const r = this.rect;
+    const k = node * 4;
+    const x0 = r[k] ?? 0;
+    const y0 = r[k + 1] ?? 0;
+    const x1 = r[k + 2] ?? 0;
+    const y1 = r[k + 3] ?? 0;
+    if ((bx[e * 4 + 2] ?? 0) <= x0 || (bx[e * 4] ?? 0) >= x1 || (bx[e * 4 + 3] ?? 0) <= y0 || (bx[e * 4 + 1] ?? 0) >= y1) return 0;
     const edge = this.edges[e];
     if (!edge || edge.a === node || edge.b === node) return 0;
     const s = this.segs[e];
-    const x0 = (this.col[node] ?? 0) + INSET;
-    const x1 = (this.col[node] ?? 0) + (this.span[node] ?? 1) - INSET;
-    const y0 = this.y(node) + INSET;
-    const y1 = this.y(node) + 1 - INSET;
-    const bx = this.box;
-    if ((bx[e * 4 + 2] ?? 0) <= x0 || (bx[e * 4] ?? 0) >= x1 || (bx[e * 4 + 3] ?? 0) <= y0 || (bx[e * 4 + 1] ?? 0) >= y1) return 0;
-    for (let k = 0; k < (this.segCount[e] ?? 0); k++) {
-      const b = k * SEG;
+    for (let q = 0; q < (this.segCount[e] ?? 0); q++) {
+      const b = q * SEG;
       if ((s?.[b] ?? 0) < x1 && (s?.[b + 2] ?? 0) > x0 && (s?.[b + 1] ?? 0) < y1 && (s?.[b + 3] ?? 0) > y0) return 1;
     }
     return 0;
+  }
+
+  /** Nodes that edge `e` runs through. */
+  private blockedBy(e: number): number {
+    let hits = 0;
+    for (let i = 0; i < this.n; i++) hits += this.blocked(e, i);
+    return hits;
   }
 
   /** Terms that belong to one edge alone. */
@@ -349,27 +379,35 @@ export class Placement {
     return (W.order * ((this.n - i) / this.n)) * ((this.col[i] ?? 0) + (this.row[i] ?? 0));
   }
 
-  /** Cost of everything that involves one of the given edges or nodes. */
-  private local(edges: number[], nodes: number[]): number {
+  /**
+   * Cost of everything that involves one of the given edges or nodes. Without `hazards` the crossing and
+   * blocked-node terms are left out, which gives a lower bound: they are never negative. With `bound` the sum
+   * stops early, returning a partial sum, once it exceeds `before + bound` (every term is non-negative).
+   */
+  private local(edges: number[], nodes: number[], hazards = true, before = 0, bound = Infinity): number {
     this.evaluations++;
     this.stampNow++;
     for (const e of edges) this.stamp[e] = this.stampNow;
     let cost = 0;
     for (const e of edges) {
       cost += this.edgeTerm(e);
+      if (!hazards) continue;
       let hits = 0;
       for (let f = 0; f < this.edges.length; f++) {
         if (f === e || (this.stamp[f] === this.stampNow && f < e)) continue;
         hits += this.crossings(e, f);
       }
-      for (let i = 0; i < this.n; i++) hits += this.blocked(e, i);
+      hits += this.blockedBy(e);
       cost += this.cross * hits;
+      if (cost - before >= bound) return cost;
     }
     for (const i of nodes) {
       cost += this.nodeTerm(i);
+      if (!hazards) continue;
       let hits = 0;
       for (let f = 0; f < this.edges.length; f++) if (this.stamp[f] !== this.stampNow) hits += this.blocked(f, i);
       cost += this.cross * hits;
+      if (cost - before >= bound) return cost;
     }
     return cost;
   }
@@ -385,12 +423,13 @@ export class Placement {
     return { crossings, blocked };
   }
 
-  /** Cost of the whole assignment. */
-  total(): number {
+  /** Cost of the whole assignment; without `hazards`, a lower bound that leaves out crossings and blocked nodes. */
+  total(hazards = true): number {
     this.totals++;
     let cost = 0;
     for (let e = 0; e < this.edges.length; e++) {
       cost += this.edgeTerm(e);
+      if (!hazards) continue;
       for (let f = e + 1; f < this.edges.length; f++) cost += this.cross * this.crossings(e, f);
       for (let i = 0; i < this.n; i++) cost += this.cross * this.blocked(e, i);
     }
@@ -399,16 +438,51 @@ export class Placement {
     return cost;
   }
 
+  /** Remembers the crossings and blocked nodes of every edge in the current assignment. */
+  private recordBase(): void {
+    const count = this.edges.length;
+    for (let e = 0; e < count; e++) {
+      for (let f = e + 1; f < count; f++) this.baseCross[e * count + f] = this.crossings(e, f);
+      for (let i = 0; i < this.n; i++) this.baseBlocked[e * this.n + i] = this.blocked(e, i);
+    }
+  }
+
+  /**
+   * Crossings and blocked nodes that stay the same when `node` moves and the lanes after its lane shift
+   * to `heights`: both parts of a pair move together, so their relation is unchanged.
+   */
+  private keptHazards(node: number, heights: readonly number[]): number {
+    const l = this.lane[node] ?? 0;
+    const d = (heights[l] ?? 0) - (this.rows[l] ?? 0);
+    const shiftOf = (m: number): number => ((this.lane[m] ?? 0) > l ? d : 0);
+    const count = this.edges.length;
+    let kept = 0;
+    for (let e = 0; e < count; e++) {
+      const edge = this.edges[e];
+      if (!edge || edge.a === node || edge.b === node) continue;
+      const se = shiftOf(edge.a);
+      if (shiftOf(edge.b) !== se) continue;
+      for (let f = e + 1; f < count; f++) {
+        const other = this.edges[f];
+        if (!other || other.a === node || other.b === node) continue;
+        if (shiftOf(other.a) === se && shiftOf(other.b) === se) kept += this.baseCross[e * count + f] ?? 0;
+      }
+      for (let m = 0; m < this.n; m++) if (m !== node && shiftOf(m) === se) kept += this.baseBlocked[e * this.n + m] ?? 0;
+    }
+    return kept;
+  }
+
   /** Lane heights after the given relocation, without applying it. */
   private heightsAfter(moves: readonly Move[]): number[] {
     const heights = [...this.rows];
-    const lanes = new Set(moves.map((m) => this.lane[m[0]] ?? 0));
-    for (const l of lanes) {
+    for (const [moved] of moves) {
+      const l = this.lane[moved] ?? 0;
       let top = 0;
       for (let i = 0; i < this.n; i++) {
         if (this.lane[i] !== l) continue;
-        const to = moves.find((m) => m[0] === i);
-        top = Math.max(top, (to ? to[2] : (this.row[i] ?? 0)) + 1);
+        let r = this.row[i] ?? 0;
+        for (const m of moves) if (m[0] === i) r = m[2];
+        top = Math.max(top, r + 1);
       }
       heights[l] = Math.max(1, top);
     }
@@ -422,6 +496,8 @@ export class Placement {
   }
 
   private edgesOf(nodes: readonly number[]): number[] {
+    const [only] = nodes;
+    if (nodes.length === 1 && only !== undefined) return this.incident[only] ?? [];
     const set = new Set<number>();
     for (const i of nodes) for (const e of this.incident[i] ?? []) set.add(e);
     return [...set].sort((x, y) => x - y);
@@ -431,9 +507,10 @@ export class Placement {
    * Applies a set of moves and returns the change of the total cost. The moves are undone with
    * `restore`. Only the terms of the moved nodes and their edges are recomputed unless a lane's
    * row count changes, which shifts every lane below it. `known` is the result of `before` when the
-   * caller already has it.
+   * caller already has it. With `bound`, a move that cannot get below it even without its crossings is
+   * not evaluated further and reports a delta that is not below `bound`.
    */
-  apply(moves: readonly Move[], known?: number): { delta: number; restore: () => void } {
+  apply(moves: readonly Move[], known?: number, bound?: number): { delta: number; restore: () => void } {
     const nodes = moves.map((m) => m[0]);
     const old: Move[] = nodes.map((i) => [i, this.col[i] ?? 0, this.row[i] ?? 0]);
     const edges = this.edgesOf(nodes);
@@ -447,10 +524,16 @@ export class Placement {
         this.col[i] = c;
         this.row[i] = r;
       }
-      for (const [i] of to) this.mark(i, i);
+      for (const [i] of to) {
+        this.mark(i, i);
+        this.refreshRect(i);
+      }
     };
 
-    this.baseTotal ??= shifts ? this.total() : undefined;
+    if (shifts && this.baseTotal === undefined) {
+      this.baseTotal = this.total();
+      this.recordBase();
+    }
     const before = shifts ? (this.baseTotal ?? 0) : (known ?? this.local(edges, nodes));
     place(moves);
     if (shifts) {
@@ -461,18 +544,40 @@ export class Placement {
     } else {
       for (const e of edges) this.route(e);
     }
-    const after = shifts ? this.total() : this.local(edges, nodes);
-    const delta = after - before;
-
     const restore = (): void => {
       place(old);
       this.rows = rowsBefore;
       this.offset = offsetsBefore;
-      if (shifts) this.edges.forEach((_, e) => this.route(e));
-      else for (const e of edges) this.route(e);
+      if (shifts) {
+        this.refreshRects();
+        this.edges.forEach((_, e) => this.route(e));
+      } else for (const e of edges) this.route(e);
     };
+
+    let after = bound === undefined ? undefined : shifts ? this.total(false) : this.local(edges, nodes, false);
+    if (after !== undefined && bound !== undefined && after - before >= bound) return { delta: after - before, restore };
+    if (after !== undefined && bound !== undefined && shifts && moves.length === 1) {
+      // The kept hazards are added as one lump, so the sum may differ from the real one by rounding.
+      const kept = this.keptHazards(moves[0]?.[0] ?? 0, heights);
+      if (after + this.cross * kept - before >= bound + BOUND_MARGIN) return { delta: Infinity, restore };
+    }
+    after = shifts ? this.total() : this.local(edges, nodes, true, before, bound ?? Infinity);
+    const delta = after - before;
+
     return { delta, restore };
   }
+}
+
+/** Appends a segment to a path unless it has no length; returns the new segment count. */
+function put(out: Float64Array, n: number, x0: number, y0: number, x1: number, y1: number, leg = 0): number {
+  if (Math.abs(x0 - x1) < EPS && Math.abs(y0 - y1) < EPS) return n;
+  const k = n * SEG;
+  out[k] = Math.min(x0, x1);
+  out[k + 1] = Math.min(y0, y1);
+  out[k + 2] = Math.max(x0, x1);
+  out[k + 3] = Math.max(y0, y1);
+  out[k + 4] = leg;
+  return n + 1;
 }
 
 /**
@@ -483,9 +588,12 @@ function forcedCrossing(s: Float64Array, a: number, t: Float64Array, b: number, 
   const oa = s[a + 4] ?? 0;
   const ob = t[b + 4] ?? 0;
   if (oa === 0 || ob === 0) return 0;
-  const [p, lo1, hi1, q, lo2, hi2] = horizontal
-    ? [s[a + 1] ?? 0, s[a] ?? 0, s[a + 2] ?? 0, t[b + 1] ?? 0, t[b] ?? 0, t[b + 2] ?? 0]
-    : [s[a] ?? 0, s[a + 1] ?? 0, s[a + 3] ?? 0, t[b] ?? 0, t[b + 1] ?? 0, t[b + 3] ?? 0];
+  const p = horizontal ? (s[a + 1] ?? 0) : (s[a] ?? 0);
+  const lo1 = horizontal ? (s[a] ?? 0) : (s[a + 1] ?? 0);
+  const hi1 = horizontal ? (s[a + 2] ?? 0) : (s[a + 3] ?? 0);
+  const q = horizontal ? (t[b + 1] ?? 0) : (t[b] ?? 0);
+  const lo2 = horizontal ? (t[b] ?? 0) : (t[b + 1] ?? 0);
+  const hi2 = horizontal ? (t[b + 2] ?? 0) : (t[b + 3] ?? 0);
   if (Math.abs(p - q) > EPS) return 0;
   if (Math.min(hi1, hi2) - Math.max(lo1, lo2) < EPS) return 0;
   if (oa !== ob) return 1;
@@ -594,7 +702,7 @@ export function placeSlots(input: SlotInput): SlotResult {
         const choice: { delta: number; moves: Move[] | null } = { delta: -EPS, moves: null };
         const known = p.before([[i, p.col[i] ?? 0, p.row[i] ?? 0]]);
         const consider = (moves: Move[]): void => {
-          const { delta, restore } = p.apply(moves, moves.length === 1 ? known : undefined);
+          const { delta, restore } = p.apply(moves, moves.length === 1 ? known : undefined, choice.delta);
           restore();
           if (delta < choice.delta) {
             choice.delta = delta;
