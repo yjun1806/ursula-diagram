@@ -166,7 +166,18 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const nodeO = (n: number): number => origin + (start[n] ?? 0) * unit;
   const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const real = (n: number): boolean => n < l.realCount;
-  const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2);
+  // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
+  const shift = new Map<number, number>();
+  for (const row of layers) {
+    for (let k = 0; k < row.length; k++) {
+      const n = row[k] as number;
+      if (real(n) || shift.has(n)) continue;
+      const group = [n];
+      while (!real(row[k + group.length] ?? 0) && row[k + group.length] !== undefined && start[row[k + group.length] as number] === start[n]) group.push(row[k + group.length] as number);
+      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * ruler.trackGap)));
+    }
+  }
+  const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift.get(n) ?? 0));
   const step = portStep(unit, ruler);
 
   const items: Item[] = [];
@@ -530,7 +541,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   diagnostics.push(...crossings(edges));
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));
-  const totalO = Math.max(prepWidth(f, l, start, nodeO), gridUp(ruler, labelEnd) + margin);
+  const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);
   const lanes: LayoutLane[] = [];
   graph.lanes.forEach((lane, k) => {
     const range = laneRange.get(k);
@@ -554,11 +565,11 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 }
 
 /** Order-axis size of the drawing: the furthest box or dummy line, the lane padding and the margin. */
-function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => number): number {
+function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => number, centre: (n: number) => number): number {
   const margin = gridUp(f.ruler, f.ruler.trackGap);
   let end = 0;
   for (const n of l.nodes) {
-    const right = n.idx < l.realCount ? nodeO(n.idx) + boxLength(n.units, f.unit, f.gap) : nodeO(n.idx) + f.unit - f.gap / 2;
+    const right = n.idx < l.realCount ? nodeO(n.idx) + boxLength(n.units, f.unit, f.gap) : centre(n.idx);
     end = Math.max(end, right);
   }
   void start;

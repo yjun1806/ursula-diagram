@@ -124,6 +124,12 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
     const unit = (graph.direction === 'TD' ? m.contentH : m.common) / 2 + gap / 2;
     pitches.push(unit / Math.max(1, Math.round(unit / ruler.portPitch)));
   }
+  // An engine that refits the box width to a narrower gap has its own unit for every gap down to the ruler's minimum.
+  for (let gap = Math.max(ruler.nodeGrid, Math.min(ruler.rankGapMin, ruler.rankGap)); gap <= 2 * ruler.rankGap; gap += ruler.nodeGrid) {
+    if (gap % ruler.nodeGrid !== 0) continue;
+    const refit = measureNodes(graph.nodes, graph.lanes, { ...ruler, rankGap: gap }, graph.direction === 'TD');
+    pitches.push(refit.unit / Math.max(1, Math.round(refit.unit / ruler.portPitch)));
+  }
   const bad: string[] = [];
   const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
   const portOf = (len: number, off: number): boolean => {

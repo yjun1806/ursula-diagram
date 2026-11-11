@@ -125,6 +125,10 @@ export interface AlignOptions {
   ports?: PortGeometry;
   /** Last resort: nodes that stick out of the limit give up their alignment. */
   squeeze?: boolean;
+  /** Pass-through lines that may share one gap, drawn side by side (1 when the gap has no room for more). */
+  lines?: number;
+  /** Units a dummy at the end of a layer needs beyond its own slot to stay inside the limit (0 or 1). */
+  dummyShift?: number;
 }
 
 const EPS = 1e-6;
@@ -139,8 +143,15 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
   const view = neighbours(l);
   const real = (n: number): boolean => n < l.realCount;
   const unitsOf = (n: number): number => l.nodes[n]?.units ?? 1;
-  // A dummy line may sit in the gap after the box before it, so a box followed by a dummy gives up one unit.
-  const sep = (a: number, b: number): number => unitsOf(a) + extra(a, b) - (real(a) && !real(b) ? 1 : 0);
+  // A pass-through line lives in the gap between two boxes: box, line, box needs no extra room, and up to `lines` lines share one gap.
+  const lines = Math.max(1, opts.lines ?? 1);
+  const runIndex = new Array<number>(l.nodes.length).fill(0);
+  for (const row of layers) for (let k = 1; k < row.length; k++) if (!real(row[k] as number) && !real(row[k - 1] as number)) runIndex[row[k] as number] = (runIndex[row[k - 1] as number] ?? 0) + 1;
+  const sep = (a: number, b: number): number => {
+    if (real(a)) return unitsOf(a) + extra(a, b) - (real(b) ? 0 : 1);
+    if (real(b)) return 1;
+    return (runIndex[b] ?? 0) % lines === 0 ? 1 : 0;
+  };
   const pos = new Array<number>(l.nodes.length).fill(0);
   layers.forEach((r) => r.forEach((n, k) => (pos[n] = k)));
   const marked = conflicts(l, layers, pos);
@@ -165,8 +176,8 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     return Math.ceil(lo * geom.steps - EPS) <= Math.floor(hi * geom.steps + EPS);
   };
   const countStraight = (st: number[]): number => all.filter(([a, b]) => straightAt(a, st[a] ?? 0, b, st[b] ?? 0)).length;
-  // A dummy line sits half a gap inside its slot, so it needs two slots at the end of a layer to stay within the limit.
-  const reachOf = (n: number): number => (real(n) ? unitsOf(n) : 2);
+  // A line in the last gap sticks out of the last box by half a gap only.
+  const reachOf = (n: number): number => (real(n) ? unitsOf(n) : 1 + (opts.dummyShift ?? 1));
   const endOf = (st: number[]): number => Math.max(0, ...l.nodes.map((n) => (st[n.idx] ?? 0) + reachOf(n.idx)));
 
   // 1. The best of the four directions.
