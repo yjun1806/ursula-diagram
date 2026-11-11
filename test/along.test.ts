@@ -1,8 +1,44 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler, renderSvg, renderTextLayout } from '../src/index.ts';
 import type { Layout } from '../src/index.ts';
 import { twoLanes } from './fixtures.ts';
 import { geometryViolations } from './helpers.ts';
+import { ALONG_REFINE, considerAlong } from '../src/layout/along.ts';
+
+const counter = vi.hoisted(() => ({ solves: 0 }));
+vi.mock('../src/layout/solve.ts', async (original) => {
+  const actual = await original<typeof import('../src/layout/solve.ts')>();
+  return {
+    ...actual,
+    solve: (...args: Parameters<typeof actual.solve>) => {
+      counter.solves++;
+      return actual.solve(...args);
+    },
+  };
+});
+
+/** Number of `solve` calls one `layout` call makes. */
+const solves = (source: string, laneAxis: 'auto' | 'across'): number => {
+  counter.solves = 0;
+  layout(parse(source), pixelRuler(), { laneAxis });
+  return counter.solves;
+};
+
+/** Two lanes whose steps line up one to one: edges leave the lanes, but nothing is gained by placing the lanes along the flow. */
+const ladder = `flowchart LR
+  subgraph top[Top]
+    a1[First] --> a2[Second]
+    a3[Third]
+  end
+  subgraph bottom[Bottom]
+    b1[One]
+    b2[Two]
+    b3[Three]
+  end
+  a1 --> b1
+  a2 --> b2
+  a3 --> b3
+`;
 
 /** Two lanes, every edge between them: two producers feed six consumers. */
 const fan = (dir: 'LR' | 'TD'): string => `flowchart ${dir}
@@ -31,6 +67,24 @@ const fan = (dir: 'LR' | 'TD'): string => `flowchart ${dir}
 const bends = (l: Layout): number => l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0);
 
 describe('lanes along the flow axis', () => {
+  beforeEach(() => {
+    counter.solves = 0;
+  });
+
+  it('makes no extra routing call when the structural estimate does not favour the arrangement', () => {
+    expect(considerAlong(parse(ladder))).toBe(true);
+    expect(solves(ladder, 'auto')).toBe(solves(ladder, 'across'));
+    expect(layout(parse(ladder), pixelRuler()).laneAxis).toBe('across');
+    expect(solves(twoLanes, 'auto')).toBe(solves(twoLanes, 'across'));
+  });
+
+  it('spends at most one construction and ALONG_REFINE refinements on routing the arrangement', () => {
+    const across = solves(fan('LR'), 'across');
+    const auto = solves(fan('LR'), 'auto');
+    expect(auto).toBeGreaterThan(across);
+    expect(auto).toBeLessThanOrEqual(across + 1 + ALONG_REFINE);
+  });
+
   it('is chosen when every edge leaves its lane, and bends less than the other arrangement', () => {
     const graph = parse(fan('TD'));
     const auto = layout(graph, pixelRuler());
@@ -127,48 +181,53 @@ describe('lanes along the flow axis', () => {
     const lines = renderTextLayout(layout(parse(fan('LR')), cellRuler(), { laneAxis: 'along', maxWidth: 120 }));
     expect(lines.join('\n')).toMatchInlineSnapshot(`
       "
-       ╎                ╎ ╎                                    ╎
-       ╎    Producers   ╎ ╎              Consumers             ╎
-       ╎                ╎ ╎                                    ╎
-       ╎                ╎ ╎ ┌─────────────┐                    ╎
-       ╎                ┌──▶│   Archive   │                    ╎
-       ╎                │ ╎ └─────────────┘                    ╎
-       ╎                │ ╎                                    ╎
-       ╎                │ ╎                                    ╎
-       ╎ ┌─────────────┐│ ╎                                    ╎
-       ╎ │             ││ ╎                                    ╎
-       ╎ │             ││ ╎                                    ╎
-       ╎ │             ││ ╎                                    ╎
-       ╎ │ Sensor feed │╎ ╎ ┌─────────────┐                    ╎
-       ╎ │             │───▶│  Dashboard  │                    ╎
-       ╎ │             │───┐└─────────────┘                    ╎
-       ╎ │             │─┐╎│                                   ╎
-       ╎ │             │╎│╎│                                   ╎
-       ╎ └─────────────┘╎│╎│                                   ╎
-       ╎                ╎│╎│                                   ╎
-       ╎                ╎│╎└────────────────┐                  ╎
-       ╎                ╎│╎ ┌─────────────┐ │  ┌──────────────┐╎
-       ╎                ╎└─▶│  Alerting   │ └─▶│ Search index │╎
-       ╎                ┌──▶│             │  ┌▶│              │╎
-       ╎                │ ╎ └─────────────┘  │ └──────────────┘╎
-       ╎                │ ╎                  │                 ╎
-       ╎                │┌───────────────────┘                 ╎
-       ╎┌──────────────┐││╎                                    ╎
-       ╎│              │││╎                                    ╎
-       ╎│              │││╎                                    ╎
-       ╎│              │─┘╎                                    ╎
-       ╎│ Batch import │╎ ╎ ┌─────────────┐                    ╎
-       ╎│              │───▶│   Billing   │                    ╎
-       ╎│              │╎ ╎ └─────────────┘                    ╎
-       ╎│              │──┐                                    ╎
-       ╎│              │╎ │                                    ╎
-       ╎└──────────────┘╎ │                                    ╎
-       ╎                ╎ │                                    ╎
-       ╎                ╎ │                                    ╎
-       ╎                ╎ │ ┌─────────────┐                    ╎
-       ╎                ╎ └▶│  Audit log  │                    ╎
-       ╎                ╎ ╎ └─────────────┘                    ╎
-       ╎                ╎ ╎                                    ╎"
+       ╎                                   ╎ ╎                 ╎
+       ╎             Producers             ╎ ╎    Consumers    ╎
+       ╎                                   ╎ ╎                 ╎
+       ╎                                   ╎ ╎  ┌─────────────┐╎
+       ╎                                   ┌───▶│  Alerting   │╎
+       ╎                                   │┌──▶│             │╎
+       ╎                                   ││╎  └─────────────┘╎
+       ╎                                   ││╎                 ╎
+       ╎                 ┌─────────────────┘│╎                 ╎
+       ╎                 │                 ╎│╎  ┌─────────────┐╎
+       ╎                 │                 ╎│┌─▶│   Archive   │╎
+       ╎                 │                 ╎││  └─────────────┘╎
+       ╎                 │                 ╎││                 ╎
+       ╎                 │                 ╎││                 ╎
+       ╎                 │                 ╎││  ┌─────────────┐╎
+       ╎                 │                 ╎││┌▶│  Dashboard  │╎
+       ╎                 │                 ╎│││ └─────────────┘╎
+       ╎                 │                 ╎│││                ╎
+       ╎                 │                 ╎│││                ╎
+       ╎                 │  ┌─────────────┐╎│││                ╎
+       ╎                 │  │             │╎│││                ╎
+       ╎                 │  │             │─┘││┌──────────────┐╎
+       ╎                 │  │             │──┘││              │╎
+       ╎                 │  │ Sensor feed │───┘│ Search index │╎
+       ╎                 │  │             │───▶│              │╎
+       ╎                 │  │             │┌──▶│              │╎
+       ╎                 │  │             ││ ╎ └──────────────┘╎
+       ╎                 │  │             ││ ╎                 ╎
+       ╎                 │  └─────────────┘│ ╎                 ╎
+       ╎                 │                 │ ╎                 ╎
+       ╎                 │┌────────────────┘ ╎                 ╎
+       ╎┌──────────────┐ ││                ╎ ╎                 ╎
+       ╎│              │ ││                ╎ ╎                 ╎
+       ╎│              │─┘│                ╎ ╎                 ╎
+       ╎│              │──┘                ╎ ╎                 ╎
+       ╎│ Batch import │                   ╎ ╎  ┌─────────────┐╎
+       ╎│              │───────────────────────▶│   Billing   │╎
+       ╎│              │                   ╎ ╎  └─────────────┘╎
+       ╎│              │───┐               ╎ ╎                 ╎
+       ╎│              │   │               ╎ ╎                 ╎
+       ╎└──────────────┘   │               ╎ ╎                 ╎
+       ╎                   │               ╎ ╎                 ╎
+       ╎                   └───────────────┐ ╎                 ╎
+       ╎                                   │ ╎  ┌─────────────┐╎
+       ╎                                   └───▶│  Audit log  │╎
+       ╎                                   ╎ ╎  └─────────────┘╎
+       ╎                                   ╎ ╎                 ╎"
     `);
   });
 });

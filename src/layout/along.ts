@@ -1,4 +1,5 @@
 import type { Graph, GraphEdge, Lane } from '../types.ts';
+import { structuralEstimate } from './estimate.ts';
 import type { AlongSpec } from './lanes-along.ts';
 
 /** The along arrangement is considered only when edges between lanes outnumber edges inside lanes this much. */
@@ -242,75 +243,106 @@ export function arrangeAlong(graph: Graph): AlongArrangement {
   return assemble(graph, lanes, col, row);
 }
 
-/** Layouts the search may evaluate, shared among the nodes. */
-const SEARCH_WORK = 10000;
-const SEARCH_ROUNDS = 4;
+/** Routed evaluations the refinement may spend, after the one for the constructed arrangement. */
+export const ALONG_REFINE = 6;
+
+/** Structural estimate of an arrangement: rank columns along the flow axis, rows across it. */
+export function alongEstimate(a: AlongArrangement): number {
+  const slots = new Map(a.source.nodes.map((n) => [n.id, { flow: a.rank.get(n.id) ?? 0, cross: a.row.get(n.id) ?? 0 }] as const));
+  return structuralEstimate(a.source.edges, slots);
+}
+
+/** Every arrangement one move away: a node to another column of its lane and another row (swapping with its occupant), or a rank column shifted. */
+function neighbours(best: AlongArrangement, columns: boolean): AlongArrangement[] {
+  const ids = best.source.nodes.map((n) => n.id);
+  const laneOf = new Map(best.source.nodes.map((n) => [n.id, n.lane] as const));
+  const top = Math.max(...best.row.values());
+  const out: AlongArrangement[] = [];
+  for (const id of ids) {
+    const c0 = best.col.get(id) ?? 0;
+    const r0 = best.row.get(id) ?? 0;
+    const laneCols = Math.max(...ids.filter((o) => laneOf.get(o) === laneOf.get(id)).map((o) => best.col.get(o) ?? 0)) + 1;
+    for (let c = columns ? -1 : c0; c <= (columns ? laneCols : c0); c++) {
+      for (let r = -1; r <= top + 1; r++) {
+        if (c === c0 && r === r0) continue;
+        const col = new Map(best.col);
+        const row = new Map(best.row);
+        const other = ids.find((o) => o !== id && laneOf.get(o) === laneOf.get(id) && best.col.get(o) === c && best.row.get(o) === r);
+        col.set(id, c);
+        row.set(id, r);
+        if (other !== undefined) {
+          col.set(other, c0);
+          row.set(other, r0);
+        }
+        out.push(assemble(best.source, best.lanes, col, row));
+      }
+    }
+  }
+  for (const column of new Set(best.rank.values())) {
+    for (const shift of [-2, -1, 1, 2]) {
+      const row = new Map(best.row);
+      for (const id of ids) if (best.rank.get(id) === column) row.set(id, (best.row.get(id) ?? 0) + shift);
+      out.push(assemble(best.source, best.lanes, best.col, row));
+    }
+  }
+  return out;
+}
+
+const POLISH_ROUNDS = 4;
+const CROSSING_ESTIMATE = 1000;
+
+/** Moves nodes while the structural estimate drops; no routing. Bounded and deterministic. */
+export function polishAlong(start: AlongArrangement): AlongArrangement {
+  let best = start;
+  let bestEstimate = alongEstimate(best);
+  if (bestEstimate === 0) return best;
+  for (let round = 0; round < POLISH_ROUNDS; round++) {
+    let next = best;
+    let nextEstimate = bestEstimate;
+    // Rows alone are tried first; columns are moved only while crossings remain.
+    for (const a of neighbours(best, bestEstimate >= CROSSING_ESTIMATE)) {
+      const est = alongEstimate(a);
+      if (est < nextEstimate) {
+        next = a;
+        nextEstimate = est;
+      }
+    }
+    if (next === best) break;
+    best = next;
+    bestEstimate = nextEstimate;
+  }
+  return best;
+}
 
 /**
- * Improves the arrangement by moving one node at a time to another column of its lane (one new
- * column at either end is allowed) and another row; the node that sits there takes its place. A
- * move is kept when the real score of the routed drawing drops. Empty rows are allowed, so partners
- * can line up. The search is bounded and deterministic.
+ * Improves the arrangement with at most ALONG_REFINE routed evaluations. Neighbours are ranked by the
+ * structural estimate and only those estimated no worse than the start are tried, best first;
+ * the one with the best routed score wins if it beats the start. Deterministic.
  */
-export function refineAlong(start: AlongArrangement, score: (arranged: AlongArrangement) => number): AlongArrangement {
-  const ids = start.source.nodes.map((n) => n.id);
-  const budget = Math.max(150, Math.floor(SEARCH_WORK / Math.max(1, ids.length)));
-  const laneOf = new Map(start.source.nodes.map((n) => [n.id, n.lane] as const));
+export function refineAlong(
+  start: AlongArrangement,
+  startScore: number,
+  score: (arranged: AlongArrangement) => number,
+): AlongArrangement {
+  const base = alongEstimate(start);
+  const seen = new Set<string>([JSON.stringify([...start.rank, ...start.row])]);
+  const ranked: Array<{ a: AlongArrangement; est: number; at: number }> = [];
+  neighbours(start, true).forEach((a, at) => {
+    const key = JSON.stringify([...a.rank, ...a.row]);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const est = alongEstimate(a);
+    if (est <= base) ranked.push({ a, est, at });
+  });
+  ranked.sort((x, y) => x.est - y.est || x.at - y.at);
   let best = start;
-  let bestScore = score(best);
-  let evaluations = 1;
-  for (let round = 0; round < SEARCH_ROUNDS; round++) {
-    let improved = false;
-    for (const id of ids) {
-      const c0 = best.col.get(id) ?? 0;
-      const r0 = best.row.get(id) ?? 0;
-      const laneCols = Math.max(...ids.filter((o) => laneOf.get(o) === laneOf.get(id)).map((o) => best.col.get(o) ?? 0)) + 1;
-      const top = Math.max(...best.row.values());
-      let moved = false;
-      for (let c = -1; c <= laneCols && !moved; c++) {
-        for (let r = -1; r <= top + 1 && !moved; r++) {
-          if ((c === c0 && r === r0) || evaluations >= budget) continue;
-          const col = new Map(best.col);
-          const row = new Map(best.row);
-          const other = ids.find(
-            (o) => o !== id && laneOf.get(o) === laneOf.get(id) && best.col.get(o) === c && best.row.get(o) === r,
-          );
-          col.set(id, c);
-          row.set(id, r);
-          if (other !== undefined) {
-            col.set(other, c0);
-            row.set(other, r0);
-          }
-          const candidate = assemble(best.source, best.lanes, col, row);
-          evaluations++;
-          const s = score(candidate);
-          if (s < bestScore - 1e-9) {
-            best = candidate;
-            bestScore = s;
-            improved = true;
-            moved = true;
-          }
-        }
-      }
+  let bestScore = startScore;
+  for (const { a } of ranked.slice(0, ALONG_REFINE)) {
+    const s = score(a);
+    if (s < bestScore - 1e-9) {
+      best = a;
+      bestScore = s;
     }
-    // Moving a whole rank column up or down lines its nodes up with other partners at once.
-    const columns = [...new Set(best.rank.values())];
-    for (const column of columns) {
-      for (const shift of [-2, -1, 1, 2]) {
-        if (evaluations >= budget) break;
-        const row = new Map(best.row);
-        for (const id of ids) if (best.rank.get(id) === column) row.set(id, (best.row.get(id) ?? 0) + shift);
-        const candidate = assemble(best.source, best.lanes, best.col, row);
-        evaluations++;
-        const s = score(candidate);
-        if (s < bestScore - 1e-9) {
-          best = candidate;
-          bestScore = s;
-          improved = true;
-        }
-      }
-    }
-    if (!improved || evaluations >= budget) break;
   }
   return best;
 }
