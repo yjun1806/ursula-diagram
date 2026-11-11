@@ -166,8 +166,12 @@ export function turnOrders(
       if (e.pos < 0) continue;
       for (const y of runs) {
         if (y.id === x.id || y.kind !== x.kind || y.idx !== x.idx) continue;
-        if (!(y.lo < e.pos && e.pos < y.hi)) continue;
-        orders.push(e.dir < 0 ? { before: x.id, after: y.id } : { before: y.id, after: x.id });
+        if (y.lo < e.pos && e.pos < y.hi) {
+          orders.push(e.dir < 0 ? { before: x.id, after: y.id } : { before: y.id, after: x.id });
+        } else if (e.dir < 0 && (y.lo === e.pos || y.hi === e.pos) && (ends.get(y.id) ?? []).some((o) => o.pos === e.pos && o.dir > 0)) {
+          // Two runs meet at one point and turn opposite ways: the one turning toward low coordinates takes the lower track, or their turns overlap.
+          orders.push({ before: x.id, after: y.id });
+        }
       }
     }
   }

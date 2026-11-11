@@ -51,25 +51,34 @@ const variants: Array<[string, Ruler]> = [
   ['pitch 16', { ...pixelRuler(), portPitch: 16 }],
 ];
 
+/**
+ * Drawings that still break an invariant, as `seed@width`: the track order of two edges that meet facing stubs
+ * cannot be satisfied, or a label finds no free place. They are listed so that anything new fails the sweep.
+ */
+const open = new Set(['9@800', '33@1280', '33@800', '33@Infinity', '36@800', '38@800', '39@1280', '39@800', '39@Infinity', '54@800']);
+
 describe('generated graphs', () => {
   for (let seed = 1; seed <= 60; seed++) {
-    it(`graph ${seed} keeps every edge on its boxes, at ports`, () => {
+    it(`graph ${seed} keeps every edge on its boxes, at ports, clear of other boxes and edges`, () => {
       const src = generate(seed);
       const graph = parse(src);
       const [name, ruler] = variants[seed % variants.length] ?? variants[0] ?? ['pixel', pixelRuler()];
       for (const maxWidth of [1280, 800, Infinity]) {
         const l = layout(graph, ruler, { maxWidth });
-        expect([name, maxWidth, geometryViolations(l).filter((v) => v.includes('border'))]).toEqual([name, maxWidth, []]);
+        const expected = open.has(`${seed}@${maxWidth}`);
+        const violations = geometryViolations(l);
+        if (expected) expect([name, maxWidth, violations.length > 0]).toEqual([name, maxWidth, true]);
+        else expect([name, maxWidth, violations]).toEqual([name, maxWidth, []]);
         expect([name, maxWidth, endpointViolations(l, ruler, graph)]).toEqual([name, maxWidth, []]);
       }
     });
   }
 
-  it('draws the text ruler with every edge on its boxes', () => {
+  it('draws the text ruler without any violation', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const graph = parse(generate(seed));
       const l = layout(graph, cellRuler(), { maxWidth: 120 });
-      expect(geometryViolations(l).filter((v) => v.includes('border'))).toEqual([]);
+      expect(geometryViolations(l)).toEqual([]);
     }
   });
 });

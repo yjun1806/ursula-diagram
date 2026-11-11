@@ -223,10 +223,15 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
     a === 0 || a === topo.ranks ? ruler.lanePad : gap,
   );
   // A box that needs more than its units gives pushes the following column away instead of overlapping it.
+  // The box overhangs the start of the channel after it: tracks of that channel keep clear of the overhang.
+  const inset = new Map<string, number>();
   for (const s of slots) {
     const end = s.rank + s.span;
     const excess = s.nf - (s.span * unit - gap);
-    if (excess > 0 && end < topo.ranks) baseWf[end] = Math.max(baseWf[end] ?? 0, gap + gridUp(ruler, excess));
+    if (excess > 0 && end < topo.ranks) {
+      baseWf[end] = Math.max(baseWf[end] ?? 0, gap + gridUp(ruler, excess));
+      inset.set(`f${end}`, Math.max(inset.get(`f${end}`) ?? 0, gridUp(ruler, excess)));
+    }
   }
   const baseWc: number[] = [];
   for (const lane of topo.lanes) {
@@ -247,6 +252,7 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
     baseWf,
     baseWc,
     minBand,
+    ...(inset.size > 0 ? { inset } : {}),
   };
 }
 

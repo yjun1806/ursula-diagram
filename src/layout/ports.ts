@@ -52,6 +52,10 @@ export function buildPorts(
   plans: EdgePlan[],
   routed: Map<number, Routed>,
   runs: Run[],
+  /** Flow-axis coordinate of every straight line across the flow axis, from the drawn boxes. */
+  lines: ReadonlyMap<number, number | undefined> = new Map(),
+  /** Flow-axis start of a box. */
+  start: (slot: Slot) => number = () => 0,
 ): PortTable {
   const raw = new Map<string, Attach[]>();
   const add = (slot: Slot, side: Side, a: Omit<Attach, 'off' | 'rel'>): void => {
@@ -106,6 +110,15 @@ export function buildPorts(
       if (!a.straight) return;
       const plan = plans.find((p) => p.index === a.edge);
       let wanted = free.map((_, j) => j).sort((x, y) => Math.abs((free[x] ?? 0) - centre) - Math.abs((free[y] ?? 0) - centre));
+      const line = lines.get(a.edge);
+      if (!isFlowSide(side) && line !== undefined) {
+        // The line was fixed from the drawn boxes: it takes that port, and no other edge on the side may use it.
+        const off = line - start(slot);
+        const j = free.findIndex((v, k) => !taken.has(k) && Math.abs(v - off) < 1e-6);
+        if (j >= 0) taken.add(j);
+        chosen.set(i, off);
+        return;
+      }
       if (!isFlowSide(side)) {
         const peer = sk.byId.get(a.role === 'src' ? (plan?.to ?? '') : (plan?.from ?? ''));
         if (peer && peer !== slot) {
@@ -180,7 +193,7 @@ export function buildPorts(
       k,
       sorted.map((a, i) => {
         const off = offs[i] ?? 0;
-        return { ...a, off, rel: startInSlot + off - ext / 2 };
+        return { ...a, off, rel: startInSlot + off - (isFlowSide(side) ? len : ext) / 2 };
       }),
     );
   }
@@ -188,7 +201,7 @@ export function buildPorts(
 }
 
 /** Ordering rules that keep stubs of different edges from crossing or touching. */
-export function portOrders(sk: Skeleton, table: PortTable, runs: Run[]): Order[] {
+export function portOrders(sk: Skeleton, table: PortTable, runs: Run[], at: (slot: Slot, off: number) => number = (slot, off) => slot.rank * sk.unit + off): Order[] {
   const orders: Order[] = [];
   const stubs: Array<{ line: string; slotKey: string; side: Side; rel: number; run: number }> = [];
   for (const [k, list] of table) {
@@ -201,9 +214,10 @@ export function portOrders(sk: Skeleton, table: PortTable, runs: Run[]): Order[]
       if (run && !a.straight) {
         stubs.push({
           line: `${run.kind}${run.idx}`,
-          slotKey: isFlowSide(side) ? `r${slot.cRow}` : `k${slot.rank}`,
+          slotKey: isFlowSide(side) ? `r${slot.cRow}` : 'f',
           side,
-          rel: a.rel,
+          // Along the flow axis boxes of different extents share a coordinate only by absolute position.
+          rel: isFlowSide(side) ? a.rel : at(slot, a.off),
           run: a.run,
         });
       }

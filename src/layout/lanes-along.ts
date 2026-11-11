@@ -33,7 +33,7 @@ export function shapeAlong(sk: Skeleton, ruler: Ruler, along: AlongSpec): Skelet
   const region = labelRegion(along, ruler);
   const baseWf = [...sk.baseWf];
   const baseWc = [...sk.baseWc];
-  const inset = new Map<string, number>();
+  const inset = new Map<string, number>(sk.inset);
   const bump = (a: number, v: number): void => {
     baseWf[a] = Math.max(baseWf[a] ?? 0, gridUp(ruler, v));
   };
@@ -48,7 +48,7 @@ export function shapeAlong(sk: Skeleton, ruler: Ruler, along: AlongSpec): Skelet
   } else {
     along.starts.forEach((a, k) => {
       const ins = region === 0 ? 0 : k === 0 ? region : pad + gap + region;
-      if (ins > 0) inset.set(`f${a}`, ins);
+      if (ins > 0) inset.set(`f${a}`, Math.max(inset.get(`f${a}`) ?? 0, ins));
       bump(a, ins + pad);
     });
   }

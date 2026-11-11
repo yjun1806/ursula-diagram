@@ -9,8 +9,8 @@ import type { Geo, Need, Side, Skeleton, Slot } from './place.ts';
 import type { AlongSpec } from './lanes-along.ts';
 import { alongBands, shapeAlong } from './lanes-along.ts';
 import { buildTopology, measureNodes, finalNf, fitLaneLabels, geometry, gridUp, origin, sizeSlots } from './place.ts';
-import { nodeNeeds, planEdges } from './plan.ts';
-import { buildPorts, portOrders, portStep } from './ports.ts';
+import { isFlowSide, nodeNeeds, planEdges } from './plan.ts';
+import { attachOf, buildPorts, portOrders, portStep } from './ports.ts';
 import type { Run } from './route.ts';
 import { routeEdges } from './route.ts';
 import type { Chain } from './tracks.ts';
@@ -65,6 +65,31 @@ interface Built {
   runs: Run[];
   counts: Map<string, number>;
   tracks: number[];
+  /** Plan index of every drawn edge, in the order of `layout.edges`. */
+  drawn: number[];
+}
+
+/** Straight lines across the flow axis that another edge's segment lies on: they are drawn as routed edges instead. */
+function stoodOn(built: Built): number[] {
+  const out: number[] = [];
+  const segs = (points: Point[]): Array<[Point, Point]> => points.slice(1).map((q, i) => [points[i] as Point, q]);
+  built.layout.edges.forEach((edge, i) => {
+    const plan = built.plans[built.drawn[i] ?? -1];
+    if (!plan || plan.straight !== 'c') return;
+    const mine = segs(edge.points);
+    const hit = built.layout.edges.some((other, j) => {
+      if (j === i) return false;
+      return segs(other.points).some(([c, d]) => mine.some(([a, b]) => {
+        const horizontal = Math.abs(a.y - b.y) < 1e-6;
+        if (horizontal !== (Math.abs(c.y - d.y) < 1e-6) || Math.abs((horizontal ? a.y - c.y : a.x - c.x)) > 1e-6) return false;
+        const lo = horizontal ? Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) : Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y));
+        const hi = horizontal ? Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) : Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y));
+        return hi - lo > 1e-6;
+      }));
+    });
+    if (hit) out.push(plan.index);
+  });
+  return out;
 }
 
 const demoted = new WeakMap<Map<string, number>, Set<number>>();
@@ -98,11 +123,13 @@ export function solve(
         return at > f0 - ruler.trackGap / 2 && at < f0 + n.nf + ruler.trackGap / 2;
       });
     });
-    if (lost.length === 0 || round >= 8) {
+    const stood = stoodOn(built).filter((i) => !demote.has(i));
+    if ((lost.length === 0 && stood.length === 0) || round >= 8) {
       demoted.set(rank, demote);
       return built.layout;
     }
     for (const p of lost) demote.add(p.index);
+    for (const i of stood) demote.add(i);
   }
 }
 
@@ -126,7 +153,7 @@ function build(
 
   const rough = geometry(sk, sk.baseWf, sk.baseWc);
   const { routed, runs } = routeEdges(sk, rough, ruler, plans);
-  const table = buildPorts(sk, ruler, plans, routed, runs);
+  const table = buildPorts(sk, ruler, plans, routed, runs, straightLines(sk, rough, ruler, plans), (slot) => origin(sk, rough, ruler, slot).f0);
   const chains: Chain[] = [];
   for (const plan of plans) {
     const r = routed.get(plan.index);
@@ -145,9 +172,6 @@ function build(
       endPos: stubPos(to),
     });
   }
-  const tracks = assignTracks(runs, [...portOrders(sk, table, runs), ...turnOrders(runs, chains)]);
-  const counts = trackCounts(runs, tracks);
-
   const sizes = new Map<number, LabelSize>();
   for (const p of plans) if (p.label) sizes.set(p.index, labelSize(p.label, ruler));
   const demand = labelDemands(sk, rough, ruler, plans, routed, runs, sizes);
@@ -161,32 +185,70 @@ function build(
       break;
     }
   }
-  const wfNeed = sk.baseWf.map((w, a) => {
-    const need = gridUp(
-      ruler,
-      Math.max(
-        w,
-        (counts.get(`f${a}`) ?? 0) * ruler.trackGap + insetOf(`f${a}`, counts.get(`f${a}`) ?? 0),
-        demand.wf[a] ?? 0,
-      ),
-    );
-    const inner = a > 0 && a < sk.ranks && need > w;
-    return inner ? w + Math.ceil((need - w) / quantum - 1e-9) * quantum : need;
-  });
-  const wcNeed = fitLaneLabels(
-    sk,
-    sk.baseWc.map((w, b) =>
-      gridUp(
-        ruler,
-        Math.max(
-          w,
-          (counts.get(`c${b}`) ?? 0) * ruler.trackGap + insetOf(`c${b}`, counts.get(`c${b}`) ?? 0),
-          demand.wc[b] ?? 0,
+  // Coordinates of the stubs that leave a port: a track on the same line must not coincide with one.
+  const stubCoords = (g: Geo): Map<string, number[]> => {
+    const out = new Map<string, number[]>();
+    for (const plan of plans) {
+      if (plan.straight || !routed.has(plan.index)) continue;
+      for (const [id, side, role] of [[plan.from, plan.srcSide, 'src'], [plan.to, plan.tgtSide, 'tgt']] as const) {
+        const slot = sk.byId.get(id);
+        const off = attachOf(table, id, side, plan.index, role)?.off;
+        if (!slot || off === undefined) continue;
+        const { f0, c0 } = origin(sk, g, ruler, slot);
+        const flow = isFlowSide(side);
+        const at = (flow ? c0 : f0) + off;
+        const starts = flow ? g.cStart : g.fStart;
+        const widths = flow ? g.wc : g.wf;
+        const k = starts.findIndex((st, i) => at > st - 1e-6 && at < st + (widths[i] ?? 0) + 1e-6);
+        if (k < 0) continue;
+        const key = `${flow ? 'c' : 'f'}${k}`;
+        out.set(key, [...(out.get(key) ?? []), at]);
+      }
+    }
+    return out;
+  };
+  const turns = turnOrders(runs, chains);
+  const settle = (at: (slot: Slot, off: number) => number): { tracks: number[]; counts: Map<string, number>; geo: Geo; avoid: ReadonlyMap<string, number[]> } => {
+    const tracks = assignTracks(runs, [...portOrders(sk, table, runs, at), ...turns]);
+    const counts = trackCounts(runs, tracks);
+    const tracksOf = (key: string, avoid: ReadonlyMap<string, number[]>): number => {
+      const n = counts.get(key) ?? 0;
+      return n === 0 ? 0 : n + new Set(avoid.get(key) ?? []).size;
+    };
+    const sizeFor = (avoid: ReadonlyMap<string, number[]>): { wf: number[]; wc: number[] } => {
+      const wf = sk.baseWf.map((w, a) => {
+        const need = gridUp(ruler, Math.max(w, tracksOf(`f${a}`, avoid) * ruler.trackGap + insetOf(`f${a}`, tracksOf(`f${a}`, avoid)), demand.wf[a] ?? 0));
+        const inner = a > 0 && a < sk.ranks && need > w;
+        return inner ? w + Math.ceil((need - w) / quantum - 1e-9) * quantum : need;
+      });
+      const wc = fitLaneLabels(
+        sk,
+        sk.baseWc.map((w, b) =>
+          gridUp(ruler, Math.max(w, tracksOf(`c${b}`, avoid) * ruler.trackGap + insetOf(`c${b}`, tracksOf(`c${b}`, avoid)), demand.wc[b] ?? 0)),
         ),
-      ),
-    ),
-  );
-  const geo = geometry(sk, wfNeed, wcNeed);
+      );
+      return { wf, wc };
+    };
+    let avoid: ReadonlyMap<string, number[]> = new Map();
+    let size = sizeFor(avoid);
+    let geo = geometry(sk, size.wf, size.wc);
+    for (let round = 0; round < 3; round++) {
+      avoid = stubCoords(geo);
+      size = sizeFor(avoid);
+      geo = geometry(sk, size.wf, size.wc);
+    }
+    return { tracks, counts, geo, avoid: stubCoords(geo) };
+  };
+  // Boxes half a step apart share port coordinates only in the drawn geometry, so the track order is settled again once it is known.
+  let settled = settle((slot, off) => origin(sk, rough, ruler, slot).f0 + off);
+  for (let round = 0; round < 2; round++) {
+    const g = settled.geo;
+    const again = settle((slot, off) => origin(sk, g, ruler, slot).f0 + off);
+    const same = again.tracks.every((t, i) => t === settled.tracks[i]);
+    settled = again;
+    if (same) break;
+  }
+  const { tracks, counts, geo, avoid } = settled;
 
   const phys = (p: AbsPoint): Point => (td ? { x: tidy(p.c), y: tidy(p.f) } : { x: tidy(p.f), y: tidy(p.c) });
   const nodes: LayoutNode[] = sk.slots.map((s) => {
@@ -209,15 +271,17 @@ function build(
   });
   const nodeRects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
-  const paths = buildPaths(sk, geo, ruler, plans, routed, runs, tracks, counts, table);
+  const paths = buildPaths(sk, geo, ruler, plans, routed, runs, tracks, counts, table, avoid);
   const diagnostics: Diagnostic[] = [];
   const edges: LayoutEdge[] = [];
+  const drawn: number[] = [];
   const raws: Array<{ plan: (typeof plans)[number]; raw: Point[] }> = [];
   for (const plan of plans) {
     const abs = paths.get(plan.index);
     if (!abs) continue;
     const raw = abs.map(phys);
     edges.push({ from: plan.from, to: plan.to, style: plan.style, points: simplify(raw) });
+    drawn.push(plans.indexOf(plan));
     raws.push({ plan, raw });
   }
   const segmentsOf = (points: Point[]): Segment[] => {
@@ -318,5 +382,5 @@ function build(
     edges,
     diagnostics,
   };
-  return { layout, sk, geo, plans, runs, counts, tracks };
+  return { layout, sk, geo, plans, runs, counts, tracks, drawn };
 }

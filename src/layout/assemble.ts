@@ -87,12 +87,25 @@ export function straightLines(sk: Skeleton, geo: Geo, ruler: Ruler, plans: EdgeP
   return out;
 }
 
-/** Coordinate of a track inside its channel strip. */
-export function trackCoord(geo: Geo, ruler: Ruler, run: Run, track: number, count: number): number {
-  const inset = geo.inset?.get(`${run.kind}${run.idx}`) ?? 0;
+/** Coordinate of a track inside its channel strip; positions that coincide with a stub on the same line are skipped. */
+export function trackCoord(
+  geo: Geo,
+  ruler: Ruler,
+  run: Run,
+  track: number,
+  count: number,
+  avoid: ReadonlyMap<string, number[]> = new Map(),
+): number {
+  const key = `${run.kind}${run.idx}`;
+  const inset = geo.inset?.get(key) ?? 0;
   const start = (run.kind === 'f' ? (geo.fStart[run.idx] ?? 0) : (geo.cStart[run.idx] ?? 0)) + inset;
   const width = (run.kind === 'f' ? (geo.wf[run.idx] ?? 0) : (geo.wc[run.idx] ?? 0)) - inset;
-  return edgeNear(ruler, start + (width - (count - 1) * ruler.trackGap) / 2) + track * ruler.trackGap;
+  const taken = avoid.get(key) ?? [];
+  for (let n = count; ; n++) {
+    const first = edgeNear(ruler, start + (width - (n - 1) * ruler.trackGap) / 2);
+    const free = Array.from({ length: n }, (_, k) => first + k * ruler.trackGap).filter((v) => taken.every((t) => Math.abs(t - v) > 1e-6));
+    if (free.length >= count || n >= count + taken.length) return free[track] ?? first + track * ruler.trackGap;
+  }
 }
 
 function meet(a: Line, b: Line): AbsPoint {
@@ -115,6 +128,7 @@ export function buildPaths(
   tracks: number[],
   counts: Map<string, number>,
   table: PortTable,
+  avoid: ReadonlyMap<string, number[]> = new Map(),
 ): Map<number, AbsPoint[]> {
   const out = new Map<number, AbsPoint[]>();
   const lines0 = straightLines(sk, geo, ruler, plans);
@@ -136,7 +150,7 @@ export function buildPaths(
       const run = runs[id];
       if (!run) return [];
       const count = counts.get(`${run.kind}${run.idx}`) ?? 1;
-      return [{ kind: run.kind, v: trackCoord(geo, ruler, run, tracks[id] ?? 0, count) }];
+      return [{ kind: run.kind, v: trackCoord(geo, ruler, run, tracks[id] ?? 0, count, avoid) }];
     });
     const first = runs[r.runs[0] ?? -1];
     const last = runs[r.runs[r.runs.length - 1] ?? -1];
