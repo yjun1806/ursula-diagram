@@ -1,5 +1,5 @@
 import { cellWidth, cellWidthOf } from '../metrics.ts';
-import type { EdgeStyle, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText } from '../types.ts';
+import type { EdgeStyle, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
 const E = 2;
@@ -338,4 +338,11 @@ export function renderTextScene(scene: Scene): string[] {
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;
+}
+
+const ANSI: Record<TextTone, string> = { normal: '', dim: '\u001b[2m', bold: '\u001b[1m', accent: '\u001b[36m' };
+
+/** Maps tones to ANSI escape codes for a terminal: bold, dim and a cyan accent. */
+export function spansToAnsi(line: TextSpan[]): string {
+  return line.map((s) => (ANSI[s.tone] === '' ? s.text : `${ANSI[s.tone]}${s.text}\u001b[0m`)).join('');
 }

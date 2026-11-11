@@ -1,4 +1,5 @@
 import type { SvgOptions } from './render/svg.ts';
+import type { TextSpan } from './types.ts';
 
 export interface RenderOptions extends SvgOptions {
   maxWidth?: number;
@@ -17,6 +18,8 @@ export interface FrontEnd {
   svg(src: string, opts: RenderOptions): string;
   /** Terminal rows; `maxWidth` is absent when the caller sets no limit. */
   textLines(src: string, maxWidth: number | undefined, opts: TextOptions): string[];
+  /** The same rows as `textLines`, as spans that carry a tone; absent when the front-end draws no tones. */
+  textSpans?(src: string, maxWidth: number | undefined, opts: TextOptions): TextSpan[][];
   /** The placed drawing data of this front-end. */
   json(src: string, mode: 'svg' | 'text', opts: RenderOptions): unknown;
 }

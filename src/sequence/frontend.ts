@@ -1,8 +1,8 @@
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderSceneSvg } from '../render/svg.ts';
-import { renderTextScene } from '../render/text.ts';
 import { layoutSequence } from './layout.ts';
+import { joinSpans, layoutSequenceText } from './text.ts';
 import type { SequenceLayoutOptions } from './layout.ts';
 import type { SequenceLegendOption } from './model.ts';
 import { parseSequence } from './parse.ts';
@@ -19,8 +19,10 @@ registerFrontEnd({
     return renderSceneSvg(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    const layout = layoutSequence(parseSequence(src), cellRuler(), layoutOptions(maxWidth, opts.legend));
-    return renderTextScene(layout.scene);
+    return layoutSequenceText(parseSequence(src), cellRuler(), maxWidth, opts.legend).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return layoutSequenceText(parseSequence(src), cellRuler(), maxWidth, opts.legend);
   },
   json(src, mode, opts) {
     const ruler = mode === 'text' ? cellRuler() : pixelRuler();

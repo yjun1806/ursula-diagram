@@ -120,6 +120,39 @@ export interface SequenceMetrics {
   legendTop: number;
   legendRow: number;
   legendBelow: number;
+  /** Rules of the terminal text drawing; absent for media that have no text mode. */
+  text?: SequenceTextMetrics;
+}
+
+/** Spacing of the sequence text drawing, which has its own layout rules instead of the pixel ones. */
+export interface SequenceTextMetrics {
+  /** Blank cells a header adds around its widest label line, inside the border. */
+  headPad: number;
+  /** Cells between the extents of two neighbouring header boxes, plus one. */
+  headGap: number;
+  /** Smallest distance between two neighbouring lifelines. */
+  pitchMin: number;
+  /** Blank cells on each side of a label embedded in an arrow. */
+  labelSpace: number;
+  /** Line glyphs a label leaves on each side of itself, counting the tee and the head. */
+  labelRun: number;
+  /** Cells from the lifeline to the corner of a self message, and the blank cells before its label. */
+  selfReach: number;
+  selfGap: number;
+  /** Cells between a lifeline and the bar or box of a note beside it. */
+  noteOffset: number;
+  /** Blank cells inside a boxed note, on each side. */
+  noteBoxPad: number;
+  /** Narrowest region a wrapped label or note is squeezed into. */
+  wrapMin: number;
+  /** Cells a frame side bar sits outside what it holds. */
+  frameOutset: number;
+  /** Line glyphs before a frame title, blank cells around it, and line glyphs after it. */
+  frameLead: number;
+  frameTitlePad: number;
+  frameTrail: number;
+  /** Cells between two legend items. */
+  legendGap: number;
 }
 
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
@@ -334,6 +367,23 @@ export function cellRuler(): Ruler {
       legendTop: 0,
       legendRow: 1,
       legendBelow: 1,
+      text: {
+        headPad: 2,
+        headGap: 2,
+        pitchMin: 8,
+        labelSpace: 1,
+        labelRun: 2,
+        selfReach: 3,
+        selfGap: 1,
+        noteOffset: 2,
+        noteBoxPad: 1,
+        wrapMin: 12,
+        frameOutset: 1,
+        frameLead: 1,
+        frameTitlePad: 1,
+        frameTrail: 1,
+        legendGap: 3,
+      },
     },
   };
 }
