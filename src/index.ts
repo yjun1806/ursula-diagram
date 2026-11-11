@@ -5,6 +5,7 @@ import { selectFrontEnd } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './sequence/frontend.ts';
 import { UrsulaError } from './types.ts';
+import type { TextSpan } from './types.ts';
 
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
@@ -13,10 +14,11 @@ export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
-export { renderTextLayout, renderTextScene } from './render/text.ts';
+export { renderTextLayout, renderTextScene, spansToAnsi } from './render/text.ts';
 export { renderSceneSvg } from './render/svg.ts';
 export { registerFrontEnd, selectFrontEnd } from './registry.ts';
 export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
+export { layoutSequenceText } from './sequence/text.ts';
 export { parseSequence } from './sequence/parse.ts';
 export { layoutSequence } from './sequence/layout.ts';
 export type { SequenceLayoutOptions } from './sequence/layout.ts';
@@ -33,6 +35,29 @@ export function renderText(
   try {
     const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
     const widest = Math.max(0, ...lines.map(cellWidth));
+    if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
+    return { lines };
+  } catch (err) {
+    if (err instanceof UrsulaError) return { error: err.message };
+    throw err;
+  }
+}
+
+/**
+ * Like `renderText`, with every line as spans that carry a tone (`normal`, `dim`, `bold`, `accent`).
+ * The library writes no escape codes; the host decides how to draw each tone.
+ */
+export function renderTextSpans(
+  src: string,
+  maxWidth: number,
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight'> = {},
+): { lines: TextSpan[][] } | { error: string } {
+  try {
+    const frontEnd = selectFrontEnd(src);
+    const lines = frontEnd.textSpans
+      ? frontEnd.textSpans(src, maxWidth, opts)
+      : frontEnd.textLines(src, maxWidth, opts).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
+    const widest = Math.max(0, ...lines.map((l) => cellWidth(l.map((s) => s.text).join(''))));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {

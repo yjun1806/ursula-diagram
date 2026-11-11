@@ -183,3 +183,11 @@ export interface Scene {
   title: string;
   items: SceneItem[];
 }
+
+/** How a run of terminal text is meant to look; the host decides how to draw each tone. */
+export type TextTone = 'normal' | 'dim' | 'bold' | 'accent';
+
+export interface TextSpan {
+  text: string;
+  tone: TextTone;
+}

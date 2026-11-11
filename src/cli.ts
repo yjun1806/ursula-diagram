@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { selectFrontEnd, UrsulaError } from './index.ts';
+import { selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color]\n');
   process.exit(2);
 }
 
@@ -11,11 +11,13 @@ let file: string | undefined;
 let format = 'svg';
 let width: number | undefined;
 let legend = true;
+let color = false;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--format') format = args[++i] ?? usage();
   else if (a === '--width') width = Number(args[++i] ?? usage());
   else if (a === '--no-legend') legend = false;
+  else if (a === '--color') color = true;
   else if (a !== undefined && !a.startsWith('--') && file === undefined) file = a;
   else usage();
 }
@@ -26,7 +28,9 @@ try {
   const frontEnd = selectFrontEnd(src);
   const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }) };
   if (format === 'text') {
-    process.stdout.write(`${frontEnd.textLines(src, width, opts).join('\n')}\n`);
+    const rows =
+      color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
+    process.stdout.write(`${rows.join('\n')}\n`);
   } else if (format === 'json') {
     process.stdout.write(`${JSON.stringify(frontEnd.json(src, 'svg', opts), null, 2)}\n`);
   } else {
