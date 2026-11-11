@@ -14,8 +14,12 @@ import { labelSize } from '../layout/labels.ts';
 import type { Frame } from './route.ts';
 import { route } from './route.ts';
 import { assignLayers } from './rows.ts';
+import type { Composition } from './composition.ts';
+import { planZones } from './composition.ts';
 
 export interface LayeredOptions {
+  /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
+  composition?: 'auto' | Composition;
   maxWidth?: number;
   maxHeight?: number;
   legend?: LegendOption;
@@ -71,8 +75,8 @@ export function gapLines(ruler: Ruler, gap: number): number {
   return Math.max(1, odd % 2 === 1 ? odd : odd - 1);
 }
 
-function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, squeeze = false): Placed {
-  const rows = assignLayers(graph, units, capacity, reduction);
+function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, squeeze = false): Placed {
+  const rows = assignLayers(graph, units, capacity, reduction, apart);
   const ladder = buildLadder(graph, rows, units);
   const layers = orderLayers(graph, ladder, rows).layers;
   const plan = planFlat(ladder, layers, ruler);
@@ -105,7 +109,7 @@ interface Solved {
 }
 
 /** Places the graph for one ruler: full row capacity first, then one box less per overflowing lane, and the alignment squeeze last. */
-function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean): Solved {
+function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean): Solved {
   const td = graph.direction === 'TD';
   const { frame, common, baseUnits, unit } = frameFor(graph, ruler, bounded ? limit : undefined);
   const margin = gridUp(ruler, ruler.trackGap);
@@ -117,10 +121,10 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   const dummyShift = Number.isFinite(dummyEnd) ? Math.min(1, Math.max(0, capacityUnits - dummyEnd)) : 0;
   const caps = graph.lanes.map(() => (bounded ? 2 * Math.floor(capacityUnits / 2) : Infinity));
   const reduction = graph.lanes.map(() => 0);
-  const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, squeeze);
+  const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, squeeze);
   let placed = run();
   // A plain placement counts only when no lane needed more rows than it has at unlimited width.
-  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity).layerLane.length) };
+  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane.length) };
   const overLanes = (): Set<number> => {
     const ends = placed.layers.map((row) => Math.max(0, ...row.map((n) => (placed.start[n] ?? 0) + (n < placed.ladder.realCount ? (placed.ladder.nodes[n]?.units ?? 2) : 2))));
     const over = new Set(ends.flatMap((e, i) => (e > capacityUnits ? [placed.ladder.layerLane[i] ?? 0] : [])));
@@ -162,12 +166,12 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
  * Lays the graph out as layers: rows inside lanes, dummies for long edges, barycentre ordering, median
  * alignment on a unit grid, and routes that follow the bands between layers.
  */
-export function layoutLayered(graph: Graph, given: Ruler, opts: LayeredOptions = {}): Layout {
+function layoutPlaced(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean): Layout {
   const base = layeredRuler(given);
   const td = graph.direction === 'TD';
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
   const bounded = limit !== undefined && Number.isFinite(limit);
-  let solved = solve(graph, base, limit, bounded, true);
+  let solved = solve(graph, base, limit, bounded, true, apart);
   if (bounded && !solved.ok) {
     // 1. Close the rank gaps toward the ruler's minimum, one grid step at a time.
     const unit0 = measureNodes(graph.nodes, graph.lanes, base, td).unit;
@@ -176,14 +180,14 @@ export function layoutLayered(graph: Graph, given: Ruler, opts: LayeredOptions =
       const tight = { ...base, rankGap: gap };
       if (measureNodes(graph.nodes, graph.lanes, tight, td).unit >= unit0) continue;
       tightest = tight;
-      const attempt = solve(graph, tight, limit, bounded, true);
+      const attempt = solve(graph, tight, limit, bounded, true, apart);
       if (attempt.ok) {
         solved = attempt;
         break;
       }
     }
     // 2. Still too wide: whole blocks to other rows, then cut paths, at the narrowest gap.
-    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false);
+    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart);
   }
   const { placed, common } = solved;
   const ruler = solved.ruler;
@@ -213,4 +217,17 @@ export function layoutLayered(graph: Graph, given: Ruler, opts: LayeredOptions =
     diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
   }
   return withLegend({ ...drawn, diagnostics }, given, opts.legend);
+}
+
+/**
+ * Lays the graph out with the composition the graph asks for. Stages are drawn as lanes of the transposed
+ * reading direction, so that the bands cross the reading direction; the result is then labelled with the real one.
+ */
+export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions = {}): Layout {
+  const plan = planZones(source, opts.composition ?? 'auto');
+  const stages = plan.composition === 'stages';
+  const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
+  const graph: Graph = { ...source, lanes, direction: stages ? (source.direction === 'LR' ? 'TD' : 'LR') : source.direction };
+  const laid = layoutPlaced(graph, given, opts, stages);
+  return { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
 }

@@ -10,7 +10,12 @@ import { assignLayers } from '../src/layered/rows.ts';
 import { assignTracks } from '../src/layered/route.ts';
 import type { Graph } from '../src/types.ts';
 import * as fixtures from './fixtures.ts';
-import { endpointViolations, geometryViolations, widthForColumns } from './helpers.ts';
+import { endpointViolations as portViolations, geometryViolations, widthForColumns } from './helpers.ts';
+import type { Layout } from '../src/types.ts';
+
+/** Stages are placed in the transposed reading direction, so ports are checked against that graph. */
+const endpointViolations = (l: Layout, ruler: Ruler, g: Graph): string[] =>
+  portViolations(l, ruler, l.composition === 'stages' ? { ...g, direction: g.direction === 'LR' ? 'TD' : 'LR' } : g);
 
 const units = (g: Graph): number[] => g.nodes.map(() => 2);
 const rowsOf = (src: string, capacity = Infinity) => {
@@ -209,7 +214,7 @@ describe('layered alignment', () => {
 });
 
 describe('layered straightening', () => {
-  const lay = (src: string) => layout(parse(src), pixelRuler(), { engine: 'layered' });
+  const lay = (src: string) => layout(parse(src), pixelRuler(), { engine: 'layered', composition: 'lanes' });
   const edge = (l: ReturnType<typeof lay>, from: string, to: string) => l.edges.find((e) => e.from === from && e.to === to);
 
   it('keeps the best of the four alignments instead of a half-step average', () => {
@@ -264,7 +269,7 @@ describe('layered straightening', () => {
     n[Short]
   end
   w --> n`);
-    const l = layout(g, pixelRuler(), { engine: 'layered' });
+    const l = layout(g, pixelRuler(), { engine: 'layered', composition: 'lanes' });
     const e = l.edges[0];
     const wide = l.nodes.find((n) => n.id === 'w');
     expect(wide && wide.w > 160).toBe(true);
@@ -433,7 +438,7 @@ describe('layered grid and width remedies', () => {
 
 describe('layered routing', () => {
   it('draws an aligned pair as one straight segment centre to centre', () => {
-    const l = layout(parse('flowchart LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { engine: 'layered' });
+    const l = layout(parse('flowchart LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { engine: 'layered', composition: 'lanes' });
     const [x, y] = l.nodes;
     expect(l.edges[0]?.points.length).toBe(2);
     expect(l.edges[0]?.points[0]?.x).toBeCloseTo((x?.x ?? 0) + (x?.w ?? 0) / 2);

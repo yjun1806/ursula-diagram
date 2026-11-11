@@ -39,7 +39,7 @@ describe('geometry invariants', () => {
   it('draws a cross-lane edge between nodes sharing a rank as one straight segment', () => {
     const g = parse('flowchart LR\nsubgraph a[Top]\nX --> Y\nend\nsubgraph b[Bottom]\nZ\nend\nY --> Z');
     for (const ruler of [pixelRuler(), cellRuler()]) {
-      const l = layout(g, ruler);
+      const l = layout(g, ruler, { composition: 'lanes' });
       const y = l.nodes.find((n) => n.id === 'Y');
       const z = l.nodes.find((n) => n.id === 'Z');
       expect(y?.rank).toBe(z?.rank);

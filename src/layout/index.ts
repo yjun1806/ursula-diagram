@@ -27,6 +27,8 @@ export interface LayoutOptions extends SolveOptions {
   laneAxis?: 'auto' | LaneAxis;
   /** 'layered' (the default) is the layered pipeline of `src/layered`; 'grid' is the slot-based placer. */
   engine?: 'grid' | 'layered';
+  /** Layered engine only: bands alongside the reading direction ('lanes') or crossing it ('stages'); chosen from the graph when 'auto'. */
+  composition?: 'auto' | 'lanes' | 'stages';
 }
 
 export type { LegendOption } from './legend.ts';
@@ -203,8 +205,8 @@ function layoutAlong(arranged: AlongArrangement, ruler: Ruler, opts: SolveOption
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
-  const { legend, laneAxis = 'auto', engine = 'layered', ...solveOpts } = opts;
-  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }) });
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, ...solveOpts } = opts;
+  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
   }

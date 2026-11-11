@@ -4,12 +4,14 @@ import type { TextSpan } from './types.ts';
 export interface RenderOptions extends SvgOptions {
   maxWidth?: number;
   engine?: 'grid' | 'layered';
+  composition?: 'auto' | 'lanes' | 'stages';
 }
 
 export interface TextOptions {
   legend?: SvgOptions['legend'];
   maxHeight?: number;
   engine?: 'grid' | 'layered';
+  composition?: 'auto' | 'lanes' | 'stages';
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */

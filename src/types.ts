@@ -107,6 +107,8 @@ export interface Layout {
   height: number;
   direction: Direction;
   laneAxis: LaneAxis;
+  /** Set by the layered engine: whether bands run alongside the reading direction or cross it in reading order. */
+  composition?: 'lanes' | 'stages';
   lanes: LayoutLane[];
   nodes: LayoutNode[];
   edges: LayoutEdge[];

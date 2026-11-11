@@ -83,6 +83,8 @@ interface Block {
   cross: number;
   anchor: 'top' | 'bottom';
   hint: number;
+  /** A block of one node that no edge inside its lane touches. */
+  single: boolean;
 }
 
 interface Slot {
@@ -202,7 +204,7 @@ function pack(blocks: Block[], cap: number): Shelf[] {
  * small block (main path on its first row, branches on rows below); blocks stand side by side, anchored toward
  * the lanes they talk to, and only when a row would be too full do they stack or move to another shelf of rows.
  */
-export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0): Rows {
+export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0, apart = false): Rows {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const laneOf = graph.nodes.map((n) => Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane)));
   const layer = new Array<number>(graph.nodes.length).fill(0);
@@ -261,7 +263,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       list.filter((p) => (laneOf[p.other] ?? 0) > lane).length,
     ];
     const blocks: Block[] = [];
-    const makeBlock = (nodes: number[], rankOf: Map<number, number>, rowOf: Map<number, number>): Block => {
+    const makeBlock = (nodes: number[], rankOf: Map<number, number>, rowOf: Map<number, number>, comp: number[] = nodes): Block => {
       const list = edgesOut(nodes);
       const [up, down] = lean(list);
       const shared = new Map<number, number>();
@@ -283,6 +285,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         cross: list.length,
         anchor,
         hint: list.length > 0 ? mean(list.map((p) => p.other)) : mean(nodes),
+        single: nodes.length === 1 && comp.length === 1,
       };
     };
     for (const nodes of comps.values()) {
@@ -319,7 +322,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       let group: number[] = [];
       const flush = (): void => {
         if (group.length === 0) return;
-        blocks.push(makeBlock(nodes.filter((n) => group.includes(rankOf.get(n) ?? 0)), rankOf, rowOf));
+        blocks.push(makeBlock(nodes.filter((n) => group.includes(rankOf.get(n) ?? 0)), rankOf, rowOf, nodes));
         group = [];
       };
       for (const r of ranks) {
@@ -330,7 +333,12 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     }
 
     const widest = Math.max(...blocks.map((b) => b.width));
-    const shelves = pack(fill(blocks, Math.max(widest, cap - less), makeBlock, (n) => units[n] ?? 2), Math.max(widest, cap - less));
+    const room = Math.max(widest, cap - less);
+    const lone = apart ? blocks.filter((b) => b.single) : [];
+    // Nodes without edges in their lane may wait one place further along the band instead of filling the same row.
+    const shelves = lone.length > 0 && lone.length < blocks.length
+      ? [...pack(fill(blocks.filter((b) => !b.single), room, makeBlock, (n) => units[n] ?? 2), room), ...pack(lone, room)]
+      : pack(fill(blocks, room, makeBlock, (n) => units[n] ?? 2), room);
     const keys: Array<[number, number, number]> = [];
     shelves.forEach((shelf, s) => {
       for (const slot of shelf.slots) {

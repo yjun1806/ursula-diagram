@@ -1,0 +1,65 @@
+import type { Graph } from '../types.ts';
+
+/**
+ * How lane bands relate to the reading direction: `lanes` run alongside it, `stages` cross it and follow one
+ * another in reading order.
+ */
+export type Composition = 'lanes' | 'stages';
+
+export interface ZonePlan {
+  composition: Composition;
+  /** Indexes into `graph.lanes` in drawing order: bands that touch an edge first, bands without any edge last. */
+  order: number[];
+}
+
+/** Reading-order rank of every band, or undefined when the bands send edges back and forth. */
+function stageRanks(count: number, links: Array<[number, number]>, active: number[]): Map<number, number> | undefined {
+  const rank = new Map<number, number>(active.map((z) => [z, 0] as const));
+  for (let round = 0; round <= active.length; round++) {
+    let changed = false;
+    for (const [a, b] of links) {
+      if ((rank.get(b) ?? 0) < (rank.get(a) ?? 0) + 1) {
+        rank.set(b, (rank.get(a) ?? 0) + 1);
+        changed = true;
+      }
+    }
+    if (!changed) return rank;
+  }
+  void count;
+  return undefined;
+}
+
+/**
+ * Picks the composition. With two or more bands that touch edges, `stages` is chosen when the edges between
+ * bands run one way only and are at least as many as the edges inside bands; otherwise `lanes`.
+ */
+export function planZones(graph: Graph, requested: 'auto' | Composition = 'auto'): ZonePlan {
+  const lanes = graph.lanes.length;
+  const laneOf = new Map(graph.nodes.map((n) => [n.id, Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane))] as const));
+  const touched = new Set<number>();
+  const links = new Map<string, [number, number]>();
+  let inside = 0;
+  let across = 0;
+  for (const e of graph.edges) {
+    const a = laneOf.get(e.from);
+    const b = laneOf.get(e.to);
+    if (a === undefined || b === undefined) continue;
+    touched.add(a);
+    touched.add(b);
+    if (a === b) inside++;
+    else {
+      across++;
+      links.set(`${a}|${b}`, [a, b]);
+    }
+  }
+  const active = Array.from({ length: lanes }, (_, i) => i).filter((i) => touched.has(i));
+  const aside = Array.from({ length: lanes }, (_, i) => i).filter((i) => !touched.has(i));
+  const ranks = stageRanks(lanes, [...links.values()], active);
+  const oneWay = ranks !== undefined;
+  const stages = requested === 'stages' || (requested === 'auto' && active.length >= 2 && oneWay && across > 0 && across >= inside);
+  if (!stages || active.length < 2) return { composition: requested === 'stages' ? 'stages' : 'lanes', order: [...active, ...aside] };
+  const order = ranks
+    ? [...active].sort((x, y) => (ranks.get(x) ?? 0) - (ranks.get(y) ?? 0) || x - y)
+    : [...active];
+  return { composition: 'stages', order: [...order, ...aside] };
+}
