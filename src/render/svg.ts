@@ -153,7 +153,7 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
   }
   return (
     `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}>` +
-    `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="8"/>` +
+    `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="6"/>` +
     texts.join('') +
     (extra.extra ?? '') +
     '</g>'

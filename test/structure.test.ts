@@ -192,7 +192,29 @@ n2 -->|transfer| m2`;
   });
 });
 
+describe('pixel ruler character widths', () => {
+  it('measures Korean and Latin text in the calibrated ranges', () => {
+    const ruler = pixelRuler();
+    // 6 Hangul syllables at 0.89 em, 12 px line text.
+    expect(ruler.textWidth('주문접수확인', 'line')).toBeCloseTo(6 * 0.89 * 12, 5);
+    // O 0.71, r d e r d 0.57 each (5), spaces 0.29 (2), i 0.33, digit 0.65.
+    expect(ruler.textWidth('Order id 7', 'line')).toBeCloseTo((0.71 + 5 * 0.57 + 2 * 0.29 + 0.33 + 0.65) * 12, 5);
+    expect(ruler.textWidth('Wi', 'title')).toBeCloseTo((0.89 + 0.33) * 13, 5);
+  });
+});
+
 describe('uniform node width', () => {
+  it('shares the width that fits 75 % of the boxes and lets the long one grow', () => {
+    const l = layout(
+      parse('flowchart LR\nA[One] --> B[Two]\nB --> C[Six]\nC --> D[A considerably longer title than the rest]'),
+      pixelRuler(),
+    );
+    const long = l.nodes.find((n) => n.id === 'D');
+    const rest = l.nodes.filter((n) => n.id !== 'D');
+    expect(new Set(rest.map((n) => n.w)).size).toBe(1);
+    expect(long?.w ?? 0).toBeGreaterThan(rest[0]?.w ?? 0);
+  });
+
   it('gives every box the widest width', () => {
     const l = layout(parse('flowchart LR\nA[Ok] --> B[Validate order]\nB --> C[Ship it]'), pixelRuler());
     expect(new Set(l.nodes.map((n) => n.w)).size).toBe(1);

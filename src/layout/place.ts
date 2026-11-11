@@ -127,15 +127,14 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
   const need = (s: Slot): Need => needs.get(s.id) ?? { nf: 0, nc: 0 };
   const needW = (s: Slot): number => (td ? need(s).nc : need(s).nf);
   const needH = (s: Slot): number => (td ? need(s).nf : need(s).nc);
-  // Every box takes the widest content width, except boxes much wider than the median, which keep
-  // their own. A box that needs more room for its attachments grows alone.
+  // Boxes narrower than the shared width take it. The shared width is the smallest one that fits
+  // the content of at least 75 % of the boxes; a box that needs more keeps its own width.
   const own = content.map((c) => snapW(c.w));
-  const median = [...own].sort((a, b) => a - b)[Math.floor(own.length / 2)] ?? 0;
-  const limit = 1.6 * median;
-  const common = Math.max(0, ...own.filter((w) => w <= limit));
+  const sorted = [...own].sort((a, b) => a - b);
+  const common = sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0;
   const physW = (i: number, s: Slot): number => {
     const mine = own[i] ?? 0;
-    return snapW(Math.max(mine > limit ? mine : common, needW(s)));
+    return snapW(Math.max(mine, common, needW(s)));
   };
   const contentH = Math.max(0, ...content.map((c) => c.h));
   const slots = topo.slots.map((s, i) => {
@@ -179,7 +178,7 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
     rowExt,
     gutter,
     margin: ruler.trackGap,
-    laneGap: ruler.trackGap,
+    laneGap: ruler.laneGap,
     baseWf,
     baseWc,
     minBand,

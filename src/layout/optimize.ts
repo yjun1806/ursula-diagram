@@ -20,6 +20,7 @@ const GRID: Ruler = {
   labelPadY: 0,
   widthStep: 8,
   rankGap: 6,
+  laneGap: 1,
   rowGap: 4,
   trackGap: 1,
   lanePad: 3,

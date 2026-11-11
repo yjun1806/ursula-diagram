@@ -17,6 +17,8 @@ export interface Ruler {
   labelPadY: number;
   widthStep: number;
   rankGap: number;
+  /** Space between two adjacent lane bands. */
+  laneGap: number;
   rowGap: number;
   trackGap: number;
   lanePad: number;
@@ -48,16 +50,38 @@ export function cellWidth(text: string): number {
   return total;
 }
 
-const NARROW_PUNCTUATION = new Set(".,:;'\"!|()[]{}`");
+/**
+ * Average advance of each character class as a fraction of the font size. The values are measured
+ * glyph advances of a system sans-serif stack with a Korean fallback at 12-13 px, plus a margin of
+ * about 3 %. The same table serves every text role.
+ */
+const EM = {
+  wide: 0.89,
+  upper: 0.71,
+  lower: 0.57,
+  digit: 0.65,
+  space: 0.29,
+  narrow: 0.33,
+  widePunct: 0.89,
+  punct: 0.5,
+  other: 0.62,
+} as const;
+
+const NARROW = new Set(".,:;'!|il\u00b7");
+const WIDE_SYMBOLS = new Set('@#%&MW');
+const PUNCTUATION = new Set('()[]/-_+=?');
 
 function emWidth(ch: string): number {
   const cp = ch.codePointAt(0) ?? 0;
-  if (isWide(cp) || cp > 0xffff) return 0.95;
-  if (ch === ' ') return 0.3;
-  if (NARROW_PUNCTUATION.has(ch)) return 0.3;
-  if (ch >= 'A' && ch <= 'Z') return 0.68;
-  if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) return 0.56;
-  return 0.6;
+  if (isWide(cp) || cp > 0xffff) return EM.wide;
+  if (ch === ' ') return EM.space;
+  if (NARROW.has(ch)) return EM.narrow;
+  if (WIDE_SYMBOLS.has(ch)) return EM.widePunct;
+  if (ch >= 'A' && ch <= 'Z') return EM.upper;
+  if (ch >= 'a' && ch <= 'z') return EM.lower;
+  if (ch >= '0' && ch <= '9') return EM.digit;
+  if (PUNCTUATION.has(ch) || cp < 0x80) return EM.punct;
+  return EM.other;
 }
 
 export function pixelRuler(): Ruler {
@@ -75,7 +99,8 @@ export function pixelRuler(): Ruler {
     labelPadX: 4,
     labelPadY: 2,
     widthStep: 8,
-    rankGap: 48,
+    rankGap: 40,
+    laneGap: 4,
     rowGap: 40,
     trackGap: 12,
     lanePad: 20,
@@ -95,6 +120,7 @@ export function cellRuler(): Ruler {
     labelPadY: 0,
     widthStep: 1,
     rankGap: 4,
+    laneGap: 1,
     rowGap: 2,
     trackGap: 1,
     lanePad: 1,
