@@ -1,0 +1,29 @@
+sequenceDiagram
+  autonumber
+  actor User as 사용자
+  participant Web as Web App
+  participant API as Auth API
+  participant DB as User Store
+  participant Mail as Mail Service
+
+  User->>Web: Open login page
+  Web-->>User: Show form
+  User->>+Web: Submit credentials
+  Web->>+API: POST /login
+  API->>API: Hash password
+  API->>+DB: Find user by email
+  DB-->>-API: User record
+  Note right of DB: Lookups are cached for 60 s
+  alt Password matches
+    API-->>Web: Session token
+    Web-->>-User: Redirect to dashboard
+  else Too many failures
+    API-)Mail: Send lock notice
+    API--xWeb: 423 Locked
+    Web-->>User: 계정이 잠겼습니다
+  end
+  loop Every 5 minutes
+    Web->>API: Refresh session
+  end
+  Note over User,Web: Session ends on logout
+  deactivate API

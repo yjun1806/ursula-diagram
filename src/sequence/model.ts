@@ -1,0 +1,129 @@
+import type { Diagnostic, Scene } from '../types.ts';
+
+export type ArrowHead = 'filled' | 'open' | 'cross' | 'none';
+export type BlockKind = 'loop' | 'opt' | 'alt' | 'par';
+
+export interface Participant {
+  id: string;
+  /** Label lines (`<br/>` splits lines). */
+  lines: string[];
+  actor: boolean;
+}
+
+export interface MessageStmt {
+  kind: 'message';
+  from: string;
+  to: string;
+  lines: string[];
+  dashed: boolean;
+  head: ArrowHead;
+  /** `+` suffix: activates the receiver. */
+  activate: boolean;
+  /** `-` suffix: deactivates the sender. */
+  deactivate: boolean;
+  /** Sequence number when `autonumber` is on. */
+  number?: number;
+  line: number;
+}
+
+export interface NoteStmt {
+  kind: 'note';
+  side: 'left' | 'right' | 'over';
+  /** One participant, or two for `over A,B`. */
+  anchors: string[];
+  lines: string[];
+  line: number;
+}
+
+export interface ActivationStmt {
+  kind: 'activate' | 'deactivate';
+  who: string;
+  line: number;
+}
+
+export interface OpenStmt {
+  kind: 'open';
+  block: BlockKind;
+  lines: string[];
+  line: number;
+}
+
+/** `else` of an `alt` or `and` of a `par`. */
+export interface BranchStmt {
+  kind: 'branch';
+  lines: string[];
+  line: number;
+}
+
+export interface CloseStmt {
+  kind: 'close';
+  line: number;
+}
+
+export type Statement = MessageStmt | NoteStmt | ActivationStmt | OpenStmt | BranchStmt | CloseStmt;
+
+export interface Sequence {
+  participants: Participant[];
+  statements: Statement[];
+}
+
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface PlacedParticipant {
+  id: string;
+  /** Lifeline x. */
+  x: number;
+  box: Box;
+}
+
+export interface PlacedMessage {
+  /** Index among the messages of the diagram, in source order. */
+  index: number;
+  from: string;
+  to: string;
+  /** Lifeline x of the sender and the receiver. */
+  fromX: number;
+  toX: number;
+  /** Vertical position of the message line. */
+  y: number;
+  self: boolean;
+  /** Box around all label lines; absent when the message has no text. */
+  label?: Box;
+}
+
+export interface PlacedNote {
+  statement: number;
+  box: Box;
+}
+
+export interface PlacedFrame extends Box {
+  block: BlockKind;
+  /** Statement index of the opening line. */
+  statement: number;
+  /** Vertical positions of the `else` / `and` dividers. */
+  dividers: number[];
+}
+
+export interface PlacedRow {
+  /** Index into `Sequence.statements`. */
+  statement: number;
+  y: number;
+  h: number;
+}
+
+export interface SequenceLayout {
+  width: number;
+  height: number;
+  participants: PlacedParticipant[];
+  rows: PlacedRow[];
+  messages: PlacedMessage[];
+  notes: PlacedNote[];
+  frames: PlacedFrame[];
+  diagnostics: Diagnostic[];
+  scene: Scene;
+}

@@ -1,7 +1,7 @@
 import type { LegendOption } from '../layout/legend.ts';
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import type { Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
+import type { Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem } from '../types.ts';
 
 export interface NodeHookResult {
   attrs?: Record<string, string>;
@@ -63,9 +63,9 @@ function expand(rule: string, mode: 0 | 1): string {
   return rule.replace(/\$([a-z]+)/g, (_, name: string) => `var(--ursula-${name},${TOKENS[name]?.[mode] ?? 'inherit'})`);
 }
 
-function styleSheet(): string {
-  const light = RULES.map((r) => expand(r, 0)).join('\n');
-  const dark = RULES.map((r) => expand(r, 1)).join('\n');
+function styleSheet(rules: readonly string[] = RULES): string {
+  const light = rules.map((r) => expand(r, 0)).join('\n');
+  const dark = rules.map((r) => expand(r, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
 }
 
@@ -78,7 +78,7 @@ export function escapeXml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function num(v: number): string {
+export function num(v: number): string {
   const r = Math.round(v * 100) / 100;
   return String(r === 0 ? 0 : r);
 }
@@ -210,6 +210,93 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...layout.nodes.map((n) => nodeSvg(n, opts.node)),
     ...layout.edges.map(labelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin)] : []),
+    '</svg>',
+  ].join('');
+}
+
+const SCENE_RULES: readonly string[] = [
+  RULES[0] ?? '',
+  '.ursula-box{fill:$surface;stroke:$border;stroke-width:1}',
+  '.ursula-box--note{fill:$lane}',
+  '.ursula-box--bar{fill:$lane;stroke:$line}',
+  '.ursula-box--frame{fill:none}',
+  '.ursula-tab{fill:$lane;stroke:$border;stroke-width:1}',
+  '.ursula-line{fill:none;stroke:$line;stroke-width:1.2}',
+  '.ursula-line--weak{stroke:$border;stroke-width:1}',
+  '.ursula-line--dash{stroke-dasharray:5 4}',
+  '.ursula-line--weak.ursula-line--dash{stroke-dasharray:4 4}',
+  '.ursula-arrow{fill:$line}',
+  '.ursula-arrow-open{fill:none;stroke:$line;stroke-width:1.2}',
+  '.ursula-text{fill:$fg;font-size:12px;font-weight:400}',
+  '.ursula-text--muted{fill:$muted}',
+  '.ursula-text--title{font-size:13px;font-weight:600}',
+  '.ursula-text--label{font-weight:500}',
+  '.ursula-text--halo{stroke:$surface;stroke-width:4;stroke-linejoin:round;paint-order:stroke}',
+];
+
+function dataAttrs(data: Record<string, string> | undefined): string {
+  return Object.entries(data ?? {})
+    .map(([k, v]) => ` data-${k.replace(/[^A-Za-z0-9_-]/g, '')}="${escapeXml(v)}"`)
+    .join('');
+}
+
+const SCENE_MARKERS: Record<string, string> = {
+  filled: MARKER('ursula-arrow', 'ursula-arrow'),
+  open:
+    '<marker id="ursula-arrow-open" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">' +
+    '<path class="ursula-arrow-open" d="M0 0L8 4L0 8"/></marker>',
+  cross:
+    '<marker id="ursula-arrow-cross" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">' +
+    '<path class="ursula-arrow-open" d="M1 1L7 7M7 1L1 7"/></marker>',
+};
+
+function sceneItemSvg(item: SceneItem): string {
+  if (item.kind === 'box') {
+    const rx = item.style === 'box' ? 6 : item.style === 'frame' ? 4 : 2;
+    const rect =
+      `<rect class="ursula-box ursula-box--${item.style}"${item.dash ? ' stroke-dasharray="5 4"' : ''} x="${num(item.x)}" y="${num(item.y)}" ` +
+      `width="${num(item.w)}" height="${num(item.h)}" rx="${rx}"${dataAttrs(item.data)}/>`;
+    if (!item.tab) return rect;
+    const t = item.tab;
+    return (
+      rect +
+      `<rect class="ursula-tab" x="${num(item.x)}" y="${num(item.y)}" width="${num(t.w)}" height="${num(t.h)}" rx="3"/>` +
+      `<text class="ursula-text ursula-text--label" x="${num(item.x + t.w / 2)}" y="${num(item.y + t.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(t.text)}</text>`
+    );
+  }
+  if (item.kind === 'text') {
+    const cls = [
+      'ursula-text',
+      item.tone === 'muted' ? 'ursula-text--muted' : '',
+      item.font === 'title' ? 'ursula-text--title' : item.font === 'label' ? 'ursula-text--label' : '',
+      item.halo ? 'ursula-text--halo' : '',
+    ]
+      .filter((c) => c !== '')
+      .join(' ');
+    return (
+      `<text class="${cls}" x="${num(item.x)}" y="${num(item.y)}" text-anchor="${item.anchor ?? 'start'}" dominant-baseline="central"` +
+      `${dataAttrs(item.data)}>${escapeXml(item.text)}</text>`
+    );
+  }
+  const arrow = item.arrow ?? 'none';
+  const cls = ['ursula-line', item.weak ? 'ursula-line--weak' : '', item.dash ? 'ursula-line--dash' : ''].filter((c) => c !== '').join(' ');
+  const marker = arrow === 'none' ? '' : ` marker-end="url(#${arrow === 'filled' ? 'ursula-arrow' : `ursula-arrow-${arrow}`})"`;
+  return `<path class="${cls}" d="${pathData(item.points, 6)}"${marker}${dataAttrs(item.data)}/>`;
+}
+
+/** Draws a scene with the same style tokens, fonts and dark block as the flowchart renderer. */
+export function renderSceneSvg(scene: Scene, opts: Pick<SvgOptions, 'title'> = {}): string {
+  const w = num(scene.width);
+  const h = num(scene.height);
+  const used = new Set<string>();
+  for (const it of scene.items) if (it.kind === 'line' && it.arrow && it.arrow !== 'none') used.add(it.arrow);
+  const defs = ['filled', 'open', 'cross'].filter((k) => used.has(k)).map((k) => SCENE_MARKERS[k] ?? '');
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
+    `<style>${styleSheet(SCENE_RULES)}</style>`,
+    ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
+    ...scene.items.map(sceneItemSvg),
     '</svg>',
   ].join('');
 }

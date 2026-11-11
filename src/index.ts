@@ -1,10 +1,9 @@
+import './flowchart-frontend.ts';
 import type { LayoutOptions } from './layout/index.ts';
-import { layout } from './layout/index.ts';
-import { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
-import { parse } from './parse.ts';
+import { cellWidth } from './metrics.ts';
+import { selectFrontEnd } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
-import { renderSvg } from './render/svg.ts';
-import { renderTextLayout } from './render/text.ts';
+import './sequence/frontend.ts';
 import { UrsulaError } from './types.ts';
 
 export { parse } from './parse.ts';
@@ -14,18 +13,25 @@ export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
-export { renderTextLayout } from './render/text.ts';
+export { renderTextLayout, renderTextScene } from './render/text.ts';
+export { renderSceneSvg } from './render/svg.ts';
+export { registerFrontEnd, selectFrontEnd } from './registry.ts';
+export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
+export { parseSequence } from './sequence/parse.ts';
+export { layoutSequence } from './sequence/layout.ts';
+export type { SequenceLayoutOptions } from './sequence/layout.ts';
+export type * from './sequence/model.ts';
 export { UrsulaError } from './types.ts';
 export type * from './types.ts';
 
-/** Parses `src`, lays it out in terminal cells and draws it as text. */
+/** Picks the front-end by the header of `src`, lays it out in terminal cells and draws it as text. */
 export function renderText(
   src: string,
   maxWidth: number,
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight'> = {},
 ): { lines: string[] } | { error: string } {
   try {
-    const lines = renderTextLayout(layout(parse(src), cellRuler(), { ...opts, maxWidth }));
+    const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
     const widest = Math.max(0, ...lines.map(cellWidth));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
@@ -35,12 +41,7 @@ export function renderText(
   }
 }
 
-/** Parses `src`, lays it out in pixels and returns inline SVG. */
+/** Picks the front-end by the header of `src`, lays it out in pixels and returns inline SVG. */
 export function render(src: string, opts: SvgOptions & { maxWidth?: number } = {}): string {
-  const { maxWidth, legend, ...svgOpts } = opts;
-  const layoutOpts: LayoutOptions = {
-    ...(maxWidth === undefined ? {} : { maxWidth }),
-    ...(legend === undefined ? {} : { legend }),
-  };
-  return renderSvg(layout(parse(src), pixelRuler(), layoutOpts), svgOpts);
+  return selectFrontEnd(src).svg(src, opts);
 }
