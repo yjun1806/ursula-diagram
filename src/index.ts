@@ -1,3 +1,4 @@
+import type { LayoutOptions } from './layout/index.ts';
 import { layout } from './layout/index.ts';
 import { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 import { parse } from './parse.ts';
@@ -8,7 +9,7 @@ import { UrsulaError } from './types.ts';
 
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
-export type { LayoutOptions } from './layout/index.ts';
+export type { LayoutOptions, LegendOption } from './layout/index.ts';
 export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
@@ -18,9 +19,13 @@ export { UrsulaError } from './types.ts';
 export type * from './types.ts';
 
 /** Parses `src`, lays it out in terminal cells and draws it as text. */
-export function renderText(src: string, maxWidth: number): { lines: string[] } | { error: string } {
+export function renderText(
+  src: string,
+  maxWidth: number,
+  opts: Pick<LayoutOptions, 'legend'> = {},
+): { lines: string[] } | { error: string } {
   try {
-    const lines = renderTextLayout(layout(parse(src), cellRuler()));
+    const lines = renderTextLayout(layout(parse(src), cellRuler(), opts));
     const widest = Math.max(0, ...lines.map(cellWidth));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
@@ -32,6 +37,10 @@ export function renderText(src: string, maxWidth: number): { lines: string[] } |
 
 /** Parses `src`, lays it out in pixels and returns inline SVG. */
 export function render(src: string, opts: SvgOptions & { maxWidth?: number } = {}): string {
-  const { maxWidth, ...svgOpts } = opts;
-  return renderSvg(layout(parse(src), pixelRuler(), maxWidth === undefined ? {} : { maxWidth }), svgOpts);
+  const { maxWidth, legend, ...svgOpts } = opts;
+  const layoutOpts: LayoutOptions = {
+    ...(maxWidth === undefined ? {} : { maxWidth }),
+    ...(legend === undefined ? {} : { legend }),
+  };
+  return renderSvg(layout(parse(src), pixelRuler(), layoutOpts), svgOpts);
 }

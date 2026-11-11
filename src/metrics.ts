@@ -23,6 +23,14 @@ export interface Ruler {
   trackGap: number;
   lanePad: number;
   laneLabelGap: number;
+  /** Length of a sample line in the legend. */
+  legendSample: number;
+  /** Space between a legend sample and its caption. */
+  legendCaptionGap: number;
+  /** Space between two legend items. */
+  legendGap: number;
+  /** Height the legend adds below the drawing. */
+  legendHeight: number;
   snap(v: number): number;
 }
 
@@ -105,6 +113,10 @@ export function pixelRuler(): Ruler {
     trackGap: 12,
     lanePad: 20,
     laneLabelGap: 8,
+    legendSample: 40,
+    legendCaptionGap: 8,
+    legendGap: 24,
+    legendHeight: 32,
     snap: (v) => v,
   };
 }
@@ -125,6 +137,10 @@ export function cellRuler(): Ruler {
     trackGap: 1,
     lanePad: 1,
     laneLabelGap: 1,
+    legendSample: 2,
+    legendCaptionGap: 1,
+    legendGap: 3,
+    legendHeight: 1,
     snap: (v) => Math.round(v),
   };
 }

@@ -25,6 +25,10 @@ const GRID: Ruler = {
   trackGap: 1,
   lanePad: 3,
   laneLabelGap: 1,
+  legendSample: 0,
+  legendCaptionGap: 0,
+  legendGap: 0,
+  legendHeight: 0,
   snap: (v) => v,
 };
 

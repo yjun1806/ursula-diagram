@@ -82,4 +82,21 @@ describe('renderText', () => {
     expect(out).toContain('━');
     expect(out).toMatch(/[┄┆]/);
   });
+
+  it('adds a legend line below the drawing when two or more styles are used', () => {
+    const out = lines('flowchart LR\nA ==> B\nA -.-> C\nB --> D\nC --> D');
+    expect(out[out.length - 1]).toMatch(/^\s*── Flow {3}━━ Request {3}┄┄ Pending$/);
+    expect(out[out.length - 2]).toBe('');
+  });
+
+  it('omits the legend with one style, with legend:false, and renames captions', () => {
+    const src = 'flowchart LR\nA ==> B\nA -.-> C';
+    expect(lines('flowchart LR\nA --> B').join('\n')).not.toContain('Flow');
+    const off = renderText(src, 200, { legend: false });
+    if ('error' in off) throw new Error(off.error);
+    expect(off.lines.join('\n')).not.toContain('Request');
+    const named = renderText(src, 200, { legend: { thick: 'Call' } });
+    if ('error' in named) throw new Error(named.error);
+    expect(named.lines[named.lines.length - 1]).toContain('━━ Call');
+  });
 });

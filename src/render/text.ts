@@ -203,6 +203,15 @@ function drawNode(c: Canvas, n: LayoutNode): void {
   });
 }
 
+const SAMPLE_GLYPH: Record<EdgeStyle, string> = { normal: '──', thick: '━━', dotted: '┄┄' };
+
+function drawLegend(c: Canvas, layout: Layout): void {
+  for (const item of layout.legend?.items ?? []) {
+    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
+    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
+  }
+}
+
 /** Draws a layout made with the cell ruler; returns one string per terminal row. */
 export function renderTextLayout(layout: Layout): string[] {
   const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
@@ -210,6 +219,7 @@ export function renderTextLayout(layout: Layout): string[] {
   drawEdges(c, layout);
   drawLabels(c, layout);
   for (const n of layout.nodes) drawNode(c, n);
+  drawLegend(c, layout);
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;

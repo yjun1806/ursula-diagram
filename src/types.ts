@@ -73,6 +73,30 @@ export interface Diagnostic {
   suggestion?: string;
 }
 
+export interface LegendItem {
+  style: EdgeStyle;
+  caption: string;
+  /** Left edge of the sample line. */
+  x: number;
+  /** Vertical centre of the item row. */
+  y: number;
+  /** Width of sample, gap and caption together. */
+  w: number;
+  sampleW: number;
+  captionX: number;
+}
+
+export interface Legend {
+  /** Box of the legend; it starts where the drawing ends. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Size of the drawing without the legend. */
+  base: { width: number; height: number };
+  items: LegendItem[];
+}
+
 export interface Layout {
   width: number;
   height: number;
@@ -81,6 +105,8 @@ export interface Layout {
   nodes: LayoutNode[];
   edges: LayoutEdge[];
   diagnostics: Diagnostic[];
+  /** Present when the drawing uses two or more edge styles; width and height already include it. */
+  legend?: Legend;
 }
 
 export class UrsulaError extends Error {
