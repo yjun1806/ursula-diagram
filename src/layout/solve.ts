@@ -6,7 +6,7 @@ import { crossings } from './check.ts';
 import type { LabelSize, Rect, Segment } from './labels.ts';
 import { hostRun, labelDemands, labelSize, placeLabel } from './labels.ts';
 import type { Need, Side, Slot } from './place.ts';
-import { buildTopology, fitLaneLabels, geometry, origin, sizeSlots } from './place.ts';
+import { buildTopology, finalNf, fitLaneLabels, geometry, gridUp, origin, sizeSlots } from './place.ts';
 import { nodeNeeds, planEdges } from './plan.ts';
 import { buildPorts, portOrders } from './ports.ts';
 import type { Run } from './route.ts';
@@ -15,7 +15,10 @@ import type { Chain } from './tracks.ts';
 import { assignTracks, trackCounts, turnOrders } from './tracks.ts';
 
 export interface LayoutOptions {
+  /** Canvas width. Fixes the number of rank columns; the pixel ruler defaults to its own canvas width. */
   maxWidth?: number;
+  /** Canvas height for top-down drawings, where the flow axis is vertical; unbounded when absent. */
+  maxHeight?: number;
 }
 
 const tidy = (v: number): number => {
@@ -51,10 +54,11 @@ export function solve(
   ruler: Ruler,
   rank: Map<string, number>,
   row: Map<string, number>,
-  opts: LayoutOptions = {},
+  opts: Pick<LayoutOptions, 'maxWidth'> = {},
+  span: Map<string, number> = new Map(),
 ): Layout {
   const td = graph.direction === 'TD';
-  const topo = buildTopology(graph, rank, row);
+  const topo = buildTopology(graph, rank, row, span);
   const plans = planEdges(graph, topo);
   const needs: Map<string, Need> = nodeNeeds(plans, topo, ruler);
   const sk = sizeSlots(topo, ruler, graph.direction, needs);
@@ -71,7 +75,7 @@ export function solve(
     // A stub leaves a line toward the node: nodes on the low side (fH, cH) are at lower coordinates.
     const stubDir = (side: Side): -1 | 1 => (side === 'fH' || side === 'cH' ? -1 : 1);
     const stubPos = (slot: Slot) => (run: Run): number =>
-      run.kind === 'f' ? 2 * slot.cb + 1 : 2 * slot.rank + 1;
+      run.kind === 'f' ? 2 * slot.cb + 1 : 2 * slot.rank + slot.span;
     chains.push({
       runs: r.runs,
       start: stubDir(plan.srcSide),
@@ -86,18 +90,24 @@ export function solve(
   const sizes = new Map<number, LabelSize>();
   for (const p of plans) if (p.label) sizes.set(p.index, labelSize(p.label, ruler));
   const demand = labelDemands(sk, rough, ruler, plans, routed, runs, sizes);
-  const wf = sk.baseWf.map((w, a) => Math.max(w, (counts.get(`f${a}`) ?? 0) * ruler.trackGap, demand.wf[a] ?? 0));
-  const wcRaw = sk.baseWc.map((w, b) => Math.max(w, (counts.get(`c${b}`) ?? 0) * ruler.trackGap, demand.wc[b] ?? 0));
+  const wf = sk.baseWf.map((w, a) =>
+    gridUp(ruler, Math.max(w, (counts.get(`f${a}`) ?? 0) * ruler.trackGap, demand.wf[a] ?? 0)),
+  );
+  const wcRaw = sk.baseWc.map((w, b) =>
+    gridUp(ruler, Math.max(w, (counts.get(`c${b}`) ?? 0) * ruler.trackGap, demand.wc[b] ?? 0)),
+  );
   const geo = geometry(sk, wf, fitLaneLabels(sk, wcRaw));
 
   const phys = (p: AbsPoint): Point => (td ? { x: tidy(p.c), y: tidy(p.f) } : { x: tidy(p.f), y: tidy(p.c) });
   const nodes: LayoutNode[] = sk.slots.map((s) => {
     const { f0, c0 } = origin(sk, geo, ruler, s);
-    const [x, y, w, h] = td ? [c0, f0, s.nc, s.nf] : [f0, c0, s.nf, s.nc];
+    const nf = finalNf(sk, geo, s);
+    const [x, y, w, h] = td ? [c0, f0, s.nc, nf] : [f0, c0, nf, s.nc];
     return {
       id: s.id,
       lane: sk.lanes[s.lane]?.id ?? '',
       rank: s.rank,
+      span: s.span,
       row: s.row,
       x: tidy(x),
       y: tidy(y),

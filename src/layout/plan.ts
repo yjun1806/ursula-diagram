@@ -31,7 +31,7 @@ export function planEdges(graph: Graph, topo: Topology): EdgePlan[] {
     let srcSide: Side;
     let tgtSide: Side;
     if (self) [srcSide, tgtSide] = ['cL', 'cL'];
-    else if (t.rank > s.rank) [srcSide, tgtSide] = ['fH', 'fL'];
+    else if (t.rank >= s.rank + s.span) [srcSide, tgtSide] = ['fH', 'fL'];
     else if (t.cRow > s.cRow) [srcSide, tgtSide] = ['cH', 'cL'];
     else if (t.cRow < s.cRow) [srcSide, tgtSide] = ['cL', 'cH'];
     else [srcSide, tgtSide] = ['cH', 'cH'];
@@ -39,19 +39,22 @@ export function planEdges(graph: Graph, topo: Topology): EdgePlan[] {
     let straight: 'f' | 'c' | null = null;
     if (!self) {
       let key = '';
-      if (t.rank > s.rank && t.cRow === s.cRow) {
-        const blocked = topo.slots.some((n) => n.cRow === s.cRow && n.rank > s.rank && n.rank < t.rank);
+      if (t.rank >= s.rank + s.span && t.cRow === s.cRow) {
+        const blocked = topo.slots.some((n) => n.cRow === s.cRow && n.rank >= s.rank + s.span && n.rank < t.rank);
         if (!blocked) {
           straight = 'f';
           key = `f:${s.cRow}:${s.rank}:${t.rank}`;
         }
-      } else if (t.rank === s.rank && t.cRow !== s.cRow) {
+      } else if (t.rank < s.rank + s.span && s.rank < t.rank + t.span && t.cRow !== s.cRow) {
+        // The columns overlap: one perpendicular line through the middle of the overlap.
         const lo = Math.min(s.cRow, t.cRow);
         const hi = Math.max(s.cRow, t.cRow);
-        const blocked = topo.slots.some((n) => n.rank === s.rank && n.cRow > lo && n.cRow < hi);
+        const from = Math.max(s.rank, t.rank);
+        const to = Math.min(s.rank + s.span, t.rank + t.span);
+        const blocked = topo.slots.some((n) => n.rank < to && from < n.rank + n.span && n.cRow > lo && n.cRow < hi);
         if (!blocked) {
           straight = 'c';
-          key = `c:${s.rank}:${lo}:${hi}`;
+          key = `c:${from}:${lo}:${hi}`;
         }
       }
       if (straight) {

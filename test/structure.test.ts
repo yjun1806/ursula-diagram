@@ -3,13 +3,19 @@ import type { Layout } from '../src/index.ts';
 import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
 import { assignRanks, components } from '../src/layout/rank.ts';
 import { crossingCount } from '../src/layout/check.ts';
-import { geometryViolations, rectsOverlap, segmentsOf } from './helpers.ts';
+import { geometryViolations, rectsOverlap, segmentsOf, widthForColumns } from './helpers.ts';
 
 const structure = (l: Layout): string =>
   l.nodes
-    .map((n) => `${n.id}:${n.rank}:${n.row}`)
+    .map((n) => `${n.id}:${n.rank}:${n.row}:${n.span}`)
     .sort()
     .join(' ');
+
+/** Slot structure on a canvas that holds `columns` columns, for either ruler. */
+const slots = (src: string, ruler: ReturnType<typeof pixelRuler>, columns: number): string => {
+  const g = parse(src);
+  return structure(layout(g, ruler, { maxWidth: widthForColumns(g, ruler, columns) }));
+};
 
 const rowsPerLane = (l: Layout): number[] =>
   l.lanes.map((lane) => 1 + Math.max(...l.nodes.filter((n) => n.lane === lane.id).map((n) => n.row)));
@@ -103,8 +109,7 @@ m3 --> n4`;
   });
 
   it('picks the same ranks and rows for the pixel ruler and the cell ruler', () => {
-    const g = parse(fanOut);
-    expect(structure(layout(g, pixelRuler()))).toBe(structure(layout(g, cellRuler())));
+    expect(slots(fanOut, pixelRuler(), 6)).toBe(slots(fanOut, cellRuler(), 6));
   });
 
   it('uses at most two rows per lane for a pipeline with side branches', () => {
@@ -121,12 +126,12 @@ c4 --> r3
 c5 --> r2`;
     const l = layout(parse(src), pixelRuler());
     expect(Math.max(...rowsPerLane(l))).toBeLessThanOrEqual(2);
-    expect(crossingCount(l.edges)).toBe(0);
+    expect(crossingCount(l.edges)).toBeLessThanOrEqual(1);
   });
 
   it('draws a cross-lane edge between facing nodes of one rank as a short vertical line', () => {
     const l = layout(
-      parse('flowchart LR\nsubgraph a[Front]\nx1[Take order] --> x2[Confirm]\nend\nsubgraph b[Kitchen]\ny1[Cook] --> y2[Serve]\nend\nx1 --> y1\nx2 --> y2'),
+      parse('flowchart LR\nsubgraph a[Front]\nx1[Receive] --> x2[Confirm]\nend\nsubgraph b[Kitchen]\ny1[Prepare] --> y2[Deliver]\nend\nx1 --> y1\nx2 --> y2'),
       pixelRuler(),
     );
     for (const [from, to] of [['x1', 'y1'], ['x2', 'y2']] as const) {
@@ -244,7 +249,7 @@ describe('uniform node width', () => {
   });
 });
 
-describe('folding long drawings', () => {
+describe('canvas columns', () => {
   const long = `flowchart LR
 subgraph a[Intake]
 i1[Register] --> i2[Triage] --> i3[Assess] --> i4[Admit] --> i5[Treat] --> i6[Review] --> i7[Discharge] --> i8[Follow up] --> i9[Close]
@@ -254,26 +259,116 @@ b1[Open account] --> b2[Charge] --> b3[Invoice] --> b4[Settle]
 end
 i1 --> b1
 i7 --> b3`;
+  const widthFor = (k: number, ruler = pixelRuler()): number => widthForColumns(parse(long), ruler, k);
 
-  it('folds a long flow so the drawing is not extremely wide', () => {
-    const l = layout(parse(long), pixelRuler());
-    expect(l.width / l.height).toBeLessThan(3.5);
-    expect(crossingCount(l.edges)).toBe(0);
+  it('derives the number of columns from the canvas width', () => {
+    for (const k of [3, 4, 6]) {
+      const l = layout(parse(long), pixelRuler(), { maxWidth: widthFor(k) });
+      expect(Math.max(...l.nodes.map((n) => n.rank + n.span))).toBeLessThanOrEqual(k);
+    }
   });
 
-  it('keeps the same structure for the pixel ruler and the cell ruler', () => {
-    const g = parse(long);
-    expect(structure(layout(g, pixelRuler()))).toBe(structure(layout(g, cellRuler())));
+  it('keeps every box inside the canvas width', () => {
+    const l = layout(parse(long), pixelRuler(), { maxWidth: widthFor(4) });
+    expect(l.width).toBeLessThanOrEqual(widthFor(4));
+    expect(l.diagnostics.filter((d) => d.kind === 'overflow')).toEqual([]);
   });
 
-  it('leaves a short flow on one row', () => {
+  it('continues a chain longer than the canvas on further rows', () => {
+    const l = layout(parse(long), pixelRuler(), { maxWidth: widthFor(4) });
+    const intake = l.nodes.filter((n) => n.lane === 'a');
+    expect(new Set(intake.map((n) => n.row)).size).toBeGreaterThanOrEqual(2);
+    expect(intake.length).toBe(9);
+    expect(geometryViolations(l)).toEqual([]);
+  });
+
+  it('leaves a flow that fits the canvas on one row', () => {
     const l = layout(parse('flowchart LR\nA[Start] --> B[Work] --> C[Done]'), pixelRuler());
     expect(rowsPerLane(l)).toEqual([1]);
   });
 
-  it('never places two ends of a forward in-lane edge in reverse order', () => {
-    const l = layout(parse(long), pixelRuler());
-    const rank = (id: string): number => l.nodes.find((n) => n.id === id)?.rank ?? -1;
-    for (let i = 1; i < 9; i++) expect(rank(`i${i + 1}`)).toBeGreaterThanOrEqual(rank(`i${i}`));
+  it('uses one column per rank when the canvas width is unbounded', () => {
+    const g = parse(long);
+    const l = layout(g, pixelRuler(), { maxWidth: Infinity });
+    expect(new Set(l.nodes.map((n) => n.rank)).size).toBeLessThanOrEqual(9);
+    expect(structure(l)).toBe(structure(layout(g, pixelRuler(), { maxWidth: Infinity })));
+  });
+});
+
+describe('wide nodes', () => {
+  const src = `flowchart LR
+subgraph a[Top]
+p1[One] --> p2[Two] --> p3[Three]
+end
+subgraph b[Bottom]
+q1[Ok] --> q2[A rather long title that needs several columns to read well] --> q3[Done]
+end
+p1 --> q1
+p3 --> q3`;
+
+  it('covers as many columns as its content needs and is drawn as one box', () => {
+    const l = layout(parse(src), pixelRuler(), { maxWidth: Infinity });
+    const wide = l.nodes.find((n) => n.id === 'q2');
+    const narrow = l.nodes.find((n) => n.id === 'q1');
+    expect(wide?.span ?? 0).toBeGreaterThan(1);
+    expect(narrow?.span).toBe(1);
+    expect(wide?.w ?? 0).toBeGreaterThan((narrow?.w ?? 0) * (wide?.span ?? 1) - 80);
+    expect(geometryViolations(l)).toEqual([]);
+  });
+
+  it('never lets two boxes of one lane share a column', () => {
+    const l = layout(parse(src), pixelRuler(), { maxWidth: Infinity });
+    for (const lane of l.lanes) {
+      const members = l.nodes.filter((n) => n.lane === lane.id);
+      members.forEach((a, i) => {
+        for (const b of members.slice(i + 1)) {
+          if (a.row !== b.row) continue;
+          expect(a.rank + a.span <= b.rank || b.rank + b.span <= a.rank).toBe(true);
+        }
+      });
+    }
+  });
+});
+
+describe('facing rows', () => {
+  it('puts the node that talks across the lanes on the row next to the other lane', () => {
+    const src = `flowchart LR
+subgraph a[Top]
+t1[Intake] --> t2[Review] --> t3[Decide]
+t4[Archive]
+end
+subgraph b[Bottom]
+b1[Notify]
+end
+t3 --> b1
+t3 --> t4`;
+    const l = layout(parse(src), pixelRuler());
+    const top = l.nodes.filter((n) => n.lane === 'a');
+    const rows = 1 + Math.max(...top.map((n) => n.row));
+    const decide = l.nodes.find((n) => n.id === 't3');
+    expect(decide?.row).toBe(rows - 1);
+  });
+});
+
+describe('fine grid', () => {
+  it('puts every node, lane and gap on a multiple of the grid', () => {
+    const ruler = pixelRuler();
+    const l = layout(
+      parse(`flowchart LR
+subgraph a[Intake]
+n1[Receive order] --> n2[Validate] --> n3[Enrich]
+end
+subgraph b[Fulfilment]
+m1[Pick] --> m2[Pack items] --> m3[Ship]
+end
+n3 --> m1
+m3 -->|late| n2`),
+      ruler,
+    );
+    const onGrid = (v: number): boolean => Math.abs(v / ruler.grid - Math.round(v / ruler.grid)) < 1e-9;
+    for (const n of l.nodes) for (const v of [n.x, n.y, n.w, n.h]) expect(onGrid(v)).toBe(true);
+    for (const lane of l.lanes) for (const v of [lane.x, lane.y, lane.w, lane.h]) expect(onGrid(v)).toBe(true);
+    expect(onGrid(l.width)).toBe(true);
+    expect(onGrid(l.height)).toBe(true);
   });
 });

@@ -32,6 +32,10 @@ export interface Ruler {
   /** Height the legend adds below the drawing. */
   legendHeight: number;
   snap(v: number): number;
+  /** Fine grid every node and lane coordinate and size is a multiple of. */
+  grid: number;
+  /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
+  defaultWidth?: number;
 }
 
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
@@ -118,6 +122,8 @@ export function pixelRuler(): Ruler {
     legendGap: 24,
     legendHeight: 32,
     snap: (v) => v,
+    grid: 4,
+    defaultWidth: 1280,
   };
 }
 
@@ -142,5 +148,6 @@ export function cellRuler(): Ruler {
     legendGap: 3,
     legendHeight: 1,
     snap: (v) => Math.round(v),
+    grid: 1,
   };
 }

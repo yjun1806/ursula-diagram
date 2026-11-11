@@ -33,13 +33,13 @@ function corners(s: Slot, side: Side): Vertex[] {
   const cb = s.cb;
   switch (side) {
     case 'fH':
-      return [[r + 1, cb], [r + 1, cb + 1]];
+      return [[r + s.span, cb], [r + s.span, cb + 1]];
     case 'fL':
       return [[r, cb], [r, cb + 1]];
     case 'cL':
-      return [[r, cb], [r + 1, cb]];
+      return [[r, cb], [r + s.span, cb]];
     case 'cH':
-      return [[r, cb + 1], [r + 1, cb + 1]];
+      return [[r, cb + 1], [r + s.span, cb + 1]];
   }
 }
 
@@ -49,13 +49,13 @@ const sideDir = (side: Side): Dir => (isFlowSide(side) ? 1 : 0);
 function stubPoint(s: Slot, side: Side): Vertex {
   switch (side) {
     case 'fH':
-      return [2 * (s.rank + 1), 2 * s.cb + 1];
+      return [2 * (s.rank + s.span), 2 * s.cb + 1];
     case 'fL':
       return [2 * s.rank, 2 * s.cb + 1];
     case 'cL':
-      return [2 * s.rank + 1, 2 * s.cb];
+      return [2 * s.rank + s.span, 2 * s.cb];
     case 'cH':
-      return [2 * s.rank + 1, 2 * (s.cb + 1)];
+      return [2 * s.rank + s.span, 2 * (s.cb + 1)];
   }
 }
 
@@ -130,6 +130,9 @@ function shortestPath(
 ): Vertex[] | null {
   const A = sk.ranks + 1;
   const B = sk.channels;
+  // A wide box covers the inner rank channels of its row: no line may run across it.
+  const inside = new Set<number>();
+  for (const slot of sk.slots) for (let a = slot.rank + 1; a < slot.rank + slot.span; a++) inside.add(a * B + slot.cb);
   const id = (a: number, b: number, d: Dir): number => (a * B + b) * 2 + d;
   const dist = new Array<number>(A * B * 2).fill(Infinity);
   const prev = new Array<number>(A * B * 2).fill(-1);
@@ -155,6 +158,7 @@ function shortestPath(
         const na = nd === 0 ? a + step : a;
         const nb = nd === 1 ? b + step : b;
         if (na < 0 || na >= A || nb < 0 || nb >= B) continue;
+        if (nd === 1 && inside.has(a * B + Math.min(b, nb))) continue;
         const len = nd === 0 ? Math.abs((geo.fC[na] ?? 0) - (geo.fC[a] ?? 0)) : Math.abs((geo.cC[nb] ?? 0) - (geo.cC[b] ?? 0));
         const cost = cur.cost + len + (nd !== d ? bend : 0);
         const ns = id(na, nb, nd);
@@ -191,7 +195,7 @@ function shortestPath(
 
 function terminals(sk: Skeleton, geo: Geo, s: Slot, side: Side): Terminal[] {
   const midC = ((geo.cC[s.cb] ?? 0) + (geo.cC[s.cb + 1] ?? 0)) / 2;
-  const midF = ((geo.fC[s.rank] ?? 0) + (geo.fC[s.rank + 1] ?? 0)) / 2;
+  const midF = ((geo.fC[s.rank] ?? 0) + (geo.fC[s.rank + s.span] ?? 0)) / 2;
   return corners(s, side).map(([a, b]) => ({
     v: [a, b] as const,
     dir: sideDir(side),
@@ -237,7 +241,7 @@ export function routeEdges(
     if (!from || !to) continue;
     let pieces: Array<Omit<Run, 'id' | 'edge'>>;
     if (plan.self) {
-      pieces = [{ kind: 'c', idx: from.cb, lo: 2 * from.rank + 1, hi: 2 * from.rank + 1 }];
+      pieces = [{ kind: 'c', idx: from.cb, lo: 2 * from.rank + from.span, hi: 2 * from.rank + from.span }];
     } else {
       const path = shortestPath(
         sk,

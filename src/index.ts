@@ -22,10 +22,10 @@ export type * from './types.ts';
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight'> = {},
 ): { lines: string[] } | { error: string } {
   try {
-    const lines = renderTextLayout(layout(parse(src), cellRuler(), opts));
+    const lines = renderTextLayout(layout(parse(src), cellRuler(), { ...opts, maxWidth }));
     const widest = Math.max(0, ...lines.map(cellWidth));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };

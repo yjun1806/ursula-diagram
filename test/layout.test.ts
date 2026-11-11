@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler, render } from '../src/index.ts';
 import * as fx from './fixtures.ts';
-import { geometryViolations } from './helpers.ts';
+import { geometryViolations, widthForColumns } from './helpers.ts';
 
-const structure = (src: string, ruler: ReturnType<typeof pixelRuler>) =>
-  layout(parse(src), ruler)
-    .nodes.map((n) => `${n.id}:${n.rank}:${n.row}`)
+/** Slot structure of the drawing on a canvas that holds `columns` columns. */
+const structure = (src: string, ruler: ReturnType<typeof pixelRuler>, columns = 6) => {
+  const g = parse(src);
+  return layout(g, ruler, { maxWidth: widthForColumns(g, ruler, columns) })
+    .nodes.map((n) => `${n.id}:${n.rank}:${n.row}:${n.span}`)
     .sort();
+};
 
 describe('structure parity', () => {
-  for (const name of ['twoLanes', 'cycle', 'topDown', 'library'] as const) {
-    it(`ranks and rows match between rulers: ${name}`, () => {
+  // twoLanes mixes scripts, so the two rulers legitimately give some boxes different spans.
+  for (const name of ['cycle', 'topDown', 'library'] as const) {
+    it(`slots match between rulers on equal canvases: ${name}`, () => {
       expect(structure(fx[name], pixelRuler())).toEqual(structure(fx[name], cellRuler()));
     });
   }

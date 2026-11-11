@@ -1,4 +1,6 @@
-import type { Layout, LayoutEdge, Point } from '../src/types.ts';
+import type { Ruler } from '../src/metrics.ts';
+import { measureNodes } from '../src/layout/place.ts';
+import type { Graph, Layout, LayoutEdge, Point } from '../src/types.ts';
 
 export interface Seg {
   a: Point;
@@ -93,4 +95,10 @@ export function geometryViolations(l: Layout): string[] {
     }
   });
   return bad;
+}
+
+/** Canvas width in the ruler's units that holds exactly `columns` rank columns of the graph. */
+export function widthForColumns(graph: Graph, ruler: Ruler, columns: number): number {
+  const m = measureNodes(graph.nodes, graph.lanes, ruler, graph.direction === 'TD');
+  return columns * (m.common + ruler.rankGap) - ruler.rankGap + 2 * ruler.trackGap + m.gutter + 2 * ruler.lanePad;
 }

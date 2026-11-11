@@ -77,7 +77,7 @@ export function labelDemands(
     const t = sk.byId.get(plan.to);
     if (!s || !t) continue;
     if (plan.straight === 'f') {
-      if (t.rank === s.rank + 1) raise(wf, t.rank, lf + g);
+      if (t.rank === s.rank + s.span) raise(wf, t.rank, lf + g);
     } else if (plan.straight === 'c') {
       const [top, bottom] = s.cRow < t.cRow ? [s, t] : [t, s];
       if (bottom.cRow === top.cRow + 1) {

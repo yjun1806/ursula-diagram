@@ -1,6 +1,6 @@
 import type { Ruler } from '../metrics.ts';
 import type { Geo, Side, Skeleton, Slot } from './place.ts';
-import { origin } from './place.ts';
+import { finalNf, origin } from './place.ts';
 import type { EdgePlan } from './plan.ts';
 import type { PortTable } from './ports.ts';
 import { attachOf } from './ports.ts';
@@ -30,16 +30,23 @@ function portPoint(
   const { f0, c0 } = origin(sk, geo, ruler, slot);
   const off = attachOf(table, slot.id, side, plan.index, role)?.off ?? 0;
   const rowCentre = (geo.rowStart[slot.lane]?.[slot.row] ?? 0) + (sk.rowExt[slot.lane]?.[slot.row] ?? 0) / 2;
-  const rankCentre = (geo.rankStart[slot.rank] ?? 0) + (sk.rankExt[slot.rank] ?? 0) / 2;
+  const nf = finalNf(sk, geo, slot);
+  // A perpendicular line between nodes of different widths runs through the middle of their overlap.
+  const peer = sk.byId.get(role === 'src' ? plan.to : plan.from);
+  let overlapCentre = f0 + nf / 2;
+  if (peer && peer !== slot) {
+    const p0 = origin(sk, geo, ruler, peer).f0;
+    overlapCentre = (Math.max(f0, p0) + Math.min(f0 + nf, p0 + finalNf(sk, geo, peer))) / 2;
+  }
   switch (side) {
     case 'fH':
-      return { f: f0 + slot.nf, c: plan.straight ? rowCentre : c0 + off };
+      return { f: f0 + nf, c: plan.straight ? rowCentre : c0 + off };
     case 'fL':
       return { f: f0, c: plan.straight ? rowCentre : c0 + off };
     case 'cL':
-      return { f: plan.straight ? rankCentre : f0 + off, c: c0 };
+      return { f: plan.straight ? overlapCentre : f0 + off, c: c0 };
     case 'cH':
-      return { f: plan.straight ? rankCentre : f0 + off, c: c0 + slot.nc };
+      return { f: plan.straight ? overlapCentre : f0 + off, c: c0 + slot.nc };
   }
 }
 

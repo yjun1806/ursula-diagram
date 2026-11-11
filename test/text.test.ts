@@ -68,7 +68,7 @@ describe('renderText', () => {
   });
 
   it('returns an error when the drawing is too narrow', () => {
-    const r = renderText('flowchart LR\nA --> B --> C', 10);
+    const r = renderText('flowchart LR\nA --> B --> C', 4);
     expect('error' in r).toBe(true);
   });
 

@@ -12,6 +12,8 @@ export interface Slot {
   id: string;
   lane: number;
   rank: number;
+  /** Number of consecutive rank columns the node covers (1 unless the node is wider than the shared width). */
+  span: number;
   /** Row inside the lane. */
   row: number;
   /** Row ordinal across all lanes. */
@@ -69,7 +71,12 @@ export interface Geo {
   totalC: number;
 }
 
-export function buildTopology(graph: Graph, rank: Map<string, number>, row: Map<string, number>): Topology {
+export function buildTopology(
+  graph: Graph,
+  rank: Map<string, number>,
+  row: Map<string, number>,
+  span: Map<string, number> = new Map(),
+): Topology {
   const lanes: LaneInfo[] = [];
   let base = 0;
   let firstRow = 0;
@@ -89,6 +96,7 @@ export function buildTopology(graph: Graph, rank: Map<string, number>, row: Map<
       id: n.id,
       lane,
       rank: rank.get(n.id) ?? 0,
+      span: span.get(n.id) ?? 1,
       row: r,
       cRow: (rowStartOfLane[lane] ?? 0) + r,
       cb: (lanes[lane]?.base ?? 0) + r,
@@ -98,7 +106,7 @@ export function buildTopology(graph: Graph, rank: Map<string, number>, row: Map<
       lines: n.lines,
     };
   });
-  const ranks = slots.length === 0 ? 0 : Math.max(...slots.map((s) => s.rank)) + 1;
+  const ranks = slots.length === 0 ? 0 : Math.max(...slots.map((s) => s.rank + s.span));
   return { slots, byId: new Map(slots.map((s) => [s.id, s] as const)), lanes, ranks, channels: base };
 }
 
@@ -109,10 +117,34 @@ export interface Need {
   nc: number;
 }
 
-export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', needs: Map<string, Need>): Skeleton {
-  const td = direction === 'TD';
+/** Rounds a size up to the ruler's fine grid. */
+export const gridUp = (ruler: Ruler, v: number): number => Math.ceil(v / ruler.grid - 1e-9) * ruler.grid;
+
+/** Rounds a position to the nearest multiple of the ruler's fine grid. */
+export const gridNear = (ruler: Ruler, v: number): number => Math.round(v / ruler.grid) * ruler.grid;
+
+export interface Measure {
+  /** Content-sized box extents, snapped up to the width step and the grid. */
+  w: number[];
+  h: number[];
+  /** Box width shared by every box that fits it: the smallest width that fits 75 % of the boxes. */
+  common: number;
+  contentH: number;
+  /** Space the lane labels take along the flow axis. */
+  gutter: number;
+}
+
+/** Sizes that depend on the text alone, never on where a node is placed. */
+export function measureNodes(
+  nodes: ReadonlyArray<{ title: string; lines: string[] }>,
+  lanes: ReadonlyArray<{ label: string }>,
+  ruler: Ruler,
+  td: boolean,
+): Measure {
   const border = ruler.nodeBorder;
-  const content = topo.slots.map((s) => {
+  const snapW = (v: number): number =>
+    gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep));
+  const content = nodes.map((s) => {
     const texts = [ruler.textWidth(s.title, 'title'), ...s.lines.map((l) => ruler.textWidth(l, 'line'))];
     return {
       w: Math.max(...texts) + 2 * ruler.nodePadX + 2 * border,
@@ -123,28 +155,44 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
         2 * border,
     };
   });
-  const snapW = (v: number): number => ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep);
+  const w = content.map((c) => snapW(c.w));
+  const sorted = [...w].sort((a, b) => a - b);
+  const common = sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0;
+  const contentH = gridUp(ruler, Math.max(0, ...content.map((c) => c.h)));
+  const labelled = lanes.some((l) => l.label !== '');
+  const labelWidths = lanes.map((l) => ruler.textWidth(l.label, 'lane'));
+  const gutter = !labelled
+    ? 0
+    : gridUp(ruler, 2 * ruler.laneLabelGap + (td ? ruler.lineHeight('lane') : Math.max(0, ...labelWidths)));
+  return { w, h: content.map(() => contentH), common, contentH, gutter };
+}
+
+export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', needs: Map<string, Need>): Skeleton {
+  const td = direction === 'TD';
+  const m = measureNodes(topo.slots, topo.lanes, ruler, td);
+  const snapW = (v: number): number =>
+    gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep));
   const need = (s: Slot): Need => needs.get(s.id) ?? { nf: 0, nc: 0 };
   const needW = (s: Slot): number => (td ? need(s).nc : need(s).nf);
   const needH = (s: Slot): number => (td ? need(s).nf : need(s).nc);
-  // Boxes narrower than the shared width take it. The shared width is the smallest one that fits
-  // the content of at least 75 % of the boxes; a box that needs more keeps its own width.
-  const own = content.map((c) => snapW(c.w));
-  const sorted = [...own].sort((a, b) => a - b);
-  const common = sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0;
+  const { common, contentH } = m;
+  const pitch = common + ruler.rankGap;
+  // A box wider than the shared width covers whole columns: `span` of them, drawn as one box.
   const physW = (i: number, s: Slot): number => {
-    const mine = own[i] ?? 0;
-    return snapW(Math.max(mine, common, needW(s)));
+    const base = s.span > 1 ? s.span * pitch - ruler.rankGap : Math.max(m.w[i] ?? 0, common);
+    return snapW(Math.max(base, needW(s)));
   };
-  const contentH = Math.max(0, ...content.map((c) => c.h));
   const slots = topo.slots.map((s, i) => {
     const w = physW(i, s);
-    const h = Math.max(contentH, needH(s));
+    const h = gridUp(ruler, Math.max(contentH, needH(s)));
     return td ? { ...s, nf: h, nc: w } : { ...s, nf: w, nc: h };
   });
 
   const rankExt = Array.from({ length: topo.ranks }, (_, r) =>
-    Math.max(0, ...slots.filter((s) => s.rank === r).map((s) => s.nf)),
+    Math.max(
+      0,
+      ...slots.filter((s) => s.rank <= r && r < s.rank + s.span).map((s) => (s.span > 1 ? common : s.nf)),
+    ),
   );
   const rowExt = topo.lanes.map((lane, l) =>
     Array.from({ length: lane.rows }, (_, i) =>
@@ -152,13 +200,10 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
     ),
   );
 
-  const labelled = topo.lanes.some((l) => l.label !== '');
+  const { gutter } = m;
   const labelWidths = topo.lanes.map((l) => ruler.textWidth(l.label, 'lane'));
-  const gutter = !labelled
-    ? 0
-    : 2 * ruler.laneLabelGap + (td ? ruler.lineHeight('lane') : Math.max(0, ...labelWidths));
   const minBand = topo.lanes.map((l, i) =>
-    td && l.label !== '' ? (labelWidths[i] ?? 0) + 2 * ruler.laneLabelGap : 0,
+    td && l.label !== '' ? gridUp(ruler, (labelWidths[i] ?? 0) + 2 * ruler.laneLabelGap) : 0,
   );
 
   const baseWf = Array.from({ length: topo.ranks + 1 }, (_, a) =>
@@ -177,8 +222,8 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
     rankExt,
     rowExt,
     gutter,
-    margin: ruler.trackGap,
-    laneGap: ruler.laneGap,
+    margin: gridUp(ruler, ruler.trackGap),
+    laneGap: gridUp(ruler, ruler.laneGap),
     baseWf,
     baseWc,
     minBand,
@@ -249,12 +294,19 @@ export function geometry(sk: Skeleton, wf: number[], wc: number[]): Geo {
   };
 }
 
+/** Extent along the flow axis of a node once the channels have their final widths. */
+export function finalNf(sk: Skeleton, geo: Geo, s: Slot): number {
+  if (s.span <= 1) return s.nf;
+  const last = s.rank + s.span - 1;
+  return (geo.rankStart[last] ?? 0) + (sk.rankExt[last] ?? 0) - (geo.rankStart[s.rank] ?? 0);
+}
+
 /** Abstract top-left corner (f, c) of a node, centred in its rank and row slot. */
 export function origin(sk: Skeleton, geo: Geo, ruler: Ruler, s: Slot): { f0: number; c0: number } {
   const rankExt = sk.rankExt[s.rank] ?? 0;
   const rowExt = sk.rowExt[s.lane]?.[s.row] ?? 0;
   return {
-    f0: (geo.rankStart[s.rank] ?? 0) + ruler.snap((rankExt - s.nf) / 2),
-    c0: (geo.rowStart[s.lane]?.[s.row] ?? 0) + ruler.snap((rowExt - s.nc) / 2),
+    f0: (geo.rankStart[s.rank] ?? 0) + (s.span > 1 ? 0 : gridNear(ruler, (rankExt - s.nf) / 2)),
+    c0: (geo.rowStart[s.lane]?.[s.row] ?? 0) + gridNear(ruler, (rowExt - s.nc) / 2),
   };
 }

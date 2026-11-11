@@ -47,7 +47,7 @@ function offsets(
 function extentsOf(sk: Skeleton, s: Slot, side: Side): { len: number; ext: number } {
   return isFlowSide(side)
     ? { len: s.nc, ext: sk.rowExt[s.lane]?.[s.row] ?? 0 }
-    : { len: s.nf, ext: sk.rankExt[s.rank] ?? 0 };
+    : { len: s.nf, ext: s.span > 1 ? s.nf : (sk.rankExt[s.rank] ?? 0) };
 }
 
 /** Orders and positions every attachment on every node side. */
@@ -78,7 +78,7 @@ export function buildPorts(
       const rr = runs[run];
       if (!rr) return 0;
       // The run touching a port starts at the slot middle (2k + 1) and heads one way.
-      const mid = isFlowSide(side) ? 2 * slot.cb + 1 : 2 * slot.rank + 1;
+      const mid = isFlowSide(side) ? 2 * slot.cb + 1 : 2 * slot.rank + slot.span;
       const other = rr.lo === mid ? rr.hi : rr.lo;
       return other === mid ? fallback : other - mid;
     };
