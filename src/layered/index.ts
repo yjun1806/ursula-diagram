@@ -16,6 +16,8 @@ import { route } from './route.ts';
 import { assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
 import { planZones } from './composition.ts';
+import type { Variant } from './choose.ts';
+import { CANDIDATES, pickBest } from './choose.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
@@ -75,13 +77,25 @@ export function gapLines(ruler: Ruler, gap: number): number {
   return Math.max(1, odd % 2 === 1 ? odd : odd - 1);
 }
 
-function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, squeeze = false): Placed {
+/** Flat edges are drawn from their left end to their right end; after a free order the left end may be the target. */
+function leftToRight(ladder: Ladder, layers: number[][]): void {
+  const pos = new Array<number>(ladder.nodes.length).fill(0);
+  layers.forEach((r) => r.forEach((n, k) => (pos[n] = k)));
+  for (const f of ladder.flat) {
+    if ((pos[f.lo] ?? 0) > (pos[f.hi] ?? 0)) [f.lo, f.hi] = [f.hi, f.lo];
+    const c = ladder.chains[f.chain];
+    if (c) c.reversed = f.lo === c.nodes[1];
+  }
+}
+
+function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false): Placed {
   const rows = assignLayers(graph, units, capacity, reduction, apart);
   const ladder = buildLadder(graph, rows, units);
-  const layers = orderLayers(graph, ladder, rows).layers;
+  const layers = orderLayers(graph, ladder, rows, variant.free).layers;
+  if (variant.free) leftToRight(ladder, layers);
   const plan = planFlat(ladder, layers, ruler);
   growForPorts(ladder, plan, unit, gap, portStep(unit, ruler));
-  const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift });
+  const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main) });
   return { ladder, layers, start: aligned.start, width: aligned.width, plan };
 }
 
@@ -109,7 +123,7 @@ interface Solved {
 }
 
 /** Places the graph for one ruler: full row capacity first, then one box less per overflowing lane, and the alignment squeeze last. */
-function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean): Solved {
+function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant): Solved {
   const td = graph.direction === 'TD';
   const { frame, common, baseUnits, unit } = frameFor(graph, ruler, bounded ? limit : undefined);
   const margin = gridUp(ruler, ruler.trackGap);
@@ -121,7 +135,7 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   const dummyShift = Number.isFinite(dummyEnd) ? Math.min(1, Math.max(0, capacityUnits - dummyEnd)) : 0;
   const caps = graph.lanes.map(() => (bounded ? 2 * Math.floor(capacityUnits / 2) : Infinity));
   const reduction = graph.lanes.map(() => 0);
-  const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, squeeze);
+  const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
   let placed = run();
   // A plain placement counts only when no lane needed more rows than it has at unlimited width.
   if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane.length) };
@@ -166,12 +180,12 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
  * Lays the graph out as layers: rows inside lanes, dummies for long edges, barycentre ordering, median
  * alignment on a unit grid, and routes that follow the bands between layers.
  */
-function layoutPlaced(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean): Layout {
+function layoutPlaced(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant): Layout {
   const base = layeredRuler(given);
   const td = graph.direction === 'TD';
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
   const bounded = limit !== undefined && Number.isFinite(limit);
-  let solved = solve(graph, base, limit, bounded, true, apart);
+  let solved = solve(graph, base, limit, bounded, true, apart, variant);
   if (bounded && !solved.ok) {
     // 1. Close the rank gaps toward the ruler's minimum, one grid step at a time.
     const unit0 = measureNodes(graph.nodes, graph.lanes, base, td).unit;
@@ -180,20 +194,20 @@ function layoutPlaced(graph: Graph, given: Ruler, opts: LayeredOptions, apart: b
       const tight = { ...base, rankGap: gap };
       if (measureNodes(graph.nodes, graph.lanes, tight, td).unit >= unit0) continue;
       tightest = tight;
-      const attempt = solve(graph, tight, limit, bounded, true, apart);
+      const attempt = solve(graph, tight, limit, bounded, true, apart, variant);
       if (attempt.ok) {
         solved = attempt;
         break;
       }
     }
     // 2. Still too wide: whole blocks to other rows, then cut paths, at the narrowest gap.
-    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart);
+    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant);
   }
   const { placed, common } = solved;
   const ruler = solved.ruler;
-  const draw = (r: Ruler): Layout => {
+  const draw = (r: Ruler, spread = 0): Layout => {
     const f = frameFor(graph, r, bounded ? limit : undefined).frame;
-    return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
+    return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
   // Spread spare width: the rank gap grows by pairs of grid steps, at most to twice the default.
@@ -209,6 +223,23 @@ function layoutPlaced(graph: Graph, given: Ruler, opts: LayeredOptions, apart: b
       if (total(wider) > limit) break;
       drawn = wider;
     }
+  }
+  // Stages: the reading direction is the layer axis, so spare room (or a shortfall) goes into the bands between layers.
+  const reading = td ? (opts.maxWidth ?? base.defaultWidth) : opts.maxHeight;
+  if (apart && reading !== undefined && Number.isFinite(reading) && placed.layers.length > 1) {
+    const size = (d: Layout): number => (td ? d.width : d.height);
+    const steps = placed.layers.length - 1;
+    let spread = Math.floor((reading - size(drawn)) / steps / ruler.nodeGrid) * ruler.nodeGrid;
+    let best = drawn;
+    for (let tries = 0; tries < 8 && spread !== 0; tries++, spread -= ruler.nodeGrid) {
+      const next = draw(ruler, spread);
+      if (size(next) <= reading) {
+        best = next;
+        break;
+      }
+      if (size(next) < size(best)) best = next;
+    }
+    drawn = best;
   }
   const diagnostics: Diagnostic[] = [...drawn.diagnostics];
   if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) {
@@ -228,6 +259,6 @@ export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions 
   const stages = plan.composition === 'stages';
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
   const graph: Graph = { ...source, lanes, direction: stages ? (source.direction === 'LR' ? 'TD' : 'LR') : source.direction };
-  const laid = layoutPlaced(graph, given, opts, stages);
+  const laid = stages ? layoutPlaced(graph, given, opts, true, CANDIDATES[0] as Variant) : pickBest(CANDIDATES.map((v) => layoutPlaced(graph, given, opts, false, v)));
   return { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
 }

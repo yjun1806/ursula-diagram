@@ -20,7 +20,7 @@ interface Adjacency {
   preds: number[][];
 }
 
-function adjacency(l: Ladder): Adjacency {
+function adjacency(l: Ladder, keep?: Set<number>): Adjacency {
   const up = l.nodes.map((): number[] => []);
   const down = l.nodes.map((): number[] => []);
   for (const [a, b] of pieces(l)) {
@@ -28,7 +28,7 @@ function adjacency(l: Ladder): Adjacency {
     down[a]?.push(b);
   }
   const preds = l.nodes.map((): number[] => []);
-  for (const f of l.flat) preds[f.hi]?.push(f.lo);
+  for (const f of l.flat) if (!keep || keep.has(l.nodes[f.lo]?.layer ?? -1)) preds[f.hi]?.push(f.lo);
   return { up, down, preds };
 }
 
@@ -139,8 +139,9 @@ function components(graph: Graph): number[] {
 const SWEEPS = 12;
 
 /** Stage 3: the order of every layer, by alternating barycentre sweeps and adjacent swaps. */
-export function orderLayers(graph: Graph, l: Ladder, rows: Rows): Ordered {
-  const adj = adjacency(l);
+export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false): Ordered {
+  // Free: only the layers that hold the main flow keep "the earlier node is on the left"; other flat edges follow their partners.
+  const adj = adjacency(l, free ? new Set(rows.main.map((n) => l.nodes[n]?.layer ?? -1)) : undefined);
   const comp = components(graph);
   const keyOf = (n: number): number[] => {
     const o = l.nodes[n]?.origin ?? n;

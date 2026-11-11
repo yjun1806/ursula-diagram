@@ -127,6 +127,8 @@ export interface AlignOptions {
   squeeze?: boolean;
   /** Pass-through lines that may share one gap, drawn side by side (1 when the gap has no room for more). */
   lines?: number;
+  /** Nodes of the main flow: when two arrangements are equally straight, the one that keeps more edges at them straight wins. */
+  main?: ReadonlySet<number>;
   /** Units a dummy at the end of a layer needs beyond its own slot to stay inside the limit (0 or 1). */
   dummyShift?: number;
 }
@@ -189,10 +191,16 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
       candidates.push(raw.map((x) => x - low));
     }
   }
+  const main = opts.main ?? new Set<number>();
+  const touchesMain = (ci: number): boolean => {
+    const nodes = l.chains[ci]?.nodes ?? [];
+    return main.has(nodes[0] ?? -1) || main.has(nodes[nodes.length - 1] ?? -1);
+  };
   const score = (st: number[]): number[] => {
     const straight = countStraight(st);
+    const anchored = all.filter(([a, b, ci]) => touchesMain(ci) && straightAt(a, st[a] ?? 0, b, st[b] ?? 0)).length;
     const off = all.reduce((sum, [a, b]) => (straightAt(a, st[a] ?? 0, b, st[b] ?? 0) ? sum : sum + Math.abs(centre(a, st[a] ?? 0) - centre(b, st[b] ?? 0))), 0);
-    return [-straight, Math.max(0, endOf(st) - limit), off];
+    return [-straight, -anchored, Math.max(0, endOf(st) - limit), off];
   };
   let start = candidates[0] as number[];
   let best = score(start);

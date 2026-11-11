@@ -10,6 +10,8 @@ export interface Rows {
   /** Initial-order hint: the block a node belongs to (mean source index of its cross-lane partners) and its rank in the block. */
   pathIndex: number[];
   pathPos: number[];
+  /** Nodes of the main flow: the longest path along edges inside one lane, one for the whole drawing. */
+  main: number[];
 }
 
 interface LaneEdge {
@@ -48,25 +50,33 @@ function topoOrder(ids: number[], succ: Map<number, number[]>): number[] {
   return post.reverse();
 }
 
-/** The longest path of a DAG; ties go to the earliest source order. */
-function longestPath(ids: number[], succ: Map<number, number[]>): number[] {
+/** The longest path of a DAG; among equal lengths the one whose nodes have more links elsewhere, then the earliest source order. */
+function longestPath(ids: number[], succ: Map<number, number[]>, weight: (v: number) => number = () => 0): number[] {
   const longest = new Map<number, number>();
+  const heavy = new Map<number, number>();
   const next = new Map<number, number>();
   for (const v of [...topoOrder(ids, succ)].reverse()) {
     let best = 0;
+    let bestWeight = 0;
     let via = -1;
     for (const w of succ.get(v) ?? []) {
       const len = longest.get(w) ?? 0;
-      if (len > best || (len === best && via >= 0 && w < via)) {
+      const sum = heavy.get(w) ?? 0;
+      if (len > best || (len === best && sum > bestWeight) || (len === best && sum === bestWeight && via >= 0 && w < via)) {
         best = len;
+        bestWeight = sum;
         via = w;
       }
     }
     longest.set(v, 1 + best);
+    heavy.set(v, weight(v) + bestWeight);
     next.set(v, via);
   }
   let start = -1;
-  for (const v of ids) if (start < 0 || (longest.get(v) ?? 0) > (longest.get(start) ?? 0)) start = v;
+  for (const v of ids) {
+    if (start < 0) start = v;
+    else if ((longest.get(v) ?? 0) > (longest.get(start) ?? 0) || ((longest.get(v) ?? 0) === (longest.get(start) ?? 0) && (heavy.get(v) ?? 0) > (heavy.get(start) ?? 0))) start = v;
+  }
   const path: number[] = [];
   for (let v = start; v >= 0; v = next.get(v) ?? -1) path.push(v);
   return path;
@@ -83,7 +93,7 @@ interface Block {
   cross: number;
   anchor: 'top' | 'bottom';
   hint: number;
-  /** A block of one node that no edge inside its lane touches. */
+  /** A block of one node that no edge touches at all. */
   single: boolean;
 }
 
@@ -222,6 +232,15 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     partners[b]?.push(a);
   });
   let nextLayer = 0;
+  let main: number[] = [];
+  const shorter = (a: number[], b: number[]): boolean => {
+    if (a.length !== b.length) return a.length < b.length;
+    const pa = a.reduce((n, v) => n + (partners[v]?.length ?? 0), 0);
+    const pb = b.reduce((n, v) => n + (partners[v]?.length ?? 0), 0);
+    if (pa !== pb) return pa < pb;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return (a[i] as number) > (b[i] as number);
+    return false;
+  };
 
   graph.lanes.forEach((_, lane) => {
     const ids = graph.nodes.map((_, i) => i).filter((i) => laneOf[i] === lane);
@@ -253,6 +272,8 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       pred.set(to, [...(pred.get(to) ?? []), from]);
       parent.set(Math.max(find(from), find(to)), Math.min(find(from), find(to)));
     }
+    const flow = longestPath(ids, succ, (v) => partners[v]?.length ?? 0);
+    if (flow.length > 1 && shorter(main, flow)) main = flow;
     const comps = new Map<number, number[]>();
     for (const i of ids) comps.set(find(i), [...(comps.get(find(i)) ?? []), i]);
 
@@ -285,7 +306,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         cross: list.length,
         anchor,
         hint: list.length > 0 ? mean(list.map((p) => p.other)) : mean(nodes),
-        single: nodes.length === 1 && comp.length === 1,
+        single: nodes.length === 1 && comp.length === 1 && list.length === 0,
       };
     };
     for (const nodes of comps.values()) {
@@ -360,5 +381,5 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     });
     nextLayer += rowKeys.length;
   });
-  return { layer, layerLane, layerRow, reversed, pathIndex, pathPos };
+  return { layer, layerLane, layerRow, reversed, pathIndex, pathPos, main };
 }

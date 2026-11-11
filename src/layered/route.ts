@@ -22,6 +22,8 @@ export interface Frame {
   layerExt: number[];
   /** Order-axis extent beyond which the drawing counts as overflowing. */
   limit?: number;
+  /** Added to (or taken from) the default room of every band between two layers along the layer axis. */
+  spread?: number;
 }
 
 const EPS = 1e-6;
@@ -406,7 +408,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     if (l.layerLane[b - 1] === l.layerLane[b]) return ruler.rowGap;
     return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + ruler.laneGap + ruler.lanePad;
   };
-  const ext = (b: number): number => gridUp(ruler, Math.max(baseExt(b), wanted(b)));
+  const ext = (b: number): number => gridUp(ruler, Math.max(baseExt(b) + (b > 0 && b < count ? Math.max(f.spread ?? 0, 2 * ruler.trackGap - baseExt(b)) : 0), wanted(b)));
   if (td) {
     for (const [lane, [first, last]] of laneRange) {
       const label = graph.lanes[lane]?.label ?? '';

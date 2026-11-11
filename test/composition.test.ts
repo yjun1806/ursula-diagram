@@ -116,6 +116,37 @@ describe('stages drawing', () => {
     expect(node('b3')?.x).toBeGreaterThan(node('b1')?.x ?? Infinity);
   });
 
+  it('puts nodes with no edge at all in a later place than the band nodes that other bands link to', () => {
+    const src = `flowchart LR
+  subgraph s1[One]
+    a1[Start]
+  end
+  subgraph s2[Two]
+    b1[Linked one]
+    b2[Linked two]
+    b3[Idle one]
+    b4[Idle two]
+  end
+  a1 --> b1
+  a1 --> b2`;
+    const l = layout(parse(src), pixelRuler());
+    expect(l.composition).toBe('stages');
+    const x = (id: string): number => l.nodes.find((n) => n.id === id)?.x ?? NaN;
+    expect(x('b3')).toBeGreaterThan(x('b1'));
+    expect(x('b3')).toBe(x('b4'));
+    expect(x('b1')).toBe(x('b2'));
+  });
+
+  it('spreads spare width over the gaps without making boxes wider, and stays inside the canvas', () => {
+    const l = layout(parse(chain), pixelRuler(), { maxWidth: 1280 });
+    const narrow = layout(parse(chain), pixelRuler(), { maxWidth: 700 });
+    expect(l.width).toBeGreaterThanOrEqual(1200);
+    expect(l.width).toBeLessThanOrEqual(1280);
+    expect(narrow.width).toBeLessThan(l.width);
+    expect(new Set(l.nodes.map((n) => n.w)).size).toBe(new Set(narrow.nodes.map((n) => n.w)).size);
+    expect(geometryViolations(l)).toEqual([]);
+  });
+
   it('is named in the coordinate output', () => {
     const json = selectFrontEnd(chain).json(chain, 'svg', {}) as Layout;
     expect(json.composition).toBe('stages');
