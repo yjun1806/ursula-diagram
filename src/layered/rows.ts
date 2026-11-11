@@ -383,3 +383,59 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
   });
   return { layer, layerLane, layerRow, reversed, pathIndex, pathPos, main };
 }
+
+/**
+ * Rows by stage: inside a lane, nodes are taken in the order of their stage; the main flow stays on the first
+ * row, and a node takes the row of the node that leads to it when that cell is free, else the first free row
+ * (leaning toward the lanes it talks to), else the lane opens one more row. Two nodes never share row and stage.
+ */
+export function assignByStage(graph: Graph, base: Rows, stage: number[]): Rows {
+  const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
+  const laneOf = graph.nodes.map((n) => Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane)));
+  const layer = new Array<number>(graph.nodes.length).fill(0);
+  const layerLane: number[] = [];
+  const layerRow: number[] = [];
+  const main = new Set(base.main);
+  const leads = graph.nodes.map((): number[] => []);
+  const lean = new Array<number>(graph.nodes.length).fill(0);
+  graph.edges.forEach((e, edge) => {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a === undefined || b === undefined || a === b) return;
+    if (laneOf[a] === laneOf[b]) {
+      const [from, to] = base.reversed[edge] ? [b, a] : [a, b];
+      leads[to]?.push(from);
+    } else {
+      lean[a] = (lean[a] ?? 0) + (laneOf[b] ?? 0) - (laneOf[a] ?? 0) > 0 ? (lean[a] ?? 0) + 1 : (lean[a] ?? 0) - 1;
+      lean[b] = (lean[b] ?? 0) + (laneOf[a] ?? 0) - (laneOf[b] ?? 0) > 0 ? (lean[b] ?? 0) + 1 : (lean[b] ?? 0) - 1;
+    }
+  });
+  let next = 0;
+  graph.lanes.forEach((_, lane) => {
+    const ids = graph.nodes.map((_, i) => i).filter((i) => laneOf[i] === lane);
+    if (ids.length === 0) return;
+    ids.sort((x, y) => (stage[x] ?? 0) - (stage[y] ?? 0) || Number(main.has(y)) - Number(main.has(x)) || x - y);
+    const taken = new Set<string>();
+    const rowOf = new Map<number, number>();
+    let count = 1;
+    for (const v of ids) {
+      const s = stage[v] ?? 0;
+      const free = (r: number): boolean => !taken.has(`${r}|${s}`);
+      const lead = [...(leads[v] ?? [])].sort((x, y) => (stage[y] ?? 0) - (stage[x] ?? 0) || x - y)[0];
+      const order = Array.from({ length: count }, (_, r) => r);
+      if ((lean[v] ?? 0) > 0) order.reverse();
+      const wanted = main.has(v) ? [0] : [...(lead === undefined ? [] : [rowOf.get(lead) ?? 0]), ...order];
+      let row = wanted.find(free);
+      if (row === undefined) row = count++;
+      rowOf.set(v, row);
+      taken.add(`${row}|${s}`);
+    }
+    for (let r = 0; r < count; r++) {
+      layerLane.push(lane);
+      layerRow.push(r);
+    }
+    for (const v of ids) layer[v] = next + (rowOf.get(v) ?? 0);
+    next += count;
+  });
+  return { ...base, layer, layerLane, layerRow, pathIndex: stage.map((s) => s), pathPos: graph.nodes.map((_, i) => i) };
+}

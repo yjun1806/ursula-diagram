@@ -139,9 +139,17 @@ function components(graph: Graph): number[] {
 const SWEEPS = 12;
 
 /** Stage 3: the order of every layer, by alternating barycentre sweeps and adjacent swaps. */
-export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false): Ordered {
+export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, stage?: number[]): Ordered {
   // Free: only the layers that hold the main flow keep "the earlier node is on the left"; other flat edges follow their partners.
   const adj = adjacency(l, free ? new Set(rows.main.map((n) => l.nodes[n]?.layer ?? -1)) : undefined);
+  // Nodes of an earlier stage stand before nodes of a later stage; only nodes of one stage are ordered by crossings.
+  if (stage) {
+    for (const row of l.layers) {
+      for (const a of row) {
+        for (const b of row) if (a < l.realCount && b < l.realCount && (stage[a] ?? 0) < (stage[b] ?? 0)) adj.preds[b]?.push(a);
+      }
+    }
+  }
   const comp = components(graph);
   const keyOf = (n: number): number[] => {
     const o = l.nodes[n]?.origin ?? n;

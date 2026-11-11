@@ -43,7 +43,7 @@ describe('main flow', () => {
 
 describe('candidates', () => {
   it('lists the candidates and measures finished drawings in a fixed order of qualities', () => {
-    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free']);
+    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage']);
     const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes' });
     const s = score(l);
     expect(s).toHaveLength(5);

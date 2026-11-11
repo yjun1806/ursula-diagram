@@ -44,6 +44,9 @@ export interface Ladder {
   flat: FlatEdge[];
 }
 
+import type { FlatPlan } from './ports.ts';
+import type { Rows } from './rows.ts';
+
 export const isReal = (l: Ladder, n: number): boolean => n < l.realCount;
 
 /** Unit-span pieces between adjacent layers: [upper node, lower node, chain index]. */
@@ -60,4 +63,20 @@ export function pieces(l: Ladder): Array<[number, number, number]> {
     }
   });
   return out;
+}
+
+/** A finished placement: the ladder, the order of its layers and the start of every node, and how to place it again with changes. */
+export interface Placed {
+  ladder: Ladder;
+  layers: number[][];
+  start: number[];
+  width: number;
+  plan: Map<number, FlatPlan>;
+  /** Units a layer may hold. */
+  capacity: number;
+  rows: Rows;
+  /** The same ladder with another order of its layers. */
+  reorder(layers: number[][]): Placed;
+  /** Rows changed by the caller: a new ladder and order. */
+  rebuild(rows: Rows): Placed;
 }

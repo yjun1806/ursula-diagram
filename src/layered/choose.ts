@@ -8,11 +8,14 @@ export interface Variant {
   name: string;
   /** Flat edges outside the main flow need not run from left to right: they follow the place of their partners. */
   free: boolean;
+  /** Nodes are ordered by their stage in the whole flow first, and only nodes of one stage by crossings. */
+  stage: boolean;
 }
 
 export const CANDIDATES: readonly Variant[] = [
-  { name: 'forced', free: false },
-  { name: 'free', free: true },
+  { name: 'forced', free: false, stage: false },
+  { name: 'free', free: true, stage: false },
+  { name: 'stage', free: false, stage: true },
 ];
 
 const EPS = 1e-6;
@@ -37,13 +40,19 @@ function overlap(s: Seg, t: Seg): boolean {
   return Math.abs(s.ax - t.ax) < EPS && Math.min(Math.max(s.ay, s.by), Math.max(t.ay, t.by)) - Math.max(Math.min(s.ay, s.by), Math.min(t.ay, t.by)) > EPS;
 }
 
-/** Things that make a drawing invalid: boxes that touch, lines through boxes, lines that share a stretch, diagonals, anything outside. */
+/** Things that make a drawing invalid: boxes that touch, lines through boxes, lines that share a stretch, diagonals, labels on boxes, anything outside. */
 export function violations(l: Layout): number {
   let n = 0;
   l.nodes.forEach((a, i) => {
     if (a.x < -EPS || a.y < -EPS || a.x + a.w > l.width + EPS || a.y + a.h > l.height + EPS) n++;
     for (const b of l.nodes.slice(i + 1)) if (a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS) n++;
   });
+  for (const e of l.edges) {
+    const t = e.label;
+    if (!t) continue;
+    if (t.x < -EPS || t.y < -EPS || t.x + t.w > l.width + EPS || t.y + t.h > l.height + EPS) n++;
+    for (const b of l.nodes) if (t.x < b.x + b.w - EPS && b.x < t.x + t.w - EPS && t.y < b.y + b.h - EPS && b.y < t.y + t.h - EPS) n++;
+  }
   const all = l.edges.map(segments);
   all.forEach((segs, i) => {
     for (const s of segs) {
@@ -68,7 +77,7 @@ export function score(l: Layout): number[] {
     if (first && last && last[axis] < first[axis] - 8) back++;
     for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
-  return [violations(l), l.diagnostics.filter((d) => d.kind === 'crossing').length, bends, back, Math.round(length)];
+  return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, l.diagnostics.filter((d) => d.kind === 'crossing').length, bends, back, Math.round(length)];
 }
 
 /** The best drawing; the earliest wins a tie, so the first candidate is the default. */
