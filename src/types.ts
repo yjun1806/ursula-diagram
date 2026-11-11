@@ -122,3 +122,54 @@ export class UrsulaError extends Error {
     if (line !== undefined) this.line = line;
   }
 }
+
+/** Arrowhead drawn at the last point of a scene line. */
+export type SceneArrow = 'none' | 'filled' | 'open' | 'cross';
+
+export interface SceneBox {
+  kind: 'box';
+  /** `box`: surface with border; `note`: tinted box; `bar`: narrow filled bar; `frame`: outline without fill. */
+  style: 'box' | 'note' | 'bar' | 'frame';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  dash?: boolean;
+  /** Label tab on the top-left corner of a frame. */
+  tab?: { text: string; w: number; h: number };
+  data?: Record<string, string>;
+}
+
+export interface SceneText {
+  kind: 'text';
+  /** Anchor position; `y` is the vertical centre of the line. */
+  x: number;
+  y: number;
+  text: string;
+  anchor?: 'start' | 'middle' | 'end';
+  font?: 'title' | 'body' | 'label';
+  tone?: 'fg' | 'muted';
+  /** Clears what lies directly behind the text. */
+  halo?: boolean;
+  data?: Record<string, string>;
+}
+
+export interface SceneLine {
+  kind: 'line';
+  points: Point[];
+  dash?: boolean;
+  /** Drawn in the border colour instead of the line colour. */
+  weak?: boolean;
+  arrow?: SceneArrow;
+  data?: Record<string, string>;
+}
+
+export type SceneItem = SceneBox | SceneText | SceneLine;
+
+/** Drawing as a list of generic primitives; later items paint over earlier ones. */
+export interface Scene {
+  width: number;
+  height: number;
+  title: string;
+  items: SceneItem[];
+}

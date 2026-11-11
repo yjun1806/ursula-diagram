@@ -36,6 +36,47 @@ export interface Ruler {
   grid: number;
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
   defaultWidth?: number;
+  /** Spacing used by the sequence diagram family. */
+  sequence: SequenceMetrics;
+}
+
+export interface SequenceMetrics {
+  /** Thickness of one line: 0 in vector units, one cell in cells. */
+  stroke: number;
+  /** Smallest distance between two adjacent lifelines. */
+  minSpan: number;
+  /** Space between two adjacent header boxes. */
+  headerGap: number;
+  headerPadY: number;
+  /** Room a message label needs beyond its text between the two lifelines. */
+  labelPad: number;
+  notePadX: number;
+  notePadY: number;
+  /** Space between a lifeline and a note beside it. */
+  noteGap: number;
+  /** Vertical space a note adds around its box. */
+  rowGap: number;
+  /** Vertical space above the label, between label and line, and below the line of a message row. */
+  msgPadTop: number;
+  msgDrop: number;
+  msgPadBottom: number;
+  selfPadBottom: number;
+  loopW: number;
+  loopH: number;
+  loopGap: number;
+  barW: number;
+  barNest: number;
+  tabH: number;
+  tabPad: number;
+  tabGap: number;
+  frameHeadH: number;
+  frameFootH: number;
+  framePad: number;
+  dividerH: number;
+  /** Space between the header boxes and the first row. */
+  firstGap: number;
+  /** Space the lifelines continue below the last row. */
+  tail: number;
 }
 
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
@@ -124,6 +165,35 @@ export function pixelRuler(): Ruler {
     snap: (v) => v,
     grid: 4,
     defaultWidth: 1280,
+    sequence: {
+      stroke: 0,
+      minSpan: 96,
+      headerGap: 24,
+      headerPadY: 8,
+      labelPad: 24,
+      notePadX: 12,
+      notePadY: 8,
+      noteGap: 8,
+      rowGap: 8,
+      msgPadTop: 8,
+      msgDrop: 4,
+      msgPadBottom: 4,
+      selfPadBottom: 8,
+      loopW: 32,
+      loopH: 16,
+      loopGap: 8,
+      barW: 8,
+      barNest: 4,
+      tabH: 20,
+      tabPad: 8,
+      tabGap: 8,
+      frameHeadH: 28,
+      frameFootH: 8,
+      framePad: 16,
+      dividerH: 24,
+      firstGap: 12,
+      tail: 16,
+    },
   };
 }
 
@@ -149,5 +219,34 @@ export function cellRuler(): Ruler {
     legendHeight: 1,
     snap: (v) => Math.round(v),
     grid: 1,
+    sequence: {
+      stroke: 1,
+      minSpan: 8,
+      headerGap: 2,
+      headerPadY: 0,
+      labelPad: 4,
+      notePadX: 1,
+      notePadY: 0,
+      noteGap: 1,
+      rowGap: 0,
+      msgPadTop: 0,
+      msgDrop: 0,
+      msgPadBottom: 1,
+      selfPadBottom: 0,
+      loopW: 3,
+      loopH: 1,
+      loopGap: 1,
+      barW: 1,
+      barNest: 1,
+      tabH: 1,
+      tabPad: 1,
+      tabGap: 1,
+      frameHeadH: 1,
+      frameFootH: 1,
+      framePad: 2,
+      dividerH: 1,
+      firstGap: 0,
+      tail: 1,
+    },
   };
 }

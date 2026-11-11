@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { cellRuler, pixelRuler, layout, parse, renderSvg, renderTextLayout, UrsulaError } from './index.ts';
+import { selectFrontEnd, UrsulaError } from './index.ts';
 
 function usage(): never {
   process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend]\n');
@@ -23,14 +23,14 @@ if (!['svg', 'text', 'json'].includes(format) || (width !== undefined && !Number
 
 try {
   const src = readFileSync(file ?? 0, 'utf8');
-  const graph = parse(src);
+  const frontEnd = selectFrontEnd(src);
   const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }) };
   if (format === 'text') {
-    const lines = renderTextLayout(layout(graph, cellRuler(), opts));
-    process.stdout.write(`${lines.join('\n')}\n`);
+    process.stdout.write(`${frontEnd.textLines(src, width, opts).join('\n')}\n`);
+  } else if (format === 'json') {
+    process.stdout.write(`${JSON.stringify(frontEnd.json(src, 'svg', opts), null, 2)}\n`);
   } else {
-    const result = layout(graph, pixelRuler(), opts);
-    process.stdout.write(format === 'json' ? `${JSON.stringify(result, null, 2)}\n` : `${renderSvg(result)}\n`);
+    process.stdout.write(`${frontEnd.svg(src, opts)}\n`);
   }
 } catch (err) {
   if (err instanceof UrsulaError) {
