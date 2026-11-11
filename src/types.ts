@@ -99,10 +99,14 @@ export interface Legend {
   items: LegendItem[];
 }
 
+/** How lanes sit: 'across' bands run parallel to the flow axis; 'along' bands follow one another along it. */
+export type LaneAxis = 'across' | 'along';
+
 export interface Layout {
   width: number;
   height: number;
   direction: Direction;
+  laneAxis: LaneAxis;
   lanes: LayoutLane[];
   nodes: LayoutNode[];
   edges: LayoutEdge[];

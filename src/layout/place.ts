@@ -67,6 +67,8 @@ export interface Skeleton extends Topology {
   baseWf: number[];
   baseWc: number[];
   minBand: number[];
+  /** Space at the start of a channel (keyed `f<idx>` or `c<idx>`) that tracks keep clear, e.g. for a lane label. */
+  inset?: ReadonlyMap<string, number>;
 }
 
 export interface Geo {
@@ -82,6 +84,7 @@ export interface Geo {
   bandExt: number[];
   totalF: number;
   totalC: number;
+  inset?: ReadonlyMap<string, number>;
 }
 
 export function buildTopology(
@@ -314,6 +317,7 @@ export function geometry(sk: Skeleton, wf: number[], wc: number[]): Geo {
     bandExt,
     totalF,
     totalC,
+    ...(sk.inset ? { inset: sk.inset } : {}),
   };
 }
 

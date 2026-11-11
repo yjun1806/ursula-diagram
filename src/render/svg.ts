@@ -114,13 +114,13 @@ export function pathData(points: Point[], radius = CORNER_RADIUS): string {
   return d;
 }
 
-function laneSvg(lane: LayoutLane, tint: boolean): string {
+function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean): string {
   if (lane.label === '') return '';
   const box = lane.labelBox;
   return (
     `<g class="ursula-lane-group" data-lane="${escapeXml(lane.id)}">` +
     `<rect class="ursula-lane${tint ? ' ursula-lane--tint' : ''}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="8"/>` +
-    `<text class="ursula-lane-label" x="${num(box.x)}" y="${num(box.y + box.h / 2)}" dominant-baseline="central">${escapeXml(lane.label)}</text>` +
+    `<text class="ursula-lane-label" x="${num(centred ? box.x + box.w / 2 : box.x)}" y="${num(box.y + box.h / 2)}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(lane.label)}</text>` +
     '</g>'
   );
 }
@@ -205,7 +205,9 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     `<title>${escapeXml(title)}</title>`,
     `<style>${styleSheet()}</style>`,
     `<defs>${MARKER('ursula-arrow', 'ursula-arrow')}${MARKER('ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}</defs>`,
-    ...layout.lanes.map((lane) => laneSvg(lane, labelled.length < 2 || lane === labelled[0])),
+    ...layout.lanes.map((lane) =>
+      laneSvg(lane, labelled.length < 2 || lane === labelled[0], layout.laneAxis === 'along' && layout.direction === 'LR'),
+    ),
     ...layout.edges.map(edgeSvg),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node)),
     ...layout.edges.map(labelSvg),
