@@ -34,7 +34,18 @@ export interface Ruler {
   /** Height the legend adds below the drawing. */
   legendHeight: number;
   snap(v: number): number;
-  /** Fine grid every node and lane coordinate and size is a multiple of. */
+  /** Grid every box coordinate and size, gap, lane padding and lane rectangle is a multiple of. */
+  nodeGrid: number;
+  /** Finer grid every edge bend, track offset and label position is a multiple of. Attachment points on a side are exempt. */
+  edgeGrid: number;
+  /**
+   * Distance between neighbouring attachment ports on a side that runs along the flow axis; the layout rounds it
+   * so that it divides the slot unit and ports of boxes half a step apart coincide.
+   */
+  portPitch: number;
+  /** Number of ports (at equal fractions, always including the centre) on a side that runs across the flow axis. */
+  sidePorts: number;
+  /** Grid of the sequence diagram family. */
   grid: number;
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
   defaultWidth?: number;
@@ -184,18 +195,22 @@ export function pixelRuler(): Ruler {
     labelPadX: 4,
     labelPadY: 2,
     widthStep: 8,
-    rankGap: 40,
-    rankGapMin: 28,
-    laneGap: 4,
-    rowGap: 40,
+    rankGap: 48,
+    rankGapMin: 32,
+    laneGap: 16,
+    rowGap: 48,
     trackGap: 12,
-    lanePad: 20,
+    lanePad: 32,
     laneLabelGap: 8,
     legendSample: 40,
     legendCaptionGap: 8,
     legendGap: 24,
     legendHeight: 32,
     snap: (v) => v,
+    nodeGrid: 16,
+    edgeGrid: 2,
+    portPitch: 24,
+    sidePorts: 3,
     grid: 4,
     defaultWidth: 1280,
     sequence: {
@@ -259,16 +274,20 @@ export function cellRuler(): Ruler {
     widthStep: 1,
     rankGap: 4,
     rankGapMin: 2,
-    laneGap: 1,
+    laneGap: 2,
     rowGap: 2,
     trackGap: 1,
-    lanePad: 1,
+    lanePad: 2,
     laneLabelGap: 1,
     legendSample: 2,
     legendCaptionGap: 1,
     legendGap: 3,
     legendHeight: 1,
     snap: (v) => Math.round(v),
+    nodeGrid: 2,
+    edgeGrid: 1,
+    portPitch: 2,
+    sidePorts: 1,
     grid: 1,
     sequence: {
       stroke: 1,

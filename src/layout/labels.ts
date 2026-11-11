@@ -2,6 +2,7 @@ import type { Ruler } from '../metrics.ts';
 import type { Point } from '../types.ts';
 import type { Geo, Skeleton } from './place.ts';
 import type { EdgePlan } from './plan.ts';
+import { edgeNear } from './place.ts';
 import type { Routed, Run } from './route.ts';
 
 export interface LabelSize {
@@ -159,7 +160,7 @@ export function placeLabel(
     const gap = (horizontal ? size.h : size.w) / 2 + (horizontal ? ruler.labelPadY : ruler.labelPadX);
     const cx = horizontal ? along : p.x + side * gap;
     const cy = horizontal ? p.y + side * gap : along;
-    return { x: ruler.snap(cx - size.w / 2), y: ruler.snap(cy - size.h / 2), w: size.w, h: size.h };
+    return { x: edgeNear(ruler, cx - size.w / 2), y: edgeNear(ruler, cy - size.h / 2), w: size.w, h: size.h };
   };
   const free = (r: Rect, side: number): boolean =>
     (side === 0 || !segmentHits(segment, r)) &&

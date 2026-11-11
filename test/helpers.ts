@@ -70,6 +70,14 @@ export function geometryViolations(l: Layout): string[] {
   }
   l.edges.forEach((e, i) => {
     const name = `${e.from}->${e.to}`;
+    for (const [p, id] of [[e.points[0], e.from], [e.points[e.points.length - 1], e.to]] as const) {
+      const n = l.nodes.find((x) => x.id === id);
+      if (!p || !n) continue;
+      const inX = p.x > n.x - 0.01 && p.x < n.x + n.w + 0.01;
+      const inY = p.y > n.y - 0.01 && p.y < n.y + n.h + 0.01;
+      const onBorder = ((Math.abs(p.x - n.x) < 0.01 || Math.abs(p.x - n.x - n.w) < 0.01) && inY) || ((Math.abs(p.y - n.y) < 0.01 || Math.abs(p.y - n.y - n.h) < 0.01) && inX);
+      if (!onBorder) bad.push(`edge ${name} ends off the border of ${id}`);
+    }
     if (e.points.length < 2) bad.push(`edge ${name} has fewer than 2 points`);
     for (const p of e.points) {
       if (p.x < -EPS || p.y < -EPS || p.x > l.width + EPS || p.y > l.height + EPS) bad.push(`edge ${name} point outside`);
@@ -97,8 +105,55 @@ export function geometryViolations(l: Layout): string[] {
   return bad;
 }
 
-/** Canvas width in the ruler's units that holds exactly `columns` rank columns of the graph. */
+/** Canvas width in the ruler's units that holds exactly `columns` columns (two slot units each) of the graph. */
 export function widthForColumns(graph: Graph, ruler: Ruler, columns: number): number {
   const m = measureNodes(graph.nodes, graph.lanes, ruler, graph.direction === 'TD');
-  return columns * (m.common + ruler.rankGap) - ruler.rankGap + 2 * ruler.trackGap + m.gutter + 2 * ruler.lanePad;
+  const margin = Math.ceil(ruler.trackGap / ruler.nodeGrid - 1e-9) * ruler.nodeGrid;
+  return columns * 2 * m.unit - ruler.rankGap + 2 * margin + m.gutter + 2 * ruler.lanePad;
+}
+
+/**
+ * Every edge starts on the border of its `from` box and ends on the border of its `to` box, at a port of that box.
+ * A port lies at the centre of a side or a multiple of the pitch from it, or at an equal fraction of the side.
+ * The pitch depends on how far the rank gap was stretched or squeezed, so every unit that can give is accepted.
+ */
+export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): string[] {
+  const m = measureNodes(graph.nodes, graph.lanes, ruler, graph.direction === 'TD');
+  const pitches: number[] = [];
+  for (let gap = Math.max(ruler.nodeGrid, ruler.rankGap - 2 * ruler.nodeGrid); gap <= 2 * ruler.rankGap; gap += 2 * ruler.nodeGrid) {
+    const unit = (graph.direction === 'TD' ? m.contentH : m.common) / 2 + gap / 2;
+    pitches.push(unit / Math.max(1, Math.round(unit / ruler.portPitch)));
+  }
+  const bad: string[] = [];
+  const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
+  const portOf = (len: number, off: number): boolean => {
+    for (const pitch of pitches) {
+      const k = (off - len / 2) / pitch;
+      if (near(k, Math.round(k))) return true;
+    }
+    for (let count = 1; count <= 40; count++) {
+      const k = (off * (count + 1)) / len;
+      if (near(k, Math.round(k)) && Math.round(k) >= 1 && Math.round(k) <= count) return true;
+    }
+    return false;
+  };
+  for (const e of l.edges) {
+    const name = `${e.from}->${e.to}`;
+    const ends: Array<[Point | undefined, string]> = [[e.points[0], e.from], [e.points[e.points.length - 1], e.to]];
+    for (const [p, id] of ends) {
+      const n = l.nodes.find((x) => x.id === id);
+      if (!p || !n) continue;
+      const inX = p.x > n.x - 0.01 && p.x < n.x + n.w + 0.01;
+      const inY = p.y > n.y - 0.01 && p.y < n.y + n.h + 0.01;
+      const onV = (near(p.x, n.x) || near(p.x, n.x + n.w)) && inY;
+      const onH = (near(p.y, n.y) || near(p.y, n.y + n.h)) && inX;
+      if (!onV && !onH) {
+        bad.push(`edge ${name} ends off the border of ${id}`);
+        continue;
+      }
+      const off = onH ? p.x - n.x : p.y - n.y;
+      if (!portOf(onH ? n.w : n.h, off)) bad.push(`edge ${name} ends off the ports of ${id}`);
+    }
+  }
+  return bad;
 }

@@ -22,72 +22,27 @@ export type PortTable = Map<string, Attach[]>;
 
 const portKey = (id: string, side: Side): string => `${id}|${side}`;
 
-function offsets(
-  items: Attach[],
-  len: number,
-  ext: number,
-  ruler: Ruler,
-): number[] {
-  const b = ruler.nodeBorder;
-  const startInSlot = ruler.snap((ext - len) / 2);
-  const centre = ext / 2 - startInSlot;
-  const sIdx = items.findIndex((a) => a.straight);
-  if (sIdx < 0) {
-    return items.map((_, i) => b + ((i + 0.5) * (len - 2 * b)) / items.length);
-  }
-  const before = sIdx;
-  const after = items.length - sIdx - 1;
-  return items.map((_, i) => {
-    if (i === sIdx) return centre;
-    if (i < sIdx) return b + ((i + 1) * (centre - b)) / (before + 1);
-    return centre + ((i - sIdx) * (len - b - centre)) / (after + 1);
-  });
+/** Pitch of the ports on a side along the flow axis: the ruler's pitch, rounded so that it divides the slot unit. */
+export function portStep(unit: number, ruler: Ruler): number {
+  return unit / Math.max(1, Math.round(unit / ruler.portPitch));
 }
 
-/**
- * Offsets on a cross-axis side that carries straight perpendicular lines at fixed places. The other
- * attachments keep their order, stay a track gap away from the fixed lines, and the ones that head
- * toward low coordinates sit on the low side of them.
- */
-function offsetsAround(items: Attach[], fixed: Map<number, number>, len: number, ruler: Ruler): number[] {
-  const b = ruler.nodeBorder;
-  const gap = ruler.trackGap;
-  const lines = [...fixed.values()].sort((p, q) => p - q);
-  const first = lines[0] ?? b;
-  const last = lines[lines.length - 1] ?? b;
-  const place = (idx: number[], from: number, to: number): Map<number, number> => {
-    const out = new Map<number, number>();
-    const room = to - from;
-    let prev = -Infinity;
-    idx.forEach((i, k) => {
-      let want = room / idx.length >= gap ? from + ((k + 0.5) * room) / idx.length : from + k * gap;
-      want = Math.max(want, prev + gap);
-      for (let moved = true; moved; ) {
-        moved = false;
-        for (const f of lines) {
-          if (Math.abs(want - f) < gap - 1e-9) {
-            want = f + gap;
-            moved = true;
-          }
-        }
-      }
-      out.set(i, want);
-      prev = want;
-    });
-    return out;
-  };
-  const free = items.map((a, i) => [a, i] as const).filter(([, i]) => !fixed.has(i));
-  const low = free.filter(([a]) => a.key < 0).map(([, i]) => i);
-  const high = free.filter(([a]) => a.key >= 0).map(([, i]) => i);
-  const placedLow = place(low, b, Math.max(b, first - gap));
-  const placedHigh = place(high, Math.min(len - b, last + gap), len - b);
-  return items.map((_, i) => fixed.get(i) ?? placedLow.get(i) ?? placedHigh.get(i) ?? len / 2);
+/** Ports on a side along the flow axis: the centre and every pitch from it in both directions, corners left out. */
+export function latticePorts(len: number, pitch: number): number[] {
+  const out = [len / 2];
+  for (let k = 1; len / 2 - k * pitch > 1e-6; k++) out.push(len / 2 - k * pitch, len / 2 + k * pitch);
+  return out.sort((x, y) => x - y);
+}
+
+/** Ports on a side across the flow axis: equal fractions of the side, the centre among them. */
+export function fractionPorts(len: number, count: number): number[] {
+  return Array.from({ length: count }, (_, k) => ((k + 1) * len) / (count + 1));
 }
 
 function extentsOf(sk: Skeleton, s: Slot, side: Side): { len: number; ext: number } {
   return isFlowSide(side)
     ? { len: s.nc, ext: sk.rowExt[s.lane]?.[s.row] ?? 0 }
-    : { len: s.nf, ext: s.span > 1 ? s.nf : (sk.rankExt[s.rank] ?? 0) };
+    : { len: s.nf, ext: s.nf };
 }
 
 /** Orders and positions every attachment on every node side. */
@@ -135,21 +90,97 @@ export function buildPorts(
       (a, b) => a.key - b.key || a.edge - b.edge || (a.role === 'src' ? -1 : 1) - (b.role === 'src' ? -1 : 1),
     );
     const { len, ext } = extentsOf(sk, slot, side);
-    const startInSlot = ruler.snap((ext - len) / 2);
-    const fixed = new Map<number, number>();
-    if (!isFlowSide(side)) {
-      sorted.forEach((a, i) => {
-        const at = sk.align.off.get(`${a.edge}|${a.role}`);
-        if (a.straight && at !== undefined) fixed.set(i, at);
-      });
+    const startInSlot = 0;
+    const pitch = portStep(sk.unit, ruler);
+    const lowCount = sorted.filter((a) => !a.straight && a.key < 0).length;
+    const highCount = sorted.filter((a) => !a.straight && a.key >= 0).length;
+    const wanted = sorted.some((a) => a.straight) ? 1 + 2 * Math.max(lowCount, highCount) : sorted.length;
+    const free: number[] =
+      isFlowSide(side) && wanted <= ruler.sidePorts ? fractionPorts(len, ruler.sidePorts) : latticePorts(len, pitch);
+    if (free.length < sorted.length) free.splice(0, free.length, ...fractionPorts(len, sorted.length));
+    const centre = len / 2;
+    const taken = new Set<number>();
+    const chosen = new Map<number, number>();
+    // Straight lines first: along the flow axis through the centre port, across it through a port both boxes share.
+    sorted.forEach((a, i) => {
+      if (!a.straight) return;
+      const plan = plans.find((p) => p.index === a.edge);
+      let wanted = free.map((_, j) => j).sort((x, y) => Math.abs((free[x] ?? 0) - centre) - Math.abs((free[y] ?? 0) - centre));
+      if (!isFlowSide(side)) {
+        const peer = sk.byId.get(a.role === 'src' ? (plan?.to ?? '') : (plan?.from ?? ''));
+        if (peer && peer !== slot) {
+          const base = slot.rank * sk.unit;
+          const other = peer.rank * sk.unit;
+          const theirs = latticePorts(peer.nf, pitch).map((v) => other + v);
+          const mine = free.map((v) => base + v);
+          const both = mine.flatMap((v, j) => (theirs.some((w) => Math.abs(w - v) < 1e-6) ? [j] : []));
+          const mid = base + slot.nf / 2;
+          const peerMid = other + peer.nf / 2;
+          const cost = (j: number): number => Math.abs((mine[j] ?? 0) - mid) + Math.abs((mine[j] ?? 0) - peerMid);
+          if (both.length === 0) {
+            // No port of this box lies in the overlap: the line runs through the middle of the overlap instead.
+            const lo = Math.max(base, other);
+            const hi = Math.min(base + slot.nf, other + peer.nf);
+            chosen.set(i, (lo + hi) / 2 - base);
+            return;
+          }
+          const pool = both;
+          wanted = [...pool].sort((x, y) => {
+            const d = cost(x) - cost(y);
+            if (Math.abs(d) > 1e-6) return d;
+            // Equally near both centres: the one nearest the partner's centre.
+            const e = Math.abs((mine[x] ?? 0) - peerMid) - Math.abs((mine[y] ?? 0) - peerMid);
+            return Math.abs(e) > 1e-6 ? e : x - y;
+          });
+        }
+      }
+      const routed = sorted.filter((o) => !o.straight);
+      const nLow = routed.filter((o) => o.key < 0).length;
+      const nHigh = routed.length - nLow;
+      // The shared port also has to leave room for the other edges on the side, each toward its own partner.
+      const roomy = (j: number): boolean =>
+        free.filter((v, k) => !taken.has(k) && k !== j && v < (free[j] ?? 0) - 1e-6).length >= nLow &&
+        free.filter((v, k) => !taken.has(k) && k !== j && v > (free[j] ?? 0) + 1e-6).length >= nHigh;
+      // A line along the flow axis is drawn through the middle of the row, so it keeps the centre port.
+      const j = isFlowSide(side) ? wanted.find((w) => !taken.has(w)) : (wanted.find((w) => !taken.has(w) && roomy(w)) ?? wanted.find((w) => !taken.has(w)));
+      if (j !== undefined) {
+        taken.add(j);
+        chosen.set(i, free[j] ?? centre);
+      }
+    });
+    // The other edges take the free ports nearest the centre, in the order of their partners.
+    const rest = sorted.map((_, i) => i).filter((i) => !chosen.has(i));
+    const fixed = [...chosen.values()];
+    const avail = free.map((_, j) => j).filter((j) => !taken.has(j));
+    const lo = fixed.length > 0 ? Math.min(...fixed) : centre;
+    const hi = fixed.length > 0 ? Math.max(...fixed) : centre;
+    const below = avail.filter((j) => (free[j] ?? 0) < lo - 1e-6).sort((x, y) => y - x);
+    const above = avail.filter((j) => (free[j] ?? 0) > hi + 1e-6).sort((x, y) => x - y);
+    const lows = rest.filter((i) => (sorted[i]?.key ?? 0) < 0);
+    const highs = rest.filter((i) => (sorted[i]?.key ?? 0) >= 0);
+    if (fixed.length > 0 && below.length >= lows.length && above.length >= highs.length) {
+      const giveLow = below.slice(0, lows.length).sort((x, y) => x - y);
+      const giveHigh = above.slice(0, highs.length).sort((x, y) => x - y);
+      lows.forEach((i, k) => chosen.set(i, free[giveLow[k] ?? 0] ?? centre));
+      highs.forEach((i, k) => chosen.set(i, free[giveHigh[k] ?? 0] ?? centre));
+    } else {
+      // An even number of edges leaves the centre port free so that the ports stay symmetric about it.
+      const pickable = fixed.length === 0 && rest.length % 2 === 0 ? avail.filter((j) => Math.abs((free[j] ?? 0) - centre) > 1e-6) : avail;
+      const set = (pickable.length >= rest.length ? pickable : avail)
+        .sort((x, y) => {
+          const d = Math.abs((free[x] ?? 0) - centre) - Math.abs((free[y] ?? 0) - centre);
+          return Math.abs(d) > 1e-6 ? d : x - y;
+        })
+        .slice(0, rest.length)
+        .sort((x, y) => x - y);
+      rest.forEach((i, k) => chosen.set(i, free[set[k] ?? 0] ?? centre));
     }
-    const offs = fixed.size > 0 ? offsetsAround(sorted, fixed, len, ruler) : offsets(sorted, len, ext, ruler);
-    const slide = isFlowSide(side) ? 0 : (sk.align.slide.get(slot.id) ?? 0);
+    const offs = sorted.map((_, i) => chosen.get(i) ?? centre);
     table.set(
       k,
       sorted.map((a, i) => {
         const off = offs[i] ?? 0;
-        return { ...a, off, rel: startInSlot + slide + off - ext / 2 };
+        return { ...a, off, rel: startInSlot + off - ext / 2 };
       }),
     );
   }

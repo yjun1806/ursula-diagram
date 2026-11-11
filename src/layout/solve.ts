@@ -1,18 +1,17 @@
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, Point } from '../types.ts';
 import type { AbsPoint } from './assemble.ts';
-import { buildPaths } from './assemble.ts';
+import { buildPaths, straightLines } from './assemble.ts';
 import { crossings } from './check.ts';
 import type { LabelSize, Rect, Segment } from './labels.ts';
 import { hostRun, labelDemands, labelSize, placeLabel } from './labels.ts';
-import type { Alignment, Geo, Need, Side, Skeleton, Slot } from './place.ts';
+import type { Geo, Need, Side, Skeleton, Slot } from './place.ts';
 import type { AlongSpec } from './lanes-along.ts';
 import { alongBands, shapeAlong } from './lanes-along.ts';
-import { buildTopology, finalNf, fitLaneLabels, geometry, gridUp, noAlignment, origin, sizeSlots } from './place.ts';
+import { buildTopology, measureNodes, finalNf, fitLaneLabels, geometry, gridUp, origin, sizeSlots } from './place.ts';
 import { nodeNeeds, planEdges } from './plan.ts';
-import { buildPorts, portOrders } from './ports.ts';
+import { buildPorts, portOrders, portStep } from './ports.ts';
 import type { Run } from './route.ts';
-import { boxesClear, slideBoxes } from './slide.ts';
 import { routeEdges } from './route.ts';
 import type { Chain } from './tracks.ts';
 import { assignTracks, trackCounts, turnOrders } from './tracks.ts';
@@ -51,16 +50,11 @@ function simplify(points: Point[]): Point[] {
   return out;
 }
 
-/** Switch for sliding boxes along the flow axis; the drawing is then centred in its columns. */
-const SLIDE_BOXES = true;
-
 interface Pass {
-  align?: Alignment;
-  forced?: Set<number>;
-  /** Channel widths of an earlier pass; the rank geometry must not change. */
-  pin?: { wf: number[]; wc: number[]; sizes: Map<string, { nf: number; nc: number }> };
   /** Lanes follow one another along the flow axis; the graph then has a single lane. */
   along?: AlongSpec;
+  /** Edges planned as straight lines across the flow axis whose boxes ended up without room for one. */
+  demote?: Set<number>;
 }
 
 interface Built {
@@ -71,11 +65,11 @@ interface Built {
   runs: Run[];
   counts: Map<string, number>;
   tracks: number[];
-  /** False when a pinned channel had to grow. */
-  pinned: boolean;
 }
 
-/** Lays the graph out for a given rank and row of every node. */
+const demoted = new WeakMap<Map<string, number>, Set<number>>();
+
+/** Lays the graph out for a given slot unit and row of every node; `span` counts slot units. */
 export function solve(
   graph: Graph,
   ruler: Ruler,
@@ -83,50 +77,33 @@ export function solve(
   row: Map<string, number>,
   opts: Pick<LayoutOptions, 'maxWidth'> = {},
   span: Map<string, number> = new Map(),
-  slide: boolean = SLIDE_BOXES,
   along?: AlongSpec,
 ): Layout {
-  const base: Pass = along ? { along } : {};
-  const first = build(graph, ruler, rank, row, opts, span, base);
-  if (!slide) return first.layout;
-  // Tight strips (the tracks as assigned) first; if the drawing then differs enough that a box
-  // meets a track, the whole channel counts as occupied.
-  for (const tracks of [first.tracks, undefined]) {
-    const slid = slideBoxes(first.sk, first.geo, ruler, first.plans, first.runs, first.counts, tracks);
-    if (!slid) return first.layout;
-    const second = build(graph, ruler, rank, row, opts, span, {
-      ...base,
-      align: slid.alignment,
-      forced: slid.forced,
-      pin: { wf: first.geo.wf, wc: first.geo.wc, sizes: new Map(first.sk.slots.map((s) => [s.id, { nf: s.nf, nc: s.nc }] as const)) },
+  // The same assignment drawn again (other gaps) starts from the edges that lost their line the first time.
+  const demote = new Set(demoted.get(rank) ?? []);
+  for (let round = 0; ; round++) {
+    const built = build(graph, ruler, rank, row, opts, span, { ...(along ? { along } : {}), demote });
+    const lines = straightLines(built.sk, built.geo, ruler, built.plans);
+    // A line is lost when no shared port exists or a box of a row between the two stands on it.
+    const lost = built.plans.filter((p) => {
+      if (p.straight !== 'c') return false;
+      const at = lines.get(p.index);
+      const a = built.sk.byId.get(p.from);
+      const b = built.sk.byId.get(p.to);
+      if (at === undefined || !a || !b) return true;
+      const [lo, hi] = [Math.min(a.cRow, b.cRow), Math.max(a.cRow, b.cRow)];
+      return built.sk.slots.some((n) => {
+        if (n.cRow <= lo || n.cRow >= hi) return false;
+        const f0 = origin(built.sk, built.geo, ruler, n).f0;
+        return at > f0 - ruler.trackGap / 2 && at < f0 + n.nf + ruler.trackGap / 2;
+      });
     });
-    const sameGrid = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
-    const stable =
-      sameGrid(first.geo.rankStart, second.geo.rankStart) &&
-      sameGrid(first.geo.cStart, second.geo.cStart) &&
-      first.geo.totalF === second.geo.totalF;
-    if (
-      second.pinned &&
-      stable &&
-      boxesClear(second.sk, second.geo, ruler, second.runs, second.counts, second.tracks) &&
-      !worse(second.layout, first.layout)
-    ) {
-      return second.layout;
+    if (lost.length === 0 || round >= 8) {
+      demoted.set(rank, demote);
+      return built.layout;
     }
+    for (const p of lost) demote.add(p.index);
   }
-  return first.layout;
-}
-
-/** True when `slid` has fewer straight edges, or more bends or crossings, than `nominal`. */
-function worse(slid: Layout, nominal: Layout): boolean {
-  const count = (l: Layout): { straight: number; bends: number; crossings: number } => ({
-    straight: l.edges.filter((e) => e.points.length === 2).length,
-    bends: l.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0),
-    crossings: l.diagnostics.filter((d) => d.kind === 'crossing').length,
-  });
-  const a = count(slid);
-  const b = count(nominal);
-  return a.straight < b.straight || a.bends > b.bends || a.crossings > b.crossings;
 }
 
 function build(
@@ -140,10 +117,11 @@ function build(
 ): Built {
   const td = graph.direction === 'TD';
   const topo = buildTopology(graph, rank, row, span);
-  const plans = planEdges(graph, topo, pass.forced, pass.along !== undefined);
-  const needs: Map<string, Need> = nodeNeeds(plans, topo, ruler);
-  const sized = sizeSlots(topo, ruler, graph.direction, needs, pass.pin?.sizes);
-  const sk: Skeleton = { ...(pass.along ? shapeAlong(sized, ruler, pass.along) : sized), align: pass.align ?? noAlignment() };
+  const unit = measureNodes(graph.nodes, graph.lanes, ruler, td).unit;
+  const plans = planEdges(graph, topo, pass.along !== undefined, ruler.rankGap / unit, pass.demote);
+  const needs: Map<string, Need> = nodeNeeds(plans, topo, ruler, portStep(unit, ruler));
+  const sized = sizeSlots(topo, ruler, graph.direction, needs);
+  const sk: Skeleton = pass.along ? shapeAlong(sized, ruler, pass.along) : sized;
   const insetOf = (key: string, count: number): number => (count > 0 ? (sk.inset?.get(key) ?? 0) : 0);
 
   const rough = geometry(sk, sk.baseWf, sk.baseWc);
@@ -173,16 +151,28 @@ function build(
   const sizes = new Map<number, LabelSize>();
   for (const p of plans) if (p.label) sizes.set(p.index, labelSize(p.label, ruler));
   const demand = labelDemands(sk, rough, ruler, plans, routed, runs, sizes);
-  const wfNeed = sk.baseWf.map((w, a) =>
-    gridUp(
+  // A channel that grows pushes the later units away by a whole number of port pitches and grid steps,
+  // so that ports of boxes half a step apart keep coinciding.
+  const pitch = portStep(sk.unit, ruler);
+  let quantum = ruler.nodeGrid;
+  for (let k = 1; k <= 12; k++) {
+    if (Math.abs((k * pitch) / ruler.nodeGrid - Math.round((k * pitch) / ruler.nodeGrid)) < 1e-6) {
+      quantum = k * pitch;
+      break;
+    }
+  }
+  const wfNeed = sk.baseWf.map((w, a) => {
+    const need = gridUp(
       ruler,
       Math.max(
         w,
         (counts.get(`f${a}`) ?? 0) * ruler.trackGap + insetOf(`f${a}`, counts.get(`f${a}`) ?? 0),
         demand.wf[a] ?? 0,
       ),
-    ),
-  );
+    );
+    const inner = a > 0 && a < sk.ranks && need > w;
+    return inner ? w + Math.ceil((need - w) / quantum - 1e-9) * quantum : need;
+  });
   const wcNeed = fitLaneLabels(
     sk,
     sk.baseWc.map((w, b) =>
@@ -196,10 +186,7 @@ function build(
       ),
     ),
   );
-  const pin = pass.pin;
-  const pinned = !pin || (wfNeed.every((w, a) => w <= (pin.wf[a] ?? 0)) && wcNeed.every((w, b) => w <= (pin.wc[b] ?? 0)));
-  const wf = pin ? pin.wf : wfNeed;
-  const geo = geometry(sk, wf, pin ? pin.wc : wcNeed);
+  const geo = geometry(sk, wfNeed, wcNeed);
 
   const phys = (p: AbsPoint): Point => (td ? { x: tidy(p.c), y: tidy(p.f) } : { x: tidy(p.f), y: tidy(p.c) });
   const nodes: LayoutNode[] = sk.slots.map((s) => {
@@ -331,5 +318,5 @@ function build(
     edges,
     diagnostics,
   };
-  return { layout, sk, geo, plans, runs, counts, tracks, pinned };
+  return { layout, sk, geo, plans, runs, counts, tracks };
 }

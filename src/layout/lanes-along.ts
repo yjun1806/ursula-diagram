@@ -1,7 +1,7 @@
 import type { Ruler } from '../metrics.ts';
 import type { LayoutLane } from '../types.ts';
 import type { Geo, Skeleton } from './place.ts';
-import { gridNear, gridUp } from './place.ts';
+import { edgeNear, gridUp } from './place.ts';
 
 /**
  * Lanes that follow one another along the flow axis. The nodes live in one lane of the slot grid;
@@ -93,7 +93,7 @@ export function alongBands(sk: Skeleton, geo: Geo, ruler: Ruler, along: AlongSpe
       w: tidy(ext),
       h: tidy(crossExt),
       labelBox: {
-        x: tidy(gridNear(ruler, f0 + (ext - labelW) / 2)),
+        x: tidy(edgeNear(ruler, f0 + (ext - labelW) / 2)),
         y: tidy(sk.margin + ruler.laneLabelGap),
         w: labelW,
         h: labelH,

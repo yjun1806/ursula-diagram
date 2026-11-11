@@ -22,9 +22,12 @@ describe('renderText', () => {
     expect(lines('flowchart LR\nA[Start] -->|go| B[Finish]').join('\n')).toMatchInlineSnapshot(`
       "
 
-        ┌────────┐      ┌────────┐
-        │ Start  │─ go ▶│ Finish │
-        └────────┘      └────────┘"
+
+
+          ┌──────────┐        ┌──────────┐
+          │  Start   │        │  Finish  │
+          │          │── go ─▶│          │
+          └──────────┘        └──────────┘"
     `);
   });
 
@@ -32,29 +35,34 @@ describe('renderText', () => {
     expect(lines('flowchart TD\nA[Start] --> B[Mid]\nA --> C[Side]\nB --> D[End]\nC --> D').join('\n')).toMatchInlineSnapshot(`
       "
 
-        ┌───────┐
-        │ Start │
-        └───────┘
-            │ │
-            │ │
-            │ └────────┐
-            ▼          ▼
-         ┌──────┐  ┌──────┐
-         │ Mid  │  │ Side │
-         └──────┘  └──────┘
-            │          │
-            │          │
-            │ ┌────────┘
-            ▼ ▼
-         ┌──────┐
-         │ End  │
-         └──────┘"
+
+
+          ┌──────────┐
+          │  Start   │
+          │          │
+          └──────────┘
+                │ │
+                │ │
+                │ └─────────┐
+                ▼           ▼
+            ┌──────┐    ┌──────┐
+            │ Mid  │    │ Side │
+            │      │    │      │
+            └──────┘    └──────┘
+                │           │
+                │           │
+                │ ┌─────────┘
+                ▼ ▼
+          ┌──────────┐
+          │   End    │
+          │          │
+          └──────────┘"
     `);
   });
 
   it('keeps borders aligned around Korean labels', () => {
     const src = 'flowchart LR\nA[주문 접수] --> B[결제 확인<br>카드]';
-    const l = layout(parse(src), cellRuler());
+    const l = layout(parse(src), cellRuler(), { maxWidth: 200 });
     const out = lines(src);
     for (const n of l.nodes) {
       const mid = cells(out[Math.round(n.y) + 1] ?? '');

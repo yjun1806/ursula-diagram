@@ -1,9 +1,9 @@
 import type { Ruler } from '../metrics.ts';
 import type { Geo, Side, Skeleton, Slot } from './place.ts';
-import { finalNf, origin } from './place.ts';
+import { edgeNear, finalNf, origin } from './place.ts';
 import type { EdgePlan } from './plan.ts';
 import type { PortTable } from './ports.ts';
-import { attachOf } from './ports.ts';
+import { attachOf, latticePorts, portStep } from './ports.ts';
 import type { Routed, Run } from './route.ts';
 
 /** A point in abstract coordinates: f along the flow axis, c across it. */
@@ -31,23 +31,60 @@ function portPoint(
   const off = attachOf(table, slot.id, side, plan.index, role)?.off ?? 0;
   const rowCentre = (geo.rowStart[slot.lane]?.[slot.row] ?? 0) + (sk.rowExt[slot.lane]?.[slot.row] ?? 0) / 2;
   const nf = finalNf(sk, geo, slot);
-  // A perpendicular line between nodes of different widths runs through the middle of their overlap.
-  const peer = sk.byId.get(role === 'src' ? plan.to : plan.from);
-  let overlapCentre = sk.align.lineF.get(plan.index) ?? f0 + nf / 2;
-  if (!sk.align.lineF.has(plan.index) && peer && peer !== slot) {
-    const p0 = origin(sk, geo, ruler, peer).f0;
-    overlapCentre = (Math.max(f0, p0) + Math.min(f0 + nf, p0 + finalNf(sk, geo, peer))) / 2;
-  }
   switch (side) {
     case 'fH':
       return { f: f0 + nf, c: plan.straight ? rowCentre : c0 + off };
     case 'fL':
       return { f: f0, c: plan.straight ? rowCentre : c0 + off };
     case 'cL':
-      return { f: plan.straight ? overlapCentre : f0 + off, c: c0 };
+      return { f: f0 + off, c: c0 };
     case 'cH':
-      return { f: plan.straight ? overlapCentre : f0 + off, c: c0 + slot.nc };
+      return { f: f0 + off, c: c0 + slot.nc };
   }
+}
+
+/**
+ * Flow-axis coordinate of a straight line across the flow axis between two boxes, from their drawn positions:
+ * a port both boxes have, nearest to both centres, else the middle of the overlap; undefined without an overlap.
+ */
+export function sharedLine(sk: Skeleton, geo: Geo, ruler: Ruler, a: Slot, b: Slot, taken: readonly number[] = []): number | undefined {
+  const fa = origin(sk, geo, ruler, a).f0;
+  const fb = origin(sk, geo, ruler, b).f0;
+  const lo = Math.max(fa, fb);
+  const hi = Math.min(fa + a.nf, fb + b.nf);
+  if (hi - lo < ruler.nodeGrid - 1e-6) return undefined;
+  const free = (v: number): boolean => taken.every((u) => Math.abs(u - v) > 1e-6);
+  const pitch = portStep(sk.unit, ruler);
+  const mine = latticePorts(a.nf, pitch).map((v) => fa + v);
+  const theirs = latticePorts(b.nf, pitch).map((v) => fb + v);
+  const both = mine.filter((v) => v > lo + 1e-6 && v < hi - 1e-6 && free(v) && theirs.some((w) => Math.abs(w - v) < 1e-6));
+  const ca = fa + a.nf / 2;
+  const cb = fb + b.nf / 2;
+  // Equally near both centres: the port nearest the centre of the narrower box.
+  const narrow = a.nf <= b.nf ? ca : cb;
+  both.sort((x, y) => {
+    const d = Math.abs(x - ca) + Math.abs(x - cb) - (Math.abs(y - ca) + Math.abs(y - cb));
+    return Math.abs(d) > 1e-6 ? d : Math.abs(x - narrow) - Math.abs(y - narrow) || x - y;
+  });
+  return both[0];
+}
+
+/** Line of every straight edge across the flow axis, in plan order, each on a port no other such edge uses; undefined when none is shared. */
+export function straightLines(sk: Skeleton, geo: Geo, ruler: Ruler, plans: EdgePlan[]): Map<number, number | undefined> {
+  const out = new Map<number, number | undefined>();
+  const used = new Map<string, number[]>();
+  for (const plan of plans) {
+    if (plan.straight !== 'c') continue;
+    const s = sk.byId.get(plan.from);
+    const t = sk.byId.get(plan.to);
+    if (!s || !t) continue;
+    const keys = [`${s.id}|${plan.srcSide}`, `${t.id}|${plan.tgtSide}`];
+    const taken = keys.flatMap((k) => used.get(k) ?? []);
+    const at = sharedLine(sk, geo, ruler, s, t, taken);
+    out.set(plan.index, at);
+    if (at !== undefined) for (const k of keys) used.set(k, [...(used.get(k) ?? []), at]);
+  }
+  return out;
 }
 
 /** Coordinate of a track inside its channel strip. */
@@ -55,7 +92,7 @@ export function trackCoord(geo: Geo, ruler: Ruler, run: Run, track: number, coun
   const inset = geo.inset?.get(`${run.kind}${run.idx}`) ?? 0;
   const start = (run.kind === 'f' ? (geo.fStart[run.idx] ?? 0) : (geo.cStart[run.idx] ?? 0)) + inset;
   const width = (run.kind === 'f' ? (geo.wf[run.idx] ?? 0) : (geo.wc[run.idx] ?? 0)) - inset;
-  return start + (width - (count - 1) * ruler.trackGap) / 2 + track * ruler.trackGap;
+  return edgeNear(ruler, start + (width - (count - 1) * ruler.trackGap) / 2) + track * ruler.trackGap;
 }
 
 function meet(a: Line, b: Line): AbsPoint {
@@ -80,6 +117,7 @@ export function buildPaths(
   table: PortTable,
 ): Map<number, AbsPoint[]> {
   const out = new Map<number, AbsPoint[]>();
+  const lines0 = straightLines(sk, geo, ruler, plans);
   for (const plan of plans) {
     const s = sk.byId.get(plan.from);
     const t = sk.byId.get(plan.to);
@@ -87,7 +125,9 @@ export function buildPaths(
     const start = portPoint(sk, geo, ruler, table, s, plan.srcSide, plan, 'src');
     const end = portPoint(sk, geo, ruler, table, t, plan.tgtSide, plan, 'tgt');
     if (plan.straight) {
-      out.set(plan.index, [start, end]);
+      // Both ends of a perpendicular line sit on the port the two boxes share.
+      const at = plan.straight === 'c' ? lines0.get(plan.index) : undefined;
+      out.set(plan.index, at === undefined ? [start, plan.straight === 'c' ? { f: start.f, c: end.c } : end] : [{ f: at, c: start.c }, { f: at, c: end.c }]);
       continue;
     }
     const r = routed.get(plan.index);

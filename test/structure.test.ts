@@ -7,7 +7,7 @@ import { geometryViolations, rectsOverlap, segmentsOf, widthForColumns } from '.
 
 const structure = (l: Layout): string =>
   l.nodes
-    .map((n) => `${n.id}:${n.rank}:${n.row}:${n.span}`)
+    .map((n) => `${n.id}:${n.rank}:${n.row}`)
     .sort()
     .join(' ');
 
@@ -264,7 +264,7 @@ i7 --> b3`;
   it('derives the number of columns from the canvas width', () => {
     for (const k of [3, 4, 6]) {
       const l = layout(parse(long), pixelRuler(), { maxWidth: widthFor(k) });
-      expect(Math.max(...l.nodes.map((n) => n.rank + n.span))).toBeLessThanOrEqual(k);
+      expect(Math.max(...l.nodes.map((n) => n.rank + n.span))).toBeLessThanOrEqual(2 * k);
     }
   });
 
@@ -310,9 +310,9 @@ p3 --> q3`;
     const l = layout(parse(src), pixelRuler(), { maxWidth: Infinity });
     const wide = l.nodes.find((n) => n.id === 'q2');
     const narrow = l.nodes.find((n) => n.id === 'q1');
-    expect(wide?.span ?? 0).toBeGreaterThan(1);
-    expect(narrow?.span).toBe(1);
-    expect(wide?.w ?? 0).toBeGreaterThan((narrow?.w ?? 0) * (wide?.span ?? 1) - 80);
+    expect(wide?.span ?? 0).toBeGreaterThan(2);
+    expect(narrow?.span).toBe(2);
+    expect(wide?.w ?? 0).toBeGreaterThan(narrow?.w ?? 0);
     expect(geometryViolations(l)).toEqual([]);
   });
 

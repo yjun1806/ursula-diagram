@@ -1,33 +1,34 @@
 import type { Graph } from '../types.ts';
 
 /**
- * Canvas-first slot placement. The canvas width fixes the number of columns K along the flow axis;
- * every node sits in one slot (lane, column, row) of that grid, wide nodes in `span` consecutive
- * columns. The cost is a pure function of the slot assignment, measured in slot units: edges are
- * drawn as the orthogonal shapes the router prefers, and lengths, crossings and blocked nodes are
- * counted. Nothing is routed while searching.
+ * Canvas-first slot placement. The canvas width fixes the number of slot units K along the flow axis; a unit
+ * is half of a box plus half a gap, so a normal box covers two units and a box that starts on an odd unit
+ * sits half a step off the regular columns. Every node sits in one slot (lane, unit, row), wide nodes in
+ * `span` consecutive units. The cost is a pure function of the slot assignment: edges are drawn as the
+ * orthogonal shapes the router prefers, and bends, crossings and blocked nodes are counted. Nothing is
+ * routed while searching, and edge length is not rewarded.
  */
 
-/** Weights. A crossing outweighs a row; a row outweighs a column of length. */
+/** Weights. A crossing outweighs a bend; a bend outweighs a half-step box; rows are charged per lane. */
 export const W = {
   cross: 100,
-  len: 2,
-  bend: 1.5,
-  back: 12,
-  /** A backward in-lane edge whose target sits directly below or above the source. */
-  backAligned: 6,
-  misalign: 3,
-  row: 22,
-  far: 3,
-  gap: 3,
-  order: 0.05,
-  /** A second edge between two nodes cannot also be a straight line. */
-  repeat: 24,
+  bend: 10,
+  /** A box on an odd unit. */
+  half: 4,
+  /** Each row of a lane beyond its first. */
+  row: 6,
+  /** Each row of a lane beyond its second: a third row is worth it only against a crossing. */
+  rowMany: 160,
+  /** An in-lane edge that does not run forward along the flow axis; less when its ends sit in adjacent rows of one column. */
+  back: 5,
+  backAligned: 2,
+  /** Tie-break that prefers earlier units and rows for earlier nodes. */
+  order: 0.02,
 };
 
 const PASS_CAP = 12;
 /** Starts searched while the best result so far still has a crossing or a blocked node. */
-const RESTARTS = 1;
+const RESTARTS = 2;
 const EPS = 1e-9;
 /** Slack for bounds that add up their terms in another order than the cost they bound. */
 const BOUND_MARGIN = 1e-6;
@@ -41,14 +42,18 @@ export interface SlotInput {
   row: Map<string, number>;
   /** Columns of the canvas. */
   columns: number;
-  /** Columns each node covers (absent: 1). */
+  /** Slot units each node covers (absent: 2). */
   span: Map<string, number>;
+  /** Clear distance between touching boxes as a fraction of a slot unit. */
+  gap?: number;
 }
 
 export interface SlotResult {
   rank: Map<string, number>;
   row: Map<string, number>;
   span: Map<string, number>;
+  /** The assignments of the other starts, cheapest first; searched on demand. */
+  rest?: () => SlotResult[];
 }
 
 /** A node (index), the column and the row it moves to. */
@@ -61,8 +66,6 @@ export interface Edge {
   first: number;
   second: number;
   sameLane: boolean;
-  /** 0 for the first edge between two nodes, 1 for the next, and so on. */
-  repeat: number;
 }
 
 /**
@@ -75,6 +78,8 @@ const MAX_SEGS = 5;
 export class Placement {
   readonly n: number;
   readonly K: number;
+  /** Gap between touching boxes in slot units: a box covers its units less this much. */
+  readonly g: number;
   readonly lane: number[];
   readonly span: number[];
   readonly edges: Edge[];
@@ -112,7 +117,9 @@ export class Placement {
     K: number,
     col: number[],
     row: number[],
+    g = 0.5,
   ) {
+    this.g = g;
     this.n = lane.length;
     this.K = K;
     this.lanes = lanes;
@@ -150,7 +157,7 @@ export class Placement {
 
   private mark(i: number, value: number | undefined): void {
     const m = this.occ[this.lane[i] ?? 0];
-    for (let c = 0; c < (this.span[i] ?? 1); c++) {
+    for (let c = 0; c < (this.span[i] ?? 2); c++) {
       const key = (this.row[i] ?? 0) * this.K + (this.col[i] ?? 0) + c;
       if (value === undefined) m?.delete(key);
       else m?.set(key, value);
@@ -185,7 +192,7 @@ export class Placement {
     const y = this.y(i);
     this.rect[k] = (this.col[i] ?? 0) + INSET;
     this.rect[k + 1] = y + INSET;
-    this.rect[k + 2] = (this.col[i] ?? 0) + (this.span[i] ?? 1) - INSET;
+    this.rect[k + 2] = (this.col[i] ?? 0) + (this.span[i] ?? 2) - this.g - INSET;
     this.rect[k + 3] = y + 1 - INSET;
   }
 
@@ -216,19 +223,21 @@ export class Placement {
     const b = edge.b;
     const ca = this.col[a] ?? 0;
     const cb = this.col[b] ?? 0;
-    const sa = this.span[a] ?? 1;
-    const sb = this.span[b] ?? 1;
+    const sa = this.span[a] ?? 2;
+    const sb = this.span[b] ?? 2;
     const ya = this.y(a) + 0.5;
     const yb = this.y(b) + 0.5;
-    const xa = ca + sa / 2;
-    const xb = cb + sb / 2;
+    const g = this.g;
+    const xa = ca + (sa - g) / 2;
+    const xb = cb + (sb - g) / 2;
     let n = 0;
     if (cb >= ca + sa) {
       // Forward: out of the source's far side, along row boundaries, into the target's near side.
-      const x1 = ca + sa;
+      const x1 = ca + sa - g / 2;
+      const x2 = cb - g / 2;
       if (ya === yb) {
         n = put(out, n, xa, ya, xb, yb);
-      } else if (x1 === cb) {
+      } else if (ca + sa === cb) {
         n = put(out, n, xa, ya, x1, ya);
         n = put(out, n, x1, ya, x1, yb, ya < yb ? 1 : -1);
         n = put(out, n, x1, yb, xb, yb);
@@ -236,9 +245,9 @@ export class Placement {
         const ym = yb > ya ? yb - 0.5 : yb + 0.5;
         n = put(out, n, xa, ya, x1, ya);
         n = put(out, n, x1, ya, x1, ym, ya < ym ? 1 : -1);
-        n = put(out, n, x1, ym, cb, ym, ya < ym ? 1 : -1);
-        n = put(out, n, cb, ym, cb, yb, ym < yb ? 1 : -1);
-        n = put(out, n, cb, yb, xb, yb);
+        n = put(out, n, x1, ym, x2, ym, ya < ym ? 1 : -1);
+        n = put(out, n, x2, ym, x2, yb, ym < yb ? 1 : -1);
+        n = put(out, n, x2, yb, xb, yb);
       }
     } else if (ca >= cb + sb) {
       // Backward: down or up from the source, back along a row boundary, into the target.
@@ -249,7 +258,7 @@ export class Placement {
       n = put(out, n, xb, ym, xb, yb);
     } else {
       const lo = Math.max(ca, cb);
-      const hi = Math.min(ca + sa, cb + sb);
+      const hi = Math.min(ca + sa, cb + sb) - g;
       const x = (lo + hi) / 2;
       n = put(out, n, x, ya, x, yb);
     }
@@ -268,16 +277,6 @@ export class Placement {
     this.box[e * 4 + 1] = y0;
     this.box[e * 4 + 2] = x1;
     this.box[e * 4 + 3] = y1;
-  }
-
-  private length(e: number): number {
-    const s = this.segs[e];
-    if (!s) return 0;
-    let total = 0;
-    for (let k = 0; k < (this.segCount[e] ?? 0); k++) {
-      total += (s[k * SEG + 2] ?? 0) - (s[k * SEG] ?? 0) + (s[k * SEG + 3] ?? 0) - (s[k * SEG + 1] ?? 0);
-    }
-    return total;
   }
 
   private crossings(e: number, f: number): number {
@@ -340,43 +339,26 @@ export class Placement {
     return hits;
   }
 
-  /** Terms that belong to one edge alone. */
+  /** Terms that belong to one edge alone: the bends of its predicted path. */
   private edgeTerm(e: number): number {
     const edge = this.edges[e];
-    if (!edge) return 0;
-    const { a, b } = edge;
-    let cost = W.len * this.length(e) + W.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
-    const ca = this.col[a] ?? 0;
-    const cb = this.col[b] ?? 0;
-    const sa = this.span[a] ?? 1;
-    const sb = this.span[b] ?? 1;
-    if (edge.repeat > 0 && this.segCount[e] === 1) cost += W.repeat;
-    if (edge.sameLane) {
+    let cost = W.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
+    if (edge?.sameLane) {
       const p = edge.first;
       const q = edge.second;
       const cp = this.col[p] ?? 0;
       const cq = this.col[q] ?? 0;
-      const sp = this.span[p] ?? 1;
-      if (cq < cp + sp) {
+      if (cq < cp + (this.span[p] ?? 2)) {
         const aligned = cq === cp && Math.abs((this.row[p] ?? 0) - (this.row[q] ?? 0)) === 1;
         cost += aligned ? W.backAligned : W.back;
-      } else if (this.row[p] === this.row[q]) {
-        cost += W.gap * (cq - cp - sp);
-      }
-    } else {
-      const gap = Math.max(ca, cb) - Math.min(ca + sa, cb + sb);
-      cost += W.misalign * (gap < 0 ? 0 : gap + 1);
-      for (const [n, other] of [[a, b], [b, a]] as const) {
-        const l = this.lane[n] ?? 0;
-        const toward = (this.lane[other] ?? 0) > l;
-        cost += W.far * (toward ? (this.rows[l] ?? 1) - 1 - (this.row[n] ?? 0) : (this.row[n] ?? 0));
       }
     }
     return cost;
   }
 
   private nodeTerm(i: number): number {
-    return (W.order * ((this.n - i) / this.n)) * ((this.col[i] ?? 0) + (this.row[i] ?? 0));
+    const c = this.col[i] ?? 0;
+    return (c % 2 === 1 ? W.half : 0) + (W.order * ((this.n - i) / this.n)) * (c + (this.row[i] ?? 0));
   }
 
   /**
@@ -434,7 +416,7 @@ export class Placement {
       for (let i = 0; i < this.n; i++) cost += this.cross * this.blocked(e, i);
     }
     for (let i = 0; i < this.n; i++) cost += this.nodeTerm(i);
-    for (const r of this.rows) cost += W.row * r;
+    for (const r of this.rows) cost += W.row * Math.max(0, r - 1) + W.rowMany * Math.max(0, r - 2);
     return cost;
   }
 
@@ -601,7 +583,7 @@ function forcedCrossing(s: Float64Array, a: number, t: Float64Array, b: number, 
   return nested ? 1 : 0;
 }
 
-/** Positions of the initial assignment, wrapped into K columns. */
+/** Positions of the initial assignment: ranks wrapped into `width` columns of two units each, K units wide. */
 function wrap(
   lanes: number,
   lane: number[],
@@ -609,6 +591,7 @@ function wrap(
   row: number[],
   span: number[],
   K: number,
+  width: number,
 ): { col: number[]; row: number[] } {
   const col = new Array<number>(lane.length).fill(0);
   const out = new Array<number>(lane.length).fill(0);
@@ -620,9 +603,9 @@ function wrap(
   const order = lane.map((_, i) => i).sort((a, b) => (rank[a] ?? 0) - (rank[b] ?? 0) || (row[a] ?? 0) - (row[b] ?? 0) || a - b);
   for (const i of order) {
     const l = lane[i] ?? 0;
-    const s = span[i] ?? 1;
-    let want = (rank[i] ?? 0) % K;
-    let shift = Math.floor((rank[i] ?? 0) / K) * (rowsOf[l] ?? 1);
+    const s = span[i] ?? 2;
+    let want = 2 * ((rank[i] ?? 0) % width);
+    let shift = Math.floor((rank[i] ?? 0) / width) * (rowsOf[l] ?? 1);
     if (want + s > K) {
       want = 0;
       shift += rowsOf[l] ?? 1;
@@ -631,27 +614,46 @@ function wrap(
       for (let k = 0; k < s; k++) if (taken[l]?.has(r * K + c + k)) return false;
       return true;
     };
+    // A start on an even unit is preferred: it costs no half step.
     search: for (let r = (row[i] ?? 0) + shift; ; r++) {
-      for (let c = r === (row[i] ?? 0) + shift ? want : 0; c + s <= K; c++) {
-        if (!fits(r, c)) continue;
-        col[i] = c;
-        out[i] = r;
-        for (let k = 0; k < s; k++) taken[l]?.add(r * K + c + k);
-        break search;
+      const from = r === (row[i] ?? 0) + shift ? want : 0;
+      for (const parity of [0, 1]) {
+        for (let c = from + ((from + parity) % 2); c + s <= K; c += 2) {
+          if (!fits(r, c)) continue;
+          col[i] = c;
+          out[i] = r;
+          for (let k = 0; k < s; k++) taken[l]?.add(r * K + c + k);
+          break search;
+        }
       }
     }
   }
   return { col, row: out };
 }
 
-/** Removes empty columns and empty rows. */
+/**
+ * Removes empty rows and empty unit columns. Empty units go in pairs, so no box changes between an
+ * even and an odd unit: half steps are decided by the search alone.
+ */
 function compact(lanes: number, lane: number[], span: number[], col: number[], row: number[]): { col: number[]; row: number[] } {
   const used = new Set<number>();
   col.forEach((c, i) => {
-    for (let k = 0; k < (span[i] ?? 1); k++) used.add(c + k);
+    for (let k = 0; k < (span[i] ?? 2); k++) used.add(c + k);
   });
-  const sorted = [...used].sort((a, b) => a - b);
-  const at = new Map(sorted.map((c, k) => [c, k] as const));
+  const top = Math.max(-1, ...used);
+  const at = new Map<number, number>();
+  let removed = 0;
+  for (let u = 0; u <= top; ) {
+    if (used.has(u)) {
+      at.set(u, u - removed);
+      u++;
+      continue;
+    }
+    let end = u;
+    while (end <= top && !used.has(end)) end++;
+    removed += 2 * Math.floor((end - u) / 2);
+    u = end;
+  }
   const outRow = new Array<number>(lane.length).fill(0);
   for (let l = 0; l < lanes; l++) {
     const members = lane.map((x, i) => (x === l ? i : -1)).filter((i) => i >= 0);
@@ -662,6 +664,11 @@ function compact(lanes: number, lane: number[], span: number[], col: number[], r
 }
 
 export function placeSlots(input: SlotInput): SlotResult {
+  return placeRanked(input, false)[0] ?? { rank: new Map(), row: new Map(), span: new Map() };
+}
+
+/** The assignments of every start, cheapest first; without `all` the search stops at the first one without hazards. */
+export function placeRanked(input: SlotInput, all: boolean): SlotResult[] {
   const { graph } = input;
   const ids = graph.nodes.map((n) => n.id);
   const index = new Map(ids.map((id, i) => [id, i] as const));
@@ -669,8 +676,8 @@ export function placeSlots(input: SlotInput): SlotResult {
   const lane = graph.nodes.map((n) => laneIndex.get(n.lane) ?? 0);
   const rank = ids.map((id) => input.rank.get(id) ?? 0);
   const row = ids.map((id) => input.row.get(id) ?? 0);
-  const K = Math.max(1, input.columns);
-  const span = ids.map((id) => Math.min(K, input.span.get(id) ?? 1));
+  const K = Math.max(2, input.columns);
+  const span = ids.map((id) => Math.min(K, Math.max(2, input.span.get(id) ?? 2)));
 
   const edges: Edge[] = [];
   for (const e of graph.edges) {
@@ -678,17 +685,17 @@ export function placeSlots(input: SlotInput): SlotResult {
     const b = index.get(e.to);
     if (a === undefined || b === undefined || a === b) continue;
     const [first, second] = (rank[a] ?? 0) <= (rank[b] ?? 0) ? [a, b] : [b, a];
-    const repeat = edges.filter((o) => (o.a === a && o.b === b) || (o.a === b && o.b === a)).length;
-    edges.push({ a, b, first, second, sameLane: lane[a] === lane[b], repeat });
+    edges.push({ a, b, first, second, sameLane: lane[a] === lane[b] });
   }
 
   // Chains longer than the wrap width continue on the next row. Every wrap width gives a start;
   // the cheapest start is searched first and the others only while hazards remain.
   const starts: Array<{ p: Placement; cost: number }> = [];
-  for (let width = K; width >= Math.max(1, Math.ceil(K / 2)); width--) {
-    if (width < K && span.some((s) => s > width)) break;
-    const start = wrap(graph.lanes.length, lane, rank, row, span, width);
-    const candidate = new Placement(graph.lanes.length, lane, span, edges, K, start.col, start.row);
+  const columns = Math.max(1, Math.floor(K / 2));
+  for (let width = columns; width >= Math.max(1, Math.ceil(columns / 2)); width--) {
+    if (width < columns && span.some((s) => s > 2 * width)) break;
+    const start = wrap(graph.lanes.length, lane, rank, row, span, K, width);
+    const candidate = new Placement(graph.lanes.length, lane, span, edges, K, start.col, start.row, input.gap);
     starts.push({ p: candidate, cost: candidate.total() });
   }
   starts.sort((x, y) => x.cost - y.cost);
@@ -698,7 +705,7 @@ export function placeSlots(input: SlotInput): SlotResult {
       let improved = false;
       for (let i = 0; i < ids.length; i++) {
         const l = lane[i] ?? 0;
-        const s = span[i] ?? 1;
+        const s = span[i] ?? 2;
         const choice: { delta: number; moves: Move[] | null } = { delta: -EPS, moves: null };
         const known = p.before([[i, p.col[i] ?? 0, p.row[i] ?? 0]]);
         const consider = (moves: Move[]): void => {
@@ -719,7 +726,7 @@ export function placeSlots(input: SlotInput): SlotResult {
         for (let j = 0; j < ids.length; j++) {
           if (j === i || lane[j] !== l) continue;
           const [ci, ri, cj, rj] = [p.col[i] ?? 0, p.row[i] ?? 0, p.col[j] ?? 0, p.row[j] ?? 0];
-          const sj = span[j] ?? 1;
+          const sj = span[j] ?? 2;
           if (p.free(l, rj, cj, s, i, j) && p.free(l, ri, ci, sj, j, i) && !overlaps(ci, ri, sj, cj, rj, s)) {
             consider([[i, cj, rj], [j, ci, ri]]);
           }
@@ -734,32 +741,122 @@ export function placeSlots(input: SlotInput): SlotResult {
     }
   };
 
-  let p = starts[0]?.p;
-  if (!p) return { rank: new Map(), row: new Map(), span: new Map() };
-  let best = Infinity;
-  if (ids.length > 1) {
-    for (const start of starts.slice(0, RESTARTS)) {
-      descend(start.p);
-      const cost = start.p.total();
-      if (cost < best - EPS) {
-        best = cost;
-        p = start.p;
+  const resultOf = (q: Placement): SlotResult => {
+    const final = compact(graph.lanes.length, lane, span, q.col, q.row);
+    return {
+      rank: new Map(ids.map((id, i) => [id, final.col[i] ?? 0] as const)),
+      row: new Map(ids.map((id, i) => [id, final.row[i] ?? 0] as const)),
+      span: new Map(ids.map((id, i) => [id, span[i] ?? 2] as const)),
+    };
+  };
+  if (starts.length === 0) return [];
+  if (ids.length <= 1) return [resultOf(starts[0]?.p as Placement)];
+
+  /** A box on an odd unit that does not pay for itself moves back: the rest of its row follows, one unit. */
+  const unhalf = (q: Placement): void => {
+    for (let pass = 0; pass < PASS_CAP; pass++) {
+      let moved = false;
+      for (let i = 0; i < ids.length; i++) {
+        if ((q.col[i] ?? 0) % 2 === 0) continue;
+        for (const d of [-1, 1]) {
+          const block = ids.flatMap((_, j) => (lane[j] === lane[i] && q.row[j] === q.row[i] && (q.col[j] ?? 0) >= (q.col[i] ?? 0) ? [j] : []));
+          const inBlock = new Set(block);
+          const fits = block.every((j) => {
+            const c = (q.col[j] ?? 0) + d;
+            if (c < 0 || c + (span[j] ?? 2) > K) return false;
+            return ids.every((o, k) => inBlock.has(k) || lane[k] !== lane[j] || q.row[k] !== q.row[j] || (q.col[k] ?? 0) + (span[k] ?? 2) <= c || c + (span[j] ?? 2) <= (q.col[k] ?? 0));
+          });
+          if (!fits) continue;
+          const moves = block.map((j) => [j, (q.col[j] ?? 0) + d, q.row[j] ?? 0] as Move);
+          const { delta, restore } = q.apply(moves);
+          if (delta < -EPS) {
+            q.baseTotal = undefined;
+            moved = true;
+            break;
+          }
+          restore();
+        }
       }
-      const hz = p.hazards();
+      if (!moved) break;
+    }
+  };
+
+  const out: Array<{ p: Placement; cost: number }> = [];
+  const searched = (start: { p: Placement }): void => {
+    descend(start.p);
+    unhalf(start.p);
+    out.push({ p: start.p, cost: start.p.total() });
+  };
+  const tried = starts.slice(0, RESTARTS);
+  for (const start of tried) {
+    searched(start);
+    if (!all) {
+      const hz = start.p.hazards();
       if (hz.crossings + hz.blocked === 0) break;
     }
   }
-
-  const final = compact(graph.lanes.length, lane, span, p.col, p.row);
-  return {
-    rank: new Map(ids.map((id, i) => [id, final.col[i] ?? 0] as const)),
-    row: new Map(ids.map((id, i) => [id, final.row[i] ?? 0] as const)),
-    span: new Map(ids.map((id, i) => [id, span[i] ?? 1] as const)),
-  };
+  const sorted = [...out].sort((x, y) => x.cost - y.cost);
+  const first = sorted[0];
+  if (!first) return [];
+  const list = (all ? sorted : sorted.slice(0, 1)).map((o) => resultOf(o.p));
+  const head = list[0];
+  if (head && !all) {
+    head.rest = () => {
+      for (const start of tried) if (!out.some((o) => o.p === start.p)) searched(start);
+      return [...out].filter((o) => o.p !== first.p).sort((x, y) => x.cost - y.cost).map((o) => resultOf(o.p));
+    };
+  }
+  return list;
 }
 
 /** True when the two boxes (given as column, row, span of one and the same for the other) share a slot. */
 function overlaps(ci: number, ri: number, sj: number, cj: number, rj: number, si: number): boolean {
   // Node i moves to (cj, rj) with span si; node j moves to (ci, ri) with span sj.
   return rj === ri && cj < ci + sj && ci < cj + si;
+}
+
+/**
+ * Moves single boxes by one slot unit, in either direction, wherever that lowers the cost. Used for an
+ * arrangement whose columns are fixed by other rules: only half steps may be added or removed.
+ */
+export function shiftHalfSteps(graph: Graph, rank: Map<string, number>, row: Map<string, number>, span: Map<string, number>, gap = 0.5, limits: ReadonlyMap<string, readonly [number, number]> = new Map()): Map<string, number> {
+  const ids = graph.nodes.map((n) => n.id);
+  const index = new Map(ids.map((id, i) => [id, i] as const));
+  const lane = graph.nodes.map(() => 0);
+  const sp = ids.map((id) => span.get(id) ?? 2);
+  const col = ids.map((id) => rank.get(id) ?? 0);
+  const K = Math.max(2, ...col.map((c, i) => c + (sp[i] ?? 2))) + 2;
+  const edges: Edge[] = [];
+  for (const e of graph.edges) {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a !== undefined && b !== undefined && a !== b) edges.push({ a, b, first: a, second: b, sameLane: true });
+  }
+  const p = new Placement(1, lane, sp, edges, K, [...col], ids.map((id) => row.get(id) ?? 0), gap);
+  for (let pass = 0; pass < PASS_CAP; pass++) {
+    let improved = false;
+    for (let i = 0; i < ids.length; i++) {
+      const known = p.before([[i, p.col[i] ?? 0, p.row[i] ?? 0]]);
+      let best = -EPS;
+      let move: Move | null = null;
+      for (const d of [-1, 1]) {
+        const c = (p.col[i] ?? 0) + d;
+        const [lo, hi] = limits.get(ids[i] ?? '') ?? [0, Infinity];
+        if (c < lo || c + (sp[i] ?? 2) > hi || !p.free(0, p.row[i] ?? 0, c, sp[i] ?? 2, i)) continue;
+        const { delta, restore } = p.apply([[i, c, p.row[i] ?? 0]], known, best);
+        restore();
+        if (delta < best) {
+          best = delta;
+          move = [i, c, p.row[i] ?? 0];
+        }
+      }
+      if (move) {
+        p.apply([move]);
+        p.baseTotal = undefined;
+        improved = true;
+      }
+    }
+    if (!improved) break;
+  }
+  return new Map(ids.map((id, i) => [id, p.col[i] ?? 0] as const));
 }

@@ -20,13 +20,15 @@ export function isFlowSide(side: Side): boolean {
 }
 
 /** Chooses attachment sides and finds edges that can be drawn as one straight line. */
-/** `forced` lists edges that run as one straight perpendicular line because their boxes were slid to overlap. */
 /** With `facing`, an edge that runs back to an earlier column leaves by the near flow side and enters by the far one. */
 export function planEdges(
   graph: Graph,
   topo: Topology,
-  forced: ReadonlySet<number> = new Set(),
   facing = false,
+  /** Clear distance between touching boxes as a fraction of a slot unit. */
+  gap = 0.5,
+  /** Edges that must be routed although their boxes overlap in slot units: drawn, they do not overlap. */
+  demote: ReadonlySet<number> = new Set(),
 ): EdgePlan[] {
   const used = new Set<string>();
   const plans: EdgePlan[] = [];
@@ -43,10 +45,6 @@ export function planEdges(
     else if (t.cRow > s.cRow) [srcSide, tgtSide] = ['cH', 'cL'];
     else if (t.cRow < s.cRow) [srcSide, tgtSide] = ['cL', 'cH'];
     else [srcSide, tgtSide] = ['cH', 'cH'];
-
-    if (!self && forced.has(index) && s.cRow !== t.cRow) {
-      [srcSide, tgtSide] = t.cRow > s.cRow ? ['cH', 'cL'] : ['cL', 'cH'];
-    }
 
     let straight: 'f' | 'c' | null = null;
     if (!self) {
@@ -68,18 +66,19 @@ export function planEdges(
         const lo = Math.min(s.cRow, t.cRow);
         const hi = Math.max(s.cRow, t.cRow);
         const from = Math.max(s.rank, t.rank);
-        const to = Math.min(s.rank + s.span, t.rank + t.span);
-        const blocked = topo.slots.some((n) => n.rank < to && from < n.rank + n.span && n.cRow > lo && n.cRow < hi);
+        const to = Math.min(s.rank + s.span, t.rank + t.span) - gap;
+        const x = (from + to) / 2;
+        const blocked = topo.slots.some((n) => x > n.rank - 0.1 && x < n.rank + n.span - gap + 0.1 && n.cRow > lo && n.cRow < hi);
         if (!blocked) {
           straight = 'c';
           key = `c:${from}:${lo}:${hi}`;
         }
       }
+      if (straight === 'c' && demote.has(index)) straight = null;
       if (straight) {
         if (used.has(key)) straight = null;
         else used.add(key);
       }
-      if (!straight && forced.has(index) && t.cRow !== s.cRow) straight = 'c';
     }
     plans.push({
       index,
@@ -96,32 +95,47 @@ export function planEdges(
   return plans;
 }
 
-/** Length a node side needs so that its attachments stay a track gap apart. */
-export function requiredLength(count: number, hasStraight: boolean, ruler: Ruler): number {
+/**
+ * Length a node side needs so that every edge on it has its own port: the side holds a port at every
+ * `pitch` along the flow axis, and a fixed few across it.
+ */
+export function requiredLength(count: number, alongFlow: boolean, ruler: Ruler, pitch: number): number {
   if (count === 0) return 0;
-  const slots = hasStraight && count > 1 ? 2 * count : count;
-  return slots * ruler.trackGap + 2 * ruler.nodeBorder;
+  if (!alongFlow && count <= ruler.sidePorts) return 0;
+  const step = alongFlow ? pitch : ruler.portPitch;
+  const raw = (count + 1) * step + 2 * ruler.nodeBorder;
+  // A side that runs across the flow axis keeps a port at its centre by growing in pairs of pitches.
+  return alongFlow ? raw : Math.ceil(raw / (2 * step) - 1e-9) * 2 * step;
 }
 
-export function nodeNeeds(plans: EdgePlan[], topo: Topology, ruler: Ruler): Map<string, Need> {
-  const sides = new Map<string, { n: number; straight: boolean }>();
-  const bump = (slot: Slot, side: Side, straight: boolean): void => {
+export function nodeNeeds(plans: EdgePlan[], topo: Topology, ruler: Ruler, pitch: number): Map<string, Need> {
+  const sides = new Map<string, { low: number; high: number; straight: boolean }>();
+  const bump = (slot: Slot, side: Side, peer: Slot, straight: boolean): void => {
     const key = `${slot.id}|${side}`;
-    const cur = sides.get(key) ?? { n: 0, straight: false };
-    sides.set(key, { n: cur.n + 1, straight: cur.straight || straight });
+    const cur = sides.get(key) ?? { low: 0, high: 0, straight: false };
+    // Edges whose partner lies toward low coordinates need ports below the straight one, the others above it.
+    const before = isFlowSide(side) ? peer.cRow < slot.cRow : peer.rank + peer.span / 2 < slot.rank + slot.span / 2;
+    sides.set(key, {
+      low: cur.low + (!straight && before ? 1 : 0),
+      high: cur.high + (!straight && !before ? 1 : 0),
+      straight: cur.straight || straight,
+    });
   };
   for (const p of plans) {
     const s = topo.byId.get(p.from);
     const t = topo.byId.get(p.to);
     if (!s || !t) continue;
-    bump(s, p.srcSide, p.straight !== null);
-    bump(t, p.tgtSide, p.straight !== null);
+    bump(s, p.srcSide, t, p.straight !== null);
+    bump(t, p.tgtSide, s, p.straight !== null);
   }
   const needs = new Map<string, Need>();
   for (const slot of topo.slots) {
     const len = (side: Side): number => {
       const e = sides.get(`${slot.id}|${side}`);
-      return e ? requiredLength(e.n, e.straight, ruler) : 0;
+      if (!e) return 0;
+      // With a straight line on the centre port, every other edge keeps to its own side of it.
+      const ports = e.straight ? 1 + 2 * Math.max(e.low, e.high) : e.low + e.high;
+      return requiredLength(ports, !isFlowSide(side), ruler, pitch);
     };
     needs.set(slot.id, { nf: Math.max(len('cL'), len('cH')), nc: Math.max(len('fL'), len('fH')) });
   }
