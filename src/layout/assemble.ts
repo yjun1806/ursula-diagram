@@ -33,8 +33,8 @@ function portPoint(
   const nf = finalNf(sk, geo, slot);
   // A perpendicular line between nodes of different widths runs through the middle of their overlap.
   const peer = sk.byId.get(role === 'src' ? plan.to : plan.from);
-  let overlapCentre = f0 + nf / 2;
-  if (peer && peer !== slot) {
+  let overlapCentre = sk.align.lineF.get(plan.index) ?? f0 + nf / 2;
+  if (!sk.align.lineF.has(plan.index) && peer && peer !== slot) {
     const p0 = origin(sk, geo, ruler, peer).f0;
     overlapCentre = (Math.max(f0, p0) + Math.min(f0 + nf, p0 + finalNf(sk, geo, peer))) / 2;
   }
@@ -51,7 +51,7 @@ function portPoint(
 }
 
 /** Coordinate of a track inside its channel strip. */
-function trackCoord(geo: Geo, ruler: Ruler, run: Run, track: number, count: number): number {
+export function trackCoord(geo: Geo, ruler: Ruler, run: Run, track: number, count: number): number {
   const start = run.kind === 'f' ? (geo.fStart[run.idx] ?? 0) : (geo.cStart[run.idx] ?? 0);
   const width = run.kind === 'f' ? (geo.wf[run.idx] ?? 0) : (geo.wc[run.idx] ?? 0);
   return start + (width - (count - 1) * ruler.trackGap) / 2 + track * ruler.trackGap;

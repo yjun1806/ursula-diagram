@@ -5,11 +5,12 @@ import { buildPaths } from './assemble.ts';
 import { crossings } from './check.ts';
 import type { LabelSize, Rect, Segment } from './labels.ts';
 import { hostRun, labelDemands, labelSize, placeLabel } from './labels.ts';
-import type { Need, Side, Slot } from './place.ts';
-import { buildTopology, finalNf, fitLaneLabels, geometry, gridUp, origin, sizeSlots } from './place.ts';
+import type { Alignment, Geo, Need, Side, Skeleton, Slot } from './place.ts';
+import { buildTopology, finalNf, fitLaneLabels, geometry, gridUp, noAlignment, origin, sizeSlots } from './place.ts';
 import { nodeNeeds, planEdges } from './plan.ts';
 import { buildPorts, portOrders } from './ports.ts';
 import type { Run } from './route.ts';
+import { boxesClear, slideBoxes } from './slide.ts';
 import { routeEdges } from './route.ts';
 import type { Chain } from './tracks.ts';
 import { assignTracks, trackCounts, turnOrders } from './tracks.ts';
@@ -48,6 +49,28 @@ function simplify(points: Point[]): Point[] {
   return out;
 }
 
+/** Switch for sliding boxes along the flow axis; the drawing is then centred in its columns. */
+const SLIDE_BOXES = true;
+
+interface Pass {
+  align?: Alignment;
+  forced?: Set<number>;
+  /** Channel widths of an earlier pass; the rank geometry must not change. */
+  pin?: { wf: number[]; wc: number[]; sizes: Map<string, { nf: number; nc: number }> };
+}
+
+interface Built {
+  layout: Layout;
+  sk: Skeleton;
+  geo: Geo;
+  plans: ReturnType<typeof planEdges>;
+  runs: Run[];
+  counts: Map<string, number>;
+  tracks: number[];
+  /** False when a pinned channel had to grow. */
+  pinned: boolean;
+}
+
 /** Lays the graph out for a given rank and row of every node. */
 export function solve(
   graph: Graph,
@@ -56,12 +79,46 @@ export function solve(
   row: Map<string, number>,
   opts: Pick<LayoutOptions, 'maxWidth'> = {},
   span: Map<string, number> = new Map(),
+  slide: boolean = SLIDE_BOXES,
 ): Layout {
+  const first = build(graph, ruler, rank, row, opts, span, {});
+  if (!slide) return first.layout;
+  // Tight strips (the tracks as assigned) first; if the drawing then differs enough that a box
+  // meets a track, the whole channel counts as occupied.
+  for (const tracks of [first.tracks, undefined]) {
+    const slid = slideBoxes(first.sk, first.geo, ruler, first.plans, first.runs, first.counts, tracks);
+    if (!slid) return first.layout;
+    const second = build(graph, ruler, rank, row, opts, span, {
+      align: slid.alignment,
+      forced: slid.forced,
+      pin: { wf: first.geo.wf, wc: first.geo.wc, sizes: new Map(first.sk.slots.map((s) => [s.id, { nf: s.nf, nc: s.nc }] as const)) },
+    });
+    const sameGrid = (a: number[], b: number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+    const stable =
+      sameGrid(first.geo.rankStart, second.geo.rankStart) &&
+      sameGrid(first.geo.cStart, second.geo.cStart) &&
+      first.geo.totalF === second.geo.totalF;
+    if (second.pinned && stable && boxesClear(second.sk, second.geo, ruler, second.runs, second.counts, second.tracks)) {
+      return second.layout;
+    }
+  }
+  return first.layout;
+}
+
+function build(
+  graph: Graph,
+  ruler: Ruler,
+  rank: Map<string, number>,
+  row: Map<string, number>,
+  opts: Pick<LayoutOptions, 'maxWidth'>,
+  span: Map<string, number>,
+  pass: Pass,
+): Built {
   const td = graph.direction === 'TD';
   const topo = buildTopology(graph, rank, row, span);
-  const plans = planEdges(graph, topo);
+  const plans = planEdges(graph, topo, pass.forced);
   const needs: Map<string, Need> = nodeNeeds(plans, topo, ruler);
-  const sk = sizeSlots(topo, ruler, graph.direction, needs);
+  const sk: Skeleton = { ...sizeSlots(topo, ruler, graph.direction, needs, pass.pin?.sizes), align: pass.align ?? noAlignment() };
 
   const rough = geometry(sk, sk.baseWf, sk.baseWc);
   const { routed, runs } = routeEdges(sk, rough, ruler, plans);
@@ -90,13 +147,17 @@ export function solve(
   const sizes = new Map<number, LabelSize>();
   for (const p of plans) if (p.label) sizes.set(p.index, labelSize(p.label, ruler));
   const demand = labelDemands(sk, rough, ruler, plans, routed, runs, sizes);
-  const wf = sk.baseWf.map((w, a) =>
+  const wfNeed = sk.baseWf.map((w, a) =>
     gridUp(ruler, Math.max(w, (counts.get(`f${a}`) ?? 0) * ruler.trackGap, demand.wf[a] ?? 0)),
   );
-  const wcRaw = sk.baseWc.map((w, b) =>
-    gridUp(ruler, Math.max(w, (counts.get(`c${b}`) ?? 0) * ruler.trackGap, demand.wc[b] ?? 0)),
+  const wcNeed = fitLaneLabels(
+    sk,
+    sk.baseWc.map((w, b) => gridUp(ruler, Math.max(w, (counts.get(`c${b}`) ?? 0) * ruler.trackGap, demand.wc[b] ?? 0))),
   );
-  const geo = geometry(sk, wf, fitLaneLabels(sk, wcRaw));
+  const pin = pass.pin;
+  const pinned = !pin || (wfNeed.every((w, a) => w <= (pin.wf[a] ?? 0)) && wcNeed.every((w, b) => w <= (pin.wc[b] ?? 0)));
+  const wf = pin ? pin.wf : wfNeed;
+  const geo = geometry(sk, wf, pin ? pin.wc : wcNeed);
 
   const phys = (p: AbsPoint): Point => (td ? { x: tidy(p.c), y: tidy(p.f) } : { x: tidy(p.f), y: tidy(p.c) });
   const nodes: LayoutNode[] = sk.slots.map((s) => {
@@ -218,7 +279,7 @@ export function solve(
         };
   });
 
-  return {
+  const layout: Layout = {
     width: tidy(width),
     height: tidy(height),
     direction: graph.direction,
@@ -227,4 +288,5 @@ export function solve(
     edges,
     diagnostics,
   };
+  return { layout, sk, geo, plans, runs, counts, tracks, pinned };
 }

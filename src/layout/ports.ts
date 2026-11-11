@@ -44,6 +44,46 @@ function offsets(
   });
 }
 
+/**
+ * Offsets on a cross-axis side that carries straight perpendicular lines at fixed places. The other
+ * attachments keep their order, stay a track gap away from the fixed lines, and the ones that head
+ * toward low coordinates sit on the low side of them.
+ */
+function offsetsAround(items: Attach[], fixed: Map<number, number>, len: number, ruler: Ruler): number[] {
+  const b = ruler.nodeBorder;
+  const gap = ruler.trackGap;
+  const lines = [...fixed.values()].sort((p, q) => p - q);
+  const first = lines[0] ?? b;
+  const last = lines[lines.length - 1] ?? b;
+  const place = (idx: number[], from: number, to: number): Map<number, number> => {
+    const out = new Map<number, number>();
+    const room = to - from;
+    let prev = -Infinity;
+    idx.forEach((i, k) => {
+      let want = room / idx.length >= gap ? from + ((k + 0.5) * room) / idx.length : from + k * gap;
+      want = Math.max(want, prev + gap);
+      for (let moved = true; moved; ) {
+        moved = false;
+        for (const f of lines) {
+          if (Math.abs(want - f) < gap - 1e-9) {
+            want = f + gap;
+            moved = true;
+          }
+        }
+      }
+      out.set(i, want);
+      prev = want;
+    });
+    return out;
+  };
+  const free = items.map((a, i) => [a, i] as const).filter(([, i]) => !fixed.has(i));
+  const low = free.filter(([a]) => a.key < 0).map(([, i]) => i);
+  const high = free.filter(([a]) => a.key >= 0).map(([, i]) => i);
+  const placedLow = place(low, b, Math.max(b, first - gap));
+  const placedHigh = place(high, Math.min(len - b, last + gap), len - b);
+  return items.map((_, i) => fixed.get(i) ?? placedLow.get(i) ?? placedHigh.get(i) ?? len / 2);
+}
+
 function extentsOf(sk: Skeleton, s: Slot, side: Side): { len: number; ext: number } {
   return isFlowSide(side)
     ? { len: s.nc, ext: sk.rowExt[s.lane]?.[s.row] ?? 0 }
@@ -95,13 +135,21 @@ export function buildPorts(
       (a, b) => a.key - b.key || a.edge - b.edge || (a.role === 'src' ? -1 : 1) - (b.role === 'src' ? -1 : 1),
     );
     const { len, ext } = extentsOf(sk, slot, side);
-    const offs = offsets(sorted, len, ext, ruler);
     const startInSlot = ruler.snap((ext - len) / 2);
+    const fixed = new Map<number, number>();
+    if (!isFlowSide(side)) {
+      sorted.forEach((a, i) => {
+        const at = sk.align.off.get(`${a.edge}|${a.role}`);
+        if (a.straight && at !== undefined) fixed.set(i, at);
+      });
+    }
+    const offs = fixed.size > 0 ? offsetsAround(sorted, fixed, len, ruler) : offsets(sorted, len, ext, ruler);
+    const slide = isFlowSide(side) ? 0 : (sk.align.slide.get(slot.id) ?? 0);
     table.set(
       k,
       sorted.map((a, i) => {
         const off = offs[i] ?? 0;
-        return { ...a, off, rel: startInSlot + off - ext / 2 };
+        return { ...a, off, rel: startInSlot + slide + off - ext / 2 };
       }),
     );
   }

@@ -17,6 +17,8 @@ export interface Ruler {
   labelPadY: number;
   widthStep: number;
   rankGap: number;
+  /** Smallest clear distance between two neighbouring boxes of one row once boxes slide along the flow axis. */
+  rankGapMin: number;
   /** Space between two adjacent lane bands. */
   laneGap: number;
   rowGap: number;
@@ -112,6 +114,7 @@ export function pixelRuler(): Ruler {
     labelPadY: 2,
     widthStep: 8,
     rankGap: 40,
+    rankGapMin: 28,
     laneGap: 4,
     rowGap: 40,
     trackGap: 12,
@@ -138,6 +141,7 @@ export function cellRuler(): Ruler {
     labelPadY: 0,
     widthStep: 1,
     rankGap: 4,
+    rankGapMin: 2,
     laneGap: 1,
     rowGap: 2,
     trackGap: 1,

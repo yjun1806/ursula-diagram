@@ -44,8 +44,21 @@ export interface Topology {
   channels: number;
 }
 
+/** Where boxes slid along the flow axis and which perpendicular edges run as one straight line. */
+export interface Alignment {
+  /** Shift of a box along the flow axis from the centre of its slot. */
+  slide: Map<string, number>;
+  /** Flow-axis coordinate of every straight perpendicular line, by edge index. */
+  lineF: Map<number, number>;
+  /** Offset of such a line's end from the start of the box, keyed `${edge}|src` or `${edge}|tgt`. */
+  off: Map<string, number>;
+}
+
+export const noAlignment = (): Alignment => ({ slide: new Map(), lineF: new Map(), off: new Map() });
+
 export interface Skeleton extends Topology {
   td: boolean;
+  align: Alignment;
   rankExt: number[];
   rowExt: number[][];
   gutter: number;
@@ -167,7 +180,14 @@ export function measureNodes(
   return { w, h: content.map(() => contentH), common, contentH, gutter };
 }
 
-export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', needs: Map<string, Need>): Skeleton {
+export function sizeSlots(
+  topo: Topology,
+  ruler: Ruler,
+  direction: 'LR' | 'TD',
+  needs: Map<string, Need>,
+  /** Smallest extents a box may take; keeps a second pass from shrinking boxes the first pass sized. */
+  floor: ReadonlyMap<string, { nf: number; nc: number }> = new Map(),
+): Skeleton {
   const td = direction === 'TD';
   const m = measureNodes(topo.slots, topo.lanes, ruler, td);
   const snapW = (v: number): number =>
@@ -185,7 +205,9 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
   const slots = topo.slots.map((s, i) => {
     const w = physW(i, s);
     const h = gridUp(ruler, Math.max(contentH, needH(s)));
-    return td ? { ...s, nf: h, nc: w } : { ...s, nf: w, nc: h };
+    const min = floor.get(s.id);
+    const [nf, nc] = td ? [h, w] : [w, h];
+    return { ...s, nf: Math.max(nf, min?.nf ?? 0), nc: Math.max(nc, min?.nc ?? 0) };
   });
 
   const rankExt = Array.from({ length: topo.ranks }, (_, r) =>
@@ -216,6 +238,7 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
 
   return {
     ...topo,
+    align: noAlignment(),
     slots,
     byId: new Map(slots.map((s) => [s.id, s] as const)),
     td,
@@ -306,7 +329,10 @@ export function origin(sk: Skeleton, geo: Geo, ruler: Ruler, s: Slot): { f0: num
   const rankExt = sk.rankExt[s.rank] ?? 0;
   const rowExt = sk.rowExt[s.lane]?.[s.row] ?? 0;
   return {
-    f0: (geo.rankStart[s.rank] ?? 0) + (s.span > 1 ? 0 : gridNear(ruler, (rankExt - s.nf) / 2)),
+    f0:
+      (geo.rankStart[s.rank] ?? 0) +
+      (s.span > 1 ? 0 : gridNear(ruler, (rankExt - s.nf) / 2)) +
+      (sk.align.slide.get(s.id) ?? 0),
     c0: (geo.rowStart[s.lane]?.[s.row] ?? 0) + gridNear(ruler, (rowExt - s.nc) / 2),
   };
 }

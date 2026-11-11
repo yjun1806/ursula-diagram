@@ -20,7 +20,8 @@ export function isFlowSide(side: Side): boolean {
 }
 
 /** Chooses attachment sides and finds edges that can be drawn as one straight line. */
-export function planEdges(graph: Graph, topo: Topology): EdgePlan[] {
+/** `forced` lists edges that run as one straight perpendicular line because their boxes were slid to overlap. */
+export function planEdges(graph: Graph, topo: Topology, forced: ReadonlySet<number> = new Set()): EdgePlan[] {
   const used = new Set<string>();
   const plans: EdgePlan[] = [];
   graph.edges.forEach((e, index) => {
@@ -35,6 +36,10 @@ export function planEdges(graph: Graph, topo: Topology): EdgePlan[] {
     else if (t.cRow > s.cRow) [srcSide, tgtSide] = ['cH', 'cL'];
     else if (t.cRow < s.cRow) [srcSide, tgtSide] = ['cL', 'cH'];
     else [srcSide, tgtSide] = ['cH', 'cH'];
+
+    if (!self && forced.has(index) && s.cRow !== t.cRow) {
+      [srcSide, tgtSide] = t.cRow > s.cRow ? ['cH', 'cL'] : ['cL', 'cH'];
+    }
 
     let straight: 'f' | 'c' | null = null;
     if (!self) {
@@ -61,6 +66,7 @@ export function planEdges(graph: Graph, topo: Topology): EdgePlan[] {
         if (used.has(key)) straight = null;
         else used.add(key);
       }
+      if (!straight && forced.has(index) && t.cRow !== s.cRow) straight = 'c';
     }
     plans.push({
       index,
