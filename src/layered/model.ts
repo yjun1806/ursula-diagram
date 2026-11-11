@@ -44,6 +44,7 @@ export interface Ladder {
   flat: FlatEdge[];
 }
 
+import type { Ruler } from '../metrics.ts';
 import type { FlatPlan } from './ports.ts';
 import type { Rows } from './rows.ts';
 
@@ -75,6 +76,10 @@ export interface Placed {
   /** Units a layer may hold. */
   capacity: number;
   rows: Rows;
+  /** Whether no flat edge was forced to run from left to right. */
+  loose: boolean;
+  /** The ruler (gap) this placement was made for. */
+  ruler: Ruler;
   /** The same ladder with another order of its layers. */
   reorder(layers: number[][]): Placed;
   /** Rows changed by the caller: a new ladder and order. */

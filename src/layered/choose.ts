@@ -8,14 +8,17 @@ export interface Variant {
   name: string;
   /** Flat edges outside the main flow need not run from left to right: they follow the place of their partners. */
   free: boolean;
+  /** No flat edge, not even on the main flow, is forced to run from left to right. */
+  loose: boolean;
   /** Nodes are ordered by their stage in the whole flow first, and only nodes of one stage by crossings. */
   stage: boolean;
 }
 
 export const CANDIDATES: readonly Variant[] = [
-  { name: 'forced', free: false, stage: false },
-  { name: 'free', free: true, stage: false },
-  { name: 'stage', free: false, stage: true },
+  { name: 'forced', free: false, loose: false, stage: false },
+  { name: 'free', free: true, loose: false, stage: false },
+  { name: 'stage', free: false, loose: false, stage: true },
+  { name: 'loose', free: true, loose: true, stage: false },
 ];
 
 const EPS = 1e-6;
@@ -64,20 +67,39 @@ export function violations(l: Layout): number {
   return n;
 }
 
-/** Quality of a finished drawing, from its coordinates: smaller is better, compared left to right. */
+/** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
+export const WEIGHTS = { crossing: 6, extraRow: 2, back: 1, backChain: 2 } as const;
+
+/** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
   const axis = l.direction === 'TD' ? 'y' : 'x';
   let bends = 0;
-  let back = 0;
   let length = 0;
+  const against: Array<[string, string]> = [];
   for (const e of l.edges) {
     bends += Math.max(0, e.points.length - 2);
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
-    if (first && last && last[axis] < first[axis] - 8) back++;
+    if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
     for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
-  return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, l.diagnostics.filter((d) => d.kind === 'crossing').length, bends, back, Math.round(length)];
+  // Edges against the reading direction that touch one another form a stream running backwards.
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while ((parent.get(r) ?? r) !== r) r = parent.get(r) ?? r;
+    return r;
+  };
+  for (const [a, b] of against) parent.set(find(a), find(b));
+  const size = new Map<string, number>();
+  for (const [a] of against) size.set(find(a), (size.get(find(a)) ?? 0) + 1);
+  const chained = against.filter(([a]) => (size.get(find(a)) ?? 0) >= 2).length;
+  const rows = new Map<string, number>();
+  for (const n of l.nodes) rows.set(n.lane, Math.max(rows.get(n.lane) ?? 0, n.row + 1));
+  const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
+  const crossings = l.diagnostics.filter((d) => d.kind === 'crossing').length;
+  const cost = bends + WEIGHTS.crossing * crossings + WEIGHTS.extraRow * extra + WEIGHTS.back * against.length + WEIGHTS.backChain * chained;
+  return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, cost, Math.round(length)];
 }
 
 /** The best drawing; the earliest wins a tie, so the first candidate is the default. */

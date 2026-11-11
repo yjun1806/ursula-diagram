@@ -562,8 +562,8 @@ describe('layered pipeline invariants', () => {
 
   it('gives pixel and cell rulers the same structure for the same capacity', () => {
     const g = parse(fixtures.twoLanes);
-    const px = layout(g, pixelRuler(), { engine: 'layered', maxWidth: widthForColumns(g, pixelRuler(), 5) });
-    const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: widthForColumns(g, cellRuler(), 5) });
+    const px = layout(g, pixelRuler(), { engine: 'layered', maxWidth: widthForColumns(g, pixelRuler(), 5), refine: false });
+    const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: widthForColumns(g, cellRuler(), 5), refine: false });
     expect(cells.nodes.map((n) => n.row)).toEqual(px.nodes.map((n) => n.row));
     expect(cells.nodes.map((n) => n.lane)).toEqual(px.nodes.map((n) => n.lane));
   });

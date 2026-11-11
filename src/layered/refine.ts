@@ -1,5 +1,6 @@
 import type { Graph, Layout, LayoutEdge } from '../types.ts';
 import type { Placed } from './model.ts';
+import type { Rows } from './rows.ts';
 import { score } from './choose.ts';
 
 const EPS = 1e-6;
@@ -57,7 +58,13 @@ export interface Refined {
  * one lane moves to another row of that lane. A change is kept when the redrawn picture measures better; the
  * walk starts over after every kept change and stops when nothing helps or the draws are used up.
  */
-export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout, maxDraws = MAX_DRAWS): Refined {
+export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout, options: { maxDraws?: number; tight?: ((rows: Rows) => Placed) | undefined; crossingsFirst?: boolean } = {}): Refined {
+  const maxDraws = options.maxDraws ?? MAX_DRAWS;
+  // The climb can weigh crossings inside the cost or put them first; the two reach different drawings.
+  const measure = (l: Layout): number[] => {
+    const sc = score(l);
+    return options.crossingsFirst ? [sc[0] as number, l.diagnostics.filter((d) => d.kind === 'crossing').length, ...sc.slice(1)] : sc;
+  };
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const laneOf = graph.nodes.map((n) => n.lane);
   const inLane = graph.nodes.map((): number[] => []);
@@ -80,7 +87,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
 
   let current = first;
   let layout = draw(current);
-  let mine = score(layout);
+  let mine = measure(layout);
   let draws = 1;
   let accepted = 0;
   const attempt = (trial: () => Placed | undefined): boolean => {
@@ -89,7 +96,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     if (!next || next.width > Math.max(next.capacity, current.width)) return false;
     const l = draw(next);
     draws++;
-    const s = score(l);
+    const s = measure(l);
     if (!better(s, mine)) return false;
     current = next;
     layout = l;
@@ -99,7 +106,24 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
   };
 
   for (;;) {
-    if (draws >= maxDraws || (mine[1] === 0 && mine[2] === 0)) break;
+    if (draws >= maxDraws || mine.slice(1, -1).every((v) => v === 0)) break;
+    // First, lanes with several rows try to give up their last row: its nodes go up to a row with room, at a tighter gap if need be.
+    let reduced = false;
+    for (let lane = 0; lane < graph.lanes.length && !reduced; lane++) {
+      const rows = current.rows;
+      const own = rows.layerLane.map((x, i) => (x === lane ? i : -1)).filter((i) => i >= 0);
+      if (own.length < 2) continue;
+      const last = own[own.length - 1] as number;
+      for (const target of own.slice(0, -1)) {
+        const layerOf = rows.layer.map((x) => (x === last ? target : x > last ? x - 1 : x));
+        const next: Rows = { ...rows, layer: layerOf, layerLane: rows.layerLane.filter((_, i) => i !== last), layerRow: rows.layerRow.filter((_, i) => i !== last) };
+        if (attempt(() => current.rebuild(next)) || (options.tight !== undefined && attempt(() => (options.tight as (r: Rows) => Placed)(next)))) {
+          reduced = true;
+          break;
+        }
+      }
+    }
+    if (reduced) continue;
     const main = new Set(current.rows.main);
     const targets = new Set<number>();
     for (const i of troubled(layout)) {
@@ -121,7 +145,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
         const key = `${Math.min(n, m)}|${Math.max(n, m)}`;
         if (tried.has(key)) continue;
         tried.add(key);
-        if (n < current.ladder.realCount && m < current.ladder.realCount && main.has(n) && main.has(m)) continue;
+        if (n < current.ladder.realCount && m < current.ladder.realCount && main.has(n) && main.has(m) && !current.loose) continue;
         const swapped = current.layers.map((r) => [...r]);
         const copy = swapped[layer] as number[];
         [copy[k], copy[j]] = [copy[j] as number, copy[k] as number];

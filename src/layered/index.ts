@@ -114,12 +114,14 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
       plan,
       capacity: limit,
       rows,
+      loose: variant.loose,
+      ruler,
       reorder: (order) => finish(cloneLadder(ladder), order.map((r) => [...r])),
       rebuild: (next) => place(graph, ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, next),
     };
   };
   const ladder = buildLadder(graph, rows, units);
-  return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage).layers);
+  return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage, variant.loose).layers);
 }
 
 function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined): { frame: Frame; common: number; baseUnits: number[]; unit: number } {
@@ -141,9 +143,8 @@ interface Solved {
   ok: boolean;
 }
 
-/** Places the graph for one ruler: full row capacity first, then one box less per overflowing lane, and the alignment squeeze last. */
-function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant): Solved {
-  const td = graph.direction === 'TD';
+/** Everything the placement needs to know about a ruler and the canvas it must fit. */
+function paramsFor(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean): { frame: Frame; common: number; baseUnits: number[]; unit: number; capacityUnits: number; dummyShift: number } {
   const { frame, common, baseUnits, unit } = frameFor(graph, ruler, bounded ? limit : undefined);
   const margin = gridUp(ruler, ruler.trackGap);
   const fixed = 2 * margin + frame.gutter + 2 * ruler.lanePad;
@@ -152,6 +153,13 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   const sideOffset = ((gapLines(ruler, ruler.rankGap) - 1) / 2) * ruler.trackGap;
   const dummyEnd = bounded && limit !== undefined ? Math.floor((limit - fixed + ruler.rankGap / 2 - sideOffset) / unit + 1e-9) : Infinity;
   const dummyShift = Number.isFinite(dummyEnd) ? Math.min(1, Math.max(0, capacityUnits - dummyEnd)) : 0;
+  return { frame, common, baseUnits, unit, capacityUnits, dummyShift };
+}
+
+/** Places the graph for one ruler: full row capacity first, then one box less per overflowing lane, and the alignment squeeze last. */
+function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant): Solved {
+  const td = graph.direction === 'TD';
+  const { frame, common, baseUnits, unit, capacityUnits, dummyShift } = paramsFor(graph, ruler, limit, bounded);
   const caps = graph.lanes.map(() => (bounded ? 2 * Math.floor(capacityUnits / 2) : Infinity));
   const reduction = graph.lanes.map(() => 0);
   const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
@@ -211,6 +219,7 @@ interface Prep {
   limit: number | undefined;
   bounded: boolean;
   placed: Placed;
+  variant: Variant;
 }
 
 function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant): Prep {
@@ -236,17 +245,19 @@ function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolea
     // 2. Still too wide: whole blocks to other rows, then cut paths, at the narrowest gap.
     if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant);
   }
-  return { graph, given, opts, apart, base, ruler: solved.ruler, common: solved.common, td, limit, bounded, placed: solved.placed };
+  return { graph, given, opts, apart, base, ruler: solved.ruler, common: solved.common, td, limit, bounded, placed: solved.placed, variant };
 }
 
 /** The drawing as it stands, without the spreading of spare room: what candidates and changes are measured on. */
 function plainDraw(p: Prep, placed: Placed): Layout {
-  const f = frameFor(p.graph, p.ruler, p.bounded ? p.limit : undefined).frame;
+  const f = frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame;
   return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
 }
 
 function finalize(p: Prep, placed: Placed = p.placed): Layout {
-  const { graph, given, opts, apart, base, ruler, common, td, limit, bounded } = p;
+  const { graph, given, opts, apart, base, td, limit, bounded } = p;
+  const ruler = placed.ruler;
+  const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {
     const f = frameFor(graph, r, bounded ? limit : undefined).frame;
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
@@ -305,16 +316,27 @@ export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions 
   return { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
 }
 
+/** Places given rows at the smallest rank gap, for changes that need more room; undefined when the gap cannot shrink. */
+function tightPlacer(p: Prep): ((rows: Rows) => Placed) | undefined {
+  const { graph, base, td, limit, bounded, apart, variant } = p;
+  const tight = { ...base, rankGap: base.rankGapMin };
+  if (tight.rankGap >= p.placed.ruler.rankGap || measureNodes(graph.nodes, graph.lanes, tight, td).unit >= measureNodes(graph.nodes, graph.lanes, p.placed.ruler, td).unit) return undefined;
+  const q = paramsFor(graph, tight, limit, bounded);
+  return (rows) => place(graph, tight, q.baseUnits, graph.lanes.map(() => Infinity), graph.lanes.map(() => 0), q.unit, tight.rankGap, td, q.capacityUnits, q.dummyShift, apart, variant, false, rows);
+}
+
 /** Lanes: every candidate is drawn to the end and measured, the best is refined by small changes. */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   const preps = CANDIDATES.map((v) => prepare(graph, given, opts, false, v));
   const drawn = preps.map((p) => finalize(p));
   if (opts.refine === false) return pickBest(drawn);
   // Every candidate is also refined by small changes; the best of all finished drawings is kept.
-  const refined = preps.map((p, i) => {
-    const r = refine(graph, p.placed, (placed) => plainDraw(p, placed));
-    return r.accepted > 0 ? finalize(p, r.placed) : (drawn[i] as Layout);
-  });
+  const refined = [false, true].flatMap((crossingsFirst) =>
+    preps.map((p, i) => {
+      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed), { tight: tightPlacer(p), crossingsFirst });
+      return r.accepted > 0 ? finalize(p, r.placed) : (drawn[i] as Layout);
+    }),
+  );
   const best = pickBest([...drawn, ...refined]);
   return best;
 }

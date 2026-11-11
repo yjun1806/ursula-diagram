@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
-import { CANDIDATES, pickBest, score, violations } from '../src/layered/choose.ts';
+import { CANDIDATES, WEIGHTS, pickBest, score, violations } from '../src/layered/choose.ts';
 import { assignLayers } from '../src/layered/rows.ts';
 import type { Layout } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
@@ -43,10 +43,10 @@ describe('main flow', () => {
 
 describe('candidates', () => {
   it('lists the candidates and measures finished drawings in a fixed order of qualities', () => {
-    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage']);
+    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage', 'loose']);
     const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes' });
     const s = score(l);
-    expect(s).toHaveLength(5);
+    expect(s).toHaveLength(3);
     expect(s[0]).toBe(violations(l));
     expect(s[0]).toBe(0);
   });
@@ -75,5 +75,38 @@ describe('candidates', () => {
       const xs = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => l.nodes.find((n) => n.id === id)?.x ?? NaN);
       expect([...xs].sort((a, b) => a - b)).toEqual(xs);
     }
+  });
+});
+
+describe('score', () => {
+  const box = (id: string, lane: string, row: number, x: number) => ({ id, lane, rank: 0, span: 1, row, x, y: row * 100, w: 40, h: 20, title: id, lines: [] as string[] });
+  const edge = (from: string, to: string, points: Array<[number, number]>) => ({ from, to, style: 'normal' as const, points: points.map(([x, y]) => ({ x, y })) });
+  const drawing = (nodes: ReturnType<typeof box>[], edges: ReturnType<typeof edge>[]): Layout => ({
+    width: 1000,
+    height: 1000,
+    direction: 'LR',
+    laneAxis: 'across',
+    lanes: [],
+    nodes,
+    edges,
+    diagnostics: [],
+  });
+
+  it('adds bends, each row beyond the first of a lane, each edge against the reading direction, and more for a chain of them', () => {
+    const nodes = [box('a', 'l', 0, 0), box('b', 'l', 1, 200), box('c', 'l', 2, 400), box('d', 'm', 0, 600)];
+    const bent = edge('a', 'd', [[40, 10], [50, 10], [50, 20], [600, 20]]);
+    expect(score(drawing(nodes, [bent]))[1]).toBe(2 + WEIGHTS.extraRow * 2);
+    const single = edge('d', 'a', [[600, 10], [40, 10]]);
+    expect(score(drawing(nodes, [single]))[1]).toBe(WEIGHTS.extraRow * 2 + WEIGHTS.back);
+    const chain = [edge('d', 'a', [[600, 10], [40, 10]]), edge('a', 'b', [[40, 10], [-20, 10]])];
+    expect(score(drawing(nodes, chain))[1]).toBe(WEIGHTS.extraRow * 2 + 2 * (WEIGHTS.back + WEIGHTS.backChain));
+  });
+
+  it('puts invalid things first and prices a crossing inside the cost', () => {
+    const nodes = [box('a', 'l', 0, 0), box('b', 'l', 0, 100)];
+    const crossing = drawing(nodes, [edge('a', 'b', [[40, 10], [100, 10]])]);
+    const s = score({ ...crossing, diagnostics: [{ kind: 'crossing', nodes: [], message: '' }] });
+    expect(s[0]).toBe(0);
+    expect(s[1]).toBe(WEIGHTS.crossing);
   });
 });
