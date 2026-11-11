@@ -52,8 +52,9 @@ function portPoint(
 
 /** Coordinate of a track inside its channel strip. */
 export function trackCoord(geo: Geo, ruler: Ruler, run: Run, track: number, count: number): number {
-  const start = run.kind === 'f' ? (geo.fStart[run.idx] ?? 0) : (geo.cStart[run.idx] ?? 0);
-  const width = run.kind === 'f' ? (geo.wf[run.idx] ?? 0) : (geo.wc[run.idx] ?? 0);
+  const inset = geo.inset?.get(`${run.kind}${run.idx}`) ?? 0;
+  const start = (run.kind === 'f' ? (geo.fStart[run.idx] ?? 0) : (geo.cStart[run.idx] ?? 0)) + inset;
+  const width = (run.kind === 'f' ? (geo.wf[run.idx] ?? 0) : (geo.wc[run.idx] ?? 0)) - inset;
   return start + (width - (count - 1) * ruler.trackGap) / 2 + track * ruler.trackGap;
 }
 

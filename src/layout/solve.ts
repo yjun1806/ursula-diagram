@@ -6,6 +6,8 @@ import { crossings } from './check.ts';
 import type { LabelSize, Rect, Segment } from './labels.ts';
 import { hostRun, labelDemands, labelSize, placeLabel } from './labels.ts';
 import type { Alignment, Geo, Need, Side, Skeleton, Slot } from './place.ts';
+import type { AlongSpec } from './lanes-along.ts';
+import { alongBands, shapeAlong } from './lanes-along.ts';
 import { buildTopology, finalNf, fitLaneLabels, geometry, gridUp, noAlignment, origin, sizeSlots } from './place.ts';
 import { nodeNeeds, planEdges } from './plan.ts';
 import { buildPorts, portOrders } from './ports.ts';
@@ -57,6 +59,8 @@ interface Pass {
   forced?: Set<number>;
   /** Channel widths of an earlier pass; the rank geometry must not change. */
   pin?: { wf: number[]; wc: number[]; sizes: Map<string, { nf: number; nc: number }> };
+  /** Lanes follow one another along the flow axis; the graph then has a single lane. */
+  along?: AlongSpec;
 }
 
 interface Built {
@@ -80,8 +84,10 @@ export function solve(
   opts: Pick<LayoutOptions, 'maxWidth'> = {},
   span: Map<string, number> = new Map(),
   slide: boolean = SLIDE_BOXES,
+  along?: AlongSpec,
 ): Layout {
-  const first = build(graph, ruler, rank, row, opts, span, {});
+  const base: Pass = along ? { along } : {};
+  const first = build(graph, ruler, rank, row, opts, span, base);
   if (!slide) return first.layout;
   // Tight strips (the tracks as assigned) first; if the drawing then differs enough that a box
   // meets a track, the whole channel counts as occupied.
@@ -89,6 +95,7 @@ export function solve(
     const slid = slideBoxes(first.sk, first.geo, ruler, first.plans, first.runs, first.counts, tracks);
     if (!slid) return first.layout;
     const second = build(graph, ruler, rank, row, opts, span, {
+      ...base,
       align: slid.alignment,
       forced: slid.forced,
       pin: { wf: first.geo.wf, wc: first.geo.wc, sizes: new Map(first.sk.slots.map((s) => [s.id, { nf: s.nf, nc: s.nc }] as const)) },
@@ -116,9 +123,11 @@ function build(
 ): Built {
   const td = graph.direction === 'TD';
   const topo = buildTopology(graph, rank, row, span);
-  const plans = planEdges(graph, topo, pass.forced);
+  const plans = planEdges(graph, topo, pass.forced, pass.along !== undefined);
   const needs: Map<string, Need> = nodeNeeds(plans, topo, ruler);
-  const sk: Skeleton = { ...sizeSlots(topo, ruler, graph.direction, needs, pass.pin?.sizes), align: pass.align ?? noAlignment() };
+  const sized = sizeSlots(topo, ruler, graph.direction, needs, pass.pin?.sizes);
+  const sk: Skeleton = { ...(pass.along ? shapeAlong(sized, ruler, pass.along) : sized), align: pass.align ?? noAlignment() };
+  const insetOf = (key: string, count: number): number => (count > 0 ? (sk.inset?.get(key) ?? 0) : 0);
 
   const rough = geometry(sk, sk.baseWf, sk.baseWc);
   const { routed, runs } = routeEdges(sk, rough, ruler, plans);
@@ -148,11 +157,27 @@ function build(
   for (const p of plans) if (p.label) sizes.set(p.index, labelSize(p.label, ruler));
   const demand = labelDemands(sk, rough, ruler, plans, routed, runs, sizes);
   const wfNeed = sk.baseWf.map((w, a) =>
-    gridUp(ruler, Math.max(w, (counts.get(`f${a}`) ?? 0) * ruler.trackGap, demand.wf[a] ?? 0)),
+    gridUp(
+      ruler,
+      Math.max(
+        w,
+        (counts.get(`f${a}`) ?? 0) * ruler.trackGap + insetOf(`f${a}`, counts.get(`f${a}`) ?? 0),
+        demand.wf[a] ?? 0,
+      ),
+    ),
   );
   const wcNeed = fitLaneLabels(
     sk,
-    sk.baseWc.map((w, b) => gridUp(ruler, Math.max(w, (counts.get(`c${b}`) ?? 0) * ruler.trackGap, demand.wc[b] ?? 0))),
+    sk.baseWc.map((w, b) =>
+      gridUp(
+        ruler,
+        Math.max(
+          w,
+          (counts.get(`c${b}`) ?? 0) * ruler.trackGap + insetOf(`c${b}`, counts.get(`c${b}`) ?? 0),
+          demand.wc[b] ?? 0,
+        ),
+      ),
+    ),
   );
   const pin = pass.pin;
   const pinned = !pin || (wfNeed.every((w, a) => w <= (pin.wf[a] ?? 0)) && wcNeed.every((w, b) => w <= (pin.wc[b] ?? 0)));
@@ -166,7 +191,7 @@ function build(
     const [x, y, w, h] = td ? [c0, f0, s.nc, nf] : [f0, c0, nf, s.nc];
     return {
       id: s.id,
-      lane: sk.lanes[s.lane]?.id ?? '',
+      lane: pass.along?.laneOf.get(s.id) ?? sk.lanes[s.lane]?.id ?? '',
       rank: s.rank,
       span: s.span,
       row: s.row,
@@ -251,7 +276,7 @@ function build(
     });
   }
 
-  const lanes: LayoutLane[] = sk.lanes.map((lane, l) => {
+  const lanes: LayoutLane[] = pass.along ? alongBands(sk, geo, ruler, pass.along) : sk.lanes.map((lane, l) => {
     const start = geo.bandStart[l] ?? 0;
     const ext = geo.bandExt[l] ?? 0;
     const flowExt = geo.totalF - 2 * sk.margin;
@@ -283,6 +308,7 @@ function build(
     width: tidy(width),
     height: tidy(height),
     direction: graph.direction,
+    laneAxis: pass.along ? 'along' : 'across',
     lanes,
     nodes,
     edges,

@@ -66,14 +66,15 @@ class Canvas {
 }
 
 function drawLanes(c: Canvas, layout: Layout): void {
-  const td = layout.direction === 'TD';
+  // Bands run down the page for top-down drawings with lanes across, and for left-to-right ones with lanes along.
+  const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
   for (const lane of layout.lanes) {
     if (lane.label === '') continue;
     const x0 = Math.floor(lane.x);
     const y0 = Math.floor(lane.y);
     const x1 = x0 + Math.round(lane.w) - 1;
     const y1 = y0 + Math.round(lane.h) - 1;
-    if (td) {
+    if (vertical) {
       for (let y = y0; y <= y1; y++) {
         c.put(x0, y, '╎');
         c.put(x1, y, '╎');

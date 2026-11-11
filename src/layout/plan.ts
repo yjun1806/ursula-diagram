@@ -21,7 +21,13 @@ export function isFlowSide(side: Side): boolean {
 
 /** Chooses attachment sides and finds edges that can be drawn as one straight line. */
 /** `forced` lists edges that run as one straight perpendicular line because their boxes were slid to overlap. */
-export function planEdges(graph: Graph, topo: Topology, forced: ReadonlySet<number> = new Set()): EdgePlan[] {
+/** With `facing`, an edge that runs back to an earlier column leaves by the near flow side and enters by the far one. */
+export function planEdges(
+  graph: Graph,
+  topo: Topology,
+  forced: ReadonlySet<number> = new Set(),
+  facing = false,
+): EdgePlan[] {
   const used = new Set<string>();
   const plans: EdgePlan[] = [];
   graph.edges.forEach((e, index) => {
@@ -33,6 +39,7 @@ export function planEdges(graph: Graph, topo: Topology, forced: ReadonlySet<numb
     let tgtSide: Side;
     if (self) [srcSide, tgtSide] = ['cL', 'cL'];
     else if (t.rank >= s.rank + s.span) [srcSide, tgtSide] = ['fH', 'fL'];
+    else if (facing && s.rank >= t.rank + t.span) [srcSide, tgtSide] = ['fL', 'fH'];
     else if (t.cRow > s.cRow) [srcSide, tgtSide] = ['cH', 'cL'];
     else if (t.cRow < s.cRow) [srcSide, tgtSide] = ['cL', 'cH'];
     else [srcSide, tgtSide] = ['cH', 'cH'];
@@ -49,6 +56,12 @@ export function planEdges(graph: Graph, topo: Topology, forced: ReadonlySet<numb
         if (!blocked) {
           straight = 'f';
           key = `f:${s.cRow}:${s.rank}:${t.rank}`;
+        }
+      } else if (facing && s.rank >= t.rank + t.span && t.cRow === s.cRow) {
+        const blocked = topo.slots.some((n) => n.cRow === s.cRow && n.rank >= t.rank + t.span && n.rank < s.rank);
+        if (!blocked) {
+          straight = 'f';
+          key = `f:${s.cRow}:${t.rank}:${s.rank}`;
         }
       } else if (t.rank < s.rank + s.span && s.rank < t.rank + t.span && t.cRow !== s.cRow) {
         // The columns overlap: one perpendicular line through the middle of the overlap.
