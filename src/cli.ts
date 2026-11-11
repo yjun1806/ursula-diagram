@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color] [--engine default|layered]\n');
   process.exit(2);
 }
 
@@ -12,12 +12,18 @@ let format = 'svg';
 let width: number | undefined;
 let legend = true;
 let color = false;
+let engine: 'default' | 'layered' | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--format') format = args[++i] ?? usage();
   else if (a === '--width') width = Number(args[++i] ?? usage());
   else if (a === '--no-legend') legend = false;
   else if (a === '--color') color = true;
+  else if (a === '--engine') {
+    const v = args[++i];
+    if (v !== 'default' && v !== 'layered') usage();
+    engine = v;
+  }
   else if (a !== undefined && !a.startsWith('--') && file === undefined) file = a;
   else usage();
 }
@@ -26,7 +32,7 @@ if (!['svg', 'text', 'json'].includes(format) || (width !== undefined && !Number
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }) };
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }) };
   if (format === 'text') {
     const rows =
       color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);

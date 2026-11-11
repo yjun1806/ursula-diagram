@@ -13,6 +13,7 @@ import { assignRows } from './rows.ts';
 import type { SlotResult } from './slots.ts';
 import { placeSlots, shiftHalfSteps } from './slots.ts';
 import { crossingCount } from './check.ts';
+import { layoutLayered } from '../layered/index.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
 
@@ -24,6 +25,8 @@ export interface LayoutOptions extends SolveOptions {
    * 'auto' (the default) tries 'along' only when edges between lanes far outnumber edges inside lanes.
    */
   laneAxis?: 'auto' | LaneAxis;
+  /** 'layered' selects the layered pipeline of `src/layered`; the default engine is the slot-based one. */
+  engine?: 'default' | 'layered';
 }
 
 export type { LegendOption } from './legend.ts';
@@ -200,7 +203,8 @@ function layoutAlong(arranged: AlongArrangement, ruler: Ruler, opts: SolveOption
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
-  const { legend, laneAxis = 'auto', ...solveOpts } = opts;
+  const { legend, laneAxis = 'auto', engine = 'default', ...solveOpts } = opts;
+  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
   }
