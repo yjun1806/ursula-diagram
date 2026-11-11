@@ -121,36 +121,59 @@ export interface Placed {
   overlap: boolean;
 }
 
+export type Segment = readonly [Point, Point];
+
+/** True when the segment passes through the open interior of the rectangle. */
+function segmentHits(seg: Segment, r: Rect): boolean {
+  const eps = 1e-6;
+  const [p, q] = seg;
+  return (
+    Math.min(p.x, q.x) < r.x + r.w - eps &&
+    Math.max(p.x, q.x) > r.x + eps &&
+    Math.min(p.y, q.y) < r.y + r.h - eps &&
+    Math.max(p.y, q.y) > r.y + eps
+  );
+}
+
 /**
- * Centres the label on its segment. When that collides with a node or an earlier
- * label it slides along the segment; if nothing is free it stays centred and
- * reports the overlap.
+ * Places a label next to its own edge, in space that holds no node, no other label and no
+ * segment of another edge. A label on a vertical segment sits beside the line, as close to the
+ * middle of the segment as it fits; a label on a horizontal segment sits on the line (the label
+ * box hides the stretch under it) and, failing that, beside it. When nothing is free the label
+ * stays at the preferred spot and the overlap is reported.
  */
 export function placeLabel(
-  segment: readonly [Point, Point],
+  segment: Segment,
   size: LabelSize,
   nodes: Rect[],
   placed: Rect[],
   ruler: Ruler,
+  foreign: Segment[] = [],
 ): Placed {
   const [p, q] = segment;
   const horizontal = p.y === q.y;
   const lo = horizontal ? Math.min(p.x, q.x) : Math.min(p.y, q.y);
   const hi = horizontal ? Math.max(p.x, q.x) : Math.max(p.y, q.y);
   const mid = (lo + hi) / 2;
-  const rectAt = (along: number): Rect => {
-    const cx = horizontal ? along : p.x;
-    const cy = horizontal ? p.y : along;
+  const rectAt = (along: number, side: number): Rect => {
+    const gap = (horizontal ? size.h : size.w) / 2 + (horizontal ? ruler.labelPadY : ruler.labelPadX);
+    const cx = horizontal ? along : p.x + side * gap;
+    const cy = horizontal ? p.y + side * gap : along;
     return { x: ruler.snap(cx - size.w / 2), y: ruler.snap(cy - size.h / 2), w: size.w, h: size.h };
   };
-  const free = (r: Rect): boolean => !nodes.some((n) => overlaps(r, n)) && !placed.some((o) => overlaps(r, o));
+  const free = (r: Rect, side: number): boolean =>
+    (side === 0 || !segmentHits(segment, r)) &&
+    !nodes.some((n) => overlaps(r, n)) && !placed.some((o) => overlaps(r, o)) && !foreign.some((f) => segmentHits(f, r));
   const step = ruler.trackGap;
   const reach = Math.floor((hi - lo) / 2 / step);
-  for (let k = 0; k <= reach; k++) {
-    for (const sign of k === 0 ? [1] : [1, -1]) {
-      const rect = rectAt(mid + sign * k * step);
-      if (free(rect)) return { rect, overlap: false };
+  const sides = horizontal ? [0, -1, 1] : [1, -1, 0];
+  for (const side of sides) {
+    for (let k = 0; k <= reach; k++) {
+      for (const sign of k === 0 ? [1] : [1, -1]) {
+        const rect = rectAt(mid + sign * k * step, side);
+        if (free(rect, side)) return { rect, overlap: false };
+      }
     }
   }
-  return { rect: rectAt(mid), overlap: true };
+  return { rect: rectAt(mid, sides[0] ?? 0), overlap: true };
 }

@@ -26,6 +26,21 @@ function properCross(a: Seg, b: Seg): boolean {
   );
 }
 
+/** Number of proper crossings between different edges (an edge crossing another twice counts twice). */
+export function crossingCount(edges: LayoutEdge[]): number {
+  let total = 0;
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 1; j < edges.length; j++) {
+      const a = edges[i];
+      const b = edges[j];
+      if (!a || !b) continue;
+      const sb = segments(b);
+      for (const s of segments(a)) for (const t of sb) if (properCross(s, t)) total++;
+    }
+  }
+  return total;
+}
+
 export function crossings(edges: LayoutEdge[]): Diagnostic[] {
   const out: Diagnostic[] = [];
   for (let i = 0; i < edges.length; i++) {

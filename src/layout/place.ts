@@ -125,14 +125,23 @@ export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', 
   });
   const snapW = (v: number): number => ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep);
   const need = (s: Slot): Need => needs.get(s.id) ?? { nf: 0, nc: 0 };
-  const physW = (i: number, s: Slot): number => snapW(Math.max(content[i]?.w ?? 0, td ? need(s).nc : need(s).nf));
-  const uniformH = Math.max(
-    0,
-    ...topo.slots.map((s, i) => Math.max(content[i]?.h ?? 0, td ? need(s).nf : need(s).nc)),
-  );
+  const needW = (s: Slot): number => (td ? need(s).nc : need(s).nf);
+  const needH = (s: Slot): number => (td ? need(s).nf : need(s).nc);
+  // Every box takes the widest content width, except boxes much wider than the median, which keep
+  // their own. A box that needs more room for its attachments grows alone.
+  const own = content.map((c) => snapW(c.w));
+  const median = [...own].sort((a, b) => a - b)[Math.floor(own.length / 2)] ?? 0;
+  const limit = 1.6 * median;
+  const common = Math.max(0, ...own.filter((w) => w <= limit));
+  const physW = (i: number, s: Slot): number => {
+    const mine = own[i] ?? 0;
+    return snapW(Math.max(mine > limit ? mine : common, needW(s)));
+  };
+  const contentH = Math.max(0, ...content.map((c) => c.h));
   const slots = topo.slots.map((s, i) => {
     const w = physW(i, s);
-    return td ? { ...s, nf: uniformH, nc: w } : { ...s, nf: w, nc: uniformH };
+    const h = Math.max(contentH, needH(s));
+    return td ? { ...s, nf: h, nc: w } : { ...s, nf: w, nc: h };
   });
 
   const rankExt = Array.from({ length: topo.ranks }, (_, r) =>
