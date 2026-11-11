@@ -150,13 +150,18 @@ function slideOnce(
     };
   });
   const edges: Array<readonly [number, number]> = [];
+  const planned: boolean[] = [];
+  const between: number[][] = [];
   const linked = new Set<string>();
   for (const p of plans) {
     const a = index.get(p.from);
     const b = index.get(p.to);
     if (a === undefined || b === undefined || a === b) continue;
-    if (p.straight === null && !open(p)) continue;
     edges.push([a, b]);
+    planned.push(p.straight === 'c');
+    const loRow = Math.min(slots[a]?.cRow ?? 0, slots[b]?.cRow ?? 0);
+    const hiRow = Math.max(slots[a]?.cRow ?? 0, slots[b]?.cRow ?? 0);
+    between.push(slots.flatMap((n, i) => (n.cRow > loRow && n.cRow < hiRow ? [i] : [])));
     linked.add(`${a}|${b}`);
     linked.add(`${b}|${a}`);
   }
@@ -164,6 +169,9 @@ function slideOnce(
   const xs = alignBoxes({
     nodes,
     edges,
+    planned,
+    between,
+    margin: ruler.trackGap / 2,
     grid: ruler.grid,
     overlap: 2 * ruler.trackGap,
     min: first,

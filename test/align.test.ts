@@ -72,6 +72,27 @@ describe('alignBoxes', () => {
     expect(alignBoxes({ ...base, nodes, edges: [[0, 1]] })).toEqual([0, 140, 420]);
   });
 
+  it('keeps two boxes joined by an already straight edge at the same x while a third is pulled', () => {
+    // Boxes 0 and 2 are one column apart in x and straight; box 1 is pulled toward box 3.
+    const nodes = [node(0, 0, 0), node(0, 1, 140), node(1, 0, 0), node(1, 1, 300)];
+    const x = alignBoxes({ ...base, nodes, edges: [[0, 2], [1, 3]] });
+    expect(x[0]).toBe(0);
+    expect(x[2]).toBe(0);
+  });
+
+  it('rejects a move that would straighten one edge and bend two', () => {
+    // Box 2 overlaps boxes 0 and 3 by exactly the minimum; reaching the pinned box 1 would lose both.
+    const pinned = (n: AlignNode): AlignNode => ({ ...n, lo: n.x0, hi: n.x0 + n.w });
+    const nodes = [
+      pinned(node(0, 0, -76)),
+      pinned(node(0, 1, 140)),
+      { ...node(1, 0, 0), lo: -200 },
+      pinned(node(2, 0, -76)),
+    ];
+    const x = alignBoxes({ ...base, nodes, edges: [[0, 2], [2, 3], [1, 2]], min: -200 });
+    expect(x).toEqual(nodes.map((n) => n.x0));
+  });
+
   it('is deterministic', () => {
     const nodes = [node(0, 0, 0), node(0, 1, 140), node(1, 0, 0), node(1, 1, 140)];
     const edges = [[0, 3], [1, 2], [0, 2]] as const;
@@ -172,4 +193,74 @@ describe('sliding boxes', () => {
       bends(solve(g, pixelRuler(), rank, row, {}, new Map(), false)),
     );
   });
+});
+
+describe('slide gains', () => {
+  const ruler = pixelRuler();
+  const column = (l: Layout): Map<number, number[]> => {
+    const by = new Map<number, number[]>();
+    for (const n of l.nodes) by.set(n.rank, [...(by.get(n.rank) ?? []), n.x]);
+    return by;
+  };
+  const mode = (xs: number[]): number => {
+    const count = new Map<number, number>();
+    for (const v of xs) count.set(v, (count.get(v) ?? 0) + 1);
+    return [...count].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+  };
+  const run = (src: string, slide: boolean): Layout => {
+    const g = parse(src);
+    const rank = assignRanks(g);
+    return solve(g, ruler, rank, assignRows(g, rank), {}, new Map(), slide);
+  };
+
+  it('keeps boxes joined by a straight edge in their column', () => {
+    const src = `flowchart LR
+subgraph top[Top]
+a[Alpha] --> b[Beta]
+end
+subgraph bottom[Bottom]
+c[Gamma] --> d[Delta]
+end
+a --> c
+`;
+    const l = run(src, true);
+    expect(l.nodes.find((n) => n.id === 'a')?.x).toBe(l.nodes.find((n) => n.id === 'c')?.x);
+    expect(JSON.stringify(l)).toBe(JSON.stringify(run(src, false)));
+  });
+
+  it('still slides a box with two partners in adjacent columns', () => {
+    const l = layout(parse(fan), ruler);
+    expect(isStraight(l, 'c', 'a')).toBe(true);
+    expect(isStraight(l, 'c', 'b')).toBe(true);
+  });
+
+  it('draws the same as without sliding when sliding gains nothing', () => {
+    const src = `flowchart LR
+subgraph top[Top]
+a[Alpha] --> b[Beta] --> c[Gamma]
+end
+subgraph bottom[Bottom]
+d[Delta] --> e[Epsilon]
+end
+a --> d
+b --> e
+`;
+    expect(JSON.stringify(run(src, true))).toBe(JSON.stringify(run(src, false)));
+  });
+
+  for (const [name, src] of [['fan', fan], ['plain', plain], ['fixture-based fan', fan.replace('Gamma', 'Omega')]] as const) {
+    it(`${name}: every box off its column ends a line that is straight only because of the slide`, () => {
+      const on = run(src, true);
+      const off = run(src, false);
+      const straight = (l: Layout): Set<string> =>
+        new Set(l.edges.filter((e) => e.points.length === 2).map((e) => `${e.from}>${e.to}`));
+      const before = straight(off);
+      const gained = [...straight(on)].filter((k) => !before.has(k));
+      const ends = new Set(gained.flatMap((k) => k.split('>')));
+      for (const [rank, xs] of column(on)) {
+        const home = mode(xs);
+        for (const n of on.nodes) if (n.rank === rank && n.x !== home) expect(ends.has(n.id)).toBe(true);
+      }
+    });
+  }
 });

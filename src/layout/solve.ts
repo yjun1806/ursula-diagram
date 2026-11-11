@@ -105,11 +105,28 @@ export function solve(
       sameGrid(first.geo.rankStart, second.geo.rankStart) &&
       sameGrid(first.geo.cStart, second.geo.cStart) &&
       first.geo.totalF === second.geo.totalF;
-    if (second.pinned && stable && boxesClear(second.sk, second.geo, ruler, second.runs, second.counts, second.tracks)) {
+    if (
+      second.pinned &&
+      stable &&
+      boxesClear(second.sk, second.geo, ruler, second.runs, second.counts, second.tracks) &&
+      !worse(second.layout, first.layout)
+    ) {
       return second.layout;
     }
   }
   return first.layout;
+}
+
+/** True when `slid` has fewer straight edges, or more bends or crossings, than `nominal`. */
+function worse(slid: Layout, nominal: Layout): boolean {
+  const count = (l: Layout): { straight: number; bends: number; crossings: number } => ({
+    straight: l.edges.filter((e) => e.points.length === 2).length,
+    bends: l.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0),
+    crossings: l.diagnostics.filter((d) => d.kind === 'crossing').length,
+  });
+  const a = count(slid);
+  const b = count(nominal);
+  return a.straight < b.straight || a.bends > b.bends || a.crossings > b.crossings;
 }
 
 function build(
