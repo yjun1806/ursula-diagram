@@ -2,12 +2,24 @@ import type { Diagnostic, Scene } from '../types.ts';
 
 export type ArrowHead = 'filled' | 'open' | 'cross' | 'none';
 export type BlockKind = 'loop' | 'opt' | 'alt' | 'par';
+/** How a message reads, derived from its arrow: `plain` is an arrow without a head. */
+export type MessageKind = 'call' | 'reply' | 'async' | 'failed' | 'plain';
+export type LegendKind = Exclude<MessageKind, 'plain'>;
+/** `false` removes the legend; an object renames the captions of the kinds. */
+export type SequenceLegendOption = false | Partial<Record<LegendKind, string>>;
 
 export interface Participant {
   id: string;
   /** Label lines (`<br/>` splits lines). */
   lines: string[];
   actor: boolean;
+}
+
+export function kindOf(m: { head: ArrowHead; dashed: boolean }): MessageKind {
+  if (m.head === 'filled') return m.dashed ? 'reply' : 'call';
+  if (m.head === 'open') return 'async';
+  if (m.head === 'cross') return 'failed';
+  return 'plain';
 }
 
 export interface MessageStmt {
@@ -89,6 +101,7 @@ export interface PlacedMessage {
   /** Lifeline x of the sender and the receiver. */
   fromX: number;
   toX: number;
+  kind: MessageKind;
   /** Vertical position of the message line. */
   y: number;
   self: boolean;
@@ -105,6 +118,8 @@ export interface PlacedFrame extends Box {
   block: BlockKind;
   /** Statement index of the opening line. */
   statement: number;
+  /** Index among the frames of the diagram, in source order. */
+  index: number;
   /** Vertical positions of the `else` / `and` dividers. */
   dividers: number[];
 }
@@ -112,6 +127,7 @@ export interface PlacedFrame extends Box {
 export interface PlacedRow {
   /** Index into `Sequence.statements`. */
   statement: number;
+  /** Top of what the statement draws (the label of a message) down to where the next statement's space starts. */
   y: number;
   h: number;
 }
@@ -119,6 +135,12 @@ export interface PlacedRow {
 export interface SequenceLayout {
   width: number;
   height: number;
+  /** Distance between two neighbouring lifelines. */
+  pitch: number;
+  /** Width shared by all header boxes. */
+  headerWidth: number;
+  /** Legend entries in drawing order; empty when no legend is drawn. */
+  legend: Array<{ kind: LegendKind; caption: string }>;
   participants: PlacedParticipant[];
   rows: PlacedRow[];
   messages: PlacedMessage[];

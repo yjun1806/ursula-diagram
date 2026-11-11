@@ -247,8 +247,9 @@ function sceneBox(c: Canvas, b: SceneBox): void {
   const y0 = Math.round(b.y);
   const w = Math.round(b.w);
   const h = Math.round(b.h);
-  if (b.style === 'bar') {
-    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) c.put(x, y, '┃');
+  if (b.style === 'bar' || b.style === 'label') {
+    const ch = b.style === 'bar' ? '┃' : ' ';
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) c.put(x, y, ch);
     return;
   }
   for (let y = y0; y < y0 + h; y++) {
@@ -271,6 +272,7 @@ function sceneBox(c: Canvas, b: SceneBox): void {
 }
 
 function sceneLine(c: Canvas, l: SceneLine): void {
+  if (l.role === 'rule') return;
   const pts = l.points.map((p) => [cellOfPoint(p.x), cellOfPoint(p.y)] as const);
   const dir = (i: number): [number, number] => {
     const a = pts[i];
@@ -322,10 +324,6 @@ function sceneText(c: Canvas, t: SceneText): void {
   const tw = cellWidth(t.text);
   const x = Math.round(t.x) - (t.anchor === 'middle' ? Math.floor(tw / 2) : t.anchor === 'end' ? tw : 0);
   const y = cellOfPoint(t.y);
-  if (t.halo) {
-    c.put(x - 1, y, ' ');
-    c.put(x + tw, y, ' ');
-  }
   c.text(x, y, t.text);
 }
 

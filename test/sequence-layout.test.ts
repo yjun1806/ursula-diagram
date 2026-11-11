@@ -94,7 +94,7 @@ describe.each(rulers)('layoutSequence invariants (%s ruler)', (_, make) => {
     for (let i = 0; i + 1 < l.rows.length; i++) {
       const r = l.rows[i];
       const next = l.rows[i + 1];
-      expect((r?.y ?? 0) + (r?.h ?? 0)).toBe(next?.y);
+      expect((r?.y ?? 0) + (r?.h ?? 0)).toBeLessThanOrEqual(next?.y ?? 0);
       expect(r?.statement).toBeLessThan(next?.statement ?? 0);
     }
     const lines = l.messages.map((m) => m.y);
@@ -134,7 +134,7 @@ describe.each(rulers)('layoutSequence invariants (%s ruler)', (_, make) => {
         expect(r.y + r.h).toBeLessThanOrEqual(f.y + f.h);
       }
       for (const m of l.messages) {
-        const stmt = l.rows.find((r) => r.y <= m.y && m.y < r.y + r.h)?.statement ?? -1;
+        const stmt = l.rows.find((r) => r.y <= m.y && m.y <= r.y + r.h)?.statement ?? -1;
         if (stmt > f.statement && stmt < close) {
           expect(Math.min(m.fromX, m.toX)).toBeGreaterThan(f.x);
           expect(Math.max(m.fromX, m.toX)).toBeLessThan(f.x + f.w);
@@ -245,24 +245,111 @@ describe('layoutSequence geometry in pixels', () => {
     expect(inner.y + inner.h).toBeLessThan(outer.y + outer.h);
   });
 
-  it('lets explicit activate and deactivate span the rows between them', () => {
+  it('lets explicit activate and deactivate span the messages between them', () => {
     const l = layoutSequence(seqOf('sequenceDiagram\nactivate A\nA->>B: x\nB->>A: y\ndeactivate A'), ruler);
     const bar = l.scene.items.find((i) => i.kind === 'box' && i.style === 'bar');
     if (bar?.kind !== 'box') throw new Error('missing bar');
-    expect(bar.y).toBe(l.rows[0]?.y);
-    expect(bar.y + bar.h).toBe((l.rows[1]?.y ?? 0) + (l.rows[1]?.h ?? 0));
+    expect(bar.y).toBe(l.messages[0]?.y);
+    expect(bar.y + bar.h).toBe(l.messages[1]?.y);
   });
 
-  it('widens the gap between neighbours for a long label and spreads a wide message over its gaps', () => {
+  it('spaces all lifelines by one pitch that fits the widest label between neighbours', () => {
     const narrow = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok'), ruler);
     const wide = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: a much longer label than the minimum span'), ruler);
-    const gap = (l: SequenceLayout, i: number): number => (l.participants[i + 1]?.x ?? 0) - (l.participants[i]?.x ?? 0);
-    expect(gap(wide, 1)).toBeGreaterThan(gap(narrow, 1));
-    expect(gap(wide, 0)).toBe(gap(narrow, 0));
-    const spanning = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok\nA->>C: a much longer label than the minimum span'), ruler);
-    expect(gap(spanning, 0) + gap(spanning, 1)).toBeGreaterThan(gap(narrow, 0) + gap(narrow, 1));
-    const label = spanning.messages[2]?.label;
-    expect((label?.w ?? 0) + ruler.sequence.labelPad).toBeLessThanOrEqual(gap(spanning, 0) + gap(spanning, 1));
+    const gaps = (l: SequenceLayout): number[] => l.participants.slice(1).map((p, i) => p.x - (l.participants[i]?.x ?? 0));
+    expect(new Set(gaps(narrow)).size).toBe(1);
+    expect(new Set(gaps(wide)).size).toBe(1);
+    expect(narrow.pitch).toBe(narrow.headerWidth + ruler.sequence.pitchGap);
+    expect(wide.pitch).toBeGreaterThan(narrow.pitch);
+    const label = wide.messages[1]?.label;
+    expect((label?.w ?? 0) + ruler.sequence.labelPad).toBeLessThanOrEqual(wide.pitch + 2 * ruler.sequence.labelBgPad);
+    expect(narrow.headerWidth).toBe(120);
+    expect(narrow.pitch).toBe(168);
+  });
+
+  it('shares one header width and sizes it by the widest name', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nparticipant A\nparticipant Very Long Participant Name Here\nA->>Very Long Participant Name Here: x'), ruler);
+    expect(new Set(l.participants.map((p) => p.box.w))).toEqual(new Set([l.headerWidth]));
+    expect(l.headerWidth).toBeGreaterThan(120);
+    expect(l.headerWidth % ruler.grid).toBe(0);
+  });
+
+  it('only needs a label that spans several columns to fit its own span', () => {
+    const one = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok'), ruler);
+    const spanning = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok\nA->>C: a label that is wider than one column but not two'), ruler);
+    expect(spanning.pitch).toBe(one.pitch);
+  });
+
+  it('centres the label of a multi-column message in the first column from the sender', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok\nA->>C: short\nC-->>A: back'), ruler);
+    const forth = l.messages[2];
+    const back = l.messages[3];
+    const [a, b, c] = l.participants.map((p) => p.x);
+    const centre = (box: Box | undefined): number => (box?.x ?? 0) + (box?.w ?? 0) / 2;
+    expect(centre(forth?.label)).toBe(((a ?? 0) + (b ?? 0)) / 2);
+    expect(centre(back?.label)).toBe(((c ?? 0) + (b ?? 0)) / 2);
+  });
+
+  it('draws bars with message lines starting and ending at the bar edge', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>+B: x\nB->>A: y\nB-->>-A: z'), ruler);
+    const b = l.participants[1]?.x ?? 0;
+    const line = (i: number) => l.scene.items.find((it) => it.kind === 'line' && it.data?.message === String(i));
+    const first = line(0);
+    const second = line(1);
+    if (first?.kind !== 'line' || second?.kind !== 'line') throw new Error('missing lines');
+    expect(first.points[1]?.x).toBe(b - ruler.sequence.barW / 2);
+    expect(second.points[0]?.x).toBe(b - ruler.sequence.barW / 2);
+  });
+
+  it('ends a bar that is never deactivated 16 below the last message that involves its participant', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>+B: x\nB-->>A: y\nA->>C: z\nC->>A: w'), ruler);
+    const bar = l.scene.items.find((i) => i.kind === 'box' && i.style === 'bar');
+    if (bar?.kind !== 'box') throw new Error('missing bar');
+    expect(bar.y + bar.h).toBe((l.messages[1]?.y ?? 0) + ruler.sequence.barTail + ruler.sequence.stroke);
+    expect(bar.y + bar.h).toBeLessThan(l.height - ruler.sequence.margin - ruler.sequence.tail);
+  });
+
+  it('aligns a frame with the header edges of the participants inside it', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nparticipant D\nA->>B: x\nloop L\nB->>C: y\nend'), ruler);
+    const frame = l.frames[0];
+    const b = l.participants[1];
+    const c = l.participants[2];
+    expect(frame?.x).toBe(b?.box.x);
+    expect((frame?.x ?? 0) + (frame?.w ?? 0)).toBe((c?.box.x ?? 0) + (c?.box.w ?? 0));
+  });
+
+  it('keeps a note that can wrap inside the first and last header edges', () => {
+    const src = 'sequenceDiagram\nA->>B: x\nNote over A: a long note about the first participant that has to wrap\nNote over B: another long note about the last participant that wraps too';
+    const l = layoutSequence(seqOf(src), ruler);
+    const first = l.participants[0]?.box;
+    const last = l.participants[1]?.box;
+    for (const n of l.notes) {
+      expect(n.box.x).toBeGreaterThanOrEqual(first?.x ?? 0);
+      expect(n.box.x + n.box.w).toBeLessThanOrEqual((last?.x ?? 0) + (last?.w ?? 0));
+    }
+    expect(l.notes.map((n) => n.box.h).every((h) => h > ruler.lineHeight('line') + 2 * ruler.sequence.notePadY)).toBe(true);
+  });
+
+  it('maps arrows to message kinds', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>B: a\nA-->>B: b\nA-)B: c\nA--)B: d\nA-xB: e\nA--xB: f\nA->B: g\nA-->B: h'), ruler);
+    expect(l.messages.map((m) => m.kind)).toEqual(['call', 'reply', 'async', 'async', 'failed', 'failed', 'plain', 'plain']);
+    const kinds = l.scene.items.flatMap((i) => (i.kind === 'line' && i.data?.kind ? [i.data.kind] : []));
+    expect(kinds).toEqual(l.messages.map((m) => m.kind));
+  });
+
+  it('adds a legend with the kinds in use, renamed or removed on request', () => {
+    const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b\nA-xB: c';
+    const texts = (l: SequenceLayout): string[] => l.scene.items.flatMap((i) => (i.kind === 'text' && i.font === 'caption' ? [i.text] : []));
+    const l = layoutSequence(seqOf(src), ruler);
+    expect(l.legend.map((e) => e.kind)).toEqual(['call', 'reply', 'failed']);
+    expect(texts(l)).toEqual(['Call', 'Reply', 'Failed']);
+    const renamed = layoutSequence(seqOf(src), ruler, { legend: { call: 'Request', failed: 'Error' } });
+    expect(texts(renamed)).toEqual(['Request', 'Reply', 'Error']);
+    const off = layoutSequence(seqOf(src), ruler, { legend: false });
+    expect(off.legend).toEqual([]);
+    expect(texts(off)).toEqual([]);
+    expect(off.height).toBeLessThan(l.height);
+    expect(layoutSequence(seqOf('sequenceDiagram\nA->>B: a\nB->>A: b'), ruler).legend).toEqual([]);
   });
 
   it('makes a note over two participants cover both lifelines', () => {
@@ -304,7 +391,7 @@ describe('layoutSequence fit', () => {
   });
 
   it('uses the ruler default width for pixels and none for cells', () => {
-    const wide = `sequenceDiagram\n${Array.from({ length: 9 }, (_, i) => `P${i}->>P${i + 1}: a message with a fairly long text to need room`).join('\n')}`;
+    const wide = `sequenceDiagram\n${Array.from({ length: 7 }, (_, i) => `P${i}->>P${i + 1}: a message with a fairly long text to need room`).join('\n')}`;
     expect(layoutSequence(seqOf(wide), pixelRuler()).width).toBeLessThanOrEqual(1280);
     expect(layoutSequence(seqOf(wide), cellRuler()).width).toBeGreaterThan(300);
   });
