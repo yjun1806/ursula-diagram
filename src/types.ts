@@ -130,15 +130,20 @@ export class UrsulaError extends Error {
 /** Arrowhead drawn at the last point of a scene line. */
 export type SceneArrow = 'none' | 'filled' | 'open' | 'cross';
 
+/** Colour weight: full foreground, foreground at about three quarters, or the muted colour. */
+export type SceneTone = 'fg' | 'soft' | 'muted';
+
 export interface SceneBox {
   kind: 'box';
-  /** `box`: surface with border; `note`: tinted box; `bar`: narrow filled bar; `frame`: outline without fill. */
-  style: 'box' | 'note' | 'bar' | 'frame';
+  /**
+   * `box`: header with a strong border; `actor`: the same with a tinted fill; `note`: surface with a quiet border;
+   * `bar`: narrow activation bar; `frame`: tinted body with a quiet border; `label`: plain backing behind a text.
+   */
+  style: 'box' | 'actor' | 'note' | 'bar' | 'frame' | 'label';
   x: number;
   y: number;
   w: number;
   h: number;
-  dash?: boolean;
   /** Label tab on the top-left corner of a frame. */
   tab?: { text: string; w: number; h: number };
   data?: Record<string, string>;
@@ -151,19 +156,20 @@ export interface SceneText {
   y: number;
   text: string;
   anchor?: 'start' | 'middle' | 'end';
-  font?: 'title' | 'body' | 'label';
-  tone?: 'fg' | 'muted';
-  /** Clears what lies directly behind the text. */
-  halo?: boolean;
+  font?: 'title' | 'body' | 'label' | 'num' | 'caption';
+  tone?: SceneTone;
   data?: Record<string, string>;
 }
 
 export interface SceneLine {
   kind: 'line';
   points: Point[];
+  /** `message` (default) is drawn in the tone; `life` and `divider` are faint dashed guides; `rule` is a thin separator. */
+  role?: 'message' | 'life' | 'divider' | 'rule';
+  tone?: SceneTone;
   dash?: boolean;
-  /** Drawn in the border colour instead of the line colour. */
-  weak?: boolean;
+  /** Corner radius of the bends. */
+  radius?: number;
   arrow?: SceneArrow;
   data?: Record<string, string>;
 }

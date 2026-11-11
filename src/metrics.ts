@@ -45,40 +45,70 @@ export interface Ruler {
 export interface SequenceMetrics {
   /** Thickness of one line: 0 in vector units, one cell in cells. */
   stroke: number;
-  /** Smallest distance between two adjacent lifelines. */
-  minSpan: number;
-  /** Space between two adjacent header boxes. */
-  headerGap: number;
-  headerPadY: number;
-  /** Room a message label needs beyond its text between the two lifelines. */
+  /** Outer margin of the drawing. */
+  margin: number;
+  /** Height of a header box with one text line. */
+  headH: number;
+  /** Smallest header width, shared by all headers. */
+  headMinW: number;
+  /** Width a header adds around its widest text. */
+  headPadX: number;
+  /** Clear distance between two header boxes at the normal and at the tight lifeline pitch. */
+  pitchGap: number;
+  pitchGapTight: number;
+  /** Room a message label needs beyond its text inside its span. */
   labelPad: number;
   notePadX: number;
   notePadY: number;
   /** Space between a lifeline and a note beside it. */
   noteGap: number;
-  /** Vertical space a note adds around its box. */
-  rowGap: number;
-  /** Vertical space above the label, between label and line, and below the line of a message row. */
-  msgPadTop: number;
-  msgDrop: number;
-  msgPadBottom: number;
-  selfPadBottom: number;
+  /** Narrowest note box once its text is wrapped to stay inside the header extent. */
+  noteMinW: number;
+  /** Clear space above the next element after the headers, after a message or note, a frame, and a frame head or divider. */
+  gapFirst: number;
+  gapMsg: number;
+  gapFrame: number;
+  gapHead: number;
+  /** Space between the bottom of a label and its line. */
+  labelDrop: number;
+  /** Space between the sequence number and the label text. */
+  numGap: number;
+  /** Horizontal room of the backing behind a label. */
+  labelBgPad: number;
+  /** Distance a failed message stops short of the lifeline. */
+  failGap: number;
   loopW: number;
   loopH: number;
+  loopR: number;
   loopGap: number;
   barW: number;
   barNest: number;
+  /** Length a bar that is never deactivated continues below its last message line. */
+  barTail: number;
+  tabW: number;
   tabH: number;
   tabPad: number;
   tabGap: number;
-  frameHeadH: number;
-  frameFootH: number;
-  framePad: number;
-  dividerH: number;
-  /** Space between the header boxes and the first row. */
-  firstGap: number;
+  /** Tab text width relative to a label of the same characters, and extra advance per character. */
+  tabScale: number;
+  tabSpacing: number;
+  /** Distance between a tab or divider and its condition text, and the height of that text; 0 puts the text on the tab row. */
+  condGap: number;
+  condH: number;
+  /** Width of small captions relative to a label of the same characters. */
+  captionScale: number;
+  /** Distance from the last row to the bottom of a frame, and between a nested frame bottom and its parent. */
+  frameFoot: number;
+  frameInset: number;
+  dividerInset: number;
+  /** Distance of condition texts from the left edge of a frame. */
+  condInset: number;
   /** Space the lifelines continue below the last row. */
   tail: number;
+  /** Distance from the lifeline ends to the legend rule, from the rule to the legend row, and from the row to the end. */
+  legendTop: number;
+  legendRow: number;
+  legendBelow: number;
 }
 
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
@@ -170,32 +200,49 @@ export function pixelRuler(): Ruler {
     defaultWidth: 1280,
     sequence: {
       stroke: 0,
-      minSpan: 96,
-      headerGap: 24,
-      headerPadY: 8,
-      labelPad: 24,
-      notePadX: 12,
-      notePadY: 8,
-      noteGap: 8,
-      rowGap: 8,
-      msgPadTop: 8,
-      msgDrop: 4,
-      msgPadBottom: 4,
-      selfPadBottom: 8,
-      loopW: 32,
-      loopH: 16,
+      margin: 40,
+      headH: 44,
+      headMinW: 120,
+      headPadX: 32,
+      pitchGap: 48,
+      pitchGapTight: 24,
+      labelPad: 32,
+      notePadX: 8,
+      notePadY: 6,
+      noteGap: 12,
+      noteMinW: 120,
+      gapFirst: 20,
+      gapMsg: 20,
+      gapFrame: 24,
+      gapHead: 12,
+      labelDrop: 4,
+      numGap: 6,
+      labelBgPad: 4,
+      failGap: 4,
+      loopW: 36,
+      loopH: 32,
+      loopR: 8,
       loopGap: 8,
       barW: 8,
       barNest: 4,
-      tabH: 20,
+      barTail: 16,
+      tabW: 40,
+      tabH: 18,
       tabPad: 8,
       tabGap: 8,
-      frameHeadH: 28,
-      frameFootH: 8,
-      framePad: 16,
-      dividerH: 24,
-      firstGap: 12,
-      tail: 16,
+      tabScale: 0.84,
+      tabSpacing: 0.8,
+      condGap: 12,
+      condH: 14,
+      captionScale: 0.92,
+      frameFoot: 24,
+      frameInset: 8,
+      dividerInset: 8,
+      condInset: 12,
+      tail: 32,
+      legendTop: 16,
+      legendRow: 24,
+      legendBelow: 12,
     },
   };
 }
@@ -225,32 +272,49 @@ export function cellRuler(): Ruler {
     grid: 1,
     sequence: {
       stroke: 1,
-      minSpan: 8,
-      headerGap: 2,
-      headerPadY: 0,
+      margin: 1,
+      headH: 3,
+      headMinW: 7,
+      headPadX: 4,
+      pitchGap: 4,
+      pitchGapTight: 2,
       labelPad: 4,
       notePadX: 1,
       notePadY: 0,
       noteGap: 1,
-      rowGap: 0,
-      msgPadTop: 0,
-      msgDrop: 0,
-      msgPadBottom: 1,
-      selfPadBottom: 0,
+      noteMinW: 12,
+      gapFirst: 0,
+      gapMsg: 0,
+      gapFrame: 0,
+      gapHead: 0,
+      labelDrop: 0,
+      numGap: 1,
+      labelBgPad: 1,
+      failGap: 0,
       loopW: 3,
       loopH: 1,
+      loopR: 0,
       loopGap: 1,
       barW: 1,
       barNest: 1,
+      barTail: 0,
+      tabW: 4,
       tabH: 1,
       tabPad: 1,
       tabGap: 1,
-      frameHeadH: 1,
-      frameFootH: 1,
-      framePad: 2,
-      dividerH: 1,
-      firstGap: 0,
+      tabScale: 1,
+      tabSpacing: 0,
+      condGap: 0,
+      condH: 0,
+      captionScale: 1,
+      frameFoot: 1,
+      frameInset: 1,
+      dividerInset: 0,
+      condInset: 2,
       tail: 1,
+      legendTop: 0,
+      legendRow: 1,
+      legendBelow: 1,
     },
   };
 }

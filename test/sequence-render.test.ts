@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellWidth, render, renderText, selectFrontEnd, UrsulaError } from '../src/index.ts';
+import { cellRuler, cellWidth, layoutSequence, parseSequence, render, renderText, selectFrontEnd, UrsulaError } from '../src/index.ts';
 
 const upload = `sequenceDiagram
   participant U as User
@@ -33,7 +33,8 @@ describe('sequence svg', () => {
     expect(svg).toContain('role="img"');
     expect(svg).toContain('<title>Sequence diagram: 2 participants, 3 messages</title>');
     expect(svg).toContain('prefers-color-scheme: dark');
-    expect(svg).toContain('--ursula-line');
+    expect(svg).toContain('--ursula-fg');
+    expect(svg).toContain('--ursula-muted');
     expect(svg).not.toMatch(/#[0-9a-f]{3,6}"/i);
   });
 
@@ -45,18 +46,37 @@ describe('sequence svg', () => {
     expect(svg).toContain('data-from="U" data-to="S"');
     expect(svg).toContain('data-note="0"');
     expect(svg).toContain('data-block="loop"');
+    expect(svg).toContain('data-frame="0"');
+    expect(svg).toContain('data-kind="call"');
+  });
+
+  it('tints actors and writes the frame tab in capitals', () => {
+    const out = render('sequenceDiagram\nactor P\nparticipant S\nloop Retry\nP->>S: ping\nend');
+    expect(out.match(/class="ursula-box ursula-box--actor"/g)).toHaveLength(1);
+    expect(out.match(/class="ursula-box ursula-box--box"/g)).toHaveLength(1);
+    expect(out).toContain('>LOOP</text>');
   });
 
   it('draws arrowheads with markers and dashes for the dashed variants', () => {
-    const all = render(
-      'sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e',
-    );
-    expect(all).toContain('id="ursula-arrow"');
+    const all = render('sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e', { legend: false });
+    expect(all).toContain('id="ursula-arrow-filled-soft"');
+    expect(all).toContain('id="ursula-arrow-filled-muted"');
     expect(all).toContain('id="ursula-arrow-open"');
     expect(all).toContain('id="ursula-arrow-cross"');
     expect(all.match(/marker-end="url\(#ursula-arrow-cross\)"/g)).toHaveLength(1);
-    expect(all.match(/ursula-line ursula-line--dash"/g)).toHaveLength(2);
+    expect(all.match(/marker-end="url\(#ursula-arrow-open\)"/g)).toHaveLength(1);
+    expect(all.match(/marker-end="url\(#ursula-arrow-filled-soft\)"/g)).toHaveLength(1);
+    expect(all.match(/marker-end="url\(#ursula-arrow-filled-muted\)"/g)).toHaveLength(1);
+    expect(all.match(/ursula-line--muted ursula-line--dash"/g)).toHaveLength(2);
     expect(render('sequenceDiagram\nA->B: c')).not.toContain('<marker');
+  });
+
+  it('writes the legend captions and lets the options rename or drop them', () => {
+    const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b';
+    expect(render(src)).toContain('>Reply</text>');
+    expect(render(src, { legend: { reply: 'Answer' } })).toContain('>Answer</text>');
+    expect(render(src, { legend: false })).not.toContain('>Reply</text>');
+    expect(render('sequenceDiagram\nA->>B: a')).not.toContain('>Call</text>');
   });
 
   it('escapes text and honours the title option', () => {
@@ -83,38 +103,43 @@ describe('sequence text', () => {
   it('draws a small exchange', () => {
     expect(text(upload)).toMatchInlineSnapshot(`
       "
-       ┌───────┐    ┌───────────┐
-       │ User  │    │  Storage  │
-       └───────┘    └───────────┘
-           ┆  Upload file ┆
-           ┆─────────────▶┆
-           ┆     완료     ┆
-           ┆◀┄┄┄┄┄┄┄┄┄┄┄┄┄┆
-           ┆              ┆"
+       ┌───────────┐     ┌───────────┐
+       │   User    │     │  Storage  │
+       └───────────┘     └───────────┘
+             ┆   Upload file   ┆
+             ┆────────────────▶┆
+             ┆      완료       ┆
+             ┆◀┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┆
+             ┆                 ┆
+
+       ─▶ Call   ┄▶ Reply"
     `);
   });
 
   it('draws activations, a frame with a divider, a note and a self message', () => {
     expect(text(withFrame)).toMatchInlineSnapshot(`
       "
-       ┌───────┐  ┌─────────┐
-       │ User  │  │ Server  │
-       └───────┘  └─────────┘
-           ┆   Login   ┆
-           ┆──────────▶┃
-         ┌ alt [Valid] ──┐
-         │ ┆   Token   ┃ │
-         │ ┆◀┄┄┄┄┄┄┄┄┄┄┃ │
-         ├ [Invalid] ┄┄┄┄┤
-         │ ┆ Rejected  ┆ │
-         │ ┆×──────────┆ │
-         └───────────────┘
-          ┌─────────────┐
-          │    Done     │
-          └─────────────┘
-           ┆           ┆──┐ Audit
-           ┆           ┆◀─┘
-           ┆           ┆"
+       ┌─────────┐     ┌─────────┐
+       │  User   │     │ Server  │
+       └─────────┘     └─────────┘
+            ┆     Login     ┆
+            ┆──────────────▶┃
+       ┌ ALT [Valid] ────────────┐
+       │    ┆     Token     ┃    │
+       │    ┆◀┄┄┄┄┄┄┄┄┄┄┄┄┄┄┃    │
+       ├ [Invalid] ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤
+       │    ┆   Rejected    ┆    │
+       │    ┆×──────────────┆    │
+       └─────────────────────────┘
+           ┌─────────────────┐
+           │      Done       │
+           └─────────────────┘
+            ┆               ┆
+            ┆               ┆──┐ Audit
+            ┆               ┆◀─┘
+            ┆               ┆
+
+       ─▶ Call   ┄▶ Reply   ┄× Failed"
     `);
   });
 
@@ -148,6 +173,37 @@ describe('sequence text', () => {
     if ('error' in r) throw new Error(r.error);
     expect(Math.max(...r.lines.map(cellWidth))).toBeLessThanOrEqual(100);
     expect(r.lines.join('\n')).toContain('주문 완료');
+  });
+
+  it('keeps headers apart and labels off foreign lifelines at 100 columns', () => {
+    const six = `sequenceDiagram
+  participant Web
+  participant Gateway
+  participant Auth
+  participant Orders
+  participant Stock
+  participant Mail
+  Web->>Gateway: Place the order for the cart
+  Gateway->>Auth: Verify the session token
+  Orders->>Stock: Reserve the requested items
+  Orders-)Mail: Send confirmation
+  Orders-->>Web: Order done`;
+    const l = layoutSequence(parseSequence(six), cellRuler(), { maxWidth: 100 });
+    for (let i = 0; i + 1 < l.participants.length; i++) {
+      const a = l.participants[i]?.box;
+      const b = l.participants[i + 1]?.box;
+      expect((a?.x ?? 0) + (a?.w ?? 0)).toBeLessThan(b?.x ?? 0);
+    }
+    const r = renderText(six, 100);
+    if ('error' in r) throw new Error(r.error);
+    for (const m of l.messages) {
+      if (!m.label) continue;
+      const row = [...(r.lines[m.label.y] ?? '')];
+      for (const p of l.participants) {
+        if (p.x === m.fromX || p.x === m.toX) continue;
+        expect(['┆', '┃', ' ']).toContain(row[p.x] ?? ' ');
+      }
+    }
   });
 
   it('returns an error when even the narrowest drawing does not fit', () => {

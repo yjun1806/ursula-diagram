@@ -1,7 +1,7 @@
-import type { LegendOption } from '../layout/legend.ts';
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import type { Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem } from '../types.ts';
+import type { LegendKind } from '../sequence/model.ts';
+import type { EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
 
 export interface NodeHookResult {
   attrs?: Record<string, string>;
@@ -15,8 +15,8 @@ export interface SvgOptions {
   node?: NodeHook;
   /** Accessible name of the drawing; defaults to a short summary. */
   title?: string;
-  /** Re-captions the legend of the layout, or removes it with `false`. */
-  legend?: LegendOption;
+  /** Re-captions the legend of the layout, or removes it with `false`. Flowcharts read the edge styles, sequence diagrams the message kinds. */
+  legend?: false | Partial<Record<EdgeStyle | LegendKind, string>>;
 }
 
 const TITLE_LINE = 18;
@@ -218,22 +218,34 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
 
 const SCENE_RULES: readonly string[] = [
   RULES[0] ?? '',
-  '.ursula-box{fill:$surface;stroke:$border;stroke-width:1}',
-  '.ursula-box--note{fill:$lane}',
-  '.ursula-box--bar{fill:$lane;stroke:$line}',
-  '.ursula-box--frame{fill:none}',
-  '.ursula-tab{fill:$lane;stroke:$border;stroke-width:1}',
-  '.ursula-line{fill:none;stroke:$line;stroke-width:1.2}',
-  '.ursula-line--weak{stroke:$border;stroke-width:1}',
+  '.ursula-box{stroke-width:1}',
+  '.ursula-box--box{fill:$surface;stroke:$fg;stroke-opacity:.7}',
+  '.ursula-box--actor{fill:$lane;stroke:$fg;stroke-opacity:.7}',
+  '.ursula-box--note{fill:$surface;stroke:$border}',
+  '.ursula-box--barback{fill:$surface;stroke:none}',
+  '.ursula-box--bar{fill:$fg;fill-opacity:.07;stroke:$muted;stroke-width:.8}',
+  '.ursula-box--frame{fill:$fg;fill-opacity:.03;stroke:$fg;stroke-opacity:.22}',
+  '.ursula-box--label{fill:$surface;stroke:none}',
+  '.ursula-tab{fill:$surface;stroke:$fg;stroke-opacity:.22;stroke-width:1}',
+  '.ursula-tab-text{fill:$fg;font-size:10px;font-weight:600;letter-spacing:.08em}',
+  '.ursula-line{fill:none;stroke-width:1.2}',
+  '.ursula-line--fg{stroke:$fg}',
+  '.ursula-line--soft{stroke:$fg;stroke-opacity:.75}',
+  '.ursula-line--muted{stroke:$muted}',
   '.ursula-line--dash{stroke-dasharray:5 4}',
-  '.ursula-line--weak.ursula-line--dash{stroke-dasharray:4 4}',
-  '.ursula-arrow{fill:$line}',
-  '.ursula-arrow-open{fill:none;stroke:$line;stroke-width:1.2}',
+  '.ursula-line--life{stroke:$fg;stroke-opacity:.22;stroke-width:1;stroke-dasharray:3 3}',
+  '.ursula-line--divider{stroke:$fg;stroke-opacity:.2;stroke-width:1;stroke-dasharray:4 3}',
+  '.ursula-line--rule{stroke:$hair;stroke-width:1}',
+  '.ursula-arrow{fill:$muted}',
+  '.ursula-arrow--soft{fill:$fg;fill-opacity:.75}',
+  '.ursula-arrow-open{fill:none;stroke:$muted;stroke-width:1.2}',
   '.ursula-text{fill:$fg;font-size:12px;font-weight:400}',
+  '.ursula-text--soft{fill:$fg;fill-opacity:.75}',
   '.ursula-text--muted{fill:$muted}',
   '.ursula-text--title{font-size:13px;font-weight:600}',
   '.ursula-text--label{font-weight:500}',
-  '.ursula-text--halo{stroke:$surface;stroke-width:4;stroke-linejoin:round;paint-order:stroke}',
+  '.ursula-text--num{font-weight:700}',
+  '.ursula-text--caption{font-size:11px;font-weight:400}',
 ];
 
 function dataAttrs(data: Record<string, string> | undefined): string {
@@ -243,7 +255,8 @@ function dataAttrs(data: Record<string, string> | undefined): string {
 }
 
 const SCENE_MARKERS: Record<string, string> = {
-  filled: MARKER('ursula-arrow', 'ursula-arrow'),
+  'filled-soft': MARKER('ursula-arrow-filled-soft', 'ursula-arrow ursula-arrow--soft'),
+  'filled-muted': MARKER('ursula-arrow-filled-muted', 'ursula-arrow'),
   open:
     '<marker id="ursula-arrow-open" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">' +
     '<path class="ursula-arrow-open" d="M0 0L8 4L0 8"/></marker>',
@@ -252,26 +265,34 @@ const SCENE_MARKERS: Record<string, string> = {
     '<path class="ursula-arrow-open" d="M1 1L7 7M7 1L1 7"/></marker>',
 };
 
+const BOX_RADIUS: Record<string, number> = { box: 6, actor: 6, note: 4, frame: 4, bar: 2, label: 2 };
+
+/** Key into `SCENE_MARKERS` of the arrowhead of a scene line. */
+function markerKey(item: SceneLine): string | undefined {
+  const arrow = item.arrow ?? 'none';
+  if (arrow === 'none') return undefined;
+  return arrow === 'filled' ? (item.tone === 'muted' ? 'filled-muted' : 'filled-soft') : arrow;
+}
+
 function sceneItemSvg(item: SceneItem): string {
   if (item.kind === 'box') {
-    const rx = item.style === 'box' ? 6 : item.style === 'frame' ? 4 : 2;
-    const rect =
-      `<rect class="ursula-box ursula-box--${item.style}"${item.dash ? ' stroke-dasharray="5 4"' : ''} x="${num(item.x)}" y="${num(item.y)}" ` +
-      `width="${num(item.w)}" height="${num(item.h)}" rx="${rx}"${dataAttrs(item.data)}/>`;
+    const rx = BOX_RADIUS[item.style] ?? 2;
+    const geometry = `x="${num(item.x)}" y="${num(item.y)}" width="${num(item.w)}" height="${num(item.h)}" rx="${rx}"`;
+    const back = item.style === 'bar' ? `<rect class="ursula-box ursula-box--barback" ${geometry}/>` : '';
+    const rect = `${back}<rect class="ursula-box ursula-box--${item.style}" ${geometry}${dataAttrs(item.data)}/>`;
     if (!item.tab) return rect;
     const t = item.tab;
     return (
       rect +
       `<rect class="ursula-tab" x="${num(item.x)}" y="${num(item.y)}" width="${num(t.w)}" height="${num(t.h)}" rx="3"/>` +
-      `<text class="ursula-text ursula-text--label" x="${num(item.x + t.w / 2)}" y="${num(item.y + t.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(t.text)}</text>`
+      `<text class="ursula-tab-text" x="${num(item.x + t.w / 2)}" y="${num(item.y + t.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(t.text)}</text>`
     );
   }
   if (item.kind === 'text') {
     const cls = [
       'ursula-text',
-      item.tone === 'muted' ? 'ursula-text--muted' : '',
-      item.font === 'title' ? 'ursula-text--title' : item.font === 'label' ? 'ursula-text--label' : '',
-      item.halo ? 'ursula-text--halo' : '',
+      item.tone === 'muted' ? 'ursula-text--muted' : item.tone === 'soft' ? 'ursula-text--soft' : '',
+      item.font === 'title' || item.font === 'label' || item.font === 'num' || item.font === 'caption' ? `ursula-text--${item.font}` : '',
     ]
       .filter((c) => c !== '')
       .join(' ');
@@ -280,10 +301,17 @@ function sceneItemSvg(item: SceneItem): string {
       `${dataAttrs(item.data)}>${escapeXml(item.text)}</text>`
     );
   }
-  const arrow = item.arrow ?? 'none';
-  const cls = ['ursula-line', item.weak ? 'ursula-line--weak' : '', item.dash ? 'ursula-line--dash' : ''].filter((c) => c !== '').join(' ');
-  const marker = arrow === 'none' ? '' : ` marker-end="url(#${arrow === 'filled' ? 'ursula-arrow' : `ursula-arrow-${arrow}`})"`;
-  return `<path class="${cls}" d="${pathData(item.points, 6)}"${marker}${dataAttrs(item.data)}/>`;
+  const role = item.role ?? 'message';
+  const cls = [
+    'ursula-line',
+    role === 'message' ? `ursula-line--${item.tone ?? 'soft'}` : `ursula-line--${role}`,
+    role === 'message' && item.dash ? 'ursula-line--dash' : '',
+  ]
+    .filter((c) => c !== '')
+    .join(' ');
+  const key = markerKey(item);
+  const marker = key === undefined ? '' : ` marker-end="url(#ursula-arrow-${key})"`;
+  return `<path class="${cls}" d="${pathData(item.points, item.radius ?? 0)}"${marker}${dataAttrs(item.data)}/>`;
 }
 
 /** Draws a scene with the same style tokens, fonts and dark block as the flowchart renderer. */
@@ -291,8 +319,13 @@ export function renderSceneSvg(scene: Scene, opts: Pick<SvgOptions, 'title'> = {
   const w = num(scene.width);
   const h = num(scene.height);
   const used = new Set<string>();
-  for (const it of scene.items) if (it.kind === 'line' && it.arrow && it.arrow !== 'none') used.add(it.arrow);
-  const defs = ['filled', 'open', 'cross'].filter((k) => used.has(k)).map((k) => SCENE_MARKERS[k] ?? '');
+  for (const it of scene.items) {
+    const key = it.kind === 'line' ? markerKey(it) : undefined;
+    if (key !== undefined) used.add(key);
+  }
+  const defs = Object.keys(SCENE_MARKERS)
+    .filter((k) => used.has(k))
+    .map((k) => SCENE_MARKERS[k] ?? '');
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
