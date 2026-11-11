@@ -3,13 +3,13 @@ import type { TextSpan } from './types.ts';
 
 export interface RenderOptions extends SvgOptions {
   maxWidth?: number;
-  engine?: 'default' | 'layered';
+  engine?: 'grid' | 'layered';
 }
 
 export interface TextOptions {
   legend?: SvgOptions['legend'];
   maxHeight?: number;
-  engine?: 'default' | 'layered';
+  engine?: 'grid' | 'layered';
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */

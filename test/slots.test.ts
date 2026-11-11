@@ -37,7 +37,7 @@ n3 --> m3`;
 describe('slot search', () => {
   it('routes the final assignment once and nothing during the search', () => {
     calls.solve = 0;
-    layout(parse(fourteen), pixelRuler(), { maxWidth: Infinity });
+    layout(parse(fourteen), pixelRuler(), { maxWidth: Infinity, engine: 'grid' });
     expect(calls.solve).toBe(1);
   });
 

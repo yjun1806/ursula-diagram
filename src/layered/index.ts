@@ -21,7 +21,7 @@ export interface LayeredOptions {
   legend?: LegendOption;
 }
 
-const RETRIES = 3;
+const RETRIES = 10;
 
 interface Placed {
   ladder: Ladder;
@@ -64,7 +64,11 @@ export function layeredRuler(r: Ruler): Ruler {
 
 /** Pass-through lines that fit side by side in one gap, each a track gap apart and clear of both boxes by half of that. */
 export function gapLines(ruler: Ruler, gap: number): number {
-  return ruler.trackGap >= 2 * ruler.edgeGrid ? Math.max(1, Math.floor(gap / ruler.trackGap + 1e-9)) : 1;
+  const fit = Math.floor(gap / ruler.trackGap + 1e-9);
+  if (ruler.trackGap >= 2 * ruler.edgeGrid) return Math.max(1, fit);
+  // On a coarse grid the lines sit on whole cells around the middle of the gap, so an odd count keeps them symmetric.
+  const odd = fit - 1;
+  return Math.max(1, odd % 2 === 1 ? odd : odd - 1);
 }
 
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, squeeze = false): Placed {

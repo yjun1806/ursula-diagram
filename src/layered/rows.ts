@@ -107,10 +107,25 @@ function slotsFor(blocks: Block[], rows: number, stack: boolean): Slot[] {
   const used = new Set<Block>();
   for (const t of tops) {
     const b = bottoms.find((x) => !used.has(x) && x.height + t.height <= rows);
-    if (b) used.add(b);
-    slots.push({ width: Math.max(t.width, b?.width ?? 0), items: [{ block: t, offset: 0 }, ...(b ? [{ block: b, offset: rows - b.height }] : [])] });
+    if (!b) continue;
+    used.add(b);
+    used.add(t);
+    slots.push({ width: Math.max(t.width, b.width), items: [{ block: t, offset: 0 }, { block: b, offset: rows - b.height }] });
   }
-  for (const b of bottoms) if (!used.has(b)) slots.push(alone(b));
+  // Anchoring is a preference: before another row is opened, blocks that lean the same way share columns too.
+  const rest = blocks.filter((b) => !used.has(b)).sort((x, y) => y.width - x.width);
+  for (const first of rest) {
+    if (used.has(first)) continue;
+    used.add(first);
+    const other = rest.find((x) => !used.has(x) && x.height + first.height <= rows);
+    if (!other) {
+      slots.push(alone(first));
+      continue;
+    }
+    used.add(other);
+    const [upper, lower] = first.anchor === 'bottom' && other.anchor === 'top' ? [other, first] : [first, other];
+    slots.push({ width: Math.max(first.width, other.width), items: [{ block: upper, offset: 0 }, { block: lower, offset: rows - lower.height }] });
+  }
   return slots;
 }
 

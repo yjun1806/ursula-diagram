@@ -34,8 +34,13 @@ export function renderText(
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine'> = {},
 ): { lines: string[] } | { error: string } {
   try {
-    const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
-    const widest = Math.max(0, ...lines.map(cellWidth));
+    let lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
+    let widest = Math.max(0, ...lines.map(cellWidth));
+    if (widest > maxWidth && opts.engine === undefined) {
+      // Narrow terminals: the grid placer packs tighter, so it gets a second chance.
+      lines = selectFrontEnd(src).textLines(src, maxWidth, { ...opts, engine: 'grid' });
+      widest = Math.max(0, ...lines.map(cellWidth));
+    }
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {
@@ -55,10 +60,17 @@ export function renderTextSpans(
 ): { lines: TextSpan[][] } | { error: string } {
   try {
     const frontEnd = selectFrontEnd(src);
-    const lines = frontEnd.textSpans
-      ? frontEnd.textSpans(src, maxWidth, opts)
-      : frontEnd.textLines(src, maxWidth, opts).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
-    const widest = Math.max(0, ...lines.map((l) => cellWidth(l.map((s) => s.text).join(''))));
+    const spans = (o: typeof opts): TextSpan[][] =>
+      frontEnd.textSpans
+        ? frontEnd.textSpans(src, maxWidth, o)
+        : frontEnd.textLines(src, maxWidth, o).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
+    const widthOf = (ls: TextSpan[][]): number => Math.max(0, ...ls.map((l) => cellWidth(l.map((s) => s.text).join(''))));
+    let lines = spans(opts);
+    let widest = widthOf(lines);
+    if (widest > maxWidth && opts.engine === undefined) {
+      lines = spans({ ...opts, engine: 'grid' });
+      widest = widthOf(lines);
+    }
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color] [--engine default|layered]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color] [--engine layered|grid]\n');
   process.exit(2);
 }
 
@@ -12,7 +12,7 @@ let format = 'svg';
 let width: number | undefined;
 let legend = true;
 let color = false;
-let engine: 'default' | 'layered' | undefined;
+let engine: 'grid' | 'layered' | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--format') format = args[++i] ?? usage();
@@ -21,7 +21,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--color') color = true;
   else if (a === '--engine') {
     const v = args[++i];
-    if (v !== 'default' && v !== 'layered') usage();
+    if (v !== 'grid' && v !== 'layered') usage();
     engine = v;
   }
   else if (a !== undefined && !a.startsWith('--') && file === undefined) file = a;

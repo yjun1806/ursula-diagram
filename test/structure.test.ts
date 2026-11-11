@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout } from '../src/index.ts';
-import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
+import { cellRuler, layout as layoutEngine, parse, pixelRuler } from '../src/index.ts';
 import { assignRanks, components } from '../src/layout/rank.ts';
 import { crossingCount } from '../src/layout/check.ts';
 import { geometryViolations, rectsOverlap, segmentsOf, widthForColumns } from './helpers.ts';
+
+/** These tests exercise the slot-based placer and router. */
+const layout = (graph: Parameters<typeof layoutEngine>[0], ruler: Parameters<typeof layoutEngine>[1], opts: Parameters<typeof layoutEngine>[2] = {}): ReturnType<typeof layoutEngine> => layoutEngine(graph, ruler, { engine: 'grid', ...opts });
+
 
 const structure = (l: Layout): string =>
   l.nodes

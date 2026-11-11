@@ -6,7 +6,7 @@ import { registerFrontEnd } from './registry.ts';
 import { renderSvg } from './render/svg.ts';
 import { renderTextLayout } from './render/text.ts';
 
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'default' | 'layered' }): { maxWidth?: number; legend?: LegendOption; engine?: 'default' | 'layered' } {
+function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered' }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered' } {
   return {
     ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),

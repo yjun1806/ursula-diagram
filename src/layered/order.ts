@@ -64,7 +64,10 @@ export function flatRoute(l: Ladder, order: number[], pos: number[], adj: { up: 
       best = side;
     }
   }
-  return { side: best, cost: inside.length === 0 ? 0 : cost, between: inside.length };
+  // Only pass-through lines between the ends: one straight segment that crosses each of them once.
+  const boxes = inside.filter((n) => n < l.realCount).length;
+  if (boxes === 0) return { side: best, cost: inside.length, between: 0 };
+  return { side: best, cost, between: boxes };
 }
 
 function flatCrossings(l: Ladder, order: number[][], pos: number[], adj: Adjacency, layer: number): number {

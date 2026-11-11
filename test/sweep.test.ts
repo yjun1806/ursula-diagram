@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
+import { cellRuler, layout as layoutEngine, parse, pixelRuler } from '../src/index.ts';
 import type { Ruler } from '../src/metrics.ts';
 import { endpointViolations, geometryViolations } from './helpers.ts';
+
+/** These tests exercise the slot-based placer and router. */
+const layout = (graph: Parameters<typeof layoutEngine>[0], ruler: Parameters<typeof layoutEngine>[1], opts: Parameters<typeof layoutEngine>[2] = {}): ReturnType<typeof layoutEngine> => layoutEngine(graph, ruler, { engine: 'grid', ...opts });
+
 
 /** Small deterministic generator (mulberry32). */
 function prng(seed: number): () => number {

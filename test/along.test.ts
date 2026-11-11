@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cellRuler, layout, parse, pixelRuler, renderSvg, renderTextLayout } from '../src/index.ts';
+import { cellRuler, layout as layoutEngine, parse, pixelRuler, renderSvg, renderTextLayout } from '../src/index.ts';
 import type { Layout } from '../src/index.ts';
 import { twoLanes } from './fixtures.ts';
 import { geometryViolations } from './helpers.ts';
 import { ALONG_REFINE, considerAlong } from '../src/layout/along.ts';
+
+/** These tests exercise the slot-based placer and router. */
+const layout = (graph: Parameters<typeof layoutEngine>[0], ruler: Parameters<typeof layoutEngine>[1], opts: Parameters<typeof layoutEngine>[2] = {}): ReturnType<typeof layoutEngine> => layoutEngine(graph, ruler, { engine: 'grid', ...opts });
+
 
 const counter = vi.hoisted(() => ({ solves: 0 }));
 vi.mock('../src/layout/solve.ts', async (original) => {

@@ -334,7 +334,8 @@ describe('layered pass-through lines', () => {
   it('counts the lines that share a gap from the track gap', () => {
     expect(gapLines(pixelRuler(), 48)).toBe(4);
     expect(gapLines(pixelRuler(), 40)).toBe(3);
-    expect(gapLines(cellRuler(), 4)).toBe(1);
+    expect(gapLines(cellRuler(), 4)).toBe(3);
+    expect(gapLines(cellRuler(), 2)).toBe(1);
   });
 
   it('needs no room for a line between two boxes', () => {
@@ -562,9 +563,9 @@ describe('layered pipeline invariants', () => {
     expect(cells.nodes.map((n) => n.lane)).toEqual(px.nodes.map((n) => n.lane));
   });
 
-  it('keeps the default engine when none is named', () => {
+  it('uses the layered engine when none is named', () => {
     const g = parse(fixtures.twoLanes);
-    expect(layout(g, pixelRuler())).toEqual(layout(g, pixelRuler(), { engine: 'default' }));
+    expect(layout(g, pixelRuler())).toEqual(layout(g, pixelRuler(), { engine: 'layered' }));
   });
 
   it('renders text through the engine, aligned with Korean labels', () => {
