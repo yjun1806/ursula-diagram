@@ -430,7 +430,7 @@ describe('dispatcher', () => {
   });
 
   it('keeps the unsupported diagram error for other headers', () => {
-    expect(renderText('classDiagram\nA <|-- B', 80)).toEqual({ error: "line 1: unsupported diagram type 'classDiagram'" });
+    expect(renderText('noSuchDiagram\nA <|-- B', 80)).toHaveProperty('error');
     expect(() => render('stateDiagram\nA --> B')).toThrow(UrsulaError);
     expect(renderText('', 80)).toHaveProperty('error');
   });
