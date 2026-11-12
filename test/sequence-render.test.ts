@@ -96,13 +96,31 @@ describe('sequence svg', () => {
     expect(render(src, { title: 'Own' })).toContain('<title>Own</title>');
   });
 
-  it('draws a head on call, reply and async lines, a cross on a failed one, and dashes the replies and async lines', () => {
+  it('draws a filled head on call and reply lines, an open head on async lines, a cross on a failed one, and dashes only dotted arrows', () => {
     const all = body(render('sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e', { legend: false }));
-    expect(all.match(/marker-end="url\(#ursula-arrow-msg-end\)"/g)).toHaveLength(3);
+    expect(all.match(/marker-end="url\(#ursula-arrow-msg-end\)"/g)).toHaveLength(2);
     expect(all.match(/ursula-edge--pending/g)).toHaveLength(2);
     expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*" data-message/g)).toHaveLength(2);
-    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*"\/>/g)).toHaveLength(2);
+    // Two strokes of the cross and the open head, which is one stroke with a corner.
+    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*"\/>/g)).toHaveLength(3);
     expect(render('sequenceDiagram\nA->B: c')).not.toContain('<marker');
+  });
+
+  it('draws `-)` as a solid line and `--)` as a dotted one, both ending in an open head that differs from the filled one', () => {
+    const solid = body(render('sequenceDiagram\nA-)B: e', { legend: false }));
+    expect(solid).toContain('data-kind="async"');
+    expect(solid).not.toContain('ursula-edge--pending');
+    expect(solid).not.toContain('marker-end');
+    expect(solid).toMatch(/<path class="ursula-edge ursula-edge--msg" d="M\S+ \S+ L(\S+) \S+ L\S+ \S+"\/>/);
+    expect(body(render('sequenceDiagram\nA--)B: e', { legend: false }))).toContain('ursula-edge--pending');
+  });
+
+  it('draws the legend sample of a kind solid or dashed like the first message of that kind', () => {
+    const legendOf = (src: string): string => body(render(src)).slice(body(render(src)).indexOf('ursula-rule'));
+    const solid = legendOf('sequenceDiagram\nA->>B: a\nA-xB: d\nA-)B: e');
+    expect(solid).not.toContain('ursula-edge--pending');
+    const dotted = legendOf('sequenceDiagram\nA->>B: a\nA--xB: d\nA--)B: e');
+    expect(dotted.match(/ursula-edge--pending/g)).toHaveLength(2);
   });
 
   it('writes the legend captions and lets the options rename or drop them', () => {

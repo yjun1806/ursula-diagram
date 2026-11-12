@@ -158,7 +158,7 @@ describe('participant kinds: drawing', () => {
     expect(path.d).toContain('A20 4');
   });
 
-  it('draws collections as two boxes of the plain size, the back one 4 right and 4 up', () => {
+  it('draws collections as two boxes of the plain size, the back one 8 right and 8 up with a dashed edge', () => {
     const src = 'participant C@{ "type": "collections" }\nparticipant P\nC->>P: x';
     const items = itemsOf(src, 'C');
     expect(items.map((i) => i.kind)).toEqual(['box', 'box']);
@@ -166,8 +166,8 @@ describe('participant kinds: drawing', () => {
     const plain = itemsOf(src, 'P')[0];
     if (back?.kind !== 'box' || front?.kind !== 'box' || plain?.kind !== 'box') throw new Error('boxes');
     expect([front.w, front.h]).toEqual([plain.w, plain.h]);
-    expect([back.x - front.x, front.y - back.y, back.w, back.h]).toEqual([4, 4, front.w, front.h]);
-    expect([front.role, back.role]).toEqual([['box'], ['box']]);
+    expect([back.x - front.x, front.y - back.y, back.w, back.h]).toEqual([8, 8, front.w, front.h]);
+    expect([front.role, back.role]).toEqual([['box'], ['box', 'box--pending']]);
   });
 
   it('draws a queue as one filled path, as wide as a plain box and 44 high', () => {

@@ -1,9 +1,11 @@
 import { UrsulaError } from '../types.ts';
 import { PARTICIPANT_KINDS } from './model.ts';
-import type { ArrowHead, BlockKind, MessageStmt, Participant, ParticipantKind, Sequence, Statement } from './model.ts';
+import type { ArrowHead, BlockKind, MessageStmt, Participant, ParticipantGroup, ParticipantKind, Sequence, Statement } from './model.ts';
 
 const BREAK = /<br\s*\/?>/gi;
 const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
+  ['<<-->>', true, 'filled'],
+  ['<<->>', false, 'filled'],
   ['-->>', true, 'filled'],
   ['->>', false, 'filled'],
   ['--x', true, 'cross'],
@@ -13,13 +15,57 @@ const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
   ['-->', true, 'none'],
   ['->', false, 'none'],
 ];
-const MESSAGE = /^(.+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
+const MESSAGE = /^(.+?)\s*(<<-->>|<<->>|-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
+/** `()` written against the arrow: the message joins that lifeline at its centre. */
+const CENTRE = '()';
+/** Named character references the documentation shows, besides the numeric `#NNN;` form. */
+const NAMED: Record<string, string> = {
+  quot: '"', amp: '&', lt: '<', gt: '>', nbsp: '\u00a0', semi: ';', num: '#', infin: '\u221e', hearts: '\u2665',
+  copy: '\u00a9', reg: '\u00ae', trade: '\u2122', hellip: '\u2026', mdash: '\u2014', ndash: '\u2013', deg: '\u00b0',
+  larr: '\u2190', rarr: '\u2192', uarr: '\u2191', darr: '\u2193', harr: '\u2194', times: '\u00d7', check: '\u2713',
+};
+/** CSS colour keywords; a `box` line that starts with one takes it as the colour, not as part of the label. */
+const COLOUR_WORDS: ReadonlySet<string> = new Set(
+  (
+    'transparent aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood ' +
+    'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen ' +
+    'darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray ' +
+    'darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia ' +
+    'gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender ' +
+    'lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink ' +
+    'lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta ' +
+    'maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise ' +
+    'mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red ' +
+    'rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow ' +
+    'springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'
+  ).split(' '),
+);
 const BLOCKS: ReadonlySet<string> = new Set(['loop', 'opt', 'alt', 'par', 'critical', 'break']);
 
-type Open = { kind: BlockKind; line: number } | { kind: 'ignored' | 'zone'; line: number };
+type Open = { kind: BlockKind; line: number } | { kind: 'ignored' | 'zone'; line: number } | { kind: 'group'; line: number; group: ParticipantGroup };
+
+/** Replaces `#NNN;` and `#name;` with the characters they stand for; unknown names stay as written. */
+function decodeEntities(text: string): string {
+  return text.replace(/#(\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (/^\d+$/.test(code)) {
+      const n = Number(code);
+      return n <= 0x10ffff ? String.fromCodePoint(n) : whole;
+    }
+    return NAMED[code.toLowerCase()] ?? whole;
+  });
+}
+
+/** Label of a `box` line: a leading colour (a keyword or an `rgb(...)`-style function) is dropped. */
+function groupLabel(rest: string): string {
+  const fn = /^(?:rgba?|hsla?)\s*\([^)]*\)\s*/i.exec(rest);
+  if (fn) return rest.slice(fn[0].length).trim();
+  const first = rest.split(/\s+/)[0] ?? '';
+  return COLOUR_WORDS.has(first.toLowerCase()) ? rest.slice(first.length).trim() : rest.trim();
+}
 
 function textLines(text: string): string[] {
-  return text
+  return decodeEntities(text)
     .trim()
     .split(BREAK)
     .map((l) => l.trim());
@@ -104,10 +150,15 @@ export function parseSequence(src: string): Sequence {
     if (!participants.has(id)) participants.set(id, { id, lines: textLines(id), kind: 'participant' });
     return id;
   };
+  const groups: ParticipantGroup[] = [];
+  const created = new Set<string>();
+  const destroyed = new Set<string>();
   const declare = (d: Declaration, keyword: ParticipantKind): void => {
     if (declared.has(d.id)) return;
     declared.add(d.id);
     participants.set(d.id, { id: d.id, lines: textLines(d.label ?? d.id), kind: d.kind ?? keyword });
+    const top = open[open.length - 1];
+    if (top?.kind === 'group') top.group.members.push(d.id);
   };
 
   const rows = src.split(/\r?\n/);
@@ -131,12 +182,14 @@ export function parseSequence(src: string): Sequence {
     if (word === 'create') {
       const m = /^(participant|actor)\s+(.+)$/i.exec(rest);
       if (!m) fail("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
-      declare(readDeclaration(m[2] ?? '', lineNo), (m[1] ?? '').toLowerCase() === 'actor' ? 'actor' : 'participant');
+      const d = readDeclaration(m[2] ?? '', lineNo);
+      declare(d, (m[1] ?? '').toLowerCase() === 'actor' ? 'actor' : 'participant');
+      created.add(d.id);
       continue;
     }
     if (word === 'destroy') {
       if (rest === '') fail("'destroy' needs a participant", lineNo);
-      touch(rest);
+      destroyed.add(touch(rest));
       continue;
     }
     if (word === 'title' || word === 'link' || word === 'links') continue;
@@ -180,7 +233,9 @@ export function parseSequence(src: string): Sequence {
       continue;
     }
     if (word === 'box') {
-      open.push({ kind: 'ignored', line: lineNo });
+      const group: ParticipantGroup = { label: decodeEntities(groupLabel(rest)), members: [] };
+      groups.push(group);
+      open.push({ kind: 'group', line: lineNo, group });
       continue;
     }
     if (word === 'else' || word === 'and' || word === 'option') {
@@ -194,7 +249,7 @@ export function parseSequence(src: string): Sequence {
       const top = open.pop();
       if (!top) fail("'end' without an open block", lineNo);
       if (top.kind === 'zone') statements.push({ kind: 'zoneClose', line: lineNo });
-      else if (top.kind !== 'ignored') statements.push({ kind: 'close', line: lineNo });
+      else if (top.kind !== 'ignored' && top.kind !== 'group') statements.push({ kind: 'close', line: lineNo });
       continue;
     }
 
@@ -204,8 +259,12 @@ export function parseSequence(src: string): Sequence {
     if (!m) fail(`unsupported syntax '${s.length > 24 ? `${s.slice(0, 24)}...` : s}'`, lineNo);
     const op = OPERATORS.find(([o]) => o === m[2]);
     if (!op) fail('unknown arrow', lineNo);
-    const from = (m[1] ?? '').trim();
-    const to = (m[4] ?? '').trim();
+    let from = (m[1] ?? '').trim();
+    let to = (m[4] ?? '').trim();
+    const centreFrom = from.endsWith(CENTRE);
+    const centreTo = to.startsWith(CENTRE);
+    if (centreFrom) from = from.slice(0, -CENTRE.length).trim();
+    if (centreTo) to = to.slice(CENTRE.length).trim();
     if (from === '' || to === '') fail('message needs a sender and a receiver', lineNo);
     const mark = m[3];
     touch(from);
@@ -221,6 +280,12 @@ export function parseSequence(src: string): Sequence {
       deactivate: mark === '-',
       line: lineNo,
     };
+    if (op[0].startsWith('<<')) msg.both = true;
+    if (centreFrom) msg.centreFrom = true;
+    if (centreTo) msg.centreTo = true;
+    if (created.delete(to)) msg.creates = true;
+    if (destroyed.delete(from)) msg.destroysFrom = true;
+    if (destroyed.delete(to)) msg.destroysTo = true;
     const counter = numbering as { next: number; step: number } | null;
     if (counter) {
       msg.number = counter.next;
@@ -238,5 +303,5 @@ export function parseSequence(src: string): Sequence {
   if (!headerSeen) fail("expected a 'sequenceDiagram' header", 1);
   const unclosed = open[open.length - 1];
   if (unclosed) fail(`'${unclosed.kind}' block is never closed`, unclosed.line);
-  return { participants: [...participants.values()], statements };
+  return { participants: [...participants.values()], statements, ...(groups.length > 0 ? { groups } : {}) };
 }
