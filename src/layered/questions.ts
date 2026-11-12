@@ -109,7 +109,8 @@ export function questionsFor(graph: Graph, laid: Layout, draw: (g: Graph) => Lay
       const split = splitGraph(graph, lane, ids);
       if (planZones(split).composition !== 'stages') continue;
       const after = pictureOf(draw(split));
-      if (after.cost >= before.cost) continue;
+      // A gain of one is not worth a question.
+      if (before.cost - after.cost < 2) continue;
       out.push({
         kind: 'question',
         code: 'split-lane',

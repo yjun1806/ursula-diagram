@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
-import { CANDIDATES, WEIGHTS, pickBest, score, violations } from '../src/layered/choose.ts';
+import { CANDIDATES, WEIGHTS, farness, pickBest, score, startMissed, violations } from '../src/layered/choose.ts';
 import { assignLayers } from '../src/layered/rows.ts';
 import type { Layout } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
@@ -43,7 +43,7 @@ describe('main flow', () => {
 
 describe('candidates', () => {
   it('lists the candidates and measures finished drawings in a fixed order of qualities', () => {
-    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage', 'loose']);
+    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage', 'loose', 'forced-unheld', 'free-unheld']);
     const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes' });
     const s = score(l);
     expect(s).toHaveLength(3);
@@ -97,9 +97,9 @@ describe('score', () => {
     const bent = edge('a', 'd', [[40, 10], [50, 10], [50, 20], [600, 20]]);
     expect(score(drawing(nodes, [bent]))[1]).toBe(2 + WEIGHTS.extraRow * 2);
     const single = edge('d', 'a', [[600, 10], [40, 10]]);
-    expect(score(drawing(nodes, [single]))[1]).toBe(WEIGHTS.extraRow * 2 + WEIGHTS.back);
+    expect(score(drawing(nodes, [single]))[1]).toBe(WEIGHTS.extraRow * 2 + WEIGHTS.back + WEIGHTS.start * 3);
     const chain = [edge('d', 'a', [[600, 10], [40, 10]]), edge('a', 'b', [[40, 10], [-20, 10]])];
-    expect(score(drawing(nodes, chain))[1]).toBe(WEIGHTS.extraRow * 2 + 2 * (WEIGHTS.back + WEIGHTS.backChain));
+    expect(score(drawing(nodes, chain))[1]).toBe(WEIGHTS.extraRow * 2 + 2 * (WEIGHTS.back + WEIGHTS.backChain) + WEIGHTS.start * 3);
   });
 
   it('puts invalid things first and prices a crossing inside the cost', () => {
@@ -108,5 +108,24 @@ describe('score', () => {
     const s = score({ ...crossing, diagnostics: [{ kind: 'crossing', nodes: [], message: '' }] });
     expect(s[0]).toBe(0);
     expect(s[1]).toBe(WEIGHTS.crossing);
+  });
+
+  it('prices the start node by the columns before it and by a later row', () => {
+    const nodes = [box('a', 'l', 0, 100), box('b', 'l', 0, 0)];
+    expect(startMissed(drawing(nodes, [edge('a', 'b', [[100, 10], [40, 10]])]))).toBe(1);
+    expect(startMissed(drawing(nodes, [edge('b', 'a', [[40, 10], [100, 10]])]))).toBe(0);
+    const later = [box('a', 'l', 1, 0), box('b', 'l', 0, 0)];
+    expect(startMissed(drawing(later, [edge('a', 'b', [[20, 20], [20, 10]])]))).toBe(1);
+  });
+
+  it('counts the places an edge leaves out in columns and rows, and nothing for neighbours', () => {
+    const near = [box('a', 'l', 0, 0), box('b', 'l', 0, 100)];
+    const far = [box('a', 'l', 0, 0), box('b', 'l', 0, 400), box('d', 'l', 1, 0), box('e', 'l', 2, 0), box('c', 'l', 3, 0)];
+    const at = (nodes: ReturnType<typeof box>[], from: string, to: string): number =>
+      farness({ ...drawing(nodes, [edge(from, to, [[0, 0], [1, 0]])]), pitch: 100 });
+    expect(at(near, 'a', 'b')).toBe(0);
+    expect(at(far, 'a', 'b')).toBe(3);
+    expect(at(far, 'a', 'c')).toBe(2);
+    expect(score({ ...drawing(far, [edge('a', 'b', [[40, 10], [400, 10]])]), pitch: 100 })[1]).toBe(WEIGHTS.far * 3 + WEIGHTS.extraRow * 3);
   });
 });

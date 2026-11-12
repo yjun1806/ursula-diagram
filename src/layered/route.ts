@@ -3,6 +3,7 @@ import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, Poi
 import { crossings } from '../layout/check.ts';
 import type { LabelSize, Rect, Segment } from '../layout/labels.ts';
 import { labelSize, placeLabel } from '../layout/labels.ts';
+import { useElbows } from './elbows.ts';
 import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
@@ -24,6 +25,8 @@ export interface Frame {
   limit?: number;
   /** Added to (or taken from) the default room of every band between two layers along the layer axis. */
   spread?: number;
+  /** Let edges between two layers leave or enter through the side of a box (one bend instead of two). */
+  elbows?: boolean;
 }
 
 const EPS = 1e-6;
@@ -509,6 +512,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     raw.push(pts);
     edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts) });
   });
+
+  if (f.elbows) useElbows(edges, nodes, ruler, td);
 
   // Labels.
   const diagnostics: Diagnostic[] = [];

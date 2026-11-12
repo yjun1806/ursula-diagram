@@ -26,6 +26,8 @@ import { CANDIDATES, pickBest } from './choose.ts';
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
   composition?: 'auto' | Composition;
+  /** Let edges between two layers leave or enter through the side of a box (on by default; on and off both compete). */
+  elbows?: boolean;
   /** Add questions (kind 'question') about the structure to the diagnostics (on by default). */
   questions?: boolean;
   /** Try small changes on the chosen drawing and keep those that measure better (on by default). */
@@ -124,7 +126,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     };
   };
   const ladder = buildLadder(graph, rows, units);
-  return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage, variant.loose).layers);
+  return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage, variant.loose, variant.start).layers);
 }
 
 function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined): { frame: Frame; common: number; baseUnits: number[]; unit: number } {
@@ -252,17 +254,17 @@ function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolea
 }
 
 /** The drawing as it stands, without the spreading of spare room: what candidates and changes are measured on. */
-function plainDraw(p: Prep, placed: Placed): Layout {
-  const f = frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame;
+function plainDraw(p: Prep, placed: Placed, elbows = p.opts.elbows !== false): Layout {
+  const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows };
   return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
 }
 
-function finalize(p: Prep, placed: Placed = p.placed): Layout {
+function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !== false): Layout {
   const { graph, given, opts, apart, base, td, limit, bounded } = p;
   const ruler = placed.ruler;
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {
-    const f = frameFor(graph, r, bounded ? limit : undefined).frame;
+    const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows };
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
@@ -303,7 +305,7 @@ function finalize(p: Prep, placed: Placed = p.placed): Layout {
   } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth) {
     diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
   }
-  return withLegend({ ...drawn, diagnostics }, given, opts.legend);
+  return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit }, given, opts.legend);
 }
 
 /**
@@ -334,15 +336,16 @@ function tightPlacer(p: Prep): ((rows: Rows) => Placed) | undefined {
 /** Lanes: every candidate is drawn to the end and measured, the best is refined by small changes. */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   const preps = CANDIDATES.map((v) => prepare(graph, given, opts, false, v));
-  const drawn = preps.map((p) => finalize(p));
+  // Drawings with and without one-bend edges both compete.
+  const shapes = opts.elbows === false ? [false] : [true, false];
+  const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));
   if (opts.refine === false) return pickBest(drawn);
   // Every candidate is also refined by small changes; the best of all finished drawings is kept.
   const refined = [false, true].flatMap((crossingsFirst) =>
-    preps.map((p, i) => {
-      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed), { tight: tightPlacer(p), crossingsFirst });
-      return r.accepted > 0 ? finalize(p, r.placed) : (drawn[i] as Layout);
+    preps.flatMap((p) => {
+      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed, false), { tight: tightPlacer(p), crossingsFirst });
+      return r.accepted > 0 ? shapes.map((e) => finalize(p, r.placed, e)) : [];
     }),
   );
-  const best = pickBest([...drawn, ...refined]);
-  return best;
+  return pickBest([...drawn, ...refined]);
 }

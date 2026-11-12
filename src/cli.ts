@@ -3,7 +3,7 @@ import { checkLines, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts
 import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows]\n');
   process.exit(2);
 }
 
@@ -14,6 +14,7 @@ let width: number | undefined;
 let legend = true;
 let color = false;
 let questions = true;
+let elbows = true;
 let engine: 'grid' | 'layered' | undefined;
 let composition: 'auto' | 'lanes' | 'stages' | undefined;
 for (let i = 0; i < args.length; i++) {
@@ -23,6 +24,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--no-legend') legend = false;
   else if (a === '--color') color = true;
   else if (a === '--no-questions') questions = false;
+  else if (a === '--no-elbows') elbows = false;
   else if (a === '--composition') {
     const v = args[++i];
     if (v !== 'auto' && v !== 'lanes' && v !== 'stages') usage();
@@ -40,7 +42,7 @@ if (!['svg', 'text', 'json', 'check'].includes(format) || (width !== undefined &
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }) };
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }) };
   if (format === 'check') {
     const laid = frontEnd.json(src, 'svg', opts) as Layout;
     process.stdout.write(`${('edges' in laid && 'diagnostics' in laid ? checkLines(laid) : ['no checks for this kind of diagram']).join('\n')}\n`);

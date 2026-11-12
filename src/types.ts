@@ -63,6 +63,8 @@ export interface LayoutEdge {
   to: string;
   style: EdgeStyle;
   points: Point[];
+  /** Drawn with one bend, out of or into the side of a box. */
+  elbow?: boolean;
   label?: { text: string; x: number; y: number; w: number; h: number };
 }
 
@@ -124,6 +126,8 @@ export interface Layout {
   laneAxis: LaneAxis;
   /** Set by the layered engine: whether bands run alongside the reading direction or cross it in reading order. */
   composition?: 'lanes' | 'stages';
+  /** Set by the layered engine: size of one place along the reading direction (a box and a gap). */
+  pitch?: number;
   lanes: LayoutLane[];
   nodes: LayoutNode[];
   edges: LayoutEdge[];

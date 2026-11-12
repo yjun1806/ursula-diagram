@@ -36,6 +36,8 @@ function stageRanks(count: number, links: Array<[number, number]>, active: numbe
 export function planZones(graph: Graph, requested: 'auto' | Composition = 'auto'): ZonePlan {
   const lanes = graph.lanes.length;
   const laneOf = new Map(graph.nodes.map((n) => [n.id, Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane))] as const));
+  const firstEdge = graph.edges[0];
+  const startLane = firstEdge ? (laneOf.get(firstEdge.from) ?? -1) : -1;
   const touched = new Set<number>();
   const links = new Map<string, [number, number]>();
   let inside = 0;
@@ -59,7 +61,7 @@ export function planZones(graph: Graph, requested: 'auto' | Composition = 'auto'
   const stages = requested === 'stages' || (requested === 'auto' && active.length >= 2 && oneWay && across > 0 && across >= inside);
   if (!stages || active.length < 2) return { composition: requested === 'stages' ? 'stages' : 'lanes', order: [...active, ...aside] };
   const order = ranks
-    ? [...active].sort((x, y) => (ranks.get(x) ?? 0) - (ranks.get(y) ?? 0) || x - y)
+    ? [...active].sort((x, y) => (ranks.get(x) ?? 0) - (ranks.get(y) ?? 0) || Number(y === startLane) - Number(x === startLane) || x - y)
     : [...active];
   return { composition: 'stages', order: [...order, ...aside] };
 }

@@ -8,11 +8,12 @@ import { renderTextLayout } from './render/text.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean } {
+function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean } {
   return {
     ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.composition === undefined ? {} : { composition: opts.composition }),
     ...(opts.questions === undefined ? {} : { questions: opts.questions }),
+    ...(opts.elbows === undefined ? {} : { elbows: opts.elbows }),
     ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
     ...(opts.legend === undefined ? {} : { legend: opts.legend }),
   };

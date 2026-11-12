@@ -47,10 +47,13 @@ describe('composition rule', () => {
   });
 
   it('orders stages by reading order and breaks ties by the order they are written in', () => {
-    const g = parse('flowchart LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nF --> T\nS --> T');
+    const g = parse('flowchart LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nS --> T\nF --> T');
     const plan = planZones(g);
     expect(plan.composition).toBe('stages');
     expect(plan.order.map((i) => g.lanes[i]?.id)).toEqual(['z2', 'z1', 'z3']);
+    // The band of the first node of the text comes first among bands of one rank.
+    const started = parse('flowchart LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nF --> T\nS --> T');
+    expect(planZones(started).order.map((i) => started.lanes[i]?.id)).toEqual(['z1', 'z2', 'z3']);
   });
 
   it('leaves a band that no edge touches out of the decision and puts it last in both compositions', () => {

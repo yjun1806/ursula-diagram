@@ -430,7 +430,8 @@ describe('layered grid and width remedies', () => {
     const l = layout(g, pixelRuler(), { engine: 'layered' });
     const main = ['m1', 'm2', 'm3', 'm4'].map((id) => l.nodes.find((n) => n.id === id)?.y);
     expect(new Set(main).size).toBe(1);
-    expect(new Set(l.nodes.filter((n) => n.lane === 'low' || n.lane === 'lane2').map((n) => n.y)).size).toBeLessThanOrEqual(2);
+    // The node the text starts from must stand in the first place, which can cost the top lane rows.
+    expect(new Set(l.nodes.filter((n) => n.lane === 'low' || n.lane === 'lane2').map((n) => n.y)).size).toBeLessThanOrEqual(3);
     expect(l.width).toBeLessThanOrEqual(1280);
     expect(geometryViolations(l)).toEqual([]);
   });

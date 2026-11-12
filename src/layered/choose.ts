@@ -12,13 +12,17 @@ export interface Variant {
   loose: boolean;
   /** Nodes are ordered by their stage in the whole flow first, and only nodes of one stage by crossings. */
   stage: boolean;
+  /** The node the text starts from is held first in its layer. */
+  start: boolean;
 }
 
 export const CANDIDATES: readonly Variant[] = [
-  { name: 'forced', free: false, loose: false, stage: false },
-  { name: 'free', free: true, loose: false, stage: false },
-  { name: 'stage', free: false, loose: false, stage: true },
-  { name: 'loose', free: true, loose: true, stage: false },
+  { name: 'forced', free: false, loose: false, stage: false, start: true },
+  { name: 'free', free: true, loose: false, stage: false, start: true },
+  { name: 'stage', free: false, loose: false, stage: true, start: true },
+  { name: 'loose', free: true, loose: true, stage: false, start: true },
+  { name: 'forced-unheld', free: false, loose: false, stage: false, start: false },
+  { name: 'free-unheld', free: true, loose: false, stage: false, start: false },
 ];
 
 const EPS = 1e-6;
@@ -68,7 +72,39 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { crossing: 6, extraRow: 2, back: 1, backChain: 2 } as const;
+export const WEIGHTS = { crossing: 6, extraRow: 2, back: 1, backChain: 2, far: 1, start: 2 } as const;
+
+/** Places an edge leaves out between its two boxes, in columns (a box and a gap) and in rows; neighbours and the same place count nothing. */
+export function farness(l: Layout): number {
+  if (l.composition === 'stages' || !l.pitch || l.pitch <= 0) return 0;
+  const reading = l.direction === 'TD' ? 'y' : 'x';
+  const across = l.direction === 'TD' ? 'x' : 'y';
+  const size = l.direction === 'TD' ? 'h' : 'w';
+  const other = l.direction === 'TD' ? 'w' : 'h';
+  const rows = [...new Set(l.nodes.map((n) => Math.round(n[across] * 100) / 100))].sort((a, b) => a - b);
+  const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
+  let total = 0;
+  for (const e of l.edges) {
+    const a = byId.get(e.from);
+    const b = byId.get(e.to);
+    if (!a || !b || a === b) continue;
+    const gap = Math.max(0, Math.max(a[reading], b[reading]) - Math.min(a[reading] + a[size], b[reading] + b[size]));
+    const between = Math.abs(rows.indexOf(Math.round(a[across] * 100) / 100) - rows.indexOf(Math.round(b[across] * 100) / 100)) - 1;
+    total += Math.floor(gap / l.pitch + 1e-6) + Math.max(0, between);
+  }
+  void other;
+  return total;
+}
+
+/** How far the first node of the text stands from where reading begins: the columns before it, and one more outside the first row of its lane. */
+export function startMissed(l: Layout): number {
+  const first = l.edges[0]?.from;
+  const start = l.nodes.find((n) => n.id === first);
+  if (!start || l.composition === 'stages') return 0;
+  const axis = l.direction === 'TD' ? 'y' : 'x';
+  const before = new Set(l.nodes.filter((n) => n[axis] < start[axis] - 1e-6).map((n) => Math.round(n[axis])));
+  return before.size + (start.row !== 0 ? 1 : 0);
+}
 
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
@@ -98,7 +134,7 @@ export function score(l: Layout): number[] {
   for (const n of l.nodes) rows.set(n.lane, Math.max(rows.get(n.lane) ?? 0, n.row + 1));
   const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
   const crossings = l.diagnostics.filter((d) => d.kind === 'crossing').length;
-  const cost = bends + WEIGHTS.crossing * crossings + WEIGHTS.extraRow * extra + WEIGHTS.back * against.length + WEIGHTS.backChain * chained;
+  const cost = bends + WEIGHTS.crossing * crossings + WEIGHTS.extraRow * extra + WEIGHTS.back * against.length + WEIGHTS.backChain * chained + WEIGHTS.far * farness(l) + WEIGHTS.start * startMissed(l);
   return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, cost, Math.round(length)];
 }
 

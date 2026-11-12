@@ -139,9 +139,14 @@ function components(graph: Graph): number[] {
 const SWEEPS = 12;
 
 /** Stage 3: the order of every layer, by alternating barycentre sweeps and adjacent swaps. */
-export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, stage?: number[], loose = false): Ordered {
+export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, stage?: number[], loose = false, holdStart = true): Ordered {
   // Free: only the layers that hold the main flow keep "the earlier node is on the left"; other flat edges follow their partners.
   const adj = adjacency(l, loose ? new Set<number>() : free ? new Set(rows.main.map((n) => l.nodes[n]?.layer ?? -1)) : undefined);
+  // The node the text starts from stands first in its layer when the candidate holds it there.
+  const startNode = holdStart ? graph.nodes.findIndex((n) => n.id === graph.edges[0]?.from) : -1;
+  if (startNode >= 0) {
+    for (const n of l.layers[l.nodes[startNode]?.layer ?? 0] ?? []) if (n !== startNode) adj.preds[n]?.push(startNode);
+  }
   // Nodes of an earlier stage stand before nodes of a later stage; only nodes of one stage are ordered by crossings.
   if (stage) {
     for (const row of l.layers) {

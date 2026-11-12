@@ -31,6 +31,8 @@ export interface LayoutOptions extends SolveOptions {
   composition?: 'auto' | 'lanes' | 'stages';
   /** Layered engine only: add questions about the structure to the diagnostics (default true). */
   questions?: boolean;
+  /** Layered engine only: let edges between layers leave or enter through the side of a box (default true). */
+  elbows?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
 }
@@ -209,8 +211,8 @@ function layoutAlong(arranged: AlongArrangement, ruler: Ruler, opts: SolveOption
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, ...solveOpts } = opts;
-  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }) });
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, ...solveOpts } = opts;
+  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
   }

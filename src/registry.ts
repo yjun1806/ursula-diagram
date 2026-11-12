@@ -6,6 +6,7 @@ export interface RenderOptions extends SvgOptions {
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
   questions?: boolean;
+  elbows?: boolean;
 }
 
 export interface TextOptions {
@@ -14,6 +15,7 @@ export interface TextOptions {
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
   questions?: boolean;
+  elbows?: boolean;
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */
