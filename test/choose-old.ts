@@ -2,6 +2,8 @@
 import type { Layout, LayoutEdge } from '../src/types.ts';
 import type { Fold } from '../src/layered/rows.ts';
 import { directionsOf, mixedSideEnds } from './sides-old.ts';
+import { mirroredEdges } from '../src/layered/choose.ts';
+import { unzoned } from '../src/layered/composition.ts';
 
 /**
  * One way to draw the same graph. Candidates are drawn to the end and the finished drawings are measured, so a
@@ -201,9 +203,11 @@ export function score(l: Layout): number[] {
   let folded = 0;
   let length = 0;
   const against: Array<[string, string]> = [];
-  for (const e of l.edges) {
-    const turns = Math.max(0, e.points.length - 2);
-    bends += (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * turns;
+  // Mirror pairs are charged for one edge (`mirroredEdges`, new since the rewrite and shared with choose.ts).
+  const bendCost = (e: LayoutEdge): number => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
+  const mirrored = mirroredEdges(l, bendCost);
+  for (const [i, e] of l.edges.entries()) {
+    if (!mirrored.has(i)) bends += bendCost(e);
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
     // Against the reading direction along the axis, or, inside one lane, from a lower row up to a higher one.
@@ -238,7 +242,8 @@ export function score(l: Layout): number[] {
   const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
   // Pixels: the second row of a lane is cheap, the third and further ones cost as before; a gap closed below the default and a label that shows too little line cost as well.
   const pixels = l.gapDefault !== undefined;
-  const rowCost = pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
+  // Without zones the rows of the one implicit zone are the places side by side of a stage: they cost nothing.
+  const rowCost = pixels && unzoned(l) ? 0 : pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
   const tightCost = pixels ? WEIGHTS.tight * (l.gap !== undefined && l.gap < (l.gapDefault ?? 0) ? 1 : 0) + WEIGHTS.labelTight * l.diagnostics.filter((d) => d.kind === 'label-tight').length + WEIGHTS.offCentre * l.diagnostics.filter((d) => d.kind === 'off-centre').length : 0;
   const [crossMain, crossOther] = crossingsOf(l);
   const cost =

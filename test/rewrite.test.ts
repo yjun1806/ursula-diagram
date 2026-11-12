@@ -688,13 +688,13 @@ function alignOld(l: Ladder, layers: number[][], extra: Extra = () => 0, opts: A
     const lowest = Math.min(...start);
     if (lowest < 0) for (let i = 0; i < start.length; i++) start[i] = (start[i] ?? 0) - lowest;
   }
-  // Stages: a node with three or more partners in one adjacent layer stands in the middle of them: level with the middle
+  // Stages: a node with two or more partners in one adjacent layer stands in the middle of them: level with the middle
   // partner when there is an odd number, between the two middle ones when even.
   if (opts.hubs) {
     for (const n of l.nodes) {
       if (!real(n.idx)) continue;
-      const partners = (view.down[n.idx] ?? []).length >= 3 ? (view.down[n.idx] as number[]) : (view.up[n.idx] ?? []).length >= 3 ? (view.up[n.idx] as number[]) : [];
-      if (partners.length < 3) continue;
+      const partners = (view.down[n.idx] ?? []).length >= 2 ? (view.down[n.idx] as number[]) : (view.up[n.idx] ?? []).length >= 2 ? (view.up[n.idx] as number[]) : [];
+      if (partners.length < 2) continue;
       const centres = partners.map((m) => centre(m, start[m] ?? 0)).sort((x, y) => x - y);
       const d = centres.length;
       const target = d % 2 === 1 ? (centres[(d - 1) / 2] as number) : ((centres[d / 2 - 1] as number) + (centres[d / 2] as number)) / 2;
