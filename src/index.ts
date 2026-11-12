@@ -15,6 +15,7 @@ import './quadrant/frontend.ts';
 import './pie/frontend.ts';
 import './packet/frontend.ts';
 import './radar/frontend.ts';
+import './sankey/frontend.ts';
 import './sequence/frontend.ts';
 import './timeline/frontend.ts';
 import './treeview/frontend.ts';
