@@ -190,7 +190,7 @@ describe('parseSequence errors', () => {
 
   it('rejects unsupported syntax with its line', () => {
     expect(failure('sequenceDiagram\nA->>B: ok\nwhat is this')).toMatchObject({ line: 3, code: 'syntax' });
-    expect(failure('sequenceDiagram\ncritical Try\nend')).toMatchObject({ line: 2 });
+    expect(failure('sequenceDiagram\nrequire Try')).toMatchObject({ line: 2 });
   });
 
   it('rejects unbalanced blocks', () => {
