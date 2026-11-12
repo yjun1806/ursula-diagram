@@ -68,6 +68,34 @@ function inside(p: Point, poly: Point[]): boolean {
 
 const tickText = (v: number): string => trimmedNumber(v, 2);
 
+/** Whether the segment from `p` to `q` passes through the box, shrunk by 1 so that a touch does not count. */
+export function segmentHitsBox(p: Point, q: Point, b: Box): boolean {
+  const x0 = b.x0 + 1;
+  const x1 = b.x1 - 1;
+  const y0 = b.y0 + 1;
+  const y1 = b.y1 - 1;
+  let t0 = 0;
+  let t1 = 1;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  for (const [den, num] of [
+    [-dx, p.x - x0],
+    [dx, x1 - p.x],
+    [-dy, p.y - y0],
+    [dy, y1 - p.y],
+  ] as const) {
+    if (den === 0) {
+      if (num < 0) return false;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 /** Rings and the value at the outer end of the axes. */
 export function radarScale(model: Radar): { min: number; max: number; rings: number[] } {
   const min = model.min ?? 0;
@@ -103,7 +131,9 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
   // Coordinates here are relative to the centre.
   const polygons = model.curves.map((c) => c.values.map((v, i) => at(i, radiusOf(v))));
   const placed: Box[] = [];
+  const edges = polygons.flatMap((pts) => pts.map((p, i) => [p, pts[(i + 1) % pts.length] as Point] as const));
   const free = (b: Box): boolean => placed.every((p) => !boxesOverlap(b, p, 1));
+  const clearOfEdges = (b: Box): boolean => edges.every(([p, q]) => !segmentHitsBox(p, q, b));
 
   const names: Label[] = model.axes.map((a, i) => {
     const d = dirOf(i);
@@ -142,17 +172,20 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
       return { x: p.x, y: p.y, text, anchor: 'middle', role: ['tick'], w: textW(text, 11) };
     });
   const gapOk = (gap: number): boolean => tickLabels(gap).every((l) => free(boxOf(l)));
-  const gap = gaps.find(gapOk) ?? gaps[0] ?? 0;
-  const ticks = tickLabels(gap).map((l): Label => (polygons.some((poly) => inside(l, poly)) ? l : { ...l, role: ['tick', 'tick--halo'] }));
+  const gap = gaps.find((g) => gapOk(g) && tickLabels(g).every((l) => clearOfEdges(boxOf(l)))) ?? gaps.find(gapOk) ?? gaps[0] ?? 0;
+  const onArea = (p: Point): boolean => model.filled && polygons.some((poly) => inside(p, poly));
+  const ticks = tickLabels(gap).map((l): Label => (onArea(l) ? l : { ...l, role: ['tick', 'tick--halo'] }));
   for (const l of ticks) placed.push(boxOf(l));
 
-  // Values: on each axis the largest stands outside its point, the others inside.
+  // Values: on each axis the largest stands outside its point, the others inside; curves that meet at one point share one label.
   const values: Label[] = [];
   model.axes.forEach((axis, i) => {
     const d = dirOf(i);
-    const entries = model.curves
+    const all = model.curves
       .map((c, k) => ({ k, v: c.values[i] ?? min, r: radiusOf(c.values[i] ?? min) }))
       .sort((a, b) => b.r - a.r || a.k - b.k);
+    const entries = all.filter((e, at) => at === 0 || Math.abs((all[at - 1]?.r ?? 0) - e.r) > FLOAT_NOISE);
+    const seriesAt = (r: number): string => all.filter((x) => Math.abs(x.r - r) <= FLOAT_NOISE).map((x) => model.curves[x.k]?.id ?? '').join(' ');
     entries.forEach((e, rank) => {
       const text = tickText(e.v);
       const w = textW(text, 11);
@@ -165,11 +198,12 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
         anchor: 'middle',
         role: ['value'],
         w,
-        data: { axis: axis.id, series: model.curves[e.k]?.id ?? '', value: text },
+        data: { axis: axis.id, series: seriesAt(e.r), value: text },
       });
-      const label = offsets.map(make).find((l) => free(boxOf(l))) ?? make(offsets[0] ?? LABEL_GAP);
+      const label =
+        offsets.map(make).find((l) => free(boxOf(l)) && clearOfEdges(boxOf(l))) ?? offsets.map(make).find((l) => free(boxOf(l))) ?? make(offsets[0] ?? LABEL_GAP);
       placed.push(boxOf(label));
-      values.push(polygons.some((poly) => inside(label, poly)) ? { ...label, role: ['value', 'value--plain'] } : label);
+      values.push(onArea(label) ? { ...label, role: ['value', 'value--plain'] } : label);
     });
   });
 
@@ -236,9 +270,9 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
     const e = P(at(i, R));
     items.push({ kind: 'path', d: `M${num(cx)} ${num(cy)} L${num(e.x)} ${num(e.y)}`, role: ['grid'] });
   }
-  const seriesNo = (k: number): number => (k % 8) + 1;
+  const seriesNo = (k: number): number => model.colors?.[k] ?? (k % 8) + 1;
   polygons.forEach((pts, k) => {
-    items.push({ kind: 'path', d: poly(pts.map(P)), role: [`series-${seriesNo(k)}--overlap`], data: { series: model.curves[k]?.id ?? '' } });
+    items.push({ kind: 'path', d: poly(pts.map(P)), role: [`series-${seriesNo(k)}--${model.filled ? 'overlap' : 'line'}`], data: { series: model.curves[k]?.id ?? '' } });
   });
   for (const l of ticks) items.push(text(l));
   polygons.forEach((pts, k) => {

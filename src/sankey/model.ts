@@ -29,6 +29,8 @@ export interface Sankey {
   nodeWidth?: number;
   /** Vertical gap between two nodes of a column in pixels, when the settings give one. */
   nodePadding?: number;
+  /** Colour asked for a node by name (`#rgb` or `#rrggbb`); drawn as the nearest colour of the series palette. */
+  nodeColors?: Record<string, string>;
 }
 
 /** A number as text with no float noise and no trailing zeros. */

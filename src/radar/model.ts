@@ -22,4 +22,8 @@ export interface Radar {
   ticks?: number;
   graticule: Graticule;
   showLegend: boolean;
+  /** One-based series colour of each curve, by curve order, when the theme variables ask for one (`cScale<i>`). */
+  colors?: Array<number | undefined>;
+  /** False when the theme variables set the curve opacity to 0: the curves are drawn as outlines only. */
+  filled: boolean;
 }

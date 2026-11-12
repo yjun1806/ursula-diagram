@@ -14,7 +14,7 @@ const TOKEN_MIN_W = 48;
 const TOKEN_PAD = 32;
 /** Width of a monospace letter at 12px. */
 const MONO_ADVANCE = 7.2;
-const SEQ_GAP = 16;
+const SEQ_GAP = 24;
 const CHOICE_GAP = 8;
 const RULE_GAP = 40;
 /** A loop or skip line keeps this far from the box it passes. */
@@ -22,6 +22,13 @@ const RAIL_CLEAR = 24;
 /** Where the vertical piece of a fork stands from the block edge, and the room a block keeps on each side. */
 const FORK_X = 16;
 const BLOCK_PAD = 40;
+/** A zero-or-more loop stands its vertical rails this far inside the skip rails, so the two never share a line. */
+const LOOP_INSET = 32;
+/** Extra room on the left of an ordered choice for the order numbers. */
+const ORDER_ROOM = 16;
+/** The order numbers of a choice stand in one column this far left of where its widest branch starts, centred this far above their rails. */
+const ORDER_DX = 12;
+const ORDER_DY = 10;
 const NAME_GAP = 24;
 const END_STUB = 24;
 const CHIP_H = 24;
@@ -46,12 +53,14 @@ export interface RailroadLayout {
   axes: number[];
 }
 
+const loopInset = (min: number): number => (min === 0 ? LOOP_INSET : 0);
+
 const chipWidth = (text: string, ruler: Ruler): number => Math.max(CHIP_H, ceilTo(ruler.textWidth(text, 'line') + 16, 4));
 
 function tokenWidth(text: string, mono: boolean, ruler: Ruler): number {
   const proportional = ruler.textWidth(text, 'line');
   const w = mono ? Math.max(proportional, cellWidth(text) * MONO_ADVANCE) : proportional;
-  return Math.max(TOKEN_MIN_W, ceilTo(w + TOKEN_PAD, 4));
+  return Math.max(TOKEN_MIN_W, ceilTo(w + TOKEN_PAD, 8));
 }
 
 /** A terminal that is blank is shown in quotes so it can be seen. */
@@ -86,7 +95,7 @@ function measure(node: Node, ruler: Ruler): Sized {
       const inner = Math.max(...kids.map((k) => k.w));
       const total = kids.reduce((sum, k) => sum + k.up + k.down, 0) + CHOICE_GAP * (kids.length - 1);
       const up = kids[0]?.up ?? 0;
-      return { node, w: inner + 2 * BLOCK_PAD, up, down: total - up, kids };
+      return { node, w: inner + 2 * BLOCK_PAD + (node.ordered === true ? ORDER_ROOM : 0), up, down: total - up, kids };
     }
     case 'optional': {
       const kid = measure(node.item, ruler);
@@ -100,7 +109,7 @@ function measure(node: Node, ruler: Ruler): Sized {
       const chipRoom = text === undefined ? 0 : CHIP_GAP + CHIP_H;
       return {
         node,
-        w: Math.max(kid.w + 2 * BLOCK_PAD, chipW + 4 * FORK_X),
+        w: Math.max(kid.w + 2 * (BLOCK_PAD + loopInset(node.min)), chipW + 4 * FORK_X),
         up: kid.up + skip,
         down: kid.down + RAIL_CLEAR + chipRoom,
         kids: [kid],
@@ -172,13 +181,15 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
       return;
     }
     case 'choice': {
-      const inner = s.w - 2 * BLOCK_PAD;
+      const room = node.ordered === true ? ORDER_ROOM : 0;
+      const inner = s.w - 2 * BLOCK_PAD - room;
       const xl = x + FORK_X;
       const xr = right - FORK_X;
       let top = ay - s.up;
       s.kids.forEach((kid, i) => {
         const by = top + kid.up;
-        const kx = x + BLOCK_PAD + floorTo((inner - kid.w) / 2, 4);
+        const kx = x + BLOCK_PAD + room + floorTo((inner - kid.w) / 2, 4);
+        if (room > 0) out.marks.push({ kind: 'text', x: x + BLOCK_PAD + room - ORDER_DX, y: by - ORDER_DY, text: String(i + 1), anchor: 'middle', role: ['tag-text'] });
         if (i === 0) {
           line(out, [pt(x, by), pt(kx, by)]);
           line(out, [pt(kx + kid.w, by), pt(right, by)]);
@@ -204,8 +215,9 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
     case 'repeat': {
       const kid = s.kids[0] as Sized;
       const kx = x + floorTo((s.w - kid.w) / 2, 4);
-      const xl = x + FORK_X;
-      const xr = right - FORK_X;
+      const inset = loopInset(node.min);
+      const xl = x + FORK_X + inset;
+      const xr = right - FORK_X - inset;
       const yl = ay + kid.down + RAIL_CLEAR;
       const mid = (x + right) / 2;
       const tip = roundTo(mid - out.arrowLength / 2, 2);
@@ -215,7 +227,7 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
       line(out, [pt(tip, yl), pt(xl, yl), pt(xl, ay), pt(xl + FORK_X, ay)]);
       if (node.min === 0) {
         const yb = ay - kid.up - RAIL_CLEAR;
-        line(out, [pt(x, ay), pt(xl, ay), pt(xl, yb), pt(xr, yb), pt(xr, ay), pt(right, ay)]);
+        line(out, [pt(x, ay), pt(x + FORK_X, ay), pt(x + FORK_X, yb), pt(right - FORK_X, yb), pt(right - FORK_X, ay), pt(right, ay)]);
       }
       if (s.chip !== undefined) {
         const w = s.chipW ?? CHIP_H;

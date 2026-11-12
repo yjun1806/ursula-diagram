@@ -5,7 +5,7 @@ import type { Box } from '../src/chart/label-place.ts';
 import { render, renderText, UrsulaError } from '../src/index.ts';
 import { pixelRuler } from '../src/metrics.ts';
 import { selectFrontEnd } from '../src/registry.ts';
-import { layoutSankey } from '../src/sankey/layout.ts';
+import { crossingWeight, layoutSankey } from '../src/sankey/layout.ts';
 import { parseSankey } from '../src/sankey/parse.ts';
 import type { SceneBox, SceneText } from '../src/types.ts';
 
@@ -319,6 +319,26 @@ describe('sankey: layout', () => {
       }
     });
   }
+
+  it('draws a node in the palette colour nearest to the one the settings ask for', () => {
+    const svg = render(EXAMPLES['custom-node-colors'] ?? '');
+    const seriesOf = (name: string): string | undefined => new RegExp(`class="[^"]*ursula-(series-\\d)[^"]*"[^>]*data-name="${name}"`, 'u').exec(svg)?.[1];
+    expect(seriesOf('Electricity grid')).toBe('series-4');
+    expect(seriesOf('Industry')).toBe('series-6');
+    expect(seriesOf('Losses')).toBe('series-8');
+    expect(seriesOf('Heating and cooling - homes')).toBe('series-2');
+  });
+
+  it('orders the columns of the large example so that the bands cross little', () => {
+    const l = layoutOf(EXAMPLES['example'] ?? '');
+    const at = new Map(l.nodes.map((n) => [n.name, n]));
+    const lines = l.bands.map((b) => {
+      const from = at.get(b.source) as { x: number; w: number };
+      const to = at.get(b.target) as { x: number };
+      return { x0: from.x + from.w, x1: to.x, y0: b.fromY + b.thickness / 2, y1: b.toY + b.thickness / 2, weight: b.thickness };
+    });
+    expect(crossingWeight(lines)).toBeLessThan(270);
+  });
 
   it('stacks the bands leaving a node in the vertical order of their targets', () => {
     const l = layoutOf(IDEAL);

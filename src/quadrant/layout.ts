@@ -4,6 +4,7 @@ import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Scene, SceneItem } from '../types.ts';
+import { styledSeries } from './colors.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
 
@@ -188,7 +189,9 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   });
 
   for (const q of placed) {
-    items.push({ kind: 'circle', cx: q.cx, cy: q.cy, r: q.r, role: ['mark-dot'], data: { name: q.name } });
+    const color = chart.points[placed.indexOf(q)]?.color;
+    const role = color === undefined ? ['mark-dot'] : [`series-${styledSeries(color)}--dot`];
+    items.push({ kind: 'circle', cx: q.cx, cy: q.cy, r: q.r, role, data: { name: q.name } });
   }
   for (const q of placed) {
     const l = q.label;

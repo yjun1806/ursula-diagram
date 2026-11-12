@@ -16,6 +16,7 @@ export interface SankeySettings {
   outlined?: boolean;
   nodeWidth?: number;
   nodePadding?: number;
+  nodeColors?: Record<string, string>;
 }
 
 /** Reads the `sankey` section of a front-matter `config` map; values of the wrong type are ignored. */
@@ -29,6 +30,11 @@ export function readSankeyConfig(config: Record<string, FrontValue> | undefined)
   if (typeof width === 'number' && Number.isFinite(width) && width > 0) out.nodeWidth = width;
   const pad = section['nodePadding'];
   if (typeof pad === 'number' && Number.isFinite(pad) && pad >= 0) out.nodePadding = pad;
+  const colors = section['nodeColors'];
+  if (typeof colors === 'object' && colors !== null) {
+    const picked = Object.entries(colors).filter((e): e is [string, string] => typeof e[1] === 'string' && /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(e[1].trim()));
+    if (picked.length > 0) out.nodeColors = Object.fromEntries(picked.map(([k, v]) => [k, v.trim()]));
+  }
   return out;
 }
 
@@ -162,6 +168,7 @@ export function parseSankey(src: string, heading?: string, config?: Record<strin
     outlined: settings.outlined ?? false,
     ...(settings.nodeWidth === undefined ? {} : { nodeWidth: settings.nodeWidth }),
     ...(settings.nodePadding === undefined ? {} : { nodePadding: settings.nodePadding }),
+    ...(settings.nodeColors === undefined ? {} : { nodeColors: settings.nodeColors }),
   };
 }
 

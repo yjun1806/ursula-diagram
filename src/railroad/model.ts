@@ -8,7 +8,8 @@ export type Node =
   /** A special sequence (`? text ?`, `<prose>`) or the any-character dot of a parsing grammar. */
   | { k: 'special'; text: string }
   | { k: 'seq'; items: Node[] }
-  | { k: 'choice'; items: Node[] }
+  /** `ordered`: a parsing-grammar choice, where a later branch is tried only when the ones before it fail. */
+  | { k: 'choice'; items: Node[]; ordered?: true }
   | { k: 'optional'; item: Node }
   /** `min` times at least, `max` times at most (`null`: no limit). Never 1..1 and never 0..1: those are the item and `optional`. */
   | { k: 'repeat'; item: Node; min: number; max: number | null }

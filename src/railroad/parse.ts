@@ -341,7 +341,7 @@ function pegChoice(c: Cursor): Node {
     c.pos++;
     alts.push(pegSeq(c));
   }
-  return choiceOf(alts);
+  return alts.length === 1 ? (alts[0] as Node) : { k: 'choice', items: alts, ordered: true };
 }
 
 function pegStarts(t: Tok | undefined): boolean {

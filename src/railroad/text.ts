@@ -35,7 +35,7 @@ export function ebnf(node: Node): string {
     case 'seq':
       return wrapped(node, node.items.map((n) => wrapped(n, ebnf(n), 2)).join(' '), 1);
     case 'choice':
-      return node.items.map(ebnf).join(' | ');
+      return node.items.map(ebnf).join(node.ordered === true ? ' / ' : ' | ');
     case 'optional':
       return strength(node.item) === 3 ? `${ebnf(node.item)}?` : `[ ${ebnf(node.item)} ]`;
     case 'repeat': {
@@ -60,7 +60,7 @@ export function railroadTextLines(model: Railroad, maxWidth: number | undefined)
     const pieces = rule.body.k === 'choice' ? rule.body.items.map(ebnf) : [ebnf(rule.body)];
     const lead = ' '.repeat(cellWidth(rule.name));
     return pieces.flatMap((piece, i) => {
-      const prefix = i === 0 ? first : `${lead} | `;
+      const prefix = i === 0 ? first : `${lead} ${rule.body.k === 'choice' && rule.body.ordered === true ? '/' : '|'} `;
       const room = Math.max(1, maxWidth - cellWidth(prefix));
       const body = i === pieces.length - 1 ? `${piece} ;` : piece;
       return wrapWords(body, room, cellWidth, { blank: true }).map((l, j) => (j === 0 ? prefix : ' '.repeat(cellWidth(prefix))) + l);
