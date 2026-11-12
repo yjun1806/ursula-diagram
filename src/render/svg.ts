@@ -143,7 +143,12 @@ function labelSvg(edge: LayoutEdge): string {
   return (
     `<g class="ursula-edge-label-group" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` +
     `<rect class="ursula-edge-label-bg" x="${num(l.x)}" y="${num(l.y)}" width="${num(l.w)}" height="${num(l.h)}" rx="3"/>` +
-    `<text class="ursula-edge-label${edge.style === 'thick' ? ' ursula-edge-label--thick' : ''}" x="${num(l.x + l.w / 2)}" y="${num(l.y + l.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(l.text)}</text>` +
+    (l.lines ?? [l.text])
+      .map(
+        (line, i, all) =>
+          `<text class="ursula-edge-label${edge.style === 'thick' ? ' ursula-edge-label--thick' : ''}" x="${num(l.x + l.w / 2)}" y="${num(l.y + l.h / 2 + (i - (all.length - 1) / 2) * BODY_LINE)}" text-anchor="middle" dominant-baseline="central">${escapeXml(line)}</text>`,
+      )
+      .join('') +
     '</g>'
   );
 }

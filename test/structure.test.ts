@@ -179,6 +179,7 @@ n2 -->|transfer| m2`;
       const x = e.points[0]?.x ?? 0;
       expect(label.x >= x || label.x + label.w <= x).toBe(true);
       expect(l.diagnostics.filter((d) => d.kind === 'label-overlap')).toEqual([]);
+      expect(l.diagnostics.filter((d) => d.kind === 'label-tight')).toEqual([]);
     }
   });
 

@@ -8,6 +8,7 @@ import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import type { FlatPlan } from './ports.ts';
+import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
@@ -364,6 +365,37 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   return { items, ends, tracks, nodeO, centre, len };
 }
 
+/**
+ * Edges whose label stands on a stretch of line that shows too little of it: a line of `lineBeside` on the side away
+ * from the arrowhead and eight more on the arrowhead side of a straight edge between neighbours, sixteen each side on
+ * other stretches. A label beside a line, not on it, hides nothing.
+ */
+function tightLabels(edges: LayoutEdge[]): Diagnostic[] {
+  const out: Diagnostic[] = [];
+  for (const edge of edges) {
+    const l = edge.label;
+    if (!l) continue;
+    const straight = edge.points.length === 2;
+    for (let i = 1; i < edge.points.length; i++) {
+      const a = edge.points[i - 1] as Point;
+      const b = edge.points[i] as Point;
+      if (Math.abs(a.y - b.y) > EPS || a.y < l.y - EPS || a.y > l.y + l.h + EPS) continue;
+      const lo = Math.min(a.x, b.x);
+      const hi = Math.max(a.x, b.x);
+      if (l.x < lo - EPS || l.x + l.w > hi + EPS) continue;
+      const toRight = b.x >= a.x;
+      const last = i === edge.points.length - 1;
+      const keep = straight ? lineBeside(edge.style) : lineBeside('normal');
+      const [tail, head] = toRight ? [l.x - lo, hi - (l.x + l.w)] : [hi - (l.x + l.w), l.x - lo];
+      if (tail < keep - 0.5 || head < keep + (last ? ARROW : 0) - 0.5) {
+        out.push({ kind: 'label-tight', nodes: [edge.from, edge.to], message: `Label of ${edge.from} -> ${edge.to} leaves only ${Math.round(Math.min(tail, head))}px of line beside it.` });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 interface Built {
   layout: Layout;
   failed: number[];
@@ -551,9 +583,17 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     const c = l.chains[ei];
     const text = graph.edges[c?.edge ?? -1]?.label;
     if (!c || text === undefined || text === '') return;
-    const size: LabelSize = labelSize(text, ruler);
+    // Pixels: a label on a straight edge between neighbours may be wrapped onto two lines when that saves room.
+    const straightFlat = !ruler.uniform && !td && c.kind === 'flat' && plan.get(ei)?.mode === 'straight';
+    const lines = straightFlat ? labelLines(text, edge.style, ruler, f.gap, f.unit) : [text];
+    const size: LabelSize = ruler.uniform ? labelSize(text, ruler) : labelBox(lines, ruler);
     const foreign = edges.flatMap((o, k) => (k === ei ? [] : segs(o.points)));
-    const mine = segs(edge.points).sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
+    let mine = segs(edge.points).sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
+    // Pixels: a label on a stretch of line that cannot keep a line visible on both sides moves to a longer stretch.
+    if (!ruler.uniform) {
+      const roomy = (s: Segment): boolean => s[0].y !== s[1].y || Math.abs(s[1].x - s[0].x) >= size.w + 2 * lineBeside('normal');
+      mine = [...mine.filter(roomy), ...mine.filter((s) => !roomy(s))];
+    }
     let best: ReturnType<typeof placeLabel> | undefined;
     for (const s of mine) {
       const got = placeLabel(s, size, obstacles, placed, ruler, foreign);
@@ -577,7 +617,13 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     }
     if (!best) return;
     placed.push(best.rect);
-    edge.label = { text, x: tidy(best.rect.x), y: tidy(best.rect.y), w: size.w, h: size.h };
+    // On a straight edge between neighbours the arrowhead takes eight pixels of the room: the label sits that much nearer the tail.
+    let labelX = best.rect.x;
+    if (straightFlat && edge.points.length === 2) {
+      const [a, z] = edge.points as [Point, Point];
+      labelX = edgeNear(ruler, labelX - (z.x >= a.x ? ARROW : -ARROW) / 2);
+    }
+    edge.label = { text, x: tidy(labelX), y: tidy(best.rect.y), w: size.w, h: size.h, ...(lines.length > 1 ? { lines } : {}) };
     if (best.overlap) {
       failed.push(ei);
       const centre = td ? best.rect.x + best.rect.w / 2 : best.rect.y + best.rect.h / 2;
@@ -586,6 +632,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     }
   });
 
+  if (!ruler.uniform) diagnostics.push(...tightLabels(edges));
   diagnostics.push(...crossings(edges));
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));

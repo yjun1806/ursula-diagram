@@ -69,10 +69,11 @@ export interface LayoutEdge {
   elbow?: boolean;
   /** Joins two nodes of the main flow in turn (set by the layered engine for lanes). */
   main?: true;
-  label?: { text: string; x: number; y: number; w: number; h: number };
+  /** `lines` is present when the label is wrapped onto two lines; `text` is then the whole text. */
+  label?: { text: string; x: number; y: number; w: number; h: number; lines?: string[] };
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'question';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'question';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {
@@ -132,6 +133,9 @@ export interface Layout {
   composition?: 'lanes' | 'stages';
   /** Set by the layered engine: size of one place along the reading direction (a box and a gap). */
   pitch?: number;
+  /** Set by the layered engine for pixels: the gap between neighbouring boxes the drawing used, and the default one. */
+  gap?: number;
+  gapDefault?: number;
   lanes: LayoutLane[];
   nodes: LayoutNode[];
   edges: LayoutEdge[];

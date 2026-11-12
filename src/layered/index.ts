@@ -12,6 +12,7 @@ import { orderLayers } from './order.ts';
 import { boxLength, growForPorts, LINE_PITCH, planFlat, portDemand, portOffsets, portStep } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
+import { labelBox, labelLines, roomAround } from './label-room.ts';
 import type { Frame } from './route.ts';
 import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
@@ -50,11 +51,23 @@ function labelExtra(graph: Graph, ladder: Ladder, plan: Map<number, FlatPlan>, r
   const need = new Map<string, number>();
   for (const f of ladder.flat) {
     if (plan.get(f.chain)?.mode !== 'straight') continue;
-    const text = graph.edges[ladder.chains[f.chain]?.edge ?? -1]?.label;
-    if (text === undefined || text === '') continue;
-    const size = labelSize(text, ruler);
-    const along = td ? size.h : size.w;
-    const units = Math.max(0, Math.ceil((along + 2 * ruler.trackGap - gap) / unit - 1e-9));
+    const e = graph.edges[ladder.chains[f.chain]?.edge ?? -1];
+    const text = e?.label;
+    if (e === undefined || text === undefined || text === '') continue;
+    let along: number;
+    let room: number;
+    if (ruler.uniform) {
+      const size = labelSize(text, ruler);
+      along = td ? size.h : size.w;
+      room = 2 * ruler.trackGap;
+    } else {
+      // Pixels: a line stays visible on both sides of the label, and the arrowhead takes more; a long label may be wrapped.
+      const lines = td ? [text] : labelLines(text, e.style, ruler, gap, unit);
+      const size = labelBox(lines, ruler);
+      along = td ? size.h : size.w;
+      room = roomAround(e.style);
+    }
+    const units = Math.max(0, Math.ceil((along + room - gap) / unit - 1e-9));
     const k = `${f.lo}|${f.hi}`;
     need.set(k, Math.max(need.get(k) ?? 0, units));
   }
@@ -179,7 +192,19 @@ function paramsFor(graph: Graph, ruler: Ruler, limit: number | undefined, bounde
 }
 
 /** Places the graph for one ruler: full row capacity first, then one box less per overflowing lane, and the alignment squeeze last. */
-function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant, fold = true): Solved {
+/** What a placement may do to count as fitting: `rows` caps the rows of a lane at its own or two, `intact` keeps the main flow in one piece. */
+interface Allowance {
+  rows?: boolean;
+  intact?: boolean;
+}
+
+function rowsPerLane(layerLane: number[], lanes: number): number[] {
+  const out = new Array<number>(lanes).fill(0);
+  for (const lane of layerLane) out[lane] = (out[lane] ?? 0) + 1;
+  return out;
+}
+
+function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant, fold = true, allow: Allowance = {}): Solved {
   const td = graph.direction === 'TD';
   const { frame, common, baseUnits, unit, capacityUnits, dummyShift } = paramsFor(graph, ruler, limit, bounded);
   const caps = graph.lanes.map(() => (bounded ? 2 * Math.floor(capacityUnits / 2) : Infinity));
@@ -188,6 +213,10 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   let placed = run();
   // A plain placement counts only when no lane needed more rows than it has at unlimited width.
   if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane.length) };
+  // Rows first: a lane may use its own rows or two, and the main flow is kept whole.
+  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane, graph.lanes.length) : [];
+  const allowed = (p: Placed): boolean =>
+    !(allow.intact && p.rows.mainCut) && (!allow.rows || rowsPerLane(p.ladder.layerLane, graph.lanes.length).every((n, lane) => n <= Math.max(unlimitedRows[lane] ?? 0, 2)));
   const overLanes = (): Set<number> => {
     const ends = placed.layers.map((row) => Math.max(0, ...row.map((n) => (placed.start[n] ?? 0) + (n < placed.ladder.realCount ? (placed.ladder.nodes[n]?.units ?? 2) : 2))));
     const over = new Set(ends.flatMap((e, i) => (e > capacityUnits ? [placed.ladder.layerLane[i] ?? 0] : [])));
@@ -213,12 +242,18 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
     for (let attempt = 1; attempt <= 2 * RETRIES && placed.width > capacityUnits; attempt++) {
       const phase = attempt <= RETRIES ? 0 : 1;
       if (phase === 1 && (found[0] || !fold)) break;
+      const rowsNow = allow.rows ? rowsPerLane(placed.ladder.layerLane, graph.lanes.length) : [];
+      let moved = false;
       for (const lane of overLanes()) {
+        // Rows first: a lane that already uses all the rows it may is not pressed further.
+        if (phase === 0 && allow.rows && (rowsNow[lane] ?? 0) >= Math.max(unlimitedRows[lane] ?? 0, 2)) continue;
+        moved = true;
         if (phase === 0) reduction[lane] = (reduction[lane] ?? 0) + 2;
         else caps[lane] = Math.max(2, (caps[lane] ?? 2) - 2);
       }
+      if (!moved && allow.rows) break;
       placed = run();
-      if (placed.width <= capacityUnits) {
+      if (placed.width <= capacityUnits && allowed(placed)) {
         const c = price(placed);
         if (c < (prices[phase] as number)) {
           prices[phase] = c;
@@ -228,7 +263,11 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
     }
     placed = found[0] ?? found[1] ?? placed;
   }
-  const ok = !bounded || placed.width <= capacityUnits;
+  const ok = !bounded || (placed.width <= capacityUnits && allowed(placed));
+  if (!ok && allow.rows) {
+    const squeezed = run(true);
+    if (squeezed.width <= capacityUnits && allowed(squeezed)) return { placed: squeezed, ruler, common, ok: true };
+  }
   return { placed: ok || !fold ? placed : run(true), ruler, common, ok };
 }
 
@@ -251,13 +290,41 @@ interface Prep {
   variant: Variant;
 }
 
-function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant): Prep {
+/**
+ * How a drawing that is too wide is narrowed. 'gap' (the order of the terminal, and one candidate of pixels): close the
+ * gaps, then move blocks to further rows, then cut paths. 'rows' (pixels): keep the default gap and give every lane a
+ * second row, then close the gaps with the second rows in use, then open a third row and further ones, and cut the
+ * flow last; the main flow is not cut before that last step.
+ */
+export type Order = 'gap' | 'rows';
+
+function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant, order: Order = 'gap'): Prep {
   const td = graph.direction === 'TD';
   const tuned = layeredRuler(given, opts.gap);
   // Terminal stages stack boxes in a column: the lines that cross the gap between them stand on adjacent rows.
   const base = tuned.uniform && td && apart ? { ...tuned, linePitch: 1 } : tuned;
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
   const bounded = limit !== undefined && Number.isFinite(limit);
+  const rowsFirst = order === 'rows' && !base.uniform;
+  if (rowsFirst) {
+    const second: Allowance = { rows: true, intact: true };
+    const unit0 = measureNodes(graph.nodes, graph.lanes, base, td).unit;
+    // 1. The default gap, a second row in every lane.
+    let solved = solve(graph, base, limit, bounded, false, apart, variant, false, second);
+    let tightest = base;
+    // 2. Close the gaps, the second rows in use.
+    for (let gap = base.rankGap - base.nodeGrid; bounded && !solved.ok && gap >= base.rankGapMin; gap -= base.nodeGrid) {
+      const tight = { ...base, rankGap: gap };
+      if (measureNodes(graph.nodes, graph.lanes, tight, td).unit >= unit0) continue;
+      tightest = tight;
+      const attempt = solve(graph, tight, limit, bounded, false, apart, variant, false, second);
+      if (attempt.ok) solved = attempt;
+    }
+    // 3. A third row and further ones, the main flow whole. 4. The flow is cut.
+    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, false, { intact: true });
+    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, opts.fold !== false);
+    return { graph, given, opts, apart, base, ruler: solved.ruler, common: solved.common, td, limit, bounded, placed: solved.placed, variant };
+  }
   let solved = solve(graph, base, limit, bounded, true, apart, variant);
   if (bounded && !solved.ok) {
     // 1. Close the rank gaps toward the ruler's minimum, one grid step at a time.
@@ -301,6 +368,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
+  let usedGap = ruler.rankGap;
   // Spread spare width: the rank gap grows by pairs of grid steps, at most to twice the default.
   if (bounded && limit !== undefined && !ruler.uniform) {
     const total = (d: Layout): number => (td ? d.height : d.width);
@@ -313,6 +381,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
       const wider = draw(r);
       if (total(wider) > limit) break;
       drawn = wider;
+      usedGap = gap;
     }
   }
   // Stages: the reading direction is the layer axis, so spare room (or a shortfall) goes into the bands between layers.
@@ -338,7 +407,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth) {
     diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
   }
-  return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit }, ruler, opts.legend);
+  return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit, ...(ruler.uniform ? {} : { gap: usedGap, gapDefault: base.rankGap }) }, ruler, opts.legend);
 }
 
 /**
@@ -409,7 +478,12 @@ function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // A terminal drawing tries three candidates and redraws at most 60 times while refining.
   const terminal = given.terminal === true;
   const candidates = opts.quick ? CANDIDATES.slice(0, 1) : terminal ? TERMINAL_CANDIDATES : CANDIDATES;
-  const preps = candidates.map((v) => prepare(graph, given, opts, false, v));
+  // Pixels draw every candidate with rows first (the default gap kept, a second row in every lane) and the first two
+  // also in the order that closes gaps first; the terminal keeps the order of gaps first.
+  const entries: Array<{ v: Variant; order: Order }> = terminal || opts.quick
+    ? candidates.map((v) => ({ v, order: 'gap' as Order }))
+    : [...candidates.map((v) => ({ v, order: 'rows' as Order })), ...candidates.filter((v) => v.name === 'forced' || v.name === 'free').map((v) => ({ v, order: 'gap' as Order }))];
+  const preps = entries.map((e) => prepare(graph, given, opts, false, e.v, e.order));
   // Drawings with and without one-bend edges both compete.
   const shapes = opts.elbows === false ? [false] : opts.quick ? [true] : [true, false];
   const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));

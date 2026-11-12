@@ -12,6 +12,8 @@ export interface Rows {
   pathPos: number[];
   /** Nodes of the main flow: the longest path along edges inside one lane, one for the whole drawing. */
   main: number[];
+  /** Whether the piece the main flow belongs to was cut between ranks because it was wider than a row. */
+  mainCut: boolean;
 }
 
 interface LaneEdge {
@@ -307,6 +309,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
   });
   let nextLayer = 0;
   let main: number[] = [];
+  const cutPieces: number[][] = [];
   const shorter = (a: number[], b: number[]): boolean => {
     if (a.length !== b.length) return a.length < b.length;
     const pa = a.reduce((n, v) => n + (partners[v]?.length ?? 0), 0);
@@ -423,11 +426,17 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         blocks.push(makeBlock(nodes.filter((n) => group.includes(rankOf.get(n) ?? 0)), rankOf, rowOf, nodes));
         group = [];
       };
+      let groups = 0;
+      const flushCounted = (): void => {
+        if (group.length > 0) groups++;
+        flush();
+      };
       for (const r of ranks) {
-        if (group.length > 0 && widthOfRanks([...group, r]) > cap) flush();
+        if (group.length > 0 && widthOfRanks([...group, r]) > cap) flushCounted();
         group.push(r);
       }
-      flush();
+      flushCounted();
+      if (groups > 1) cutPieces.push(nodes);
     }
 
     const widest = Math.max(...blocks.map((b) => b.width));
@@ -461,7 +470,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     });
     nextLayer += rowKeys.length;
   });
-  return { layer, layerLane, layerRow, reversed, pathIndex, pathPos, main };
+  return { layer, layerLane, layerRow, reversed, pathIndex, pathPos, main, mainCut: main.some((n) => cutPieces.some((piece) => piece.includes(n))) };
 }
 
 /**

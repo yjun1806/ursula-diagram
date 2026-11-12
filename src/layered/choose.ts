@@ -72,7 +72,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2 } as const;
 
 const properCross = (a: Seg, b: Seg): boolean => {
   const ah = Math.abs(a.ay - a.by) < EPS;
@@ -215,12 +215,17 @@ export function score(l: Layout): number[] {
   const rows = new Map<string, number>();
   for (const n of l.nodes) rows.set(n.lane, Math.max(rows.get(n.lane) ?? 0, n.row + 1));
   const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
+  // Pixels: the second row of a lane is cheap, the third and further ones cost as before; a gap closed below the default and a label that shows too little line cost as well.
+  const pixels = l.gapDefault !== undefined;
+  const rowCost = pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
+  const tightCost = pixels ? WEIGHTS.tight * (l.gap !== undefined && l.gap < (l.gapDefault ?? 0) ? 1 : 0) + WEIGHTS.labelTight * l.diagnostics.filter((d) => d.kind === 'label-tight').length : 0;
   const [crossMain, crossOther] = crossingsOf(l);
   const cost =
     bends +
     WEIGHTS.crossingMain * crossMain +
     WEIGHTS.crossing * crossOther +
-    WEIGHTS.extraRow * extra +
+    rowCost +
+    tightCost +
     WEIGHTS.upward * folded +
     WEIGHTS.back * against.length +
     WEIGHTS.backChain * chained +
