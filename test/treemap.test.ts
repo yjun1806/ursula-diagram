@@ -293,15 +293,18 @@ describe('treemap layout', () => {
     expect((internet?.x ?? 0) - ((utilities?.x ?? 0) + (utilities?.w ?? 0))).toBeCloseTo(4, 6);
   });
 
-  it('keeps a foot row lower than a label exact in area and sheds its text', () => {
+  it('pulls tiles from above into the foot row until it is as tall as a two-line label', () => {
     const { tiles } = layoutTreemap(parseTreemap(body(EXAMPLES['currency'] ?? '')), pixelRuler());
     const supplies = tiles.find((t) => t.label === 'Supplies');
-    expect(supplies?.h).toBeLessThan(56);
+    const equipment = tiles.find((t) => t.label === 'Equipment');
+    expect(supplies?.y).toBeCloseTo(equipment?.y ?? 0, 6);
+    expect(supplies?.h).toBeGreaterThanOrEqual(56);
     const unit = tiles.reduce((a, t) => a + t.w * t.h, 0) / tiles.reduce((a, t) => a + t.value, 0);
     expect(Math.abs(((supplies?.w ?? 0) * (supplies?.h ?? 0)) / (unit * 100000) - 1)).toBeLessThan(0.001);
-    expect(supplies?.valueShown).toBeUndefined();
-    expect(supplies?.nameShown).toBeUndefined();
-    expect(supplies?.label).toBe('Supplies');
+    for (const t of tiles) {
+      expect(t.nameShown, t.label).toBe(t.label);
+      expect(t.valueShown, t.label).toBe(t.valueText);
+    }
   });
 
   it('stacks nested groups with their names above their tiles', () => {

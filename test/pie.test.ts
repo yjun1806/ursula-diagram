@@ -125,6 +125,19 @@ describe('pie layout', () => {
     }
   });
 
+  it('cuts the donut hole of the settings out of every slice', () => {
+    const svg = render(CONFIG);
+    const donut = layoutPie(parsePie(BODY, undefined, { pie: { donutHole: 0.2 } }), pixelRuler());
+    expect(donut.hole).toBeCloseTo(0.2 * RADIUS, 6);
+    const paths = donut.scene.items.filter((i) => i.kind === 'path' && i.role.some((r) => r.endsWith('--tint')));
+    expect(paths).toHaveLength(4);
+    // Every slice has an inner arc of the hole's radius and no point closer to the centre than the hole.
+    for (const p of paths) expect(p.kind === 'path' && p.d.includes(`A${0.2 * RADIUS} ${0.2 * RADIUS} 0 0 0`)).toBe(true);
+    expect(svg).toContain(`A${0.2 * RADIUS} ${0.2 * RADIUS}`);
+    expect(layoutPie(parsePie(BODY), pixelRuler()).hole).toBe(0);
+    expect(parsePie(BODY, undefined, { pie: { donutHole: 2 } }).donutHole).toBe(0.9);
+  });
+
   it('writes every name and value', () => {
     const texts = layout.scene.items.filter((it): it is SceneText => it.kind === 'text').map((t) => t.text);
     for (const t of ['Calcium', '42.96', 'Potassium', '50.05', 'Magnesium', '10.01', 'Iron', '5']) expect(texts).toContain(t);

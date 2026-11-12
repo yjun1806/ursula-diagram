@@ -389,6 +389,43 @@ gantt
     expect(inner).toHaveLength(1);
     expect(layout.scene.items.filter((i) => i.kind === 'text' && i.text === 'A task')).toHaveLength(1);
   });
+
+  const shared = `gantt
+    dateFormat YYYY-MM-DD
+    section S
+    First                   :a1, 2014-01-01, 3d
+    Busy work               :active, a2, 2014-01-10, 10d
+    A rather long task name :a3, 2014-01-25, 2d`;
+  const sharedLayout = () => layoutGantt(parseGantt(shared, { frontMatter: { displayMode: 'compact' } }), pixelRuler());
+  const textOf = (items: SceneItem[], s: string): SceneText => items.find((i): i is SceneText => i.kind === 'text' && i.text === s) as SceneText;
+
+  it('writes a name beside an active band instead of on its full colour', () => {
+    const layout = sharedLayout();
+    expect(layout.bars.map((b) => b.row)).toEqual([0, 0, 0]);
+    const bar = layout.bars[1] as (typeof layout.bars)[number];
+    const t = textOf(layout.scene.items, 'Busy work');
+    expect(t).toBeDefined();
+    expect(t.x).toBeGreaterThanOrEqual(bar.x + bar.w);
+  });
+
+  it('writes a name that does not fit in its band whole, to the right of the band, before its length', () => {
+    const layout = sharedLayout();
+    const bar = layout.bars[2] as (typeof layout.bars)[number];
+    const t = textOf(layout.scene.items, 'A rather long task name');
+    expect(t).toBeDefined();
+    expect(t.x).toBeGreaterThanOrEqual(bar.x + bar.w);
+    const dur = textOf(layout.scene.items, '2d');
+    expect(dur.x).toBeGreaterThanOrEqual(t.x + pixelRuler().textWidth(t.text, 'line'));
+    expect(layout.scene.items.some((i) => i.kind === 'text' && i.text.endsWith('…'))).toBe(false);
+  });
+
+  it('keeps every text of a shared row clear of the next band', () => {
+    const layout = sharedLayout();
+    const w = (s: string) => pixelRuler().textWidth(s, 'line');
+    const busyRight = textOf(layout.scene.items, '10d').x + w('10d');
+    const next = layout.bars[2] as (typeof layout.bars)[number];
+    expect(busyRight).toBeLessThanOrEqual(next.x);
+  });
 });
 
 describe('gantt text', () => {

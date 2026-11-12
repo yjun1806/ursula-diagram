@@ -1,4 +1,5 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
+import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
 import type { Pie, PieSlice } from './model.ts';
 
@@ -10,8 +11,11 @@ function fail(message: string, line: number, code = 'syntax'): never {
 }
 
 /** Parses a Mermaid pie chart: `pie [showData] [title ...]`, then `"label" : value` lines. */
-/** `heading` is the title of a leading front-matter block; a title line in the body wins over it. */
-export function parsePie(src: string, heading?: string): Pie {
+/**
+ * `heading` is the title of a leading front-matter block; a title line in the body wins over it. `config` is its
+ * `config` map, of which `pie.donutHole` is read.
+ */
+export function parsePie(src: string, heading?: string, config?: unknown): Pie {
   const rows = src.split(/\r?\n/);
   const slices: PieSlice[] = [];
   let title: string | undefined;
@@ -80,5 +84,7 @@ export function parsePie(src: string, heading?: string): Pie {
   if (!headerSeen) fail('A pie chart starts with "pie".', 1, 'header');
   if (slices.length === 0) fail('A pie chart needs at least one slice.', rows.length, 'empty');
   if (!bodyTitle && heading !== undefined && heading !== '') title = heading;
-  return { ...(title === undefined ? {} : { title }), showData, slices };
+  const hole = configSection(config, 'pie')?.['donutHole'];
+  const donutHole = typeof hole === 'number' && Number.isFinite(hole) ? Math.min(0.9, Math.max(0, hole)) : 0;
+  return { ...(title === undefined ? {} : { title }), showData, donutHole, slices };
 }

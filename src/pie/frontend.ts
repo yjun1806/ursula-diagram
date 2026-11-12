@@ -1,3 +1,4 @@
+import { frontOf } from '../front/options.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { FrontEnd } from '../registry.ts';
@@ -10,14 +11,14 @@ export const pieFrontEnd: FrontEnd = {
   name: 'pie',
   headers: ['pie'],
   svg(src, opts) {
-    const layout = layoutPie(parsePie(src, opts.heading), pixelRuler());
+    const layout = layoutPie(parsePie(src, frontOf(opts).heading, frontOf(opts).config), pixelRuler());
     return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
   },
   textLines(src, maxWidth, opts) {
-    return pieTextLines(parsePie(src, opts.heading), maxWidth);
+    return pieTextLines(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
   },
   json(src, mode, opts) {
-    const pie = parsePie(src, opts.heading);
+    const pie = parsePie(src, frontOf(opts).heading, frontOf(opts).config);
     return { pie, ...layoutPie(pie, mode === 'text' ? cellRuler() : pixelRuler()) };
   },
 };
