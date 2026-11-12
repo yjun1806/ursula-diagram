@@ -435,3 +435,31 @@ describe('c4 errors', () => {
     expect(svg).toContain('<title>My C4</title>');
   });
 });
+
+describe('c4 boundaries without lines inside are grids', () => {
+  const laid = layout(c4Graph(parseC4(EXAMPLES[1] as string), pixelRuler()), pixelRuler());
+  const node = (id: string) => laid.nodes.find((n) => n.id === id) as (typeof laid.nodes)[number];
+  const box = (id: string) => (laid.clusters ?? []).find((c) => c.id === id) as NonNullable<typeof laid.clusters>[number];
+
+  it('puts the loose customers in one row with the connected one first', () => {
+    const row = ['customerA', 'customerB', 'customerC', 'customerD'].map(node);
+    for (const n of row) expect(n.y).toBe(row[0]?.y);
+    expect(row.map((n) => n.x)).toEqual([...row.map((n) => n.x)].sort((a, b) => a - b));
+    expect(node('SystemAA').y).toBeGreaterThan(node('customerA').y);
+  });
+
+  it('lays the plain nodes of a boundary in two columns and stacks its boundaries to the right', () => {
+    expect(node('SystemE').y).toBe(node('SystemC').y);
+    expect(node('SystemC').x).toBeGreaterThan(node('SystemE').x);
+    expect(node('SystemD').y).toBeGreaterThan(node('SystemE').y);
+    expect(node('SystemD').x).toBe(node('SystemE').x);
+    expect(box('b2').x).toBe(box('b3').x);
+    expect(box('b3').y).toBeGreaterThan(box('b2').y);
+    expect(box('b2').x).toBeGreaterThan(node('SystemC').x + node('SystemC').w);
+  });
+
+  it('puts the two systems of a boundary side by side', () => {
+    expect(node('SystemA').y).toBe(node('SystemB').y);
+    expect(node('SystemF').y).toBe(node('SystemG').y);
+  });
+});
