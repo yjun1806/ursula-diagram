@@ -72,7 +72,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { crossing: 6, extraRow: 2, back: 1, backChain: 2, far: 1, start: 2 } as const;
+export const WEIGHTS = { crossing: 3, extraRow: 2, back: 1, backChain: 2, far: 1, start: 2 } as const;
 
 /** Places an edge leaves out between its two boxes, in columns (a box and a gap) and in rows; neighbours and the same place count nothing. */
 export function farness(l: Layout): number {
