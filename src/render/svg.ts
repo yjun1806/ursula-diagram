@@ -1,8 +1,9 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, compartmentHeights, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
+import { SCENE_THEME_SPECS } from './scene-theme.ts';
 import { arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
@@ -41,7 +42,7 @@ const DOT = 8;
 const CROSS = 8;
 
 /** Height of the end caps of a cylinder, and the inset of the bars of a subroutine. */
-const CAP = 6;
+const CAP = CYLINDER_CAP;
 const BAR = 8;
 
 /** Colour variables (`--ursula-<name>`) with their light and dark values; the values are the fallbacks written into the drawing. */
@@ -172,23 +173,30 @@ function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeS
   );
 }
 
-/** A cluster box: tinted at odd depths, plain at even ones; its name stands at the top left. */
+/** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands at the top left. */
 function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
-  const plain = cluster.depth % 2 === 0;
+  const look = cluster.style === 'dashed' ? ' ursula-zone--dashed' : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
   return (
     `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` +
-    `<rect class="ursula-zone${plain ? ' ursula-zone--plain' : ''}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
+    `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
     `<text class="ursula-zone-name" x="${num(cluster.x + CLUSTER_NAME_INSET)}" y="${num(cluster.y + 24)}">${escapeXml(cluster.label)}</text>` +
     '</g>'
   );
 }
 
-/** Rules for the cluster boxes, added only to a drawing that has some. */
-const CLUSTER_RULES: readonly string[] = [
-  '.ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}',
-  '.ursula-zone--plain{fill:$zone}',
-  '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
-];
+/** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene theme. */
+function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[] {
+  if (clusters.length === 0) return [];
+  const m = SCENE_THEME_SPECS[theme].metrics;
+  return [
+    '.ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}',
+    '.ursula-zone--plain{fill:$zone}',
+    ...(clusters.some((c) => c.style === 'dashed')
+      ? [`.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
+      : []),
+    '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
+  ];
+}
 
 /** The edge with both ends moved onto the outline of shapes that do not fill their box. */
 function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[] {
@@ -483,10 +491,14 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   const cells = node.compartments ?? [];
   const ruler = pixelRuler();
   const heights = compartmentHeights(cells, ruler);
-  const spare = Math.max(0, node.h - heights.reduce((a, b) => a + b, 0));
+  // A cylinder draws its own outline, and its head starts under the top cap; a rounded box rounds its corners more.
+  const cylinder = node.shape === 'cylinder';
+  const caps = cylinder ? 2 * CAP : 0;
+  const spare = Math.max(0, node.h - caps - heights.reduce((a, b) => a + b, 0));
   heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
-  const parts = [boxSvg(node, spec.boxRadius, shadowAttr(spec))];
-  let top = node.y;
+  const outline = cylinder || node.shape === 'round' ? shapeSvg(node, spec) : boxSvg(node, spec.boxRadius, shadowAttr(spec));
+  const parts = [outline];
+  let top = node.y + caps;
   cells.forEach((cell, i) => {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
     const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center' && cell.columns === undefined;
@@ -576,6 +588,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
   const byId = new Map(layout.nodes.map((n) => [n.id, n] as const));
   const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth] as const));
+  const dashed = new Set((layout.clusters ?? []).filter((c) => c.style === 'dashed').map((c) => c.id));
   const labelled = layout.lanes.filter((l) => l.label !== '');
   const tinted = (lane: LayoutLane): boolean => labelled.length < 2 || lane === labelled[0];
   const paint: Paint = {
@@ -583,16 +596,18 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     roles: rolesOf(layout),
     tinted: new Set([
       ...labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id)),
-      ...layout.nodes.filter((n) => n.cluster !== undefined && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id),
+      ...layout.nodes.filter((n) => n.cluster !== undefined && !dashed.has(n.cluster) && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id),
     ]),
   };
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
-  const lookup: Lookup = (name, mode) => tokenVar(spec, name, mode);
+  // A colour the flow theme does not have (the dashed zone's stroke) comes from the scene theme of the same name.
+  const scene = SCENE_THEME_SPECS[theme].colors;
+  const lookup: Lookup = (name, mode) => (spec.tokens[name] === undefined && scene[name] !== undefined ? `var(--ursula-${name},${scene[name][mode]})` : tokenVar(spec, name, mode));
   const ends = extraEnds(layout, paint);
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...(layout.clusters && layout.clusters.length > 0 ? CLUSTER_RULES : []), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : [])], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : [])], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
     ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),

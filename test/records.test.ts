@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, pixelRuler, renderSvg, renderTextLayout, THEMES } from '../src/index.ts';
 import { placeEndLabels } from '../src/layered/end-labels.ts';
-import { compartmentHeights, recordHeight, recordWidth } from '../src/layout/records.ts';
+import { compartmentHeights, CYLINDER_CAP, ownSize, recordHeight, recordWidth } from '../src/layout/records.ts';
 import { markGlyphs } from '../src/render/text.ts';
 import type { Compartment, EdgeEnd, Graph, Layout, LayoutEdge, LayoutNode, NodeShape, Point } from '../src/types.ts';
 import { geometryViolations, rectsOverlap } from './helpers.ts';
@@ -622,5 +622,28 @@ describe('the small texts at the ends of a line in the text drawing', () => {
     expect(at('S')).toBeGreaterThan(alpha);
     expect(at('S')).toBeLessThan(at('E'));
     expect(at('E')).toBeLessThan(beta);
+  });
+});
+
+describe('a cylinder divided into compartments', () => {
+  const cells: Compartment[] = [{ lines: ['[Database]', 'Store'], lineEmphasis: ['tag', 'title'] }, { lines: ['Keeps the rows'] }];
+  const graph: Graph = { direction: 'TD', lanes: [{ id: '_', label: '' }], nodes: [{ id: 'db', title: 'db', lines: [], shape: 'cylinder', lane: '_', compartments: cells }], edges: [] };
+
+  it('is as high as its compartments and the two caps', () => {
+    expect(ownSize({ title: 'db', lines: [], shape: 'cylinder', compartments: cells }, true, px)?.h).toBe(recordHeight(cells, px) + 2 * CYLINDER_CAP);
+    expect(ownSize({ title: 'db', lines: [], shape: 'rect', compartments: cells }, true, px)?.h).toBe(recordHeight(cells, px));
+  });
+
+  it('draws the outline as a cylinder and starts the head under the top cap', () => {
+    const l = layout(graph, px);
+    const n = nodeOf(l, 'db');
+    const svg = renderSvg(l, { legend: false });
+    const group = svg.slice(svg.indexOf('data-node="db"'));
+    expect(group).not.toMatch(/^[^]*?<rect class="ursula-node-box"[^]*?<\/g>/);
+    expect(group).toMatch(/<path class="ursula-node-box[^"]*" d="M/);
+    const rule = /<path class="ursula-rule" d="M[\d.]+ ([\d.]+)H/.exec(group);
+    expect(Number(rule?.[1])).toBe(n.y + 2 * CYLINDER_CAP + (compartmentHeights(cells, px)[0] as number));
+    const tag = /<text class="ursula-cell-tag" x="[\d.]+" y="([\d.]+)"/.exec(group);
+    expect(Number(tag?.[1])).toBeGreaterThan(n.y + 2 * CYLINDER_CAP);
   });
 });
