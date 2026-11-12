@@ -1,6 +1,7 @@
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, Point } from '../types.ts';
 import { crossings } from '../layout/check.ts';
+import { diamondSides, withOutline } from '../layout/diamond.ts';
 import type { LabelSize, Rect, Segment } from '../layout/labels.ts';
 import { labelSize, placeLabel } from '../layout/labels.ts';
 import { useElbows } from './elbows.ts';
@@ -661,7 +662,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     const o = nodeO(i);
     const c = layerStart[ln.layer] ?? 0;
     const [x, y, w, h] = td ? [c, o, thick[ln.layer] ?? 0, len(i)] : [o, c, len(i), thick[ln.layer] ?? 0];
-    return {
+    return withOutline({
       id: n.id,
       lane: n.lane,
       rank: Math.floor((start[i] ?? 0) / 2),
@@ -674,7 +675,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       title: n.title,
       lines: n.lines,
       shape: n.shape,
-    };
+    }, ruler);
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
@@ -810,7 +811,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
 
   if (!ruler.uniform) diagnostics.push(...tightLabels(edges), ...offCentreEnds({ nodes, edges }));
-  diagnostics.push(...crossings(edges));
+  diagnostics.push(...crossings(edges), ...diamondSides({ nodes, edges }));
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));
   const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);

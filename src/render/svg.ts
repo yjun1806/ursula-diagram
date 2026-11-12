@@ -1,7 +1,7 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
 import type { LegendKind } from '../sequence/model.ts';
-import { hexagonPoints, parallelogramPoints, trimToOutline } from './shapes.ts';
+import { diamondPoints, hexagonPoints, parallelogramPoints, trimToOutline } from './shapes.ts';
 import type { EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
 
 export interface NodeHookResult {
@@ -206,8 +206,8 @@ function shapeSvg(node: LayoutNode): string {
         `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`
       );
     }
-    // A diamond is drawn as a plain box until it has a size rule of its own.
     case 'diamond':
+      return node.outline ? `<polygon class="ursula-node-box" points="${points(diamondPoints(node.outline))}"/>` : boxSvg(node, NODE_RADIUS);
     case 'rect':
       return boxSvg(node, NODE_RADIUS);
   }

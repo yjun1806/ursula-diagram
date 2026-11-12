@@ -8,6 +8,7 @@ import { hostRun, labelDemands, labelSize, placeLabel } from './labels.ts';
 import type { Geo, Need, Side, Skeleton, Slot } from './place.ts';
 import type { AlongSpec } from './lanes-along.ts';
 import { alongBands, shapeAlong } from './lanes-along.ts';
+import { diamondSides, withOutline } from './diamond.ts';
 import { buildTopology, measureNodes, finalNf, fitLaneLabels, geometry, gridUp, origin, sizeSlots } from './place.ts';
 import { isFlowSide, nodeNeeds, planEdges } from './plan.ts';
 import { attachOf, buildPorts, portOrders, portStep } from './ports.ts';
@@ -255,7 +256,7 @@ function build(
     const { f0, c0 } = origin(sk, geo, ruler, s);
     const nf = finalNf(sk, geo, s);
     const [x, y, w, h] = td ? [c0, f0, s.nc, nf] : [f0, c0, nf, s.nc];
-    return {
+    return withOutline({
       id: s.id,
       lane: pass.along?.laneOf.get(s.id) ?? sk.lanes[s.lane]?.id ?? '',
       rank: s.rank,
@@ -268,7 +269,7 @@ function build(
       title: s.title,
       lines: s.lines,
       shape: s.shape,
-    };
+    }, ruler);
   });
   const nodeRects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
@@ -333,7 +334,7 @@ function build(
       });
     }
   }
-  diagnostics.push(...crossings(edges));
+  diagnostics.push(...crossings(edges), ...diamondSides({ nodes, edges }));
 
   const width = td ? geo.totalC : geo.totalF;
   const height = td ? geo.totalF : geo.totalC;

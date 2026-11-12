@@ -1,6 +1,6 @@
 import type { LayoutNode, Point } from '../types.ts';
 
-type Box = Pick<LayoutNode, 'x' | 'y' | 'w' | 'h' | 'shape'>;
+type Box = Pick<LayoutNode, 'x' | 'y' | 'w' | 'h' | 'shape' | 'outline'>;
 
 /** How far the slanted sides of a hexagon and a parallelogram reach into the box. */
 export const SLANT = 12;
@@ -18,6 +18,21 @@ export function hexagonPoints(b: Box): Point[] {
     { x: b.x, y: cy },
   ];
 }
+
+/** The corners of a diamond outline: the middles of the four sides of its rectangle. */
+export function diamondPoints(o: NonNullable<LayoutNode['outline']>): Point[] {
+  const cx = o.x + o.w / 2;
+  const cy = o.y + o.h / 2;
+  return [
+    { x: cx, y: o.y },
+    { x: o.x + o.w, y: cy },
+    { x: cx, y: o.y + o.h },
+    { x: o.x, y: cy },
+  ];
+}
+
+/** Length of an arrowhead: an end is not moved when the segment would be left shorter than that. */
+const ARROW = 8;
 
 export function parallelogramPoints(b: Box): Point[] {
   return [
@@ -117,7 +132,19 @@ export function trimToOutline(node: Box, end: Point, next: Point): Point {
   const len = Math.hypot(next.x - end.x, next.y - end.y);
   if (len < EPS) return end;
   const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
+  if (node.shape === 'diamond' && node.outline) return fitToDiamond(node.outline, end, next, len, d);
   const t = entry(node, end, d);
   if (t === undefined || t < EPS || t > len / 2) return end;
+  return { x: end.x + d.x * t, y: end.y + d.y * t };
+}
+
+/**
+ * Moves the end of an edge along the line of its last segment to where that line meets the diamond outline nearest
+ * to `next`, inwards or back out. Stays where it is when the line misses the outline or the segment would be left
+ * shorter than an arrowhead.
+ */
+function fitToDiamond(outline: NonNullable<LayoutNode['outline']>, end: Point, next: Point, len: number, d: Point): Point {
+  const t = enterPolygon(diamondPoints(outline), end, d);
+  if (t === undefined || len + t < ARROW - EPS) return end;
   return { x: end.x + d.x * t, y: end.y + d.y * t };
 }

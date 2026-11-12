@@ -1,5 +1,6 @@
 import type { Graph, NodeShape } from '../types.ts';
 import type { Ruler } from '../metrics.ts';
+import { diamondHeight, diamondWidth, hasOutline } from './diamond.ts';
 
 /**
  * Everything here is "abstract": f is the flow axis (x for LR, y for TD) and c is
@@ -149,7 +150,7 @@ export interface Measure {
 
 /** Sizes that depend on the text alone, never on where a node is placed. */
 export function measureNodes(
-  nodes: ReadonlyArray<{ title: string; lines: string[] }>,
+  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined }>,
   lanes: ReadonlyArray<{ label: string }>,
   ruler: Ruler,
   td: boolean,
@@ -157,15 +158,23 @@ export function measureNodes(
   const border = ruler.nodeBorder;
   const snapW = (v: number): number =>
     gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep));
-  const content = nodes.map((s) => {
+  // Half of the column pitch is the slot unit; it has to be a whole number of node grid steps.
+  // Boxes half a step apart still have to overlap, so a box is wider than a gap.
+  const fit = (v: number, minimum = ruler.nodeGrid): number => {
+    let r = Math.max(gridUp(ruler, v), minimum);
+    while (((r + ruler.rankGap) / 2) % ruler.nodeGrid > 1e-9) r += ruler.nodeGrid;
+    return r;
+  };
+  const heights = nodes.map(
+    (s) => ruler.lineHeight('title') + s.lines.length * ruler.lineHeight('line') + 2 * ruler.nodePadY + 2 * border,
+  );
+  const contentH = td ? fit(Math.max(0, ...heights)) : gridUp(ruler, Math.max(0, ...heights));
+  // A diamond is measured by its outline, which stands out eight pixels above and below the box height.
+  const content = nodes.map((s, i) => {
     const texts = [ruler.textWidth(s.title, 'title'), ...s.lines.map((l) => ruler.textWidth(l, 'line'))];
     return {
-      w: Math.max(...texts) + 2 * ruler.nodePadX + 2 * border,
-      h:
-        ruler.lineHeight('title') +
-        s.lines.length * ruler.lineHeight('line') +
-        2 * ruler.nodePadY +
-        2 * border,
+      w: hasOutline(s.shape, ruler) ? diamondWidth(ruler, s, diamondHeight(contentH)) : Math.max(...texts) + 2 * ruler.nodePadX + 2 * border,
+      h: heights[i] as number,
     };
   });
   const w = content.map((c) => snapW(c.w));
@@ -178,15 +187,7 @@ export function measureNodes(
     : within !== undefined
       ? (sorted.filter((v) => v <= within * middle).pop() ?? 0)
       : (sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0);
-  // Half of the column pitch is the slot unit; it has to be a whole number of node grid steps.
-  // Boxes half a step apart still have to overlap, so a box is wider than a gap.
-  const fit = (v: number, minimum = ruler.nodeGrid): number => {
-    let r = Math.max(gridUp(ruler, v), minimum);
-    while (((r + ruler.rankGap) / 2) % ruler.nodeGrid > 1e-9) r += ruler.nodeGrid;
-    return r;
-  };
   const common = td ? gridUp(ruler, pick) : fit(pick, 5 * ruler.nodeGrid);
-  const contentH = td ? fit(Math.max(0, ...content.map((c) => c.h))) : gridUp(ruler, Math.max(0, ...content.map((c) => c.h)));
   if (ruler.uniform) {
     return { w: w.map(() => common), h: td ? content.map(() => contentH) : content.map((c) => gridUp(ruler, c.h)), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter: td && lanes.some((l) => l.label !== '') ? 2 : 0 };
   }

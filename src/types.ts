@@ -62,6 +62,8 @@ export interface LayoutNode {
   title: string;
   lines: string[];
   shape: NodeShape;
+  /** Diamonds in pixel media: the outline, centred in the box and reaching past its top and bottom. */
+  outline?: { x: number; y: number; w: number; h: number };
 }
 
 export interface LayoutEdge {
@@ -77,7 +79,7 @@ export interface LayoutEdge {
   label?: { text: string; x: number; y: number; w: number; h: number; lines?: string[] };
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'question';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'diamond-side' | 'question';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {

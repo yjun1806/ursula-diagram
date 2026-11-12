@@ -87,7 +87,7 @@ describe('node shapes in the drawing', () => {
     expect(polygons(svg('a[/x/]'))[0]?.split(' ')).toHaveLength(4);
     expect(svg('a[[x]]').match(/<line class="ursula-node-box"/g)).toHaveLength(2);
     expect(svg('a[(x)]')).toMatch(/<path class="ursula-node-box" d="M[^"]*A[^"]*A[^"]*V/);
-    expect(svg('a{x}')).toBe(svg('a[x]'));
+    expect(polygons(svg('a{x}'))[0]?.split(' ')).toHaveLength(4);
   });
 
   it('give a stadium a corner radius of half its height', () => {
