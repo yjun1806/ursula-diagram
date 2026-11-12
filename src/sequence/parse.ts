@@ -15,7 +15,7 @@ const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
 const MESSAGE = /^(.+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
 const BLOCKS: ReadonlySet<string> = new Set(['loop', 'opt', 'alt', 'par', 'critical', 'break']);
 
-type Open = { kind: BlockKind; line: number } | { kind: 'ignored'; line: number };
+type Open = { kind: BlockKind; line: number } | { kind: 'ignored' | 'zone'; line: number };
 
 function textLines(text: string): string[] {
   return text
@@ -119,7 +119,12 @@ export function parseSequence(src: string): Sequence {
       statements.push({ kind: 'open', block: word as BlockKind, lines: rest === '' ? [] : textLines(rest), line: lineNo });
       continue;
     }
-    if (word === 'rect' || word === 'box') {
+    if (word === 'rect') {
+      open.push({ kind: 'zone', line: lineNo });
+      statements.push({ kind: 'zoneOpen', line: lineNo });
+      continue;
+    }
+    if (word === 'box') {
       open.push({ kind: 'ignored', line: lineNo });
       continue;
     }
@@ -133,7 +138,8 @@ export function parseSequence(src: string): Sequence {
     if (s === 'end') {
       const top = open.pop();
       if (!top) fail("'end' without an open block", lineNo);
-      if (top.kind !== 'ignored') statements.push({ kind: 'close', line: lineNo });
+      if (top.kind === 'zone') statements.push({ kind: 'zoneClose', line: lineNo });
+      else if (top.kind !== 'ignored') statements.push({ kind: 'close', line: lineNo });
       continue;
     }
 

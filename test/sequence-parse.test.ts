@@ -150,7 +150,7 @@ describe('parseSequence statements', () => {
     expect((seq.statements[0] as MessageStmt).lines).toEqual(['x']);
   });
 
-  it('accepts and ignores title, link, links, destroy, box and rect', () => {
+  it('ignores title, link, links, destroy and box, and keeps rect as a zone', () => {
     const seq = parseSequence(
       [
         'sequenceDiagram',
@@ -167,7 +167,7 @@ describe('parseSequence statements', () => {
         'destroy B',
       ].join('\n'),
     );
-    expect(seq.statements.map((s) => s.kind)).toEqual(['message']);
+    expect(seq.statements.map((s) => s.kind)).toEqual(['zoneOpen', 'message', 'zoneClose']);
     expect(seq.participants.map((p) => p.id)).toEqual(['A', 'B']);
   });
 

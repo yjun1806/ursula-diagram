@@ -16,7 +16,7 @@ const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
 
 type Palette = Record<string, readonly [string, string]>;
 
-/** The palette of the theme named on the root element of a drawing; a drawing without one (a sequence diagram) uses `TOKENS`. */
+/** The palette of the theme named on the root element of a drawing; a drawing without one uses `TOKENS`. */
 function paletteOf(svg: string): Palette {
   const name = /^<svg [^>]*data-theme="([a-z]+)"/.exec(svg)?.[1];
   const theme = THEMES.find((t): t is DrawingTheme => t === name);

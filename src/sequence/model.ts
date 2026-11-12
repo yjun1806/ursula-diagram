@@ -72,7 +72,13 @@ export interface CloseStmt {
   line: number;
 }
 
-export type Statement = MessageStmt | NoteStmt | ActivationStmt | OpenStmt | BranchStmt | CloseStmt;
+/** `rect` and its `end`: a highlighted stretch of rows. The colour of the source is not kept. */
+export interface ZoneStmt {
+  kind: 'zoneOpen' | 'zoneClose';
+  line: number;
+}
+
+export type Statement = MessageStmt | NoteStmt | ActivationStmt | OpenStmt | BranchStmt | CloseStmt | ZoneStmt;
 
 export interface Sequence {
   participants: Participant[];

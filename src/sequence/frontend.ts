@@ -1,6 +1,6 @@
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
-import { renderSceneSvg } from '../render/svg.ts';
+import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutSequence } from './layout.ts';
 import { joinSpans, layoutSequenceText } from './text.ts';
 import type { SequenceLayoutOptions } from './layout.ts';
@@ -16,7 +16,11 @@ registerFrontEnd({
   headers: ['sequenceDiagram'],
   svg(src, opts) {
     const layout = layoutSequence(parseSequence(src), pixelRuler(), layoutOptions(opts.maxWidth, opts.legend));
-    return renderSceneSvg(layout.scene, opts.title === undefined ? {} : { title: opts.title });
+    const title = opts.title ?? opts.heading;
+    return renderThemedScene(layout.scene, {
+      ...(title === undefined ? {} : { title }),
+      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
+    });
   },
   textLines(src, maxWidth, opts) {
     return layoutSequenceText(parseSequence(src), cellRuler(), maxWidth, opts.legend).map(joinSpans);

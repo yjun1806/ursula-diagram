@@ -21,6 +21,9 @@ const withFrame = `sequenceDiagram
   Note over U,S: Done
   S->>S: Audit`;
 
+/** The drawing without its style sheet, whose rules name every role. */
+const body = (svg: string): string => svg.replace(/<style>[\s\S]*?<\/style>/, '');
+
 function text(src: string, width = 100): string {
   const r = renderText(src, width);
   if ('error' in r) throw new Error(r.error);
@@ -35,8 +38,8 @@ describe('sequence svg', () => {
     expect(svg).toContain('role="img"');
     expect(svg).toContain('<title>Sequence diagram: 2 participants, 3 messages</title>');
     expect(svg).toContain('prefers-color-scheme: dark');
-    expect(svg).toContain('--ursula-fg');
-    expect(svg).toContain('--ursula-muted');
+    expect(svg).toContain('--ursula-ink');
+    expect(svg).toContain('--ursula-edge-msg');
     expect(svg).not.toMatch(/#[0-9a-f]{3,6}"/i);
   });
 
@@ -52,24 +55,53 @@ describe('sequence svg', () => {
     expect(svg).toContain('data-kind="call"');
   });
 
-  it('tints actors and writes the frame tab in capitals', () => {
+  it('draws an actor as a figure, a participant as a box, and writes the frame tag in capitals', () => {
     const out = render('sequenceDiagram\nactor P\nparticipant S\nloop Retry\nP->>S: ping\nend');
-    expect(out.match(/class="ursula-box ursula-box--actor"/g)).toHaveLength(1);
-    expect(out.match(/class="ursula-box ursula-box--box"/g)).toHaveLength(1);
+    expect(out.match(/<rect class="ursula-box"/g)).toHaveLength(1);
+    expect(out.match(/<circle class="ursula-edge ursula-edge--msg"[^>]*data-participant="P"/g)).toHaveLength(1);
+    expect(out).toContain('<rect class="ursula-frame"');
+    expect(out).toContain('<rect class="ursula-tag"');
+    expect(out).toContain('class="ursula-tag-text ursula-middle"');
     expect(out).toContain('>LOOP</text>');
   });
 
-  it('draws arrowheads with markers and dashes for the dashed variants', () => {
-    const all = render('sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e', { legend: false });
-    expect(all).toContain('id="ursula-arrow-filled-soft"');
-    expect(all).toContain('id="ursula-arrow-filled-muted"');
-    expect(all).toContain('id="ursula-arrow-open"');
-    expect(all).toContain('id="ursula-arrow-cross"');
-    expect(all.match(/marker-end="url\(#ursula-arrow-cross\)"/g)).toHaveLength(1);
-    expect(all.match(/marker-end="url\(#ursula-arrow-open\)"/g)).toHaveLength(1);
-    expect(all.match(/marker-end="url\(#ursula-arrow-filled-soft\)"/g)).toHaveLength(1);
-    expect(all.match(/marker-end="url\(#ursula-arrow-filled-muted\)"/g)).toHaveLength(1);
-    expect(all.match(/ursula-line--muted ursula-line--dash"/g)).toHaveLength(2);
+  it('writes the theme on the root, the card shadow only in the card theme, and edge--msg on every message line', () => {
+    const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b';
+    for (const theme of ['solid', 'outline', 'card'] as const) {
+      const out = body(render(src, { theme, legend: false }));
+      expect(out).toContain(`data-theme="${theme}"`);
+      expect(out.includes('filter="url(#ursula-shadow)"')).toBe(theme === 'card');
+      expect(out.match(/class="ursula-edge ursula-edge--msg ursula-edge--arrow/g)).toHaveLength(2);
+    }
+    expect(render(src)).toContain('data-theme="solid"');
+  });
+
+  it('draws the reply dashed and the ports that only the card theme shows', () => {
+    const out = body(render('sequenceDiagram\nA->>B: a\nB-->>A: b', { theme: 'card', legend: false }));
+    expect(out.match(/ursula-edge--pending/g)).toHaveLength(1);
+    expect(out.match(/class="ursula-port ursula-port--msg"/g)).toHaveLength(2);
+  });
+
+  it('draws a rect block as a zone that sits under the lifelines', () => {
+    const out = body(render('sequenceDiagram\nA->>B: a\nrect rgb(240, 240, 255)\nB->>A: b\nend\nA->>B: c'));
+    // The zone itself and the backing of the label that lies inside it; the other labels sit on the page.
+    expect(out.match(/class="ursula-zone"/g)).toHaveLength(2);
+    expect(out.indexOf('class="ursula-zone"')).toBeLessThan(out.indexOf('class="ursula-lifeline"'));
+    expect(out).not.toContain('rgb(');
+  });
+
+  it('takes the title of the front matter as the title unless a title is given', () => {
+    const src = '---\ntitle: Head\n---\nsequenceDiagram\nA->>B: a';
+    expect(render(src)).toContain('<title>Head</title>');
+    expect(render(src, { title: 'Own' })).toContain('<title>Own</title>');
+  });
+
+  it('draws a head on call, reply and async lines, a cross on a failed one, and dashes the replies and async lines', () => {
+    const all = body(render('sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e', { legend: false }));
+    expect(all.match(/marker-end="url\(#ursula-arrow-msg-end\)"/g)).toHaveLength(3);
+    expect(all.match(/ursula-edge--pending/g)).toHaveLength(2);
+    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*" data-message/g)).toHaveLength(2);
+    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*"\/>/g)).toHaveLength(2);
     expect(render('sequenceDiagram\nA->B: c')).not.toContain('<marker');
   });
 
