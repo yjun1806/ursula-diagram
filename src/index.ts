@@ -25,6 +25,7 @@ import './treeview/frontend.ts';
 import './usecase/frontend.ts';
 import './treemap/frontend.ts';
 import './venn/frontend.ts';
+import './c4/frontend.ts';
 import './xychart/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
