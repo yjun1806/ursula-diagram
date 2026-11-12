@@ -9,5 +9,7 @@ export interface PieSlice {
 export interface Pie {
   title?: string;
   showData: boolean;
+  /** `config.pie.donutHole`: the hole's radius as a share of the circle's, from 0 to 0.9. */
+  donutHole: number;
   slices: PieSlice[];
 }

@@ -16,6 +16,8 @@ export interface QuadrantPoint {
   y: number;
   /** Radius in pixels from the point's own style or its class; absent when the theme decides. */
   radius?: number;
+  /** Fill colour (`#rgb` or `#rrggbb`) from the point's own style or its class; absent when the theme decides. */
+  color?: string;
   /** Source text of the coordinates, kept for the text table. */
   xText: string;
   yText: string;
@@ -58,10 +60,11 @@ function stripComment(line: string): string {
 
 interface Style {
   radius?: number;
+  color?: string;
   ignoredKeys: string[];
 }
 
-/** Reads `key: value, key: value`; only the radius shapes the drawing. */
+/** Reads `key: value, key: value`; the radius and the fill colour shape the drawing, the stroke is left out. */
 function parseStyle(text: string, line: number): Style {
   const out: Style = { ignoredKeys: [] };
   for (const part of text.split(',')) {
@@ -76,6 +79,8 @@ function parseStyle(text: string, line: number): Style {
       const m = /^(\d+(?:\.\d+)?)(?:px)?$/u.exec(value);
       if (m === null) fail(`radius must be a number, got "${value}".`, line);
       out.radius = Number(m[1]);
+    } else if (key === 'color' && /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(value)) {
+      out.color = value;
     } else {
       out.ignoredKeys.push(key);
     }
@@ -106,6 +111,7 @@ export function parseQuadrant(src: string, opts: { heading?: string; config?: Re
   const ignored = new Set<string>();
   const chart: QuadrantChart = { quadrants: ['', '', '', ''], points: [], ignored: [] };
   const classRadius = new Map<string, number | undefined>();
+  const classColor = new Map<string, string | undefined>();
   const pointClass: Array<string | undefined> = [];
   let n = 0;
   if (opts.heading !== undefined) chart.title = opts.heading;
@@ -160,6 +166,7 @@ export function parseQuadrant(src: string, opts: { heading?: string; config?: Re
       const style = parseStyle(m[2] ?? '', lineNo);
       for (const k of style.ignoredKeys) ignored.add(`classDef ${k}`);
       classRadius.set(m[1] ?? '', style.radius);
+      classColor.set(m[1] ?? '', style.color);
     } else if ((m = POINT.exec(s)) !== null) {
       const x = Number(m[3]);
       const y = Number(m[4]);
@@ -168,6 +175,7 @@ export function parseQuadrant(src: string, opts: { heading?: string; config?: Re
       for (const k of style.ignoredKeys) ignored.add(`point ${k}`);
       const point: QuadrantPoint = { name: unquote(m[1] ?? ''), x, y, xText: m[3] ?? '', yText: m[4] ?? '', line: lineNo };
       if (style.radius !== undefined) point.radius = style.radius;
+      if (style.color !== undefined) point.color = style.color;
       chart.points.push(point);
       pointClass.push(m[2]);
     } else {
@@ -181,6 +189,10 @@ export function parseQuadrant(src: string, opts: { heading?: string; config?: Re
     if (p.radius === undefined && cls !== undefined) {
       const r = classRadius.get(cls);
       if (r !== undefined) p.radius = r;
+    }
+    if (p.color === undefined && cls !== undefined) {
+      const c = classColor.get(cls);
+      if (c !== undefined) p.color = c;
     }
   });
   chart.ignored = [...ignored];

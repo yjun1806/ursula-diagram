@@ -116,20 +116,22 @@ describe('requirement parse', () => {
 
 describe('requirement graph', () => {
   const g = requirementGraph(parseRequirement(RICH), pixelRuler());
-  it('marks a contains line with a circle at its start and no arrowhead', () => {
+  it('marks a contains line with a circle with a plus at its start and no arrowhead', () => {
     const e = g.edges[0];
-    expect(e?.startEnd).toBe('circle');
+    expect(e?.startEnd).toBe('circle-plus');
     expect(e?.end).toBe('none');
     expect(e?.label).toBe('<<contains>>');
     expect(g.edges[1]?.end).toBe('arrow');
   });
 
-  it('puts the kind tag, the name, the text and the facts in separate compartments', () => {
+  it('puts the kind tag over the name in one head, then the text, then the facts as key and value columns', () => {
     const cells = g.nodes[1]?.compartments;
-    expect(cells?.map((c) => c.emphasis)).toEqual(['tag', 'title', 'body', 'body']);
-    expect(cells?.[0]?.lines).toEqual(['<<Functional Requirement>>']);
-    expect(cells?.[3]?.lines).toEqual(['id: 1.1', 'risk: medium', 'verifymethod: demonstration']);
-    expect(g.nodes[6]?.compartments?.[0]?.lines).toEqual(['<<Element>>']);
+    expect(cells?.map((c) => c.emphasis)).toEqual(['title', 'body', 'body']);
+    expect(cells?.[0]?.lines).toEqual(['<<Functional Requirement>>', g.nodes[1]?.title]);
+    expect(cells?.[0]?.lineEmphasis).toEqual(['tag', 'title']);
+    expect(cells?.[2]?.columns).toEqual([['id', '1.1'], ['risk', 'medium'], ['verifymethod', 'demonstration']]);
+    expect(cells?.[2]?.columnEmphasis).toEqual(['tag', 'body']);
+    expect(g.nodes[6]?.compartments?.[0]?.lines[0]).toBe('<<Element>>');
   });
 
   it('reads the direction: LR stays, BT and RL are mirrored', () => {
@@ -149,7 +151,7 @@ describe('requirement render', () => {
 
   it('draws every text of the source', () => {
     const svg = render(OFFICIAL);
-    for (const t of ['&lt;&lt;Requirement&gt;&gt;', 'test_req', 'the test text.', 'id: 1', 'risk: high', 'verifymethod: test', '&lt;&lt;Element&gt;&gt;', 'type: simulation', '&lt;&lt;satisfies&gt;&gt;']) {
+    for (const t of ['&lt;&lt;Requirement&gt;&gt;', 'test_req', 'the test text.', '>id</text>', '>1</text>', '>risk</text>', '>high</text>', '>verifymethod</text>', '>test</text>', '&lt;&lt;Element&gt;&gt;', '>type</text>', '>simulation</text>', '&lt;&lt;satisfies&gt;&gt;']) {
       expect(svg).toContain(t);
     }
   });

@@ -1,7 +1,6 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Theme } from '../render/theme.ts';
-import { clip } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Gantt, GanttTask } from './model.ts';
 import { planTicks } from './ticks.ts';
@@ -20,8 +19,8 @@ const MAX_CHART = 960;
 const MIN_BAR = 4;
 const TICK_GAP = 12;
 const COMPACT_GAP = 8;
-/** A band narrower than this cannot carry its own name in compact mode. */
-const INNER_MIN = 40;
+/** Room left and right of a name written inside its band. */
+const INNER_PAD = 8;
 
 /** Pixels per unit of time the chart may use: `ladder` values of each unit; the largest that fits wins. */
 const UNITS_MS = [1, 1000, 60_000, 3_600_000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
@@ -85,23 +84,34 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const posOf = (t: number): number => (t - t0) * scale;
   const plan = planTicks({ t0, t1, posOf, width: w11, gap: TICK_GAP, axisFormat: model.axisFormat, tickInterval: model.tickInterval, weekday: model.weekday, wholeDays: marks.every((m) => m % DAY === 0) });
 
-  // Each task's band and the text to its right, measured from the axis start (`rx`)
-  interface Geo {
-    rx: number;
-    w: number;
-    dur: string;
+  // Each task's band and the text to its right, measured from the axis start (`rx`). A task that shares a row in
+  // compact mode carries its own name: inside a tinted band it fits in, otherwise right after the band.
+  interface Trail {
+    /** Where the name starts when it stands after the band. */
+    nameDx?: number;
+    durDx: number;
     chips: Array<{ dx: number; w: number; text: string }>;
     /** Right end of the text after the band, from the axis start. */
     reach: number;
   }
-  const geoOf = new Map<number, Geo>();
-  for (const ti of rowTasks) {
-    const t = taskOf(ti);
-    const milestone = t.milestone;
-    const w = milestone ? BAND : Math.max(MIN_BAR, (t.end - t.start) * scale);
-    const rx = milestone ? posOf(centreOf(t)) - HALF : posOf(t.start);
-    let at = rx + w + TAG_GAP + w11(t.durationText);
-    const chips: Geo['chips'] = [];
+  interface Geo {
+    rx: number;
+    w: number;
+    dur: string;
+    /** The text after the band when the name stands in the name column, and when the task names itself. */
+    alone: Trail;
+    shared: Trail;
+  }
+  const trailOf = (t: GanttTask, rx: number, w: number, nameOut: boolean): Trail => {
+    let at = rx + w;
+    let nameDx: number | undefined;
+    if (nameOut) {
+      nameDx = at + TAG_GAP;
+      at = nameDx + w12(t.label);
+    }
+    const durDx = at + TAG_GAP;
+    at = durDx + w11(t.durationText);
+    const chips: Trail['chips'] = [];
     for (const [on, text] of [[t.done, 'done'], [t.active, 'active'], [t.milestone, 'milestone']] as const) {
       if (!on) continue;
       const cw = ceilTo(w11(text) + 16);
@@ -109,7 +119,16 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
       chips.push({ dx, w: cw, text });
       at = dx + cw;
     }
-    geoOf.set(ti, { rx, w, dur: t.durationText, chips, reach: at });
+    return { ...(nameDx === undefined ? {} : { nameDx }), durDx, chips, reach: at };
+  };
+  const geoOf = new Map<number, Geo>();
+  for (const ti of rowTasks) {
+    const t = taskOf(ti);
+    const milestone = t.milestone;
+    const w = milestone ? BAND : Math.max(MIN_BAR, (t.end - t.start) * scale);
+    const rx = milestone ? posOf(centreOf(t)) - HALF : posOf(t.start);
+    const inside = !t.active && !milestone && w12(t.label) + 2 * INNER_PAD <= w;
+    geoOf.set(ti, { rx, w, dur: t.durationText, alone: trailOf(t, rx, w, false), shared: trailOf(t, rx, w, !inside) });
   }
   const geo = (ti: number): Geo => geoOf.get(ti) as Geo;
 
@@ -121,7 +140,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const t = taskOf(ti);
     const g = geo(ti);
     let row = -1;
-    if (model.compact === true && !t.milestone && g.w >= INNER_MIN) {
+    if (model.compact === true && !t.milestone) {
       row = lines.findIndex((_, r) => lineSection[r] === t.section && g.rx >= (lineEnds[r] ?? 0) + COMPACT_GAP);
     }
     if (row < 0) {
@@ -131,7 +150,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
       lineEnds.push(Number.NEGATIVE_INFINITY);
     }
     lines[row]?.push(ti);
-    lineEnds[row] = g.reach;
+    lineEnds[row] = (lines[row]?.length === 1 ? g.alone : g.shared).reach;
   }
   const rowOfTask = new Map<number, number>();
   lines.forEach((tasksOfLine, row) => tasksOfLine.forEach((ti) => rowOfTask.set(ti, row)));
@@ -152,20 +171,22 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const gridBottom = rowTop(lines.length);
 
   const bars: PlacedBar[] = [];
-  const labels = new Map<number, { dur: { x: number; text: string }; chips: Array<{ x: number; w: number; text: string }>; right: number }>();
+  const labels = new Map<number, { name?: { x: number; text: string }; dur: { x: number; text: string }; chips: Array<{ x: number; w: number; text: string }>; right: number }>();
   const obstacles: Rect[][] = lines.map(() => []);
   for (const ti of rowTasks) {
     const row = rowOfTask.get(ti) ?? 0;
     const g = geo(ti);
+    const trail = lines[row]?.[0] === ti ? g.alone : g.shared;
     const x = x0 + g.rx;
     const y = rowTop(row) + BAND_TOP;
     const cy = y + HALF;
     bars.push({ task: ti, row, x, y, w: g.w, h: BAND, cx: x + g.w / 2, cy });
-    const durX = x + g.w + TAG_GAP;
-    const chips = g.chips.map((c) => ({ x: ceilTo(x0 + c.dx), w: c.w, text: c.text }));
+    const durX = x0 + trail.durDx;
+    const chips = trail.chips.map((c) => ({ x: ceilTo(x0 + c.dx), w: c.w, text: c.text }));
     const right = chips.length === 0 ? durX + w11(g.dur) : (chips[chips.length - 1]?.x ?? 0) + (chips[chips.length - 1]?.w ?? 0);
-    labels.set(ti, { dur: { x: durX, text: g.dur }, chips, right });
-    obstacles[row]?.push({ x0: x, x1: x + g.w, y0: y, y1: y + BAND }, { x0: durX, x1: right, y0: cy - 10, y1: cy + 10 });
+    const name = trail.nameDx === undefined ? {} : { name: { x: x0 + trail.nameDx, text: taskOf(ti).label } };
+    labels.set(ti, { ...name, dur: { x: durX, text: g.dur }, chips, right });
+    obstacles[row]?.push({ x0: x, x1: x + g.w, y0: y, y1: y + BAND }, { x0: x + g.w + TAG_GAP, x1: right, y0: cy - 10, y1: cy + 10 });
   }
 
   // Vertical markers: a dashed line with its name under the chart
@@ -313,12 +334,10 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
       items.push({ kind: 'box', style: 'frame', x: bar.x, y: bar.y, w: bar.w, h: bar.h, role: ['band', t.active ? series : `${series}--tint`], data });
       if (t.crit) items.push({ kind: 'path', d: roundedOutline(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2, Math.min(5, (bar.w - 2) / 2)), role: ['edge', 'edge--accent'], data });
     }
-    if (lines[bar.row]?.[0] !== bar.task) {
-      const text = clip(t.label, bar.w - 16, w12);
-      items.push({ kind: 'text', x: bar.x + 8, y: bar.cy, text, role: t.active ? ['body', 'on-start'] : ['body'], data });
-    }
     const label = labels.get(bar.task);
     if (label === undefined) continue;
+    if (label.name !== undefined) items.push({ kind: 'text', x: label.name.x, y: bar.cy, text: label.name.text, role: ['body'], data });
+    else if (lines[bar.row]?.[0] !== bar.task) items.push({ kind: 'text', x: bar.x + INNER_PAD, y: bar.cy, text: t.label, role: ['body'], data });
     items.push({ kind: 'text', x: label.dur.x, y: bar.cy, text: label.dur.text, role: ['tick', 'start'] });
     for (const chip of label.chips) {
       items.push({ kind: 'box', style: 'label', x: chip.x, y: bar.cy - 10, w: chip.w, h: 20, role: ['tag'] });

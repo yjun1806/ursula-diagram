@@ -33,6 +33,7 @@ export interface GitConfig {
   mainBranchName: string;
   mainBranchOrder: number;
   parallelCommits: boolean;
+  /** Commit ids turned by 45 degrees (LR only); off unless the source turns it on. */
   rotateCommitLabel: boolean;
 }
 

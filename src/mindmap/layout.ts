@@ -1,9 +1,10 @@
 import { ceilTo, floorTo, roundTo } from '../chart/grid.ts';
 import type { FrontValue } from '../front-matter.ts';
 import { configSection } from '../front/options.ts';
+import { spansWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Scene, SceneItem } from '../types.ts';
-import type { MindNode, MindShape, Mindmap } from './model.ts';
+import type { Scene, SceneItem, SceneTextSpan } from '../types.ts';
+import type { MindNode, MindRun, MindShape, Mindmap } from './model.ts';
 
 /** Space between two columns, and the margin around the drawing. */
 export const COLUMN_GAP = 32;
@@ -11,9 +12,9 @@ const MARGIN = 24;
 /** Horizontal room a box keeps around its widest line, and its smallest width. */
 const PAD_X = 40;
 const MIN_W = 120;
-/** A line of a label is broken at a word once it is wider than this. */
-export const MAX_TEXT = 200;
-/** Labels inside a circle break earlier, so the circle does not grow wider than the text needs. */
+/** A line of a label is broken at a word once it has more characters than this. */
+export const MAX_CHARS = 20;
+/** Labels inside a circle break once wider than this, so the circle does not grow wider than the text needs. */
 const CIRCLE_TEXT = 120;
 const LINE = 20;
 /** Gap between neighbouring leaves, and between groups that belong to different parents. */
@@ -40,6 +41,8 @@ export interface PlacedMindNode {
   node: MindNode;
   /** Wrapped label lines. */
   lines: string[];
+  /** Runs of each line when the label sets some words bold or italic. */
+  spans?: SceneTextSpan[][];
   depth: number;
   /** -1 left of the root, 1 right of it, 0 for the root. */
   side: -1 | 0 | 1;
@@ -58,13 +61,13 @@ export interface MindmapLayout {
 
 const num = (v: number): string => String(Math.round(v * 100) / 100);
 
-/** Breaks one paragraph at spaces so no line is wider than `MAX_TEXT`; a single longer word stays whole. */
-function wrap(paragraph: string, ruler: Ruler, max: number): string[] {
+/** Breaks one paragraph at spaces so no line is too long by `tooLong`; a single longer word stays whole. */
+function wrap(paragraph: string, tooLong: (line: string) => boolean): string[] {
   const out: string[] = [];
   let line = '';
   for (const word of paragraph.split(' ')) {
     const next = line === '' ? word : `${line} ${word}`;
-    if (line !== '' && ruler.textWidth(next, 'title') > max) {
+    if (line !== '' && tooLong(next)) {
       out.push(line);
       line = word;
     } else {
@@ -75,6 +78,44 @@ function wrap(paragraph: string, ruler: Ruler, max: number): string[] {
   return out;
 }
 
+const sameLook = (a: MindRun, b: MindRun): boolean => a.bold === b.bold && a.italic === b.italic;
+
+/**
+ * The runs of a paragraph cut into the lines `wrap` made of its text: a space between two words of one look takes that
+ * look, any other space is plain, and neighbouring runs of one look merge.
+ */
+function runLines(runs: readonly MindRun[], lines: readonly string[]): MindRun[][] {
+  const words: MindRun[][] = [[]];
+  for (const run of runs) {
+    run.text.split(' ').forEach((part, k) => {
+      if (k > 0) words.push([]);
+      if (part !== '') words[words.length - 1]?.push({ ...run, text: part });
+    });
+  }
+  const filled = words.filter((w) => w.length > 0);
+  let at = 0;
+  return lines.map((line) => {
+    const count = line.split(' ').length;
+    const pieces: MindRun[] = [];
+    filled.slice(at, at + count).forEach((word, k) => {
+      const prev = pieces[pieces.length - 1];
+      const first = word[0];
+      if (k > 0 && prev !== undefined && first !== undefined) pieces.push(sameLook(prev, first) ? { ...prev, text: ' ' } : { text: ' ' });
+      pieces.push(...word);
+    });
+    at += count;
+    const merged: MindRun[] = [];
+    for (const piece of pieces) {
+      const last = merged[merged.length - 1];
+      if (last !== undefined && sameLook(last, piece)) merged[merged.length - 1] = { ...last, text: last.text + piece.text };
+      else merged.push(piece);
+    }
+    return merged;
+  });
+}
+
+const spanOf = (run: MindRun): SceneTextSpan => ({ text: run.text, ...(run.bold === true ? { weight: 'bold' as const } : {}), ...(run.italic === true ? { italic: true as const } : {}) });
+
 /** Height of a box with `n` lines: 48 for one, 68 for two, 84 for three, then 20 for each more. */
 function heightOf(n: number): number {
   return n <= 1 ? 48 : n === 2 ? 68 : n === 3 ? 84 : LINE * n + 24;
@@ -82,6 +123,7 @@ function heightOf(n: number): number {
 
 interface Size {
   lines: string[];
+  spans?: SceneTextSpan[][];
   w: number;
   h: number;
   /** A circle keeps its own width; every other shape takes the width of its column. */
@@ -89,20 +131,26 @@ interface Size {
 }
 
 function sizeOf(node: MindNode, isRoot: boolean, ruler: Ruler): Size {
-  const isCircle = (isRoot && node.shape === 'default') || node.shape === 'circle';
-  const lines = node.paragraphs.flatMap((p) => wrap(p, ruler, isCircle ? CIRCLE_TEXT : MAX_TEXT));
-  const textW = Math.max(...lines.map((l) => ruler.textWidth(l, 'title')));
+  const isCircle = node.shape === 'circle';
+  const tooLong = isCircle ? (l: string) => ruler.textWidth(l, 'title') > CIRCLE_TEXT : (l: string) => [...l].length > MAX_CHARS;
+  const wrapped = node.paragraphs.map((p) => wrap(p, tooLong));
+  const lines = wrapped.flat();
+  const runs = node.runs;
+  const spans = runs === undefined ? undefined : wrapped.flatMap((ls, i) => runLines(runs[i] ?? [{ text: node.paragraphs[i] ?? '' }], ls)).map((line) => line.map(spanOf));
+  const widths = spans === undefined ? lines.map((l) => ruler.textWidth(l, 'title')) : spans.map((line) => spansWidth(ruler, line, 'title'));
+  const textW = Math.max(...widths);
   const baseH = heightOf(lines.length);
-  const shape: MindShape = isRoot && node.shape === 'default' ? 'circle' : node.shape;
+  const shape = node.shape;
+  const text = spans === undefined ? { lines } : { lines, spans };
   if (shape === 'circle') {
     const r = Math.max(isRoot ? ROOT_MIN_R : 24, ceilTo(Math.hypot(textW / 2, (lines.length * LINE) / 2) + 12));
-    return { lines, w: 2 * r, h: 2 * r, fixedWidth: true };
+    return { ...text, w: 2 * r, h: 2 * r, fixedWidth: true };
   }
   const w = Math.max(MIN_W, ceilTo(textW + PAD_X));
-  if (shape === 'bang') return { lines, w: w + BANG_W, h: baseH + BANG_H, fixedWidth: false };
-  if (shape === 'cloud') return { lines, w: w + CLOUD_W, h: baseH + CLOUD_H, fixedWidth: false };
-  if (shape === 'hexagon') return { lines, w: w + 2 * SLANT, h: baseH, fixedWidth: false };
-  return { lines, w, h: baseH, fixedWidth: false };
+  if (shape === 'bang') return { ...text, w: w + BANG_W, h: baseH + BANG_H, fixedWidth: false };
+  if (shape === 'cloud') return { ...text, w: w + CLOUD_W, h: baseH + CLOUD_H, fixedWidth: false };
+  if (shape === 'hexagon') return { ...text, w: w + 2 * SLANT, h: baseH, fixedWidth: false };
+  return { ...text, w, h: baseH, fixedWidth: false };
 }
 
 /** A node with its subtree, before any position is known. */
@@ -165,23 +213,29 @@ function shift(t: Tree, dy: number): void {
   t.children.forEach((c) => shift(c, dy));
 }
 
-/** Splits the root's children into a right and a left half: each goes to the side with fewer leaves so far. */
+/**
+ * Splits the root's children into a right and a left half so that reading clockwise from the top of the left half
+ * follows the input: the first child sits top left, the next run fills the right half from the top, and the rest
+ * climbs the left half from the bottom. The run is the one that leaves the two halves with the closest leaf counts;
+ * on a tie the right half takes more. A single child goes to the right.
+ */
 function sides(children: MindNode[]): { right: MindNode[]; left: MindNode[] } {
   const leaves = (n: MindNode): number => (n.children.length === 0 ? 1 : n.children.reduce((s, c) => s + leaves(c), 0));
-  const right: MindNode[] = [];
-  const left: MindNode[] = [];
-  let r = 0;
-  let l = 0;
-  for (const c of children) {
-    if (r <= l) {
-      right.push(c);
-      r += leaves(c);
-    } else {
-      left.push(c);
-      l += leaves(c);
+  if (children.length <= 1) return { right: [...children], left: [] };
+  const counts = children.map(leaves);
+  const total = counts.reduce((a, b) => a + b, 0);
+  let best = 2;
+  let bestDiff = Infinity;
+  let right = 0;
+  for (let end = 2; end <= children.length; end++) {
+    right += counts[end - 1] ?? 0;
+    const diff = Math.abs(total - 2 * right);
+    if (diff <= bestDiff) {
+      best = end;
+      bestDiff = diff;
     }
   }
-  return { right, left };
+  return { right: children.slice(1, best), left: [children[0] as MindNode, ...children.slice(best).reverse()] };
 }
 
 const flatten = (t: Tree): Tree[] => [t, ...t.children.flatMap(flatten)];
@@ -303,7 +357,7 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
   const rootR = rootSize.w / 2;
   const placed: PlacedMindNode[] = [];
   const rootIndex = 0;
-  placed.push({ node: map.root, lines: rootSize.lines, depth: 0, side: 0, x: -rootR, y: -rootSize.h / 2, w: rootSize.w, h: rootSize.h, parent: -1 });
+  placed.push({ node: map.root, lines: rootSize.lines, ...(rootSize.spans === undefined ? {} : { spans: rootSize.spans }), depth: 0, side: 0, x: -rootR, y: -rootSize.h / 2, w: rootSize.w, h: rootSize.h, parent: -1 });
 
   const edges: Array<{ from: number; to: number; side: -1 | 1; x1: number; y1: number; x2: number; y2: number; tree: Tree }> = [];
   for (const { side, trees } of halves) {
@@ -322,7 +376,7 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
       const x = side === 1 ? near : near - w;
       const index = placed.length;
       t.index = index;
-      placed.push({ node: t.node, lines: t.size.lines, depth: t.depth, side, x, y: t.cy - t.size.h / 2, w, h: t.size.h, parent });
+      placed.push({ node: t.node, lines: t.size.lines, ...(t.size.spans === undefined ? {} : { spans: t.size.spans }), depth: t.depth, side, x, y: t.cy - t.size.h / 2, w, h: t.size.h, parent });
       edges.push({ from: parent, to: index, side, x1: from.x, y1: from.y, x2: near, y2: t.cy, tree: t });
       const out = { x: side === 1 ? x + w : x, y: t.cy };
       for (const c of t.children) walk(c, index, out);
@@ -365,14 +419,14 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
     const role = s === undefined ? ['box'] : ['box', `${s}--tint`];
     const x = p.x + dx;
     const y = p.y + dy;
-    const isRoot = i === 0;
-    const shape: MindShape = isRoot && p.node.shape === 'default' ? 'circle' : p.node.shape;
+    const shape = p.node.shape;
     const data = { label: p.lines.join(' '), depth: String(p.depth) };
     if (shape === 'circle') items.push({ kind: 'circle', cx: x + p.w / 2, cy: y + p.h / 2, r: p.w / 2, role, data });
     else if (shape === 'bang' || shape === 'cloud' || shape === 'hexagon') items.push({ kind: 'path', d: outline(shape, x, y, p.w, p.h), role, data });
     else items.push({ kind: 'box', style: 'box', x, y, w: p.w, h: p.h, role: shape === 'round' ? [...role, 'box--round'] : role, ...(shape === 'square' ? { radius: 4 } : {}), data });
     p.lines.forEach((text, k) => {
-      items.push({ kind: 'text', x: x + p.w / 2, y: y + p.h / 2 + (k - (p.lines.length - 1) / 2) * LINE, text, anchor: 'middle', role: ['name'] });
+      const spans = p.spans?.[k];
+      items.push({ kind: 'text', x: x + p.w / 2, y: y + p.h / 2 + (k - (p.lines.length - 1) / 2) * LINE, text, anchor: 'middle', role: ['name'], ...(spans === undefined ? {} : { spans }) });
     });
   });
 

@@ -3,6 +3,8 @@ import { trimmedNumber } from '../src/chart/format.ts';
 import { ceilTo, FLOAT_NOISE, floorTo, round2, roundTo } from '../src/chart/grid.ts';
 import { anchoredBox, boxesOverlap, clashCost, pickLeastClash, trendAt } from '../src/chart/label-place.ts';
 import type { Box } from '../src/chart/label-place.ts';
+import { nearestSeries } from '../src/chart/series-color.ts';
+import { readdirSync } from 'node:fs';
 
 describe('grid', () => {
   it('rounds to multiples of 4 by default', () => {
@@ -82,5 +84,21 @@ describe('label placement', () => {
     expect(trendAt(2, undefined, undefined)).toBe('peak');
     expect(trendAt(5, undefined, 2)).toBe('falling');
     expect(trendAt(5, 2, undefined)).toBe('rising');
+  });
+});
+
+describe('nearest series colour', () => {
+  // [asked colour, series, series when the first is left out], as the three chart types drew them before sharing one function.
+  const table: [string, number, number][] = [["#ff0000",6,6],["#f00",6,6],["#00ff00",5,5],["#0000ff",1,4],["#ffff00",7,7],["#ff00ff",1,6],["#00ffff",2,2],["#808080",8,8],["#7447c8",1,4],["#0f9b95",2,2],["#d58d25",3,3],["#1f7dcf",4,4],["#399d57",5,5],["#dd5847",6,6],["#9ca73e",7,7],["#6b727e",8,8],["#ff9900",3,3],["#123456",4,4],["#abcdef",4,4],["#663399",1,4],["#ffffff",8,8],["#000000",8,8],["#ff7f50",6,6],["#8a2be2",1,4]];
+
+  it('picks the series nearest in hue, the neutral last for a grey, and can leave out the first', () => {
+    for (const [hex, any, notFirst] of table) {
+      expect(nearestSeries(hex), hex).toBe(any);
+      expect(nearestSeries(hex, { skipFirst: true }), hex).toBe(notFirst);
+    }
+  });
+
+  it('is the one copy: the chart types keep no colour module of their own', () => {
+    for (const dir of ['sankey', 'radar', 'quadrant']) expect(readdirSync(new URL(`../src/${dir}/`, import.meta.url))).not.toContain('colors.ts');
   });
 });

@@ -228,6 +228,19 @@ describe('venn: layout', () => {
     for (const c of [a, b]) expect(Math.hypot(label.x - c.cx, label.y - c.cy)).toBeLessThan(c.r);
   });
 
+  it('keeps the whole block of every union label inside its circles in every example', () => {
+    for (const [name, src] of Object.entries(EXAMPLES)) {
+      const l = laid(src);
+      for (const label of l.labels.filter((x) => x.key.startsWith('union:'))) {
+        const ids = label.key.slice('union:'.length).split(',');
+        const corners = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: label.x + (sx * label.w) / 2, y: label.y + (sy * label.h) / 2 })));
+        for (const c of l.circles.filter((k) => ids.includes(k.id))) {
+          for (const p of corners) expect(Math.hypot(p.x - c.cx, p.y - c.cy), `${name} ${label.key}`).toBeLessThan(c.r);
+        }
+      }
+    }
+  });
+
   it('wraps a long union label to fit a narrow overlap', () => {
     const l = laid('venn-beta\n  set A:20\n  set B:20\n  union A,B["A rather long shared label"]:2\n');
     const label = l.labels.find((x) => x.key.startsWith('union'));

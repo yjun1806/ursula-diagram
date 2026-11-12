@@ -1,7 +1,7 @@
 import type { Graph, NodeShape } from '../types.ts';
 import type { Ruler } from '../metrics.ts';
 import { diamondHeight, diamondWidth, hasOutline } from './diamond.ts';
-import { isFixedShape, ownSize } from './records.ts';
+import { isFixedShape, ownSize, ROUND_MIN_W } from './records.ts';
 import type { Compartment } from '../types.ts';
 
 /**
@@ -180,7 +180,7 @@ export function measureNodes(
   const content = nodes.map((s, i) => {
     const texts = [ruler.textWidth(s.title, 'title'), ...s.lines.map((l) => ruler.textWidth(l, 'line'))];
     return {
-      w: own[i]?.w ?? (hasOutline(s.shape, ruler) ? diamondWidth(ruler, s, diamondHeight(contentH)) : Math.max(...texts) + 2 * ruler.nodePadX + 2 * border),
+      w: own[i]?.w ?? Math.max(hasOutline(s.shape, ruler) ? diamondWidth(ruler, s, diamondHeight(contentH)) : Math.max(...texts) + 2 * ruler.nodePadX + 2 * border, s.shape === 'round' && ruler.terminal !== true ? ROUND_MIN_W : 0),
       h: heights[i] as number,
     };
   });

@@ -1,4 +1,5 @@
 import { ceilTo, floorTo } from '../chart/grid.ts';
+import { nearestSeries } from '../chart/series-color.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
@@ -188,7 +189,9 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   });
 
   for (const q of placed) {
-    items.push({ kind: 'circle', cx: q.cx, cy: q.cy, r: q.r, role: ['mark-dot'], data: { name: q.name } });
+    const color = chart.points[placed.indexOf(q)]?.color;
+    const role = color === undefined ? ['mark-dot'] : [`series-${nearestSeries(color, { skipFirst: true })}--dot`];
+    items.push({ kind: 'circle', cx: q.cx, cy: q.cy, r: q.r, role, data: { name: q.name } });
   }
   for (const q of placed) {
     const l = q.label;

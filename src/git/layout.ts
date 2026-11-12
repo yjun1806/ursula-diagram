@@ -70,7 +70,77 @@ const series = (index: number): number => (index % SERIES) + 1;
 /** `a` and `b` as the two parts of one `M..C..` curve in (time, lane) space. */
 type Pt = readonly [number, number];
 
+/** A curve may start (fork) or end (merge) at most this many steps away from its commit. */
+const MAX_DELAY = 3;
+/** Distance a curve keeps from the label boxes it passes. */
+const CURVE_CLEAR = 2;
+/** Turned commit ids: the end of the id sits this far below and behind the commit, and the id turns by `TURN` degrees. */
+const TURN_DROP = 14;
+const TURN_BACK = 4;
+const TURN = -45;
+const COS45 = Math.SQRT1_2;
+/** Half the height of a line of label text. */
+const TEXT_HALF = 8;
+
+/**
+ * Lays out the graph. A fork or merge curve that would cross the id or tag of a commit it can move away from starts
+ * (fork) or ends (merge) one step later or earlier, along an empty column added for it, up to `MAX_DELAY` steps.
+ */
 export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid'): GitLayout {
+  const delays = new Map<string, number>();
+  for (;;) {
+    const { layout, hits } = buildGit(graph, ruler, theme, delays);
+    const grow = hits.filter((k) => (delays.get(k) ?? 0) < MAX_DELAY);
+    if (grow.length === 0) return layout;
+    for (const k of grow) delays.set(k, (delays.get(k) ?? 0) + 1);
+  }
+}
+
+/** A label's box, turned by `turn` degrees around (ax, ay); `t` is the time of its commit. */
+interface Shape {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  turn: number;
+  ax: number;
+  ay: number;
+  t: number;
+}
+
+function hits(shape: Shape, p: Point): boolean {
+  const r = (-shape.turn * Math.PI) / 180;
+  const dx = p.x - shape.ax;
+  const dy = p.y - shape.ay;
+  const x = shape.ax + dx * Math.cos(r) - dy * Math.sin(r);
+  const y = shape.ay + dx * Math.sin(r) + dy * Math.cos(r);
+  return x > shape.x0 - CURVE_CLEAR && x < shape.x1 + CURVE_CLEAR && y > shape.y0 - CURVE_CLEAR && y < shape.y1 + CURVE_CLEAR;
+}
+
+/** Points along a cubic curve from p0, without its ends. */
+function sample(p0: Point, p1: Point, p2: Point, p3: Point): Point[] {
+  const out: Point[] = [];
+  for (let i = 1; i < 32; i++) {
+    const s = i / 32;
+    const u = 1 - s;
+    const a = u * u * u;
+    const b = 3 * u * u * s;
+    const c = 3 * u * s * s;
+    const d = s * s * s;
+    out.push({ x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y });
+  }
+  return out;
+}
+
+/** A fork or merge curve: its key in the delay map, the curve's points, and which labels a delay can move it off. */
+interface Connector {
+  key: string;
+  points: Point[];
+  /** Labels of commits at or before this time (fork) or at or after it (merge) are ones a delay moves away from. */
+  escapes: (t: number) => boolean;
+}
+
+function buildGit(graph: GitGraph, ruler: Ruler, theme: Theme, delays: ReadonlyMap<string, number>): { layout: GitLayout; hits: string[] } {
   const spec = SCENE_THEME_SPECS[theme];
   const radius = spec?.dotRadius ?? 5;
   const { showBranches, showCommitLabel, parallelCommits } = graph.config;
@@ -81,18 +151,32 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
   const rowCount = order.length;
   const titleOff = graph.title === undefined ? 0 : TITLE_BAND;
 
-  // Position of each commit along the time axis, in steps.
-  const pos: number[] = [];
+  // Position of each commit along the time axis, in steps; delayed curves add empty columns.
+  const base: number[] = [];
   for (const c of graph.commits) {
-    pos[c.seq] = parallelCommits ? Math.max(-1, ...c.parents.map((p) => pos[p] ?? 0)) + 1 : c.seq;
+    base[c.seq] = parallelCommits ? Math.max(-1, ...c.parents.map((p) => base[p] ?? 0)) + 1 : c.seq;
   }
+  /** Empty columns added just before a base position. */
+  const gaps = new Map<number, number>();
+  const needGap = (slot: number, k: number): void => {
+    if (k > 0) gaps.set(slot, Math.max(gaps.get(slot) ?? 0, k));
+  };
+  for (const b of graph.branches) if (b.parent !== undefined) needGap((base[b.parent] ?? 0) + 1, delays.get(`fork:${b.name}`) ?? 0);
+  for (const c of graph.commits) if (c.kind === 'merge') needGap(base[c.seq] ?? 0, delays.get(`merge:${c.seq}`) ?? 0);
+  const shiftAt = (p: number): number => [...gaps].reduce((sum, [slot, k]) => (slot <= p ? sum + k : sum), 0);
+  const pos = base.map((p) => p + shiftAt(p));
   const maxPos = Math.max(0, ...pos);
 
   // Labels: id above or beside, tag chip beyond it.
+  const turned = !vertical && showCommitLabel && graph.config.rotateCommitLabel;
   const idText = (c: Commit): string | undefined => (showCommitLabel ? c.id : undefined);
   const idW = (c: Commit): number => (showCommitLabel ? monoWidth(c.id, ruler) : 0);
   const chipW = (c: Commit): number => (c.tag === undefined ? 0 : Math.ceil((ruler.textWidth(c.tag, 'line') * 11) / 12) + CHIP_PAD);
-  const labelW = (c: Commit): number => Math.max(idW(c), chipW(c));
+  /** Width the labels of a commit take along the time axis; a turned id takes none to the right of its commit. */
+  const labelW = (c: Commit): number => (turned ? chipW(c) : Math.max(idW(c), chipW(c)));
+  /** A turned id: how far it reaches below its commit and back along the time axis. */
+  const turnedDown = (c: Commit): number => (turned ? TURN_DROP + idW(c) * COS45 + TEXT_HALF * COS45 : 0);
+  const turnedBack = (c: Commit): number => (turned ? TURN_BACK + idW(c) * COS45 + TEXT_HALF * COS45 : 0);
 
   const nameW = Math.max(0, ...order.map((n) => ruler.textWidth(n, 'lane')));
 
@@ -115,9 +199,15 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
   const guideStart = vertical ? titleOff + NAME_BAND : showBranches ? Math.max(GUIDE_MIN, snap4Up(MARGIN + nameW + NAME_GAP)) : MARGIN;
   const firstEdge = guideStart + FIRST_GAP;
   const firstHalf = Math.max(0, ...graph.commits.filter((c) => pos[c.seq] === 0).map((c) => labelW(c) / 2));
-  const firstT = vertical ? firstEdge : Math.max(firstEdge, snap4Up(firstHalf + 8));
+  let firstT = vertical ? firstEdge : Math.max(firstEdge, snap4Up(firstHalf + 8));
+  for (const c of graph.commits) firstT = Math.max(firstT, snap4Up(MARGIN + turnedBack(c) - (pos[c.seq] ?? 0) * step));
   const timeOf = (c: Commit): number => firstT + (pos[c.seq] ?? 0) * step;
-  const lastT = firstT + maxPos * step;
+  const delayOf = (key: string): number => delays.get(key) ?? 0;
+  const forkEnds = graph.branches.map((b) => {
+    const parent = b.parent === undefined ? undefined : graph.commits[b.parent];
+    return parent === undefined ? 0 : timeOf(parent) + delayOf(`fork:${b.name}`) * step + REACH;
+  });
+  const lastT = Math.max(firstT + maxPos * step, ...forkEnds);
   const guideEnd = lastT + MARGIN;
 
   // Lane coordinates (y in LR, x in TB/BT) and the room labels need beside the lanes.
@@ -126,8 +216,11 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
   const side = (c: Commit): 'a' | 'b' => ((rowOf.get(c.branch) ?? 0) === 0 ? 'a' : 'b');
   const sideExtent = (c: Commit): number => (idW(c) > 0 && chipW(c) > 0 ? idW(c) + SIDE_GAP + chipW(c) : labelW(c));
   if (!vertical) {
-    for (let r = 0; r < rowCount; r++) lane[r] = titleOff + TOP + r * LANE;
-    acrossSize = titleOff + TOP + (rowCount - 1) * LANE + BOTTOM;
+    const below = (r: number): number => Math.max(0, ...graph.commits.filter((c) => rowOf.get(c.branch) === r).map(turnedDown));
+    const above = (r: number): number => (turned && graph.commits.some((c) => rowOf.get(c.branch) === r && c.tag !== undefined) ? ID_ABOVE + 4 + CHIP_H / 2 : 0);
+    lane[0] = titleOff + TOP;
+    for (let r = 1; r < rowCount; r++) lane[r] = (lane[r - 1] ?? 0) + Math.max(LANE, snap4Up(below(r - 1) + above(r) + LABEL_GAP));
+    acrossSize = (lane[rowCount - 1] ?? 0) + Math.max(BOTTOM, snap4Up(below(rowCount - 1) + MARGIN));
   } else {
     const left = Math.max(0, ...graph.commits.filter((c) => side(c) === 'a').map(sideExtent));
     const right = Math.max(0, ...graph.commits.filter((c) => side(c) === 'b').map(sideExtent));
@@ -185,24 +278,32 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
     items.push({ kind: 'path', d: `${M(guideStart, l)}${H(guideEnd, l)}`, role: ['guide'] });
   }
 
-  // Branch lines: fork curve, then along the line to the last commit.
+  // Fork and merge curves first, then the branch lines over them: a delayed curve runs along a line it shares.
+  const curves: SceneItem[] = [];
   const lines: SceneItem[] = [];
+  const connectors: Connector[] = [];
+  const curvePoints = (a: Pt, b: Pt, c: Pt, d: Pt): Point[] => sample(place(a), place(b), place(c), place(d));
   for (const b of graph.branches) {
     const own = graph.commits.filter((c) => c.branch === b.name);
     const first = own[0];
     const last = own[own.length - 1];
     const l = laneOf(b.name);
     const parent = b.parent === undefined ? undefined : graph.commits[b.parent];
+    const role = [`series-${dot(b.name)}--line`];
     if (parent !== undefined) {
       const t0 = timeOf(parent);
       const l0 = laneOf(parent.branch);
-      const end = last === undefined ? t0 + REACH : Math.max(t0 + REACH, timeOf(last));
-      lines.push({ kind: 'path', d: `${M(t0, l0)}${forkTo(t0, l0, l)}${end > t0 + REACH ? H(end, l) : ''}`, role: [`series-${dot(b.name)}--line`], data: { branch: b.name } });
+      const ts = t0 + delayOf(`fork:${b.name}`) * step;
+      const mid = l0 + (l - l0) * 0.5;
+      curves.push({ kind: 'path', d: `${M(t0, l0)}${ts > t0 ? H(ts, l0) : ''}${C([ts + 20, mid], [ts + 24, l], [ts + REACH, l])}`, role, data: { branch: b.name, fork: b.name } });
+      connectors.push({ key: `fork:${b.name}`, points: curvePoints([ts, l0], [ts + 20, mid], [ts + 24, l], [ts + REACH, l]), escapes: (t) => t <= ts });
+      const end = last === undefined ? ts + REACH : timeOf(last);
+      if (end > ts + REACH) lines.push({ kind: 'path', d: `${M(ts + REACH, l)}${H(end, l)}`, role, data: { branch: b.name } });
     } else if (first !== undefined && last !== undefined && first !== last) {
-      lines.push({ kind: 'path', d: `${M(timeOf(first), l)}${H(timeOf(last), l)}`, role: [`series-${dot(b.name)}--line`], data: { branch: b.name } });
+      lines.push({ kind: 'path', d: `${M(timeOf(first), l)}${H(timeOf(last), l)}`, role, data: { branch: b.name } });
     }
   }
-  // Merge lines: from the head of the merged branch up to the merge commit.
+  // Merge curves: from the head of the merged branch along its line, then up or down to the merge commit.
   for (const c of graph.commits) {
     if (c.kind !== 'merge' || c.mergedFrom === undefined) continue;
     const srcSeq = c.parents[1];
@@ -212,7 +313,11 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
     const lt = laneOf(c.branch);
     const ts = timeOf(src);
     const tm = timeOf(c);
-    lines.push({ kind: 'path', d: `${M(ts, ls)}${tm - REACH > ts ? H(tm - REACH, ls) : ''}${joinTo(tm, ls, lt)}`, role: [`series-${dot(src.branch)}--line`], data: { branch: src.branch, merge: c.id } });
+    const te = tm - delayOf(`merge:${c.seq}`) * step;
+    const mid = ls + (lt - ls) * 0.5;
+    const d = `${M(ts, ls)}${te - REACH > ts ? H(te - REACH, ls) : ''}${C([te - 24, ls], [te - 20, mid], [te, lt])}${te < tm ? H(tm, lt) : ''}`;
+    curves.push({ kind: 'path', d, role: [`series-${dot(src.branch)}--line`], data: { branch: src.branch, merge: c.id } });
+    connectors.push({ key: `merge:${c.seq}`, points: curvePoints([te - REACH, ls], [te - 24, ls], [te - 20, mid], [te, lt]), escapes: (t) => t >= te });
   }
   // Cherry-picks: a dotted link from the copied commit.
   for (const c of graph.commits) {
@@ -227,12 +332,19 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
     const d = `${M(t0, l0)}${C([mid, l0], [mid, l1], [t1, l1])}`;
     lines.push({ kind: 'path', d, role: ['edge', 'edge--pending'], data: { cherry: c.id } });
   }
-  items.push(...lines);
+  items.push(...curves, ...lines);
 
   // Commits and their labels.
   const dots: SceneItem[] = [];
   const labels: SceneItem[] = [];
   const placed: PlacedCommit[] = [];
+  const shapes: Shape[] = [];
+  const flat = (x0: number, x1: number, y0: number, y1: number, t: number): Shape => ({ x0, x1, y0, y1, turn: 0, ax: 0, ay: 0, t });
+  const chip = (x0: number, y: number, w: number, tag: string, t: number): void => {
+    labels.push({ kind: 'box', style: 'label', x: x0, y: y - CHIP_H / 2, w, h: CHIP_H, role: ['tag'] });
+    labels.push({ kind: 'text', x: x0 + w / 2, y, text: tag, anchor: 'middle', role: ['tag-text'] });
+    shapes.push(flat(x0, x0 + w, y - CHIP_H / 2, y + CHIP_H / 2, t));
+  };
   for (const c of graph.commits) {
     const t = timeOf(c);
     const l = laneOf(c.branch);
@@ -241,8 +353,9 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
     const data = { id: c.id, branch: c.branch };
     let r = radius;
     if (c.type === 'HIGHLIGHT') {
-      r = radius + 3;
-      dots.push({ kind: 'circle', cx: p.x, cy: p.y, r, role: ['mark-dot'], data });
+      // A filled square in the colour of the branch.
+      r = radius + 2;
+      dots.push({ kind: 'box', style: 'label', x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r, radius: 2, role: [`series-${n}--dot`], data });
     } else if (c.type === 'REVERSE') {
       r = radius + 2;
       dots.push({ kind: 'circle', cx: p.x, cy: p.y, r, role: ['end-ring'], data });
@@ -259,33 +372,44 @@ export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid')
 
     const id = idText(c);
     const tag = c.tag;
-    if (!vertical) {
+    if (turned) {
+      // The id ends just under the commit and runs back and down at 45 degrees; the tag sits above the commit.
+      const ax = p.x - TURN_BACK;
+      const ay = l + TURN_DROP;
+      if (id !== undefined) {
+        labels.push({ kind: 'text', x: ax, y: ay, text: id, anchor: 'end', role: ['mono'], rotate: TURN });
+        shapes.push({ x0: ax - idW(c), x1: ax, y0: ay - TEXT_HALF, y1: ay + TEXT_HALF, turn: TURN, ax, ay, t });
+      }
+      if (tag !== undefined) chip(p.x - chipW(c) / 2, l - ID_ABOVE - 4, chipW(c), tag, t);
+    } else if (!vertical) {
       const above = side(c) === 'a';
       const idY = above ? l - ID_ABOVE : l + ID_BELOW;
-      if (id !== undefined) labels.push({ kind: 'text', x: p.x, y: idY, text: id, anchor: 'middle', role: ['mono'] });
-      if (tag !== undefined) {
-        const w = chipW(c);
-        const y = id === undefined ? idY : above ? l - TAG_ABOVE : l + TAG_BELOW;
-        labels.push({ kind: 'box', style: 'label', x: p.x - w / 2, y: y - CHIP_H / 2, w, h: CHIP_H, role: ['tag'] });
-        labels.push({ kind: 'text', x: p.x, y, text: tag, anchor: 'middle', role: ['tag-text'] });
+      if (id !== undefined) {
+        labels.push({ kind: 'text', x: p.x, y: idY, text: id, anchor: 'middle', role: ['mono'] });
+        shapes.push(flat(p.x - idW(c) / 2, p.x + idW(c) / 2, idY - TEXT_HALF, idY + TEXT_HALF, t));
       }
+      if (tag !== undefined) chip(p.x - chipW(c) / 2, id === undefined ? idY : above ? l - TAG_ABOVE : l + TAG_BELOW, chipW(c), tag, t);
     } else {
       const left = side(c) === 'a';
       const dir = left ? -1 : 1;
       const edge = p.x + dir * SIDE;
       const w = idW(c);
-      if (id !== undefined) labels.push({ kind: 'text', x: edge, y: p.y, text: id, anchor: left ? 'end' : 'start', role: ['mono'] });
+      if (id !== undefined) {
+        labels.push({ kind: 'text', x: edge, y: p.y, text: id, anchor: left ? 'end' : 'start', role: ['mono'] });
+        shapes.push(flat(left ? edge - w : edge, left ? edge : edge + w, p.y - TEXT_HALF, p.y + TEXT_HALF, t));
+      }
       if (tag !== undefined) {
         const cw = chipW(c);
         const near = edge + dir * (w > 0 ? w + SIDE_GAP : 0);
-        const x0 = left ? near - cw : near;
-        labels.push({ kind: 'box', style: 'label', x: x0, y: p.y - CHIP_H / 2, w: cw, h: CHIP_H, role: ['tag'] });
-        labels.push({ kind: 'text', x: x0 + cw / 2, y: p.y, text: tag, anchor: 'middle', role: ['tag-text'] });
+        chip(left ? near - cw : near, p.y, cw, tag, t);
       }
     }
   }
   items.push(...dots, ...labels);
 
+  // Curves that pass through a label they could move away from.
+  const crossing = connectors.filter((k) => shapes.some((sh) => k.escapes(sh.t) && k.points.some((pt) => hits(sh, pt)))).map((k) => k.key);
+
   const name = graph.accTitle ?? (graph.title === undefined ? `Git graph: ${total} commits on ${rowCount} branches` : `Git graph: ${graph.title}`);
-  return { scene: { width, height, title: name, items }, commits: placed, branches: placedBranches };
+  return { layout: { scene: { width, height, title: name, items }, commits: placed, branches: placedBranches }, hits: crossing };
 }

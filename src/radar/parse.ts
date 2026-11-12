@@ -1,3 +1,5 @@
+import { nearestSeries } from '../chart/series-color.ts';
+import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
 import type { Graticule, Radar, RadarAxis, RadarCurve } from './model.ts';
 
@@ -110,12 +112,26 @@ function readValues(entry: Entry, line: number): RawCurve {
 }
 
 /** Parses the Mermaid `radar-beta` diagram; `heading` is the title of a front matter block, used when the body has none. */
-export function parseRadar(src: string, heading?: string): Radar {
+/** Curve colours (`cScale<i>`) and the curve opacity (`radar.curveOpacity`) of the theme variables of a front-matter `config` map. */
+function readThemeVariables(config: unknown): Pick<Radar, 'colors' | 'filled'> {
+  const vars = configSection(config, 'themeVariables');
+  if (vars === undefined) return { filled: true };
+  const colors: Array<number | undefined> = [];
+  for (const [key, value] of Object.entries(vars)) {
+    const m = /^cScale(\d+)$/u.exec(key);
+    if (m === null || typeof value !== 'string' || !/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(value.trim())) continue;
+    colors[Number(m[1])] = nearestSeries(value.trim());
+  }
+  const opacity = configSection(vars, 'radar')?.['curveOpacity'];
+  return { ...(colors.length > 0 ? { colors } : {}), filled: opacity !== 0 };
+}
+
+export function parseRadar(src: string, heading?: string, config?: unknown): Radar {
   const rows = src.split(/\r?\n/);
   let title = heading;
   const axes: RadarAxis[] = [];
   const raws: RawCurve[] = [];
-  const out: Omit<Radar, 'axes' | 'curves'> = { graticule: 'circle', showLegend: true };
+  const out: Omit<Radar, 'axes' | 'curves' | 'filled'> = { graticule: 'circle', showLegend: true };
   let max: number | undefined;
   let min: number | undefined;
   let ticks: number | undefined;
@@ -205,6 +221,7 @@ export function parseRadar(src: string, heading?: string): Radar {
 
   return {
     ...out,
+    ...readThemeVariables(config),
     ...(title === undefined ? {} : { title }),
     axes,
     curves,

@@ -234,6 +234,21 @@ describe('xychart layout', () => {
     const names = sceneOf(LABELS).items.filter((i): i is SceneText => i.kind === 'text').map((t) => t.text);
     for (const t of ['540', '65', '34', '7', '3.8', 'PaLM', 'LLaMA-65B', 'Llama 2 34B', 'Mistral 7B', 'Phi-3-mini']) expect(names).toContain(t);
   });
+  it('leaves the values of several different series out unless the settings ask for them', () => {
+    for (const src of [LEGEND, COLORS]) {
+      for (const theme of THEMES) expect(sceneOf(src, theme).items.some((i) => i.kind === 'text' && i.role?.[0] === 'value')).toBe(false);
+    }
+  });
+  it('still writes the point labels of a chart with several series', () => {
+    expect(sceneOf(HORIZONTAL).items.some((i) => i.kind === 'text' && i.text === 'up')).toBe(true);
+  });
+  it('gives a bar and a line point of the same value in one category a value each when they are different series', () => {
+    const asked = COLORS.replace('config:\n', 'config:\n  xyChart:\n    showDataLabel: true\n');
+    const values = sceneOf(asked).items.filter((i): i is SceneText => i.kind === 'text' && i.role?.[0] === 'value').map((t) => t.text);
+    // 25 is the blue bar of Category 3 and the red line of Category 3; 30 the black line, a bar and a bar
+    expect(values.filter((v) => v === '25')).toHaveLength(3);
+    expect(values).toHaveLength(16);
+  });
   it('puts the label of a bar inside it in solid and above it when asked for outside', () => {
     const find = (src: string): SceneText | undefined => sceneOf(src).items.find((i): i is SceneText => i.kind === 'text' && i.text === '25' && i.role?.[0] === 'value');
     const dots = (src: string): number => Number(/^M[\d.]+ [\d.]+V[\d.]+Q[\d.]+ ([\d.]+)/.exec((sceneOf(src).items.find((i) => i.kind === 'path' && i.d.includes('H')) as { d: string }).d)?.[1]);

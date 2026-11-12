@@ -59,6 +59,15 @@ describe('kanban svg', () => {
     expect(selectFrontEnd(overview).name).toBe('kanban');
   });
 
+  it('wraps a linked ticket tag in an SVG link', () => {
+    const svg = render(full);
+    const link = /<a href="https:\/\/mermaidchart\.atlassian\.net\/browse\/MC-2038">([\s\S]*?)<\/a>/.exec(svg);
+    expect(link?.[1]).toContain('<rect class="ursula-tag"');
+    expect(link?.[1]).toContain('>MC-2038</text>');
+    expect(svg.match(/<a href=/g)).toHaveLength(3);
+    expect(render(metadataKeys)).not.toContain('<a ');
+  });
+
   it('links a ticket through data-href', () => {
     expect(render(full)).toContain('data-href="https://mermaidchart.atlassian.net/browse/MC-2038"');
     const init = full.replace(/^---[\s\S]*?---\n/, `%%{init: {"kanban": {"ticketBaseUrl": "https://x/#TICKET#"}}}%%\n`);

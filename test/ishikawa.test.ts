@@ -169,7 +169,7 @@ describe('ishikawa parse', () => {
 
 describe('ishikawa layout', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const assign of ['alternate', 'balanced'] as const) {
+    for (const assign of ['halves', 'alternate', 'balanced'] as const) {
       describe(`${name} (${assign})`, () => {
         const layout = layoutIshikawa(parseIshikawa(src), ruler, undefined, undefined, { assign });
         const items = layout.scene.items;
@@ -211,8 +211,8 @@ describe('ishikawa layout', () => {
           }
         });
 
-        it('keeps texts clear of every bone', () => {
-          const bones = lines(items).filter((l) => l.data?.['part'] === 'bone');
+        it('keeps texts clear of every bone, cause line and sub-bone', () => {
+          const bones = lines(items).filter((l) => l.data?.['part'] !== 'spine');
           for (const t of texts(items)) {
             const r = textRect(t);
             for (const bone of bones) {
@@ -246,23 +246,38 @@ describe('ishikawa layout', () => {
     }
   }
 
-  it('puts the categories above and below the spine in turn, in input order, and the head at the right end', () => {
+  it('puts the first half of the categories above the spine and the rest below, in input order, and the head at the right end', () => {
     const layout = layoutIshikawa(parseIshikawa(syntax), ruler);
-    expect(layout.bones.map((b) => b.side)).toEqual(['top', 'bottom', 'top', 'bottom']);
+    expect(layout.bones.map((b) => b.side)).toEqual(['top', 'top', 'bottom', 'bottom']);
     const [process, user, equipment, environment] = layout.bones;
-    expect(process?.join.x).toBe(user?.join.x);
-    expect(equipment?.join.x).toBe(environment?.join.x);
-    expect(equipment?.join.x ?? 0).toBeGreaterThan(process?.join.x ?? 0);
+    expect(process?.join.x).toBe(equipment?.join.x);
+    expect(user?.join.x).toBe(environment?.join.x);
+    expect(user?.join.x ?? 0).toBeGreaterThan(process?.join.x ?? 0);
+    const odd = layoutIshikawa(parseIshikawa('ishikawa\n  P\n  A\n    a\n  B\n    b\n  C\n    c'), ruler);
+    expect(odd.bones.map((b) => b.side)).toEqual(['top', 'top', 'bottom']);
     expect(layout.head.x).toBeGreaterThan(equipment?.join.x ?? Number.POSITIVE_INFINITY);
     expect(layout.head.x + layout.head.w).toBeLessThanOrEqual(layout.scene.width);
   });
 
-  it('lists the causes of a bone from the top down, with deeper ones set apart by a shorter tick', () => {
+  it('lists the causes of a bone from the top down and hangs deeper causes off the line of their own cause', () => {
     const layout = layoutIshikawa(parseIshikawa(syntax), ruler);
     const equipment = layout.bones[2];
-    const ys = equipment?.causes.map((c) => c.y) ?? [];
-    expect(ys).toEqual([...ys].sort((a, b) => a - b));
-    expect(equipment?.causes[1]?.tick).toBeLessThan(equipment?.causes[0]?.tick ?? 0);
+    const top = equipment?.causes.filter((c) => c.depth === 1) ?? [];
+    expect(top.map((c) => c.text)).toEqual(['LENS', 'SENSOR']);
+    expect(top.map((c) => c.y)).toEqual([...top.map((c) => c.y)].sort((a, b) => a - b));
+    const lens = top[0];
+    const subs = equipment?.causes.filter((c) => c.depth > 1 && c.parent === 'LENS') ?? [];
+    expect(subs.map((c) => c.text)).toEqual(['Inappropriate lens', 'Damaged lens', 'Dirty lens']);
+    for (const sub of subs) {
+      // The sub-bone starts on the cause line, between its left end and the bone, and leans like the bones.
+      expect(sub.bone.y).toBe(lens?.y);
+      expect(sub.bone.x).toBeGreaterThan((lens?.bone.x ?? 0) - (lens?.tick ?? 0));
+      expect(sub.bone.x).toBeLessThan(lens?.bone.x ?? 0);
+      expect(sub.tip).toBeDefined();
+      expect(((sub.tip?.y ?? 0) - sub.bone.y) / (sub.bone.x - (sub.tip?.x ?? 0))).toBe(2);
+    }
+    const xs = subs.map((c) => c.bone.x);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
   });
 
   it('balanced puts each category on the side with fewer causes so far', () => {

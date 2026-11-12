@@ -170,26 +170,106 @@ describe('git parse', () => {
 });
 
 interface Box {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
+  /** Corners in drawing order. */
+  pts: { x: number; y: number }[];
   text: string;
 }
 
-function textBoxes(src: string): { boxes: Box[]; width: number; height: number } {
+const TEXT_HALF = 8;
+
+/** Corners of an `x0..x1` × `y0..y1` box turned by `deg` around (ax, ay). */
+function corners(x0: number, x1: number, y0: number, y1: number, deg = 0, ax = 0, ay = 0): { x: number; y: number }[] {
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  return [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ].map(([x = 0, y = 0]) => ({ x: ax + (x - ax) * c - (y - ay) * s, y: ay + (x - ax) * s + (y - ay) * c }));
+}
+
+/** Separating-axis test for two convex polygons. */
+function polygonsOverlap(a: Box['pts'], b: Box['pts']): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i];
+      const q = poly[(i + 1) % poly.length];
+      if (p === undefined || q === undefined) continue;
+      const nx = q.y - p.y;
+      const ny = p.x - q.x;
+      const proj = (pts: Box['pts']): [number, number] => {
+        const v = pts.map((t) => t.x * nx + t.y * ny);
+        return [Math.min(...v), Math.max(...v)];
+      };
+      const [a0, a1] = proj(a);
+      const [b0, b1] = proj(b);
+      if (a1 <= b0 + 1e-6 || b1 <= a0 + 1e-6) return false;
+    }
+  }
+  return true;
+}
+
+function insidePolygon(pt: { x: number; y: number }, poly: Box['pts']): boolean {
+  let sign = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    if (p === undefined || q === undefined) continue;
+    const cross = (q.x - p.x) * (pt.y - p.y) - (q.y - p.y) * (pt.x - p.x);
+    const sg = Math.sign(cross);
+    if (sg === 0) continue;
+    if (sign === 0) sign = sg;
+    else if (sg !== sign) return false;
+  }
+  return true;
+}
+
+function textBoxes(src: string): { boxes: Box[]; chips: Box[]; width: number; height: number; scene: ReturnType<typeof layoutGit>['scene'] } {
   const ruler = pixelRuler();
   const layout = layoutGit(parseGit(src), ruler);
   const boxes: Box[] = [];
+  const chips: Box[] = [];
   for (const it of layout.scene.items) {
+    if (it.kind === 'box' && (it.role ?? []).includes('tag')) {
+      chips.push({ pts: corners(it.x, it.x + it.w, it.y, it.y + it.h), text: 'chip' });
+      continue;
+    }
     if (it.kind !== 'text') continue;
     const t: SceneText = it;
     const mono = (t.role ?? []).includes('mono');
     const w = mono ? monoWidth(t.text, ruler) : ruler.textWidth(t.text, 'line');
     const x0 = t.anchor === 'middle' ? t.x - w / 2 : t.anchor === 'end' ? t.x - w : t.x;
-    boxes.push({ x0, x1: x0 + w, y0: t.y - 8, y1: t.y + 8, text: t.text });
+    const deg = t.rotate ?? 0;
+    boxes.push({ pts: corners(x0, x0 + w, t.y - TEXT_HALF, t.y + TEXT_HALF, deg, t.x, t.y), text: t.text });
   }
-  return { boxes, width: layout.scene.width, height: layout.scene.height };
+  return { boxes, chips, width: layout.scene.width, height: layout.scene.height, scene: layout.scene };
+}
+
+/** Points along the curved parts of a path: each `C` piece sampled, straight pieces left out. */
+function curvePoints(d: string): { x: number; y: number }[] {
+  const nums = (s: string): number[] => s.trim().split(/[\s,]+/).filter((v) => v !== '').map(Number);
+  const out: { x: number; y: number }[] = [];
+  let cur = { x: 0, y: 0 };
+  for (const m of d.matchAll(/([MLC])([^MLC]*)/g)) {
+    const v = nums(m[2] ?? '');
+    if (m[1] === 'C') {
+      const [x1 = 0, y1 = 0, x2 = 0, y2 = 0, x3 = 0, y3 = 0] = v;
+      for (let i = 1; i < 40; i++) {
+        const s = i / 40;
+        const u = 1 - s;
+        out.push({
+          x: u * u * u * cur.x + 3 * u * u * s * x1 + 3 * u * s * s * x2 + s * s * s * x3,
+          y: u * u * u * cur.y + 3 * u * u * s * y1 + 3 * u * s * s * y2 + s * s * s * y3,
+        });
+      }
+      cur = { x: x3, y: y3 };
+    } else {
+      cur = { x: v[v.length - 2] ?? 0, y: v[v.length - 1] ?? 0 };
+    }
+  }
+  return out;
 }
 
 describe('git layout', () => {
@@ -197,18 +277,19 @@ describe('git layout', () => {
     for (const src of EXAMPLES) {
       const { boxes, width, height } = textBoxes(src);
       for (const b of boxes) {
-        expect(b.x0).toBeGreaterThanOrEqual(0);
-        expect(b.x1).toBeLessThanOrEqual(width);
-        expect(b.y0).toBeGreaterThanOrEqual(0);
-        expect(b.y1).toBeLessThanOrEqual(height);
+        for (const p of b.pts) {
+          expect(p.x, b.text).toBeGreaterThanOrEqual(0);
+          expect(p.x, b.text).toBeLessThanOrEqual(width);
+          expect(p.y, b.text).toBeGreaterThanOrEqual(0);
+          expect(p.y, b.text).toBeLessThanOrEqual(height);
+        }
       }
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
           const a = boxes[i];
           const b = boxes[j];
           if (a === undefined || b === undefined) continue;
-          const overlap = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
-          expect(overlap, `${a.text} / ${b.text}`).toBe(false);
+          expect(polygonsOverlap(a.pts, b.pts), `${a.text} / ${b.text}`).toBe(false);
         }
       }
     }
@@ -263,9 +344,67 @@ describe('git layout', () => {
 
   it('draws the three commit shapes and a ring for a merge', () => {
     const svg = render(SHOWCASE);
-    expect(svg).toContain('ursula-mark-dot');
+    // HIGHLIGHT is a filled square in the colour of its branch, REVERSE a crossed ring.
+    expect(svg).toMatch(/<rect class="ursula-series-4--dot"[^>]*data-id="3-/u);
     expect(svg).toContain('ursula-end-ring');
     expect(svg).toContain('ursula-series-1 ursula-line');
+  });
+
+  it('keeps branch curves off commit ids and tags', () => {
+    for (const [i, src] of EXAMPLES.entries()) {
+      const { boxes, chips, scene } = textBoxes(src);
+      const pad = 2;
+      const grown = [...boxes, ...chips].map((b) => {
+        const cx = b.pts.reduce((a, p) => a + p.x, 0) / b.pts.length;
+        const cy = b.pts.reduce((a, p) => a + p.y, 0) / b.pts.length;
+        const pts = b.pts.map((p) => {
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          const len = Math.hypot(dx, dy) || 1;
+          return { x: p.x + (dx / len) * pad * Math.SQRT2, y: p.y + (dy / len) * pad * Math.SQRT2 };
+        });
+        return { pts, text: b.text };
+      });
+      for (const it of scene.items) {
+        if (it.kind !== 'path' || !(it.role ?? []).some((r) => r.endsWith('--line'))) continue;
+        for (const pt of curvePoints(it.d)) {
+          for (const b of grown) expect(insidePolygon(pt, b.pts), `example ${i + 1}: curve through ${b.text}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('starts a curve one step later when it would cross the label of the commit it leaves', () => {
+    // Example 11: featureB leaves "ash", whose id sits under the commit on develop.
+    const g = parseGit(EXAMPLES[10] ?? '');
+    const l = layoutGit(g, pixelRuler());
+    const ash = l.commits.find((c) => c.id === 'ash');
+    const next = l.commits.find((c) => c.seq === (ash?.seq ?? 0) + 1);
+    expect(ash).toBeDefined();
+    expect((next?.x ?? 0) - (ash?.x ?? 0)).toBe(2 * 96);
+    const fork = l.scene.items.find((it) => it.kind === 'path' && it.data?.['fork'] === 'featureB');
+    expect(fork?.kind === 'path' ? fork.d : '').toMatch(new RegExp(`^M${ash?.x} ${ash?.y}L${(ash?.x ?? 0) + 96} ${ash?.y}C`, 'u'));
+  });
+
+  it('keeps every line of a branch without commits inside the picture', () => {
+    for (const src of [EXAMPLES[15] ?? '', EXAMPLES[16] ?? '']) {
+      const { scene } = textBoxes(src);
+      for (const it of scene.items) {
+        if (it.kind !== 'path') continue;
+        const xs = [...it.d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => Number(m[1]));
+        for (const x of xs) expect(x).toBeLessThanOrEqual(scene.width - 16);
+      }
+    }
+  });
+
+  it('turns commit ids 45 degrees only when rotateCommitLabel is true', () => {
+    const rotated = textBoxes(EXAMPLES[11] ?? '').scene.items.filter((it) => it.kind === 'text' && (it.role ?? []).includes('mono'));
+    const flat = textBoxes(EXAMPLES[12] ?? '').scene.items.filter((it) => it.kind === 'text' && (it.role ?? []).includes('mono'));
+    expect(rotated.length).toBe(10);
+    expect(rotated.every((it) => it.kind === 'text' && it.rotate === -45)).toBe(true);
+    expect(flat.every((it) => it.kind === 'text' && it.rotate === undefined)).toBe(true);
+    expect(render(EXAMPLES[11] ?? '')).toMatch(/<text class="ursula-mono ursula-end" x="([\d.]+)" y="([\d.]+)"[^>]*transform="rotate\(-45 \1 \2\)"/u);
+    expect(render(EXAMPLES[1] ?? '')).not.toContain('rotate(');
   });
 });
 

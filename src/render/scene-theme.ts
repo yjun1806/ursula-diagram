@@ -3,6 +3,8 @@ import type { Theme } from './theme.ts';
 /** Light and dark value of a colour variable. */
 export type Pair = readonly [string, string];
 
+export type Arrow = { kind: 'filled'; length: number; width: number; stroke: number } | { kind: 'open'; length: number; width: number; wing: number };
+
 export interface SceneThemeSpec {
   /** Colour variables (`--ursula-<name>`) with their light and dark values. */
   colors: Record<string, Pair>;
@@ -21,7 +23,9 @@ export interface SceneThemeSpec {
   dataWidth: number;
   dotRadius: number;
   /** Arrowhead: `length` is the room it takes along the line; an open head draws its two wings `wing` long. */
-  arrow: { kind: 'filled'; length: number; width: number; stroke: number } | { kind: 'open'; length: number; width: number; wing: number };
+  arrow: Arrow;
+  /** Head of a message line when it differs from `arrow`, so that a call stays apart from the open head of an async message. */
+  msgArrow?: Arrow;
   shadow: boolean;
   /** Shape of a value line between its points. */
   interpolation: 'linear' | 'monotone';
@@ -90,7 +94,9 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'active-stroke': ['none', 'none'],
       'note-fill': ['#ffffff', '#1c1b22'],
       'note-stroke': ['#e4e2ec', '#3a3846'],
+      'note-in-zone': ['#ffffff', '#1c1b22'],
       rule: ['#ffffff', '#1c1b22'],
+      'rule-in-zone': ['#ecebf1', '#474454'],
       edge: ['#c4c1d0', '#6a6779'],
       'edge-msg': ['#8f8c9b', '#7d7a8c'],
       lifeline: ['#e4e2ec', '#3a3846'],
@@ -174,7 +180,9 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'active-stroke': ['#7447c8', '#7447c8'],
       'note-fill': ['#f7f6fa', '#211f29'],
       'note-stroke': ['#ecebf1', '#33313d'],
+      'note-in-zone': ['#ffffff', '#2a2833'],
       rule: ['#ecebf1', '#33313d'],
+      'rule-in-zone': ['#ecebf1', '#33313d'],
       edge: ['#8f8c9b', '#7d7a8c'],
       'edge-msg': ['#8f8c9b', '#7d7a8c'],
       lifeline: ['#d3d1dc', '#474454'],
@@ -258,7 +266,9 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'active-stroke': ['#7447c8', '#7447c8'],
       'note-fill': ['#eeecf5', '#1c1b22'],
       'note-stroke': ['none', 'none'],
+      'note-in-zone': ['#ffffff', '#2e2c38'],
       rule: ['#ecebf1', '#33313d'],
+      'rule-in-zone': ['#ecebf1', '#474454'],
       edge: ['#8f8c9b', '#7d7a8c'],
       'edge-msg': ['#8f8c9b', '#7d7a8c'],
       lifeline: ['#d3d1dc', '#474454'],
@@ -320,6 +330,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     dataWidth: 3,
     dotRadius: 5.5,
     arrow: { kind: 'open', length: 8, width: 10, wing: 5 },
+    msgArrow: { kind: 'filled', length: 8, width: 8, stroke: 1.5 },
     shadow: true,
     interpolation: 'monotone',
     valueLabel: 'outside',

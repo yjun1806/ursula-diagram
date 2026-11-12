@@ -102,7 +102,16 @@ describe('quadrant chart reading', () => {
     const c = parseQuadrant(STYLING);
     expect(c.points.map((p) => p.radius)).toEqual([12, 10, 25, 15, 10, 10]);
     expect(c.points[1]?.name).toBe('Campaign B');
-    expect(c.ignored).toEqual(expect.arrayContaining(['point color', 'point stroke-color', 'point stroke-width', 'classDef color', 'classDef stroke-color', 'classDef stroke-width']));
+    expect(c.ignored).toEqual(expect.arrayContaining(['point stroke-color', 'point stroke-width', 'classDef stroke-color', 'classDef stroke-width']));
+    expect(c.ignored).not.toContain('point color');
+    expect(c.points.map((p) => p.color)).toEqual([undefined, '#ff3300', '#00ff33', '#ff33f0', '#908342', '#0000ff']);
+  });
+
+  it('fills a styled point with the palette colour nearest to its own and never with the colour of a plain point', () => {
+    const roles = layoutQuadrant(parseQuadrant(STYLING), ruler)
+      .scene.items.filter((i) => i.kind === 'circle')
+      .map((i) => (i.kind === 'circle' ? i.role.join(' ') : ''));
+    expect(roles).toEqual(['mark-dot', 'series-6--dot', 'series-5--dot', 'series-6--dot', 'series-3--dot', 'series-4--dot']);
   });
 });
 

@@ -213,3 +213,52 @@ describe('timeline text', () => {
     expect(Math.max(...r.lines.map((s) => s.length))).toBeLessThanOrEqual(60);
   });
 });
+
+describe('timeline colour scheme', () => {
+  const seriesOf = (svg: string): string[] => [...svg.matchAll(/class="[^"]*ursula-series-(\d)--tint/g)].map((m) => m[1] ?? '');
+
+  it('gives each time period its own series when there is no section', () => {
+    const svg = render(renderSrc('07-styling-of-time-periods-and-events'));
+    // LinkedIn, Facebook, Google, YouTube, Twitter: the two 2004 events share the second series.
+    expect(seriesOf(svg)).toEqual(['1', '2', '2', '3', '4']);
+  });
+
+  it('draws every period in one scheme when disableMulticolor is set', () => {
+    expect(seriesOf(render(renderSrc('08-styling-of-time-periods-and-events')))).toEqual([]);
+  });
+
+  it('gives every period of a section the series of the section', () => {
+    expect(seriesOf(render(renderSrc('03-grouping-of-time-periods-in-sections-ages')))).toEqual(['1', '1', '1', '2', '2']);
+  });
+
+  it('colours the dot of a period with the series of its events', () => {
+    const svg = render(renderSrc('07-styling-of-time-periods-and-events'));
+    expect([...svg.matchAll(/<circle class="ursula-dot ursula-series-(\d)"/g)].map((m) => m[1])).toEqual(['1', '2', '3', '4']);
+  });
+});
+
+describe('timeline box sizes', () => {
+  for (const name of ['03-grouping-of-time-periods-in-sections-ages', '04-wrapping-of-text-for-long-time-periods-or-events', '06-direction-v11-14-0']) {
+    it(`${name}: every event box has one width and the n-th boxes of a row one height`, () => {
+      const l = layoutTimeline(parseTimeline(src(name)), ruler);
+      expect(new Set(l.periods.flatMap((p) => p.boxes.map((b) => b.w))).size).toBe(1);
+      const depth = Math.max(...l.periods.map((p) => p.boxes.length));
+      for (let k = 0; k < depth; k++) {
+        const hs = l.periods.filter((p) => p.boxes[k] !== undefined && l.direction === 'LR').map((p) => p.boxes[k]?.h);
+        expect(new Set(hs).size).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+});
+
+describe('timeline event text', () => {
+  it('centres the lines of an event in a box taller than they need', () => {
+    const l = layoutTimeline(parseTimeline(src('04-wrapping-of-text-for-long-time-periods-or-events')), ruler);
+    for (const p of l.periods)
+      for (const b of p.boxes) {
+        const ys = texts(l.scene.items).filter((t) => b.lines.includes(t.text) && t.x === b.x + b.w / 2 && t.y > b.y && t.y < b.y + b.h).map((t) => t.y);
+        const mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+        expect(mid).toBe(b.y + b.h / 2);
+      }
+  });
+});

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { cellRuler, cellWidth, layoutSequence, parseSequence, render, renderText, renderTextSpans, selectFrontEnd, spansToAnsi, UrsulaError } from '../src/index.ts';
 import type { TextSpan } from '../src/index.ts';
+import { pixelRuler } from '../src/metrics.ts';
 
 const upload = `sequenceDiagram
   participant U as User
@@ -84,8 +85,9 @@ describe('sequence svg', () => {
 
   it('draws a rect block as a zone that sits under the lifelines', () => {
     const out = body(render('sequenceDiagram\nA->>B: a\nrect rgb(240, 240, 255)\nB->>A: b\nend\nA->>B: c'));
-    // The zone itself and the backing of the label that lies inside it; the other labels sit on the page.
-    expect(out.match(/class="ursula-zone"/g)).toHaveLength(2);
+    // The zone itself, and the zone face backing the label that lies inside it; the other labels sit on the page.
+    expect(out.match(/class="ursula-zone"/g)).toHaveLength(1);
+    expect(out.match(/class="ursula-zone-face"/g)).toHaveLength(1);
     expect(out.indexOf('class="ursula-zone"')).toBeLessThan(out.indexOf('class="ursula-lifeline"'));
     expect(out).not.toContain('rgb(');
   });
@@ -96,13 +98,31 @@ describe('sequence svg', () => {
     expect(render(src, { title: 'Own' })).toContain('<title>Own</title>');
   });
 
-  it('draws a head on call, reply and async lines, a cross on a failed one, and dashes the replies and async lines', () => {
+  it('draws a filled head on call and reply lines, an open head on async lines, a cross on a failed one, and dashes only dotted arrows', () => {
     const all = body(render('sequenceDiagram\nA->>B: a\nA-->>B: b\nA->B: c\nA-xB: d\nA--)B: e', { legend: false }));
-    expect(all.match(/marker-end="url\(#ursula-arrow-msg-end\)"/g)).toHaveLength(3);
+    expect(all.match(/marker-end="url\(#ursula-arrow-msg-end\)"/g)).toHaveLength(2);
     expect(all.match(/ursula-edge--pending/g)).toHaveLength(2);
     expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*" data-message/g)).toHaveLength(2);
-    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*"\/>/g)).toHaveLength(2);
+    // Two strokes of the cross and the open head, which is one stroke with a corner.
+    expect(all.match(/<path class="ursula-edge ursula-edge--msg" d="M[^"]*"\/>/g)).toHaveLength(3);
     expect(render('sequenceDiagram\nA->B: c')).not.toContain('<marker');
+  });
+
+  it('draws `-)` as a solid line and `--)` as a dotted one, both ending in an open head that differs from the filled one', () => {
+    const solid = body(render('sequenceDiagram\nA-)B: e', { legend: false }));
+    expect(solid).toContain('data-kind="async"');
+    expect(solid).not.toContain('ursula-edge--pending');
+    expect(solid).not.toContain('marker-end');
+    expect(solid).toMatch(/<path class="ursula-edge ursula-edge--msg" d="M\S+ \S+ L(\S+) \S+ L\S+ \S+"\/>/);
+    expect(body(render('sequenceDiagram\nA--)B: e', { legend: false }))).toContain('ursula-edge--pending');
+  });
+
+  it('draws the legend sample of a kind solid or dashed like the first message of that kind', () => {
+    const legendOf = (src: string): string => body(render(src)).slice(body(render(src)).indexOf('ursula-rule'));
+    const solid = legendOf('sequenceDiagram\nA->>B: a\nA-xB: d\nA-)B: e');
+    expect(solid).not.toContain('ursula-edge--pending');
+    const dotted = legendOf('sequenceDiagram\nA->>B: a\nA--xB: d\nA--)B: e');
+    expect(dotted.match(/ursula-edge--pending/g)).toHaveLength(2);
   });
 
   it('writes the legend captions and lets the options rename or drop them', () => {
@@ -468,3 +488,29 @@ describe('sequence speed', () => {
     expect(textMs).toBeLessThan(20);
   });
 });
+
+describe('sequence backings and notes inside zones', () => {
+  const src = `sequenceDiagram
+    participant Alice
+    participant John
+    rect rgb(191, 223, 255)
+    note right of Alice: Alice calls John.
+    Alice->>+John: Hello John, how are you?
+    end
+    note right of Alice: Outside.
+    Alice->>John: Bye`;
+
+  it('backs a label in a zone with the zone face, which has no outline', () => {
+    const items = layoutSequence(parseSequence(src), pixelRuler()).scene.items;
+    const backs = items.filter((it) => it.kind === 'box' && it.style === 'label');
+    expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone-face'))).toBe(true);
+    expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone'))).toBe(false);
+  });
+
+  it('marks a note inside a zone, and only that one', () => {
+    const notes = layoutSequence(parseSequence(src), pixelRuler()).scene.items.filter((it) => it.kind === 'box' && it.role?.includes('note'));
+    expect(notes).toHaveLength(2);
+    expect(notes.map((n) => n.kind === 'box' && (n.role?.includes('note--in-zone') ?? false))).toEqual([true, false]);
+  });
+});
+

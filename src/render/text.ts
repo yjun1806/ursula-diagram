@@ -1,5 +1,5 @@
 import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
-import { compartmentHeights, hasCompartments } from '../layout/records.ts';
+import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
@@ -151,12 +151,16 @@ export function markGlyphs(end: EdgeEnd, heading: Heading): string[] {
       return [foot, bar];
     case 'zero-many':
       return [foot, 'o'];
+    case 'circle-plus':
+      return ['⊕'];
+    case 'lollipop':
+      return ['○'];
     default:
       return [];
   }
 }
 
-const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many']);
+const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
 
 function drawEdges(c: Canvas, layout: Layout): void {
   const nodes = new Map(layout.nodes.map((n) => [n.id, n] as const));
@@ -280,7 +284,12 @@ function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: n
       y += 1;
     }
     const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center';
-    cell.lines.forEach((line, k) => c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line));
+    const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
+    cell.lines.forEach((line, k) => {
+      const row = cell.columns?.[k];
+      if (row === undefined) c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
+      else row.forEach((text, col) => text !== '' && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
+    });
     y += heights[i] ?? 0;
   });
 }

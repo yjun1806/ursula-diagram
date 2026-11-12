@@ -18,7 +18,7 @@ const DEFAULTS: GitConfig = {
   mainBranchName: 'main',
   mainBranchOrder: 0,
   parallelCommits: false,
-  rotateCommitLabel: true,
+  rotateCommitLabel: false,
 };
 
 /** A deterministic seven-digit hex from the sequence number (FNV-1a, then a bit mixer). */
