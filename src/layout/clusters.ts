@@ -169,6 +169,10 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
     const own = tree.setting.get(c) ?? {};
     kids.set(c, buildLevel(plan, c, own.direction ?? direction, own.direction === undefined ? mirror : own.mirror));
   }
+  // The boxes of one level share their size across the flow, the content standing in the middle of the grown box.
+  const across = direction === 'LR' ? 'h' : 'w';
+  const widest = Math.max(0, ...[...kids.values()].map((k) => k.size[across]));
+  for (const [c, k] of kids) kids.set(c, { ...k, size: { ...k.size, [across]: widest } });
   // The nodes of the level in the order of the source; a cluster stands where its first node stands.
   const nodes: GraphNode[] = [];
   const seen = new Set<string>();
@@ -187,12 +191,14 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
       nodes.push({ ...rest, lane: plan.home });
     }
   }
-  const edges: GraphEdge[] = plan.edges
-    .filter((r) => r.level === id)
-    .map(({ index, edge, from, to }) => {
-      const { id: _id, ...rest } = edge;
-      return { ...rest, from, to, id: marker(index) };
-    });
+  const here = plan.edges.filter((r) => r.level === id);
+  // While a line is written to or from a subgraph, the lines of its nodes between two boxes do not decide the ranks of the boxes.
+  const subgraphLevel = here.some((r) => tree.label.has(r.edge.from) || tree.label.has(r.edge.to));
+  const edges: GraphEdge[] = here.map(({ index, edge, from, to }) => {
+    const { id: _id, ...rest } = edge;
+    const lifted = from !== to && tree.label.has(from) && tree.label.has(to) && from !== edge.from && to !== edge.to;
+    return { ...rest, from, to, id: marker(index), ...(subgraphLevel && lifted ? { unranked: true as const } : {}) };
+  });
   const level: Graph = { direction, ...(mirror === undefined ? {} : { mirror }), lanes: graph.lanes.slice(0, 1), nodes, edges };
   const { maxWidth, maxHeight, ...rest } = plan.opts;
   const root = id === '';

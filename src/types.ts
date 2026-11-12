@@ -129,6 +129,12 @@ export interface GraphEdge {
   invisible?: true;
   /** Length asked for by a longer line (`--->` is 2); absent for the shortest. */
   minLength?: number;
+  /**
+   * The edge does not decide where its ends stand in the flow: ranks, layers and stages are assigned as if it were not
+   * there, and the line is routed afterwards between the places its ends got. Set by the cluster layout on a line
+   * between two boxes that was lifted from nodes inside them, while a line written to or from a subgraph is present.
+   */
+  unranked?: true;
   /** Small texts beside the start and the end of the line (a multiplicity such as `1..*`). */
   startLabel?: string;
   endLabel?: string;

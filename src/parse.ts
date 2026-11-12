@@ -626,12 +626,34 @@ function finishClusters(st: State): Graph {
   for (const n of st.nodes.values()) {
     for (let g = n.lane === null || n.lane === IMPLICIT_LANE ? undefined : n.lane; g !== undefined; g = parentOf(g)) filled.add(g);
   }
+  const groupIds = new Set(st.lanes.map((l) => l.id));
+  const homeOf = (id: string): string | undefined => {
+    const lane = st.nodes.get(id)?.lane;
+    return lane === null || lane === undefined || lane === IMPLICIT_LANE ? undefined : lane;
+  };
+  const within = (id: string, group: string): boolean => {
+    if (groupIds.has(id)) {
+      for (let g: string | undefined = id, i = 0; g !== undefined && i <= groupIds.size; g = parentOf(g), i++) if (g === group) return true;
+      return false;
+    }
+    for (let g = homeOf(id), i = 0; g !== undefined && i <= groupIds.size; g = parentOf(g), i++) if (g === group) return true;
+    return false;
+  };
+  /** Mermaid's rule: a subgraph whose node has an edge to or from a node outside it takes its parent's direction. */
+  const linkedOutside = (group: string): boolean =>
+    st.edges.some((e) => {
+      const ends = [e.from, e.to];
+      // An end that is the subgraph itself, or one inside it, is not a link out; only a node of the subgraph can have one.
+      if (!ends.some((id) => !groupIds.has(id) && within(id, group))) return false;
+      return ends.some((id) => !within(id, group));
+    });
   const clusters: GraphCluster[] = st.lanes
     .filter((l) => filled.has(l.id))
     .map((l) => {
       const g = st.groups.get(l.id) ?? {};
       const parent = g.parent;
-      return { id: l.id, label: l.label, ...(parent === undefined ? {} : { parent }), ...(g.direction === undefined ? {} : { direction: g.direction }), ...(g.mirror === undefined ? {} : { mirror: g.mirror }) };
+      const own = g.direction !== undefined && !linkedOutside(l.id);
+      return { id: l.id, label: l.label, ...(parent === undefined ? {} : { parent }), ...(own ? { direction: g.direction } : {}), ...(own && g.mirror !== undefined ? { mirror: g.mirror } : {}) };
     });
   const empty = new Set(st.lanes.filter((l) => !filled.has(l.id)).map((l) => l.id));
   const home = { id: IMPLICIT_LANE, label: '' };
