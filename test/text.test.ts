@@ -20,43 +20,29 @@ function cells(line: string): string[] {
 describe('renderText', () => {
   it('draws a small LR graph', () => {
     expect(lines('flowchart LR\nA[Start] -->|go| B[Finish]').join('\n')).toMatchInlineSnapshot(`
-      "
-
-
-
-          ┌──────────┐                  ┌──────────┐
-          │  Start   │                  │  Finish  │
-          │          │─────── go ──────▶│          │
-          └──────────┘                  └──────────┘"
+      "┌─────────┐          ┌─────────┐
+      │  Start  │─── go ──▶│ Finish  │
+      └─────────┘          └─────────┘"
     `);
   });
 
   it('draws a small TD graph', () => {
     expect(lines('flowchart TD\nA[Start] --> B[Mid]\nA --> C[Side]\nB --> D[End]\nC --> D').join('\n')).toMatchInlineSnapshot(`
-      "
-
-
-
-          ┌────────┐  ┌──────┐
-          │ Start  │  │      │
-          │        │─▶│      │
-          └────────┘  │      │
-               │     ││      │
-               │     ││ Side │
-               │     ││      │
-               ▼     ││      │
-          ┌────────┐ ││      │
-          │  Mid   │ ││      │
-          │        │ ││      │
-          └────────┘ │└──────┘
-               │     │
-               │     │
-               │     │
-               ▼     │
-          ┌────────┐ │
-          │  End   │ │
-          │        │◀┘
-          └────────┘"
+      "┌───────┐   ┌───────┐
+      │ Start │   │       │
+      └───────┘   │       │
+          │  └───▶│       │
+          │       │ Side  │
+          ▼       │       │
+      ┌───────┐   │       │
+      │  Mid  │   │       │
+      └───────┘   └───────┘
+          │        │
+          │        │
+          ▼        │
+      ┌───────┐    │
+      │  End  │◀───┘
+      └───────┘"
     `);
   });
 

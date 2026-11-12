@@ -26,7 +26,9 @@ export function withLegend(layout: Layout, ruler: Ruler, option: LegendOption | 
   const x0 = Math.min(...bare.lanes.map((l) => l.x), ...bare.nodes.map((n) => n.x), bare.width);
   const y = bare.height;
   const h = ruler.legendHeight;
-  const rowY = y + h / 2;
+  // A terminal leaves one blank line between the drawing and its legend.
+  const lead = ruler.uniform ? 1 : 0;
+  const rowY = y + lead + h / 2;
   let cursor = x0;
   const items: LegendItem[] = used.map((style) => {
     const caption = option?.[style] ?? LEGEND_CAPTIONS[style];
@@ -48,7 +50,7 @@ export function withLegend(layout: Layout, ruler: Ruler, option: LegendOption | 
   return {
     ...bare,
     width,
-    height: tidy(y + h),
-    legend: { x: 0, y: tidy(y), w: width, h, base: { width: bare.width, height: bare.height }, items },
+    height: tidy(y + lead + h),
+    legend: { x: 0, y: tidy(y), w: width, h: h + lead, base: { width: bare.width, height: bare.height }, items },
   };
 }

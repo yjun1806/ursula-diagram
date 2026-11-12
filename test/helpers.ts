@@ -108,7 +108,7 @@ export function geometryViolations(l: Layout): string[] {
 /** Canvas width in the ruler's units that holds exactly `columns` columns (two slot units each) of the graph. */
 export function widthForColumns(graph: Graph, ruler: Ruler, columns: number): number {
   const m = measureNodes(graph.nodes, graph.lanes, ruler, graph.direction === 'TD');
-  const margin = Math.ceil(ruler.trackGap / ruler.nodeGrid - 1e-9) * ruler.nodeGrid;
+  const margin = ruler.uniform ? 0 : Math.ceil(ruler.trackGap / ruler.nodeGrid - 1e-9) * ruler.nodeGrid;
   return columns * 2 * m.unit - ruler.rankGap + 2 * margin + m.gutter + 2 * ruler.lanePad;
 }
 

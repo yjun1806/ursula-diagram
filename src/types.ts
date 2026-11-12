@@ -41,6 +41,8 @@ export interface LayoutLane {
   h: number;
   /** Box of the lane label (text extent), placed at the start corner of the band. */
   labelBox: { x: number; y: number; w: number; h: number };
+  /** Terminal drawings: the band has no border; its name stands on a line of its own (a rule across the band when lanes run along the reading direction). */
+  bare?: true;
 }
 
 export interface LayoutNode {

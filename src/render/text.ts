@@ -74,16 +74,20 @@ function drawLanes(c: Canvas, layout: Layout): void {
     const y0 = Math.floor(lane.y);
     const x1 = x0 + Math.round(lane.w) - 1;
     const y1 = y0 + Math.round(lane.h) - 1;
+    if (lane.bare && vertical) {
+      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+      continue;
+    }
     if (vertical) {
       for (let y = y0; y <= y1; y++) {
         c.put(x0, y, '╎');
         c.put(x1, y, '╎');
       }
     } else {
-      for (let x = x0; x <= x1; x++) {
-        c.put(x, y0, '╌');
-        c.put(x, y1, '╌');
-      }
+      for (let x = x0; x <= x1; x++) c.put(x, y0, '─');
+      const lx = Math.floor(lane.labelBox.x);
+      c.put(lx - 1, y0, ' ');
+      c.put(lx + cellWidth(lane.label), y0, ' ');
     }
     c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
   }
@@ -152,7 +156,19 @@ function drawEdges(c: Canvas, layout: Layout): void {
         touch(x, y, back, edge.style);
       }
     }
+    // The end that sits on a box also reaches toward that box, so a line that turns at once draws a corner.
+    const first = pts[0];
     const last = pts[pts.length - 1];
+    const toward = (index: number, id: string): void => {
+      const n = nodes.get(id);
+      const p = edge.points[index];
+      const cell = index === 0 ? first : last;
+      if (!n || !p || !cell) return;
+      const bit = Math.abs(p.x - n.x) < 1e-9 ? E : Math.abs(p.x - n.x - n.w) < 1e-9 ? W : Math.abs(p.y - n.y) < 1e-9 ? S : Math.abs(p.y - n.y - n.h) < 1e-9 ? N : 0;
+      if (bit !== 0) touch(cell[0], cell[1], bit, edge.style);
+    };
+    toward(0, edge.from);
+    toward(edge.points.length - 1, edge.to);
     if (last) arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
   }
   for (const [key, cell] of cells) {

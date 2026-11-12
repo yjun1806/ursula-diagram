@@ -2,6 +2,7 @@ import './flowchart-frontend.ts';
 import type { LayoutOptions } from './layout/index.ts';
 import { cellWidth } from './metrics.ts';
 import { selectFrontEnd } from './registry.ts';
+import type { TextOptions } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './sequence/frontend.ts';
 import { UrsulaError } from './types.ts';
@@ -32,16 +33,11 @@ export type * from './types.ts';
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> & Pick<TextOptions, 'detail'> = {},
 ): { lines: string[] } | { error: string } {
   try {
-    let lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
-    let widest = Math.max(0, ...lines.map(cellWidth));
-    if (widest > maxWidth && opts.engine === undefined) {
-      // Narrow terminals: the grid placer packs tighter, so it gets a second chance.
-      lines = selectFrontEnd(src).textLines(src, maxWidth, { ...opts, engine: 'grid' });
-      widest = Math.max(0, ...lines.map(cellWidth));
-    }
+    const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
+    const widest = Math.max(0, ...lines.map(cellWidth));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {
@@ -57,7 +53,7 @@ export function renderText(
 export function renderTextSpans(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> & Pick<TextOptions, 'detail'> = {},
 ): { lines: TextSpan[][] } | { error: string } {
   try {
     const frontEnd = selectFrontEnd(src);
@@ -66,12 +62,8 @@ export function renderTextSpans(
         ? frontEnd.textSpans(src, maxWidth, o)
         : frontEnd.textLines(src, maxWidth, o).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
     const widthOf = (ls: TextSpan[][]): number => Math.max(0, ...ls.map((l) => cellWidth(l.map((s) => s.text).join(''))));
-    let lines = spans(opts);
-    let widest = widthOf(lines);
-    if (widest > maxWidth && opts.engine === undefined) {
-      lines = spans({ ...opts, engine: 'grid' });
-      widest = widthOf(lines);
-    }
+    const lines = spans(opts);
+    const widest = widthOf(lines);
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {

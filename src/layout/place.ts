@@ -168,7 +168,8 @@ export function measureNodes(
   });
   const w = content.map((c) => snapW(c.w));
   const sorted = [...w].sort((a, b) => a - b);
-  const pick = sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0;
+  // A terminal drawing has one box width: the widest.
+  const pick = ruler.uniform ? (sorted[sorted.length - 1] ?? 0) : (sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0);
   // Half of the column pitch is the slot unit; it has to be a whole number of node grid steps.
   // Boxes half a step apart still have to overlap, so a box is wider than a gap.
   const fit = (v: number, minimum = ruler.nodeGrid): number => {
@@ -178,6 +179,9 @@ export function measureNodes(
   };
   const common = td ? gridUp(ruler, pick) : fit(pick, 5 * ruler.nodeGrid);
   const contentH = td ? fit(Math.max(0, ...content.map((c) => c.h))) : gridUp(ruler, Math.max(0, ...content.map((c) => c.h)));
+  if (ruler.uniform) {
+    return { w: w.map(() => common), h: td ? content.map(() => contentH) : content.map((c) => gridUp(ruler, c.h)), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter: td && lanes.some((l) => l.label !== '') ? 2 : 0 };
+  }
   const labelled = lanes.some((l) => l.label !== '');
   const labelWidths = lanes.map((l) => ruler.textWidth(l.label, 'lane'));
   const gutter = !labelled

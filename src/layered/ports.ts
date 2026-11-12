@@ -3,6 +3,9 @@ import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import { adjacency, flatRoute } from './order.ts';
 
+/** Cells between two neighbouring pass-through lines of a terminal drawing: a blank cell separates them. */
+export const LINE_PITCH = 2;
+
 /** Distance between neighbouring ports on a side crossed by inter-layer edges; it divides the slot unit. */
 export const portStep = (unit: number, ruler: Ruler): number => unit / Math.max(1, Math.round(unit / ruler.portPitch));
 
@@ -12,7 +15,8 @@ export const boxLength = (units: number, unit: number, gap: number): number => u
 /** Offsets from the start of a side: the centre and every multiple of the step from it that keeps clear of the corners. */
 export function portOffsets(length: number, step: number): number[] {
   const out: number[] = [];
-  const reach = length / 2 - step / 2 + 1e-6;
+  // A port of one cell keeps clear of the corner cells too.
+  const reach = length / 2 - step / 2 - (step <= 1 ? 1 : 0) + 1e-6;
   for (let k = -Math.floor(reach / step); k <= Math.floor(reach / step); k++) out.push(length / 2 + k * step);
   return out;
 }

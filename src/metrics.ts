@@ -47,6 +47,10 @@ export interface Ruler {
   sidePorts: number;
   /** Grid of the sequence diagram family. */
   grid: number;
+  /** The medium is a terminal: the layered engine draws it with its own rules (no spare-width spreading, per-drawing box width). */
+  terminal?: boolean;
+  /** Set by the layered engine on the ruler it derives for a terminal: every box has the width of the widest. */
+  uniform?: boolean;
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
   defaultWidth?: number;
   /** Spacing used by the sequence diagram family. */
@@ -322,6 +326,7 @@ export function cellRuler(): Ruler {
     portPitch: 2,
     sidePorts: 1,
     grid: 1,
+    terminal: true,
     sequence: {
       stroke: 1,
       margin: 1,

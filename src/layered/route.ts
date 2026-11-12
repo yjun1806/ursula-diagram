@@ -8,7 +8,7 @@ import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import type { FlatPlan } from './ports.ts';
-import { boxLength, portOffsets, portStep, sideFractions } from './ports.ts';
+import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -32,6 +32,10 @@ export interface Frame {
 }
 
 const EPS = 1e-6;
+
+/** Space kept free at the outer edge of the drawing: none in a terminal, where an empty cell is lost width. */
+export const marginOf = (ruler: Ruler): number => (ruler.uniform ? 0 : gridUp(ruler, ruler.trackGap));
+
 const tidy = (v: number): number => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
@@ -168,7 +172,7 @@ export function assignTracks(items: Array<{ order: number; lo: number; hi: numbe
 
 function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Prepared {
   const { ruler, unit, gap } = f;
-  const margin = gridUp(ruler, ruler.trackGap);
+  const margin = marginOf(ruler);
   const origin = margin + f.gutter + ruler.lanePad;
   const nodeO = (n: number): number => origin + (start[n] ?? 0) * unit;
   const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
@@ -181,7 +185,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       if (real(n) || shift.has(n)) continue;
       const group = [n];
       while (!real(row[k + group.length] ?? 0) && row[k + group.length] !== undefined && start[row[k + group.length] as number] === start[n]) group.push(row[k + group.length] as number);
-      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * ruler.trackGap)));
+      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * (ruler.uniform ? LINE_PITCH : ruler.trackGap))));
     }
   }
   const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift.get(n) ?? 0));
@@ -233,6 +237,8 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   for (const it of items) {
     if (it.kind !== 'piece' || !real(it.a) || !real(it.b)) continue;
     const fb = free(it.b, 'up');
+    // A terminal keeps boxes of one column centred: only two boxes with the same centre are joined by a straight line.
+    if (ruler.uniform && Math.abs(centre(it.a) - centre(it.b)) > EPS) continue;
     const common = free(it.a, 'down').filter((x) => fb.some((y) => Math.abs(x - y) < EPS));
     const mid = (centre(it.a) + centre(it.b)) / 2;
     common.sort((x, y) => Math.abs(x - mid) - Math.abs(y - mid) || x - y);
@@ -388,7 +394,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const { graph, ruler, td } = f;
   const { items, nodeO, len } = prep;
   const count = layers.length;
-  const margin = gridUp(ruler, ruler.trackGap);
+  const margin = marginOf(ruler);
   const laneCount = graph.lanes.length;
 
   const thick = layers.map((row) => Math.max(...row.filter((n) => n < l.realCount).map((n) => f.layerExt[n] ?? 0), 0));
@@ -413,7 +419,21 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     if (l.layerLane[b - 1] === l.layerLane[b]) return ruler.rowGap;
     return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + ruler.laneGap + ruler.lanePad;
   };
-  const ext = (b: number): number => gridUp(ruler, Math.max(baseExt(b) + (b > 0 && b < count ? Math.max(f.spread ?? 0, 2 * ruler.trackGap - baseExt(b)) : 0), wanted(b)));
+  // A terminal band holds the lane's name line (when the lane below has a name) and one line per track, and at least one line between two rows.
+  const nameLine = (b: number): number => (b < count && (b === 0 || l.layerLane[b - 1] !== l.layerLane[b]) && (graph.lanes[l.layerLane[b] ?? 0]?.label ?? '') !== '' ? 1 : 0);
+  const terminalExt = (b: number): number => {
+    const tracks = trackCount[b] ?? 0;
+    if (td) {
+      // Columns of boxes: a gap holds the arrows of the edges that pass, and its jogs stand a blank column apart.
+      if (b === 0 || b === count) return tracks === 0 ? 0 : 2 * tracks + 1 + (demand[b] ?? 0);
+      const own = l.layerLane[b - 1] !== l.layerLane[b] ? (bottomPad[l.layerLane[b - 1] ?? 0] ?? 0) : 0;
+      return Math.max(3, 2 * tracks + 1) + own + (demand[b] ?? 0);
+    }
+    const line = nameLine(b);
+    const body = b > 0 && b < count && line === 0 ? Math.max(tracks, 1) : tracks;
+    return line + body + (demand[b] ?? 0);
+  };
+  const ext = (b: number): number => (ruler.uniform ? terminalExt(b) : gridUp(ruler, Math.max(baseExt(b) + (b > 0 && b < count ? Math.max(f.spread ?? 0, 2 * ruler.trackGap - baseExt(b)) : 0), wanted(b))));
   if (td) {
     for (const [lane, [first, last]] of laneRange) {
       const label = graph.lanes[lane]?.label ?? '';
@@ -442,6 +462,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 
   const order = (o: number, c: number): Point => (td ? { x: tidy(c), y: tidy(o) } : { x: tidy(o), y: tidy(c) });
   const trackY = (it: Item): number => {
+    if (ruler.uniform) return (bandStart[it.band] ?? 0) + (td ? 1 + 2 * it.track : it.track);
     const n = trackCount[it.band] ?? 1;
     const first = (bandStart[it.band] ?? 0) + ((bandSize[it.band] ?? 0) - (n - 1) * ruler.trackGap) / 2;
     return edgeNear(ruler, first + it.track * ruler.trackGap);
@@ -561,13 +582,25 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     const labelW = ruler.textWidth(lane.label, 'lane');
     const labelH = ruler.lineHeight('lane');
     const contentO = totalO - margin;
+    if (ruler.uniform && td) {
+      // Stages: no border; the name stands on the first line of the band, a blank line below it.
+      lanes.push({ id: lane.id, label: lane.label, x: tidy(top), y: tidy(margin), w: tidy(bottom - top), h: tidy(contentO - margin), labelBox: { x: tidy(top), y: tidy(margin), w: labelW, h: labelH }, bare: true });
+      return;
+    }
+    if (ruler.uniform && !td) {
+      // A terminal lane is one line of its own: `── name ───` in the last line of the band above its first layer.
+      const lineRow = (bandStart[first] ?? 0) + (bandSize[first] ?? 0) - 1;
+      lanes.push({ id: lane.id, label: lane.label, x: tidy(margin), y: tidy(lineRow), w: tidy(contentO - margin), h: tidy(bottom - lineRow), labelBox: { x: tidy(margin + 3), y: tidy(lineRow), w: labelW, h: labelH }, bare: true });
+      return;
+    }
     lanes.push(
       td
         ? { id: lane.id, label: lane.label, x: tidy(top), y: tidy(margin), w: tidy(bottom - top), h: tidy(contentO - margin), labelBox: { x: tidy(top + ruler.laneLabelGap), y: tidy(margin + ruler.laneLabelGap), w: labelW, h: labelH } }
         : { id: lane.id, label: lane.label, x: tidy(margin), y: tidy(top), w: tidy(contentO - margin), h: tidy(bottom - top), labelBox: { x: tidy(margin + ruler.laneLabelGap), y: tidy(layerStart[first] ?? top), w: labelW, h: labelH } },
     );
   });
-  const [width, height] = td ? [totalL, totalO] : [totalO, totalL];
+  const whole = (v: number): number => (ruler.uniform ? Math.ceil(v - EPS) : v);
+  const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
   const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
   void raw;
   return { layout, failed: failed.map((ei) => ei) };
@@ -575,7 +608,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 
 /** Order-axis size of the drawing: the furthest box or dummy line, the lane padding and the margin. */
 function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => number, centre: (n: number) => number): number {
-  const margin = gridUp(f.ruler, f.ruler.trackGap);
+  const margin = marginOf(f.ruler);
   let end = 0;
   for (const n of l.nodes) {
     const right = n.idx < l.realCount ? nodeO(n.idx) + boxLength(n.units, f.unit, f.gap) : centre(n.idx);
@@ -601,7 +634,7 @@ export function route(f: Frame, l: Ladder, layers: number[][], start: number[], 
     const text = f.graph.edges[c.edge]?.label;
     if (text === undefined || text === '') return;
     const first = prep.items.find((it) => it.chain === ci);
-    if (first) demand[first.band] = Math.max(demand[first.band] ?? 0, need(text));
+    if (first && !ruler.uniform) demand[first.band] = Math.max(demand[first.band] ?? 0, need(text));
   });
   let built = build(f, l, layers, start, plan, prep, demand);
   for (let round = 0; round < 3 && built.failed.length > 0; round++) {
@@ -609,7 +642,7 @@ export function route(f: Frame, l: Ladder, layers: number[][], start: number[], 
       const c = l.chains[ei];
       const text = f.graph.edges[c?.edge ?? -1]?.label;
       if (!c || text === undefined) continue;
-      for (const it of prep.items) if (it.chain === ei) demand[it.band] = Math.max(demand[it.band] ?? 0, need(text));
+      for (const it of prep.items) if (it.chain === ei) demand[it.band] = ruler.uniform ? (demand[it.band] ?? 0) + 1 : Math.max(demand[it.band] ?? 0, need(text));
     }
     built = build(f, l, layers, start, plan, prep, demand);
   }

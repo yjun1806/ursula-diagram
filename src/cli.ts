@@ -3,7 +3,7 @@ import { checkLines, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts
 import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title]\n');
   process.exit(2);
 }
 
@@ -17,6 +17,7 @@ let questions = true;
 let elbows = true;
 let engine: 'grid' | 'layered' | undefined;
 let composition: 'auto' | 'lanes' | 'stages' | undefined;
+let detail: 'auto' | 'full' | 'narrow' | 'title' | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--format') format = args[++i] ?? usage();
@@ -29,6 +30,10 @@ for (let i = 0; i < args.length; i++) {
     const v = args[++i];
     if (v !== 'auto' && v !== 'lanes' && v !== 'stages') usage();
     composition = v;
+  } else if (a === '--detail') {
+    const v = args[++i];
+    if (v !== 'auto' && v !== 'full' && v !== 'narrow' && v !== 'title') usage();
+    detail = v;
   } else if (a === '--engine') {
     const v = args[++i];
     if (v !== 'grid' && v !== 'layered') usage();
@@ -42,7 +47,7 @@ if (!['svg', 'text', 'json', 'check'].includes(format) || (width !== undefined &
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }) };
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }), ...(detail === undefined ? {} : { detail }) };
   if (format === 'check') {
     const laid = frontEnd.json(src, 'svg', opts) as Layout;
     process.stdout.write(`${('edges' in laid && 'diagnostics' in laid ? checkLines(laid) : ['no checks for this kind of diagram']).join('\n')}\n`);

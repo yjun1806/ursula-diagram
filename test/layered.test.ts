@@ -395,7 +395,9 @@ describe('layered grid and width remedies', () => {
   it('snaps to half the node grid for pixels and leaves cells alone', () => {
     expect(layeredRuler(pixelRuler()).nodeGrid).toBe(8);
     expect(layeredRuler(pixelRuler()).rankGapMin).toBe(24);
-    expect(layeredRuler(cellRuler()).nodeGrid).toBe(cellRuler().nodeGrid);
+    // A terminal counts in whole cells, with the gap of one arrow between neighbouring boxes.
+    expect(layeredRuler(cellRuler()).nodeGrid).toBe(1);
+    expect(layeredRuler(cellRuler()).rankGap).toBe(3);
   });
 
   it('closes the pixel gap before dropping a box from a row', () => {
@@ -561,11 +563,10 @@ describe('layered pipeline invariants', () => {
     }
   });
 
-  it('gives pixel and cell rulers the same structure for the same capacity', () => {
+  it('keeps every node in its lane on pixel and cell rulers, whose capacity in boxes differs', () => {
     const g = parse(fixtures.twoLanes);
     const px = layout(g, pixelRuler(), { engine: 'layered', maxWidth: widthForColumns(g, pixelRuler(), 5), refine: false });
-    const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: widthForColumns(g, cellRuler(), 5), refine: false });
-    expect(cells.nodes.map((n) => n.row)).toEqual(px.nodes.map((n) => n.row));
+    const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: widthForColumns(g, layeredRuler(cellRuler()), 5), refine: false });
     expect(cells.nodes.map((n) => n.lane)).toEqual(px.nodes.map((n) => n.lane));
   });
 

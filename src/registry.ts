@@ -16,6 +16,8 @@ export interface TextOptions {
   composition?: 'auto' | 'lanes' | 'stages';
   questions?: boolean;
   elbows?: boolean;
+  /** How much of every box a terminal drawing keeps; 'auto' (the default) takes the fullest step that fits the width. */
+  detail?: 'auto' | 'full' | 'narrow' | 'title';
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */

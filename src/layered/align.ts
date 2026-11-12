@@ -114,6 +114,8 @@ function direction(
 export interface PortGeometry {
   steps: number;
   reach: (units: number) => number;
+  /** Two boxes count as straight only when their centres are on one line (a terminal keeps boxes of a column centred). */
+  centred?: boolean;
 }
 
 /** The pixel ruler's geometry, used when the caller gives none. */
@@ -173,6 +175,7 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
       const [r, d] = real(a) ? [a, cb] : [b, ca];
       return Math.abs(d - centre(r, real(a) ? sa : sb)) <= geom.reach(unitsOf(r)) + EPS;
     }
+    if (geom.centred) return Math.abs(ca - cb) < EPS;
     const lo = Math.max(ca - geom.reach(unitsOf(a)), cb - geom.reach(unitsOf(b)));
     const hi = Math.min(ca + geom.reach(unitsOf(a)), cb + geom.reach(unitsOf(b)));
     return Math.ceil(lo * geom.steps - EPS) <= Math.floor(hi * geom.steps + EPS);
