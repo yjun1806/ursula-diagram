@@ -5,7 +5,8 @@ import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogram
 import { arrowFit, flowMarker, flowRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
-import type { EdgeEnd, EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
+import type { EdgeEnd, EdgeStyle, Layout, LayoutCluster, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
+import { CLUSTER_NAME_INSET } from '../layout/clusters.ts';
 
 export interface NodeHookResult {
   attrs?: Record<string, string>;
@@ -161,6 +162,24 @@ function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeS
     '</g>'
   );
 }
+
+/** A cluster box: tinted at odd depths, plain at even ones; its name stands at the top left. */
+function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
+  const plain = cluster.depth % 2 === 0;
+  return (
+    `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` +
+    `<rect class="ursula-zone${plain ? ' ursula-zone--plain' : ''}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
+    `<text class="ursula-zone-name" x="${num(cluster.x + CLUSTER_NAME_INSET)}" y="${num(cluster.y + 24)}">${escapeXml(cluster.label)}</text>` +
+    '</g>'
+  );
+}
+
+/** Rules for the cluster boxes, added only to a drawing that has some. */
+const CLUSTER_RULES: readonly string[] = [
+  '.ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}',
+  '.ursula-zone--plain{fill:$zone}',
+  '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
+];
 
 /** The edge with both ends moved onto the outline of shapes that do not fill their box. */
 function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[] {
@@ -415,12 +434,16 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const h = num(layout.height);
   const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
   const byId = new Map(layout.nodes.map((n) => [n.id, n] as const));
+  const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth] as const));
   const labelled = layout.lanes.filter((l) => l.label !== '');
   const tinted = (lane: LayoutLane): boolean => labelled.length < 2 || lane === labelled[0];
   const paint: Paint = {
     spec,
     roles: rolesOf(layout),
-    tinted: new Set(labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id))),
+    tinted: new Set([
+      ...labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id)),
+      ...layout.nodes.filter((n) => n.cluster !== undefined && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id),
+    ]),
   };
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
   const lookup: Lookup = (name, mode) => tokenVar(spec, name, mode);
@@ -428,9 +451,10 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...ends.rules], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...(layout.clusters && layout.clusters.length > 0 ? CLUSTER_RULES : []), ...ends.rules], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
+    ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
     ...layout.edges.map((e) => labelSvg(e, paint)),

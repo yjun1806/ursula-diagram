@@ -3,6 +3,7 @@ import { pixelRuler } from '../metrics.ts';
 import type { Diagnostic, Graph, Layout, LaneAxis } from '../types.ts';
 import type { AlongArrangement } from './along.ts';
 import { alongEstimate, arrangeAlong, considerAlong, polishAlong, refineAlong } from './along.ts';
+import { flattenClusters, flattenedNote, layoutClusters } from './clusters.ts';
 import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
@@ -233,6 +234,11 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
+  if (graph.clusters !== undefined && graph.clusters.length > 0) {
+    if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, layout);
+    const flat = layout(flattenClusters(graph), ruler, opts);
+    return { ...flat, diagnostics: [...flat.diagnostics, flattenedNote()] };
+  }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
   const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }) });

@@ -201,8 +201,9 @@ function unitsOf(own: number, common: number, unit: number, gap: number, compact
 function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact = false): { frame: Frame; common: number; baseUnits: number[]; unit: number } {
   const td = graph.direction === 'TD';
   const m = measureNodes(graph.nodes, graph.lanes, ruler, td);
-  const baseUnits = graph.nodes.map((_, i) => (td ? 2 : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
-  const layerExt = graph.nodes.map((_, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : m.contentH));
+  // A box given from outside is as long as its size needs along the reading direction and as thick as it is across.
+  const baseUnits = graph.nodes.map((n, i) => (td ? (n.box === undefined ? 2 : unitsOf(m.h[i] ?? 0, m.contentH, m.unit, ruler.rankGap, compact)) : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
+  const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? m.contentH : Math.max(m.contentH, m.h[i] ?? 0)));
   const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
 }

@@ -486,20 +486,34 @@ describe('directions RL and BT', () => {
   });
 });
 
-describe('what is still refused', () => {
-  it('refuses nested subgraphs', () => {
-    expect(failure('flowchart LR\nsubgraph a\nsubgraph b\nend\nend')).toMatchObject({ code: 'nested-subgraph', line: 3, message: expect.stringContaining('not supported yet') });
+describe('subgraphs as boxes', () => {
+  it('reads nested subgraphs, a direction inside one, and an edge that ends at one', () => {
+    const g = parse('flowchart LR\nsubgraph a\ndirection TB\nsubgraph b\ndirection RL\nX --> Y\nend\nend\nC --> a');
+    expect(g.clusters).toEqual([
+      { id: 'a', label: 'a', direction: 'TD' },
+      { id: 'b', label: 'b', parent: 'a', direction: 'LR', mirror: 'RL' },
+    ]);
+    expect(g.nodes.map((n) => [n.id, n.cluster])).toEqual([['X', 'b'], ['Y', 'b'], ['C', undefined]]);
+    expect(g.edges.map((e) => [e.from, e.to])).toEqual([['X', 'Y'], ['C', 'a']]);
+    expect(g.lanes).toEqual([{ id: '_', label: '' }]);
   });
 
-  it('refuses a direction inside a subgraph and still ignores one outside', () => {
-    expect(failure('flowchart LR\nsubgraph a\ndirection TB\nA --> B\nend')).toMatchObject({ code: 'unsupported', line: 3, message: expect.stringMatching(/direction.*not supported yet/) });
-    expect(parse('flowchart LR\ndirection TB\nA --> B').edges).toHaveLength(1);
+  it('reads a subgraph named in an edge before it is opened as a cluster, not as a node', () => {
+    const g = parse('flowchart TD\nStart --> one\nsubgraph one [My Group]\nA --> B\nend');
+    expect(g.nodes.map((n) => n.id)).toEqual(['Start', 'A', 'B']);
+    expect(g.clusters).toEqual([{ id: 'one', label: 'My Group' }]);
   });
 
-  it('refuses an edge that points at a subgraph', () => {
-    const e = failure('flowchart LR\nsubgraph s1\nA --> B\nend\nC --> s1');
-    expect(e).toMatchObject({ code: 'subgraph-edge', line: 5 });
-    expect(e.message).toMatch(/subgraph 's1'.*not supported yet/);
+  it('keeps flat subgraphs without a direction or an edge to them as lanes', () => {
+    const g = parse('flowchart LR\nsubgraph a\nA --> B\nend\nsubgraph b\nC\nend\nB --> C');
+    expect(g.clusters).toBeUndefined();
+    expect(g.lanes.map((l) => l.id)).toEqual(['a', 'b']);
+  });
+
+  it('leaves out a subgraph with nothing in it and the edges that end at it', () => {
+    const g = parse('flowchart LR\nsubgraph a\nsubgraph b\nend\nX --> Y\nend\nsubgraph e\nend\nQ --> e');
+    expect(g.clusters?.map((c) => c.id)).toEqual(['a']);
+    expect(g.edges.map((e) => [e.from, e.to])).toEqual([['X', 'Y']]);
   });
 });
 
@@ -551,19 +565,18 @@ const EXAMPLES: Array<[string, string]> = [
   ['112 classes 2', 'flowchart LR\n    A:::foo & B:::bar --> C:::foobar\n    classDef foo stroke:#f00\n    classDef bar stroke:#0f0\n    classDef foobar stroke:#00f'],
 ];
 
-const REFUSED: Array<[string, string, string]> = [
+/** The examples that need subgraphs as boxes. */
+const BOXED: Array<[string, string]> = [
   [
     '101 flowcharts',
     'flowchart TB\n    c1-->a2\n    subgraph one\n    a1-->a2\n    end\n    subgraph two\n    b1-->b2\n    end\n    subgraph three\n    c1-->c2\n    end\n    one --> two\n    three --> two\n    two --> c2',
-    'subgraph-edge',
   ],
-  ['102 direction in subgraphs', 'flowchart LR\n  subgraph TOP\n    direction TB\n    subgraph B1\n        direction RL\n        i1 -->f1\n    end\n  end\n  A --> TOP --> B\n  B1 --> B2', 'unsupported'],
+  ['102 direction in subgraphs', 'flowchart LR\n  subgraph TOP\n    direction TB\n    subgraph B1\n        direction RL\n        i1 -->f1\n    end\n    subgraph B2\n        direction BT\n        i2 -->f2\n    end\n  end\n  A --> TOP --> B\n  B1 --> B2'],
   [
     '103 limitation',
     'flowchart LR\n    subgraph subgraph1\n        direction TB\n        top1[top] --> bottom1[bottom]\n    end\n    subgraph subgraph2\n        direction TB\n        top2[top] --> bottom2[bottom]\n    end\n    outside --> subgraph1\n    outside ---> top2',
-    'unsupported',
   ],
-  ['104 collapsible subgraphs', 'flowchart TD\n    Start --> one\n    subgraph one [My Group]\n        A --> B\n        B --> C\n    end\n    one --> End\n    one@{ view: collapsed }', 'subgraph-edge'],
+  ['104 collapsible subgraphs', 'flowchart TD\n    Start --> one\n    subgraph one [My Group]\n        A --> B\n        B --> C\n    end\n    one --> End\n    one@{ view: collapsed }'],
 ];
 
 describe('documentation examples', () => {
@@ -574,9 +587,13 @@ describe('documentation examples', () => {
     expect('error' in text).toBe(false);
   });
 
-  it.each(REFUSED)('refuses %s with a message that says it is not supported yet', (_name, src, code) => {
-    const e = failure(src);
-    expect(e.code).toBe(code);
-    expect(e.message).toContain('not supported yet');
+  it.each(BOXED)('draws %s as boxes and, in text, flat with a note', (_name, src) => {
+    const svg = render(src);
+    expect(svg).toContain('data-cluster=');
+    const text = renderText(src, 100);
+    expect('error' in text).toBe(false);
+    const laid = layout(parse(src), cellRuler());
+    expect(laid.diagnostics.map((d) => d.kind)).toContain('clusters-flattened-in-text');
+    expect(laid.clusters).toBeUndefined();
   });
 });
