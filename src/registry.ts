@@ -8,6 +8,8 @@ export interface RenderOptions extends SvgOptions {
   heading?: string;
   /** The `config` map of a leading front-matter block; a front-end reads its own section (for example `config.packet`). */
   config?: Record<string, FrontValue>;
+  /** Every key of a leading front-matter block, for front-ends that read keys outside `config` (for example `displayMode`). */
+  frontMatter?: Record<string, FrontValue>;
   maxWidth?: number;
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
@@ -22,6 +24,8 @@ export interface TextOptions {
   heading?: string;
   /** See `RenderOptions.config`. */
   config?: Record<string, FrontValue>;
+  /** See `RenderOptions.frontMatter`. */
+  frontMatter?: Record<string, FrontValue>;
   legend?: SvgOptions['legend'];
   maxHeight?: number;
   engine?: 'grid' | 'layered';
@@ -87,7 +91,7 @@ export function selectFrontEnd(src: string): FrontEnd {
   const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
   if (!found) throw new Error('no front-end registered');
   const spans = found.textSpans;
-  const head = <T extends { heading?: string; config?: Record<string, FrontValue> }>(s: string, o: T): T => {
+  const head = <T extends { heading?: string; config?: Record<string, FrontValue>; frontMatter?: Record<string, FrontValue> }>(s: string, o: T): T => {
     const front = readFrontMatter(s);
     const title = front['title'];
     const heading = o.heading ?? (title === undefined || title === null || typeof title === 'object' ? undefined : String(title));
@@ -96,6 +100,7 @@ export function selectFrontEnd(src: string): FrontEnd {
       ...o,
       ...(heading === undefined ? {} : { heading }),
       ...(o.config === undefined && config !== null && typeof config === 'object' ? { config } : {}),
+      ...(o.frontMatter === undefined && Object.keys(front).length > 0 ? { frontMatter: front } : {}),
     };
   };
   return {
