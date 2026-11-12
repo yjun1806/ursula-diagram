@@ -89,7 +89,7 @@ function nameLines(items: LNode[]): number {
 /**
  * Lays `items` out in a column of width `w` whose top is `y` and returns its height; each unit of value takes `k` of area.
  * Leaves of a column (`foot`) stack from top to bottom; the lowest ones that would be shorter than a two-line label
- * form one row at the foot, split by value. The leaves of a nested group form one row. A stack holding groups puts
+ * form one row at the foot, split by value, and that row takes in the tiles above it until it is as tall as a label. The leaves of a nested group form one row. A stack holding groups puts
  * each group's name line above its tiles. Areas always follow the values, so a foot row can be lower than a label;
  * its tiles then shed text instead.
  */
@@ -110,6 +110,9 @@ function stack(items: LNode[], x: number, y: number, w: number, k: number, foot:
   if (allLeaves(items)) {
     let start = items.length;
     while (start > 0 && area(items[start - 1] as LNode) / w < MIN_TILE_H) start--;
+    // A foot row still lower than a label takes the tile above it too, until it is tall enough or holds them all.
+    const rowH = (from: number): number => (k * sumValue(items.slice(from))) / (w - TILE_GAP * (items.length - from - 1));
+    while (start > 0 && start < items.length && rowH(start) < MIN_TILE_H) start--;
     const above = items.slice(0, start);
     const row = items.slice(start);
     const rawRow = row.length === 0 ? 0 : (k * sumValue(row)) / (w - TILE_GAP * (row.length - 1));

@@ -191,8 +191,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
   const plotTop = rows.length > 0 ? up4(headCenter + 54) : 64;
   const titleNeed = title === undefined ? 0 : MARGIN + px(title, 15, true) + MARGIN;
 
-  // value labels shown?
-  const showValues = cfg.showDataLabel !== false;
+  // value labels shown? Several different series share one value colour, so their values are written only on request.
+  const showValues = single ? cfg.showDataLabel !== false : cfg.showDataLabel === true;
   const valueText = (raw: string): number => px(raw, 11, true);
   const maxValueW = Math.max(...chart.series.flatMap((s) => s.points.map((p) => valueText(p.raw))));
 
@@ -446,7 +446,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       emit(job, best.candidate, roles);
     };
 
-    if (showValues) {
+    const hasPointLabels = lineSeries.some(({ s }) => s.points.some((p) => p.label !== undefined));
+    if (showValues || hasPointLabels) {
       // text labels of line points first, then the values
       const pointLabels: { job: LabelJob; w: number }[] = [];
       const valueJobs: { job: LabelJob; w: number; roles: string[]; inner?: Candidate[] }[] = [];
@@ -464,9 +465,10 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           if (p.label !== undefined) {
             pointLabels.push({ job: { text: p.label, p: at, cat: i, side, off: lineOff, kind: 'text' }, w: px(p.label, 12, true) });
           }
+          if (!showValues) return;
           const key = `${i}:${p.value}`;
           const hasBar = barSeries.some(({ s: b }) => b.points[i]?.value === p.value);
-          if (hasBar && spec.valueLabel === 'inside') return; // the bar carries the value
+          if (hasBar && single && spec.valueLabel === 'inside') return; // the bar of the same series carries the value
           if (lineJobs.has(key) && !strongBars) return;
           lineJobs.set(key, true);
           const job: LabelJob = { text: p.raw, p: at, cat: i, side, off: lineOff, kind: 'line' };
@@ -474,12 +476,12 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           valueJobs.push({ job, w: valueText(p.raw), roles: ['value'] });
         });
       });
-      barSeries.forEach(({ s }) => {
+      if (showValues) barSeries.forEach(({ s }) => {
         s.points.forEach((p, i) => {
           const r = barRects.find((b) => b.series === chart.series.indexOf(s) && b.i === i);
           if (r === undefined) return;
           const hasLine = lineSeries.some(({ s: l }) => l.points[i]?.value === p.value);
-          if (hasLine && spec.valueLabel !== 'inside') return; // the line carries the value
+          if (hasLine && single && spec.valueLabel !== 'inside') return; // the line of the same series carries the value
           const w = valueText(p.raw);
           const wantOutside = cfg.showDataLabelOutsideBar === true;
           const wantInside = cfg.showDataLabelOutsideBar !== true && (cfg.showDataLabel === true || spec.valueLabel === 'inside');

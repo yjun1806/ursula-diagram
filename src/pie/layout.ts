@@ -52,6 +52,8 @@ export interface PieLayout {
   r: number;
   slices: PlacedSlice[];
   labels: PlacedLabel[];
+  /** Radius of the donut hole; 0 for a full pie. */
+  hole: number;
 }
 
 interface Draft {
@@ -179,13 +181,14 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   if (pie.title !== undefined) {
     items.push({ kind: 'text', x: MARGIN, y: MARGIN + TITLE_LINE / 2, text: pie.title, anchor: 'start', role: ['title'] });
   }
+  const hole = pie.donutHole * RADIUS;
   slices.forEach((s, i) => {
     const sweep = s.a1 - s.a0;
     // A very narrow slice gets a narrower gap so the straight sides can still meet.
     const gap = Math.min(GAP, RADIUS * Math.sin(Math.min(sweep, Math.PI) / 2));
     items.push({
       kind: 'path',
-      d: arcPath(cx, cy, RADIUS, s.a0, s.a1, { gap, corner: CORNER }),
+      d: hole > 0 ? ringPath(cx, cy, RADIUS, hole, s.a0, s.a1, gap, CORNER) : arcPath(cx, cy, RADIUS, s.a0, s.a1, { gap, corner: CORNER }),
       role: [`series-${(i % SERIES) + 1}--tint`],
       data: { label: s.label, value: pie.slices[i]?.valueText ?? '' },
     });
@@ -217,5 +220,43 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   }
 
   const name = pie.title === undefined ? `Pie chart: ${pie.slices.length} slices` : `Pie chart: ${pie.title}`;
-  return { scene: { width, height, title: name, items }, cx, cy, r: RADIUS, slices, labels };
+  return { scene: { width, height, title: name, items }, cx, cy, r: RADIUS, slices, labels, hole };
+}
+
+const fmt = (v: number): string => String(Math.round(v * 100) / 100 || 0);
+
+/**
+ * A slice of a ring between radii `inner` and `outer`, from angle `a0` to `a1` (0 at 12 o'clock, clockwise). Its
+ * straight sides move inward by half of `gap`, and the two outer corners are rounded by `corner`.
+ */
+function ringPath(cx: number, cy: number, outer: number, inner: number, a0: number, a1: number, gap: number, corner: number): string {
+  const at = (a: number, r: number): string => `${fmt(cx + r * Math.sin(a))} ${fmt(cy - r * Math.cos(a))}`;
+  if (a1 - a0 >= Math.PI * 2 - 1e-9) {
+    const circle = (r: number, sweep: 0 | 1): string => `M${at(0, r)}A${fmt(r)} ${fmt(r)} 0 1 ${sweep} ${at(Math.PI, r)}A${fmt(r)} ${fmt(r)} 0 1 ${sweep} ${at(0, r)}Z`;
+    return circle(outer, 1) + circle(inner, 0);
+  }
+  const g = gap / 2;
+  // A point at `distance` along the side at angle `a`, moved across it by `g` toward the slice.
+  const side = (a: number, dir: 1 | -1, distance: number): string =>
+    `${fmt(cx + distance * Math.sin(a) + dir * g * Math.cos(a))} ${fmt(cy - distance * Math.cos(a) + dir * g * Math.sin(a))}`;
+  const dOut = Math.asin(Math.min(1, g / outer));
+  const dIn = Math.asin(Math.min(1, g / inner));
+  const reachOut = Math.sqrt(outer * outer - g * g);
+  const reachIn = Math.sqrt(Math.max(0, inner * inner - g * g));
+  const c = Math.max(0, Math.min(corner, (reachOut - reachIn) / 2, ((a1 - a0 - 2 * dOut) * outer) / 4));
+  const outerSweep = a1 - a0 - 2 * dOut - (2 * c) / outer;
+  const innerSweep = a1 - a0 - 2 * dIn;
+  if (innerSweep <= 0) return arcPath(cx, cy, outer, a0, a1, { gap, corner });
+  const r = fmt(outer);
+  const ri = fmt(inner);
+  return [
+    `M${side(a0, 1, reachIn)}`,
+    `L${side(a0, 1, reachOut - c)}`,
+    `Q${at(a0 + dOut, outer)} ${at(a0 + dOut + c / outer, outer)}`,
+    `A${r} ${r} 0 ${outerSweep > Math.PI ? 1 : 0} 1 ${at(a1 - dOut - c / outer, outer)}`,
+    `Q${at(a1 - dOut, outer)} ${side(a1, -1, reachOut - c)}`,
+    `L${side(a1, -1, reachIn)}`,
+    `A${ri} ${ri} 0 ${innerSweep > Math.PI ? 1 : 0} 0 ${side(a0, 1, reachIn)}`,
+    'Z',
+  ].join('');
 }
