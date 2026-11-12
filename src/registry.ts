@@ -1,5 +1,7 @@
 import type { SvgOptions } from './render/svg.ts';
 import type { TextSpan } from './types.ts';
+import { frontMatterRows, readFrontMatter } from './front-matter.ts';
+import type { FrontValue } from './front-matter.ts';
 
 export interface RenderOptions extends SvgOptions {
   /** Title from a leading front-matter block (`title: ...`); a front-end draws it when the diagram text gives none. */
@@ -16,6 +18,8 @@ export interface RenderOptions extends SvgOptions {
 export interface TextOptions {
   /** Title from a leading front-matter block; see `RenderOptions.heading`. */
   heading?: string;
+  /** See `RenderOptions.config`. */
+  config?: Record<string, FrontValue>;
   legend?: SvgOptions['legend'];
   maxHeight?: number;
   engine?: 'grid' | 'layered';
@@ -50,29 +54,19 @@ export function registerFrontEnd(frontEnd: FrontEnd): void {
 
 /**
  * The source with a leading `---` front-matter block turned into blank lines, so line numbers stay the same.
- * Front-ends read diagram text only; the block is configuration they do not follow.
+ * Front-ends read diagram text only; the block reaches them as `heading` and `config` options.
  */
 export function blankFrontMatter(src: string): string {
   const rows = src.split(/\r?\n/);
-  const start = rows.findIndex((r) => r.trim() !== '' && !r.trim().startsWith('%%'));
-  if (start < 0 || rows[start]?.trim() !== '---') return src;
-  const end = rows.findIndex((r, i) => i > start && r.trim() === '---');
-  if (end < 0) return src;
-  return rows.map((r, i) => (i >= start && i <= end ? '' : r)).join('\n');
+  const span = frontMatterRows(rows);
+  if (!span) return src;
+  return rows.map((r, i) => (i >= span[0] && i <= span[1] ? '' : r)).join('\n');
 }
 
-/** The `title:` of a leading front-matter block, unquoted; undefined when there is none. */
+/** The `title:` of a leading front-matter block; undefined when there is none. */
 export function frontMatterTitle(src: string): string | undefined {
-  const blanked = blankFrontMatter(src);
-  if (blanked === src) return undefined;
-  const rows = src.split(/\r?\n/);
-  const kept = blanked.split(/\r?\n/);
-  for (let i = 0; i < rows.length; i++) {
-    if (kept[i] === rows[i]) continue;
-    const m = /^title:\s*(.*)$/.exec(rows[i] ?? '');
-    if (m) return (m[1] ?? '').trim().replace(/^(["'])(.*)\1$/, '$2');
-  }
-  return undefined;
+  const title = readFrontMatter(src)['title'];
+  return title === undefined || title === null || typeof title === 'object' ? undefined : String(title);
 }
 
 /** The first word of the source, past blank lines, `%%` comments and a leading `---` front-matter block. */
@@ -91,9 +85,16 @@ export function selectFrontEnd(src: string): FrontEnd {
   const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
   if (!found) throw new Error('no front-end registered');
   const spans = found.textSpans;
-  const head = <T extends { heading?: string }>(s: string, o: T): T => {
-    const heading = o.heading ?? frontMatterTitle(s);
-    return heading === undefined ? o : { ...o, heading };
+  const head = <T extends { heading?: string; config?: Record<string, FrontValue> }>(s: string, o: T): T => {
+    const front = readFrontMatter(s);
+    const title = front['title'];
+    const heading = o.heading ?? (title === undefined || title === null || typeof title === 'object' ? undefined : String(title));
+    const config = front['config'];
+    return {
+      ...o,
+      ...(heading === undefined ? {} : { heading }),
+      ...(o.config === undefined && config !== null && typeof config === 'object' ? { config } : {}),
+    };
   };
   return {
     ...found,
