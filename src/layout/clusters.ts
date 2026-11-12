@@ -187,6 +187,88 @@ function alignBoxes(layout: Layout, kids: Map<string, Block>): Map<string, { w: 
   return new Map([...size].filter(([id, v]) => v.w !== (kids.get(id) as Block).size.w || v.h !== (kids.get(id) as Block).size.h));
 }
 
+/** Room between neighbouring boxes in a rank and between ranks: the default gap of the layered engine. */
+const levelGap = (ruler: Ruler): number => layeredRuler(ruler).rankGap;
+
+const shifted = (n: LayoutNode, x: number, y: number): LayoutNode => ({
+  ...n,
+  x: tidy(x),
+  y: tidy(y),
+  ...(n.outline ? { outline: { ...n.outline, x: tidy(n.outline.x + x - n.x), y: tidy(n.outline.y + y - n.y) } } : {}),
+});
+
+/**
+ * A level with no line inside it is a grid, not a flow: the plain nodes first, in the order of the source, two to a row
+ * (one row when there are fewer), in cells of the size of the largest one; the boxes of the clusters in it stand to the
+ * right of them, one above the other with their tops and left sides aligned. With no plain nodes, three or more boxes
+ * stand one above the other and fewer stand side by side. `drawn` only supplies the sizes the engine gives the nodes.
+ */
+function gridLevel(level: Graph, drawn: Layout, kids: Map<string, Block>, gap: number): Layout {
+  const at = new Map(drawn.nodes.map((n) => [n.id, n] as const));
+  const plain = level.nodes.filter((n) => !kids.has(n.id)).map((n) => at.get(n.id) as LayoutNode);
+  const boxes = level.nodes.filter((n) => kids.has(n.id)).map((n) => at.get(n.id) as LayoutNode);
+  const cols = plain.length <= 2 ? plain.length : 2;
+  const cw = Math.max(0, ...plain.map((n) => n.w));
+  const ch = Math.max(0, ...plain.map((n) => n.h));
+  const rows = Math.ceil(plain.length / Math.max(1, cols));
+  const placed: LayoutNode[] = plain.map((n, i) => shifted(n, (i % cols) * (cw + gap) + (cw - n.w) / 2, Math.floor(i / cols) * (ch + gap) + (ch - n.h) / 2));
+  const stacked = plain.length > 0 || boxes.length >= 3;
+  let x = plain.length > 0 ? cols * cw + (cols - 1) * gap + gap : 0;
+  let y = 0;
+  for (const b of boxes) {
+    placed.push(shifted(b, x, y));
+    if (stacked) y += b.h + gap;
+    else x += b.w + gap;
+  }
+  const order = new Map(level.nodes.map((n, i) => [n.id, i] as const));
+  const nodes = placed.sort((a, b) => (order.get(a.id) as number) - (order.get(b.id) as number));
+  const right = Math.max(...nodes.map((n) => n.x + n.w));
+  const bottom = Math.max(...nodes.map((n) => n.y + n.h));
+  return { ...drawn, nodes, edges: [], lanes: [], width: tidy(right), height: tidy(Math.max(bottom, rows * ch)) };
+}
+
+/**
+ * Plain nodes no line touches that are as big as, and shaped like, a node of the first rank stand in that rank after its
+ * members, in the order of the source, instead of wherever the engine packs loose nodes. The level is drawn again
+ * without them, so they take no room in the flow; when that changes the size of the first rank, the first drawing stays.
+ */
+function joinFirstRank(level: Graph, full: Layout, engine: (g: Graph) => Layout, touched: ReadonlySet<string>, kids: Map<string, Block>, gap: number): Layout {
+  const lonely = (id: string): boolean => !touched.has(id) && !kids.has(id);
+  const connected = full.nodes.filter((n) => !lonely(n.id));
+  if (connected.length === 0 || connected.length === full.nodes.length) return full;
+  const top = Math.min(...connected.map((n) => n.rank));
+  const alike = (a: LayoutNode, b: LayoutNode): boolean => a.shape === b.shape && a.w === b.w && a.h === b.h;
+  const first = connected.filter((n) => n.rank === top);
+  const joiners = level.nodes.flatMap((n) => {
+    const l = full.nodes.find((m) => m.id === n.id) as LayoutNode;
+    return lonely(n.id) && first.some((f) => alike(f, l)) ? [l] : [];
+  });
+  if (joiners.length === 0) return full;
+  const gone = new Set(joiners.map((n) => n.id));
+  const laid = engine({ ...level, nodes: level.nodes.filter((n) => !gone.has(n.id)) });
+  const row = laid.nodes.filter((n) => n.rank === Math.min(...laid.nodes.map((m) => m.rank)));
+  const td = level.direction === 'TD';
+  const anchors = (j: LayoutNode): LayoutNode | undefined => row.find((f) => alike(f, j));
+  if (joiners.some((j) => anchors(j) === undefined)) return full;
+  const home = anchors(joiners[0] as LayoutNode) as LayoutNode;
+  const line = row.filter((n) => (td ? Math.abs(n.y - home.y) : Math.abs(n.x - home.x)) < 1);
+  let at = Math.max(...line.map((n) => (td ? n.x + n.w : n.y + n.h))) + gap;
+  const added = joiners.map((j) => {
+    const n = shifted({ ...j, rank: home.rank, row: home.row }, td ? at : home.x, td ? home.y : at);
+    at += (td ? j.w : j.h) + gap;
+    return n;
+  });
+  const box = contentOf(laid);
+  const room = { x: laid.width - box.x - box.w, y: laid.height - box.y - box.h };
+  const extent = Math.max(...added.map((n) => (td ? n.x + n.w : n.y + n.h)));
+  return {
+    ...laid,
+    nodes: [...laid.nodes, ...added],
+    width: td ? Math.max(laid.width, tidy(extent + room.x)) : laid.width,
+    height: td ? laid.height : Math.max(laid.height, tidy(extent + room.y)),
+  };
+}
+
 function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' | 'BT' | undefined): Block {
   const { graph, ruler, tree } = plan;
   const kids = new Map<string, Block>();
@@ -223,7 +305,13 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
   const level: Graph = { direction, ...(mirror === undefined ? {} : { mirror }), lanes: graph.lanes.slice(0, 1), nodes, edges };
   const { maxWidth, maxHeight, ...rest } = plan.opts;
   const root = id === '';
-  const drawLevel = (g: Graph): Layout => plan.draw(g, ruler, { ...rest, engine: 'layered', legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
+  const engine = (g: Graph): Layout => plan.draw(g, ruler, { ...rest, engine: 'layered', legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
+  const touched = new Set(graph.edges.flatMap((e) => [e.from, e.to]));
+  const drawLevel = (g: Graph): Layout => {
+    const full = engine(g);
+    if (!root && g.edges.length === 0 && g.nodes.every((n) => n.attach === undefined)) return gridLevel(g, full, kids, levelGap(ruler));
+    return joinFirstRank(g, full, engine, touched, kids, levelGap(ruler));
+  };
   let layout = drawLevel(level);
   // Boxes that stand one above the other share their width, boxes side by side share their height; the level is drawn once more with the grown boxes.
   const grown = alignBoxes(layout, kids);
