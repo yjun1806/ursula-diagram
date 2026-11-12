@@ -7,18 +7,26 @@ import { renderThemedScene } from '../render/scene-svg.ts';
 import { joinSpans } from '../text/terminal.ts';
 import { layoutTreeView } from './layout.ts';
 import { parseTreeView } from './parse.ts';
-import type { TreeView } from './parse.ts';
+import type { IconSettings, TreeView } from './parse.ts';
 import { layoutTreeViewText } from './text.ts';
 
 type Config = Record<string, FrontValue>;
 /** Options as the registry hands them over: the render options plus the front-matter `config`. */
 type Opts = RenderOptions & { config?: Config };
 
-/** The parsed tree with the indent the configuration asks for (`config.treeView.rowIndent`), when it is a number. */
+/** The parsed tree with the indent (`config.treeView.rowIndent`, when a number) and the icon settings of the configuration. */
 function read(src: string, config: Config | undefined): TreeView {
   const tree = parseTreeView(src);
-  const indent = configSection(config, 'treeView')?.['rowIndent'];
-  return typeof indent === 'number' ? { ...tree, rowIndent: indent } : tree;
+  const section = configSection(config, 'treeView');
+  const indent = section?.['rowIndent'];
+  const icons: IconSettings = { show: section?.['showIcons'] === true, filenames: names(section?.['filenameIcons']), extensions: names(section?.['extensionIcons']) };
+  return { ...tree, ...(typeof indent === 'number' ? { rowIndent: indent } : {}), icons };
+}
+
+/** The string values of a map setting; anything else reads as an empty map. */
+function names(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === 'string'));
 }
 
 export const treeViewFrontEnd: FrontEnd = {
