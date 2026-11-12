@@ -364,7 +364,7 @@ describe('c4 shapes, boundaries and sizes', () => {
   });
 
   it('leaves the clusters of a flowchart as they were', () => {
-    const svg = render('flowchart TD\n  subgraph one[One]\n    a --> b\n  end');
+    const svg = render('flowchart TD\n  subgraph one[One]\n    direction LR\n    a --> b\n  end');
     expect(svg).toContain('class="ursula-zone"');
     expect(svg).not.toContain('ursula-zone--dashed');
     expect(svg).toContain('class="ursula-node ursula-node--on-lane');
