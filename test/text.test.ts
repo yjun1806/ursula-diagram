@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cellRuler, cellWidth, layout, parse, renderText } from '../src/index.ts';
 
 function lines(src: string, width = 200): string[] {
-  const r = renderText(src, width);
+  const r = renderText(src, width, { quality: 'best' });
   if ('error' in r) throw new Error(r.error);
   return r.lines;
 }

@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { checkLines, renderHtml, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
+import { renderHtml } from './html.ts';
+import { checkLines, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
 import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--title TEXT] [--theme auto|light|dark]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]\n');
   process.exit(2);
 }
 
@@ -19,6 +20,7 @@ let engine: 'grid' | 'layered' | undefined;
 let composition: 'auto' | 'lanes' | 'stages' | undefined;
 let detail: 'auto' | 'full' | 'narrow' | 'title' | undefined;
 let title: string | undefined;
+let quality: 'fast' | 'best' | undefined;
 let theme: 'auto' | 'light' | 'dark' | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -32,6 +34,10 @@ for (let i = 0; i < args.length; i++) {
     const v = args[++i];
     if (v !== 'auto' && v !== 'lanes' && v !== 'stages') usage();
     composition = v;
+  } else if (a === '--quality') {
+    const v = args[++i];
+    if (v !== 'fast' && v !== 'best') usage();
+    quality = v;
   } else if (a === '--title') {
     title = args[++i] ?? usage();
   } else if (a === '--theme') {
@@ -55,7 +61,7 @@ if (!['svg', 'text', 'json', 'check', 'html'].includes(format) || (width !== und
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }), ...(detail === undefined ? {} : { detail }) };
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }), ...(detail === undefined ? {} : { detail }), ...(quality === undefined ? {} : { quality }) };
   if (format === 'html') {
     process.stdout.write(renderHtml(src, { ...(title === undefined ? {} : { title }), ...(width === undefined ? {} : { maxWidth: width }), ...(theme === undefined ? {} : { theme }) }));
   } else if (format === 'check') {

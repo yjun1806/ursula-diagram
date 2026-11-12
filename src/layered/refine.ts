@@ -58,7 +58,7 @@ export interface Refined {
  * one lane moves to another row of that lane. A change is kept when the redrawn picture measures better; the
  * walk starts over after every kept change and stops when nothing helps or the draws are used up.
  */
-export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout, options: { maxDraws?: number; tight?: ((rows: Rows) => Placed) | undefined; crossingsFirst?: boolean } = {}): Refined {
+export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout, options: { maxDraws?: number; tight?: ((rows: Rows) => Placed) | undefined; crossingsFirst?: boolean; memo?: Map<string, Layout | null>; tag?: string } = {}): Refined {
   const maxDraws = options.maxDraws ?? MAX_DRAWS;
   // The climb can weigh crossings inside the cost or put them first; the two reach different drawings.
   const measure = (l: Layout): number[] => {
@@ -104,7 +104,11 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     if (draws >= maxDraws) return false;
     const next = trial();
     if (!next || next.width > Math.max(next.capacity, current.width)) return false;
-    const l = draw(next);
+    // A placement drawn before (same rows, same order in every layer, same starts) is not drawn again.
+    const key = `${options.tag ?? ''}|${next.rows.layer.join(',')}|${next.rows.layerLane.join(',')}|${next.layers.map((r) => r.join('.')).join('/')}|${next.start.join(',')}`;
+    const known = options.memo?.get(key);
+    const l = known ?? draw(next);
+    if (known === undefined) options.memo?.set(key, l);
     draws++;
     const s = measure(l);
     if (!better(s, mine)) return false;

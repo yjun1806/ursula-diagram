@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { layout, parse, pixelRuler, renderHtml, renderSvg } from '../src/index.ts';
+import { renderHtml } from '../src/html.ts';
+import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import { BAKE_SOURCE, decodeSource, encodeSource, fileBase } from '../src/render/html.ts';
 
 const SRC = `flowchart LR

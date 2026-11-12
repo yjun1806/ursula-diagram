@@ -3,12 +3,10 @@ import type { LayoutOptions } from './layout/index.ts';
 import { cellWidth } from './metrics.ts';
 import { selectFrontEnd } from './registry.ts';
 import type { TextOptions } from './registry.ts';
-import { renderHtmlDocument } from './render/html.ts';
-import type { Theme } from './render/html.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './sequence/frontend.ts';
 import { UrsulaError } from './types.ts';
-import type { Layout, TextSpan } from './types.ts';
+import type { TextSpan } from './types.ts';
 
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
@@ -18,8 +16,6 @@ export type { LayoutOptions, LegendOption } from './layout/index.ts';
 export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
-export { renderHtmlDocument } from './render/html.ts';
-export type { HtmlOptions, Theme } from './render/html.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
 export { renderTextLayout, renderTextScene, spansToAnsi } from './render/text.ts';
 export { renderSceneSvg } from './render/svg.ts';
@@ -37,7 +33,7 @@ export type * from './types.ts';
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> & Pick<TextOptions, 'detail'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail'> = {},
 ): { lines: string[] } | { error: string } {
   try {
     const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
@@ -57,7 +53,7 @@ export function renderText(
 export function renderTextSpans(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows'> & Pick<TextOptions, 'detail'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail'> = {},
 ): { lines: TextSpan[][] } | { error: string } {
   try {
     const frontEnd = selectFrontEnd(src);
@@ -79,17 +75,4 @@ export function renderTextSpans(
 /** Picks the front-end by the header of `src`, lays it out in pixels and returns inline SVG. */
 export function render(src: string, opts: SvgOptions & { maxWidth?: number } = {}): string {
   return selectFrontEnd(src).svg(src, opts);
-}
-
-/**
- * Picks the front-end by the header of `src` and returns one HTML file: the drawing, a theme switch, saving as PNG
- * or SVG, copying the source, and pressing a node to follow its edges. Nothing is loaded from outside.
- */
-export function renderHtml(src: string, opts: { title?: string; maxWidth?: number; theme?: Theme } = {}): string {
-  const frontEnd = selectFrontEnd(src);
-  const svgOpts = { ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }), ...(opts.title === undefined ? {} : { title: opts.title }) };
-  const svg = frontEnd.svg(src, svgOpts);
-  const laid = frontEnd.json(src, 'svg', svgOpts);
-  const layout = typeof laid === 'object' && laid !== null && 'nodes' in laid && 'edges' in laid ? (laid as Layout) : undefined;
-  return renderHtmlDocument(svg, layout, src, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
 }

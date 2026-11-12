@@ -12,8 +12,11 @@ import type { Graph, Layout } from './types.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean } {
+type Quality = 'fast' | 'best';
+
+function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality } {
   return {
+    ...(opts.quality === undefined ? {} : { quality: opts.quality }),
     ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.composition === undefined ? {} : { composition: opts.composition }),
     ...(opts.questions === undefined ? {} : { questions: opts.questions }),
@@ -31,6 +34,7 @@ interface TextOptionsIn {
   maxHeight?: number;
   engine?: 'grid' | 'layered';
   composition?: Composition;
+  quality?: Quality;
   detail?: Detail;
 }
 
@@ -47,7 +51,7 @@ interface Attempt {
  * setting that fits is then drawn once with candidates and refinement. Reports the layout, the step and the inner width.
  */
 export function drawText(src: string, maxWidth: number | undefined, opts: TextOptionsIn): { lines: string[]; layout: Layout; step: TextStep; w: number } {
-  const { legend, maxHeight, engine, composition, detail = 'auto' } = opts;
+  const { legend, maxHeight, engine, composition, quality, detail = 'auto' } = opts;
   const full = parse(src);
   const inner = innerWidth(full);
   const widths = innerWidths(full);
@@ -61,7 +65,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
   const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
   const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition): { lines: string[]; layout: Layout } => {
     const laid = layout(a.graph, cellRuler(), {
-      ...layoutOptions({ legend, engine, composition: as }),
+      ...layoutOptions({ legend, engine, composition: as, ...(quality === undefined ? {} : { quality }) }),
       ...(maxHeight === undefined ? {} : { maxHeight }),
       ...(maxWidth === undefined ? {} : { maxWidth }),
       fold,
@@ -149,8 +153,8 @@ registerFrontEnd({
   name: 'flowchart',
   headers: ['flowchart', 'graph'],
   svg(src, opts) {
-    const { maxWidth, legend, engine, composition, ...svgOpts } = opts;
-    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition })), svgOpts);
+    const { maxWidth, legend, engine, composition, quality, ...svgOpts } = opts;
+    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition, ...(quality === undefined ? {} : { quality }) })), svgOpts);
   },
   textLines(src, maxWidth, opts) {
     return drawText(src, maxWidth, opts).lines;

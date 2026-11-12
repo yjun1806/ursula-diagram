@@ -8,6 +8,7 @@ import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import type { FlatPlan } from './ports.ts';
+import { stats } from './stats.ts';
 import { offCentreEnds } from './centre.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from './ports.ts';
@@ -735,6 +736,7 @@ function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => n
  * band it crosses, a straight segment between neighbours, or a U through the band above or below its layer.
  */
 export function route(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
+  stats.draws++;
   const prep = prepare(f, l, layers, start, plan);
   const demand = new Array<number>(layers.length + 1).fill(0);
   const { ruler, td } = f;

@@ -1,13 +1,24 @@
 {
-  "name": "ursula",
+  "name": "@yjun1806/ursula",
   "version": "0.0.0",
   "description": "Deterministic layout and rendering of Mermaid flowcharts to layout data, inline SVG and terminal text.",
   "type": "module",
   "private": true,
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./html": { "types": "./dist/html.d.ts", "default": "./dist/html.js" },
+    "./global": "./dist/ursula.global.js"
+  },
+  "bin": { "ursula": "dist/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
   "scripts": {
+    "build": "bun scripts/build.ts",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "dev": "bun src/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

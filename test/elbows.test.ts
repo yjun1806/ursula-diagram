@@ -69,7 +69,7 @@ describe('start node', () => {
     const src = 'flowchart LR\nsubgraph a[A]\nS[Start] --> M[Middle]\nX[Other] --> M\nY[Side] --> X\nend\nsubgraph b[B]\nZ[Far]\nend\nM --> Z';
     const g = parse(src);
     for (const ruler of [pixelRuler(), cellRuler()]) {
-      const l = layout(g, ruler, ruler === cellRuler() ? { maxWidth: 160 } : {});
+      const l = layout(g, ruler, ruler.terminal === true ? { quality: 'best' } : {});
       const s = l.nodes.find((n) => n.id === 'S');
       expect(s?.x).toBe(Math.min(...l.nodes.map((n) => n.x)));
       expect(s?.row).toBe(0);

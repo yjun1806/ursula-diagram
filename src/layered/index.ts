@@ -22,8 +22,9 @@ import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
 import type { Variant } from './choose.ts';
-import { CANDIDATES, FOLDED, pickBest } from './choose.ts';
+import { CANDIDATES, FOLDED, pickBest, score } from './choose.ts';
 import { directionsOf, mixedSideEnds } from './sides.ts';
+import { stats } from './stats.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
@@ -34,6 +35,8 @@ export interface LayeredOptions {
   questions?: boolean;
   /** Try small changes on the chosen drawing and keep those that measure better (on by default). */
   refine?: boolean;
+  /** 'fast': three candidates and one fold, drawn once, nothing refined, no questions; 'best': every candidate, the best three refined (the default for pixels; the terminal defaults to 'fast'). */
+  quality?: 'fast' | 'best';
   /** Draw the first candidate only and refine nothing: the quick drawing that tells whether a setting fits. */
   quick?: boolean;
   /** Cut paths and give up alignment when a drawing is still too wide after blocks moved to other rows (on by default). */
@@ -166,6 +169,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
       rebuild: (next) => place(graph, ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, next),
     };
   };
+  stats.placements++;
   const ladder = buildLadder(graph, rows, units);
   return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage, variant.loose, variant.start).layers);
 }
@@ -438,7 +442,7 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
 }
 
 function withQuestions(source: Graph, drawn: Layout, given: Ruler, opts: LayeredOptions): Layout {
-  if (opts.questions === false) return drawn;
+  if (opts.questions === false || opts.quality === 'fast') return drawn;
   const asked = questionsFor(source, drawn, (g) => layoutAt(g, given, { ...opts, questions: false }));
   return asked.length === 0 ? drawn : { ...drawn, diagnostics: [...drawn.diagnostics, ...asked] };
 }
@@ -457,7 +461,8 @@ function stackGaps(source: Graph): number[] {
   return [first, first + 2, first + 4];
 }
 
-export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions = {}): Layout {
+export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptions = {}): Layout {
+  const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
   if (!given.terminal || opts.gap !== undefined) return withQuestions(source, layoutAt(source, given, opts), given, opts);
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
@@ -495,11 +500,14 @@ function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Pixels draw every candidate with rows first (the default gap kept, a second row in every lane) and the first two
   // also in the order that closes gaps first; the terminal keeps the order of gaps first.
   // The candidates forced and free are also drawn with the flows of a lane folded by the head, and by head and tail.
+  const fast = opts.quality === 'fast';
   const entries: Array<{ v: Variant; order: Order }> = opts.quick
     ? candidates.map((v) => ({ v, order: 'gap' as Order }))
-    : terminal
-      ? [...candidates.map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.slice(0, 2).map((v) => ({ v, order: 'gap' as Order }))]
-      : [...candidates.map((v) => ({ v, order: 'rows' as Order })), ...candidates.filter((v) => v.name === 'forced' || v.name === 'free').map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.map((v) => ({ v, order: 'rows' as Order }))];
+    : fast
+      ? [...TERMINAL_CANDIDATES, FOLDED[0] as Variant].map((v) => ({ v, order: 'rows' as Order }))
+      : terminal
+        ? [...candidates.map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.slice(0, 2).map((v) => ({ v, order: 'gap' as Order }))]
+        : [...candidates.map((v) => ({ v, order: 'rows' as Order })), ...candidates.filter((v) => v.name === 'forced' || v.name === 'free').map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.map((v) => ({ v, order: 'rows' as Order }))];
   // Candidates that came to the same placement draw and refine to the same drawing: the first of them stands for all.
   const seen = new Set<string>();
   const preps = entries
@@ -513,13 +521,30 @@ function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Drawings with and without one-bend edges both compete.
   const shapes = opts.elbows === false ? [false] : opts.quick ? [true] : [true, false];
   const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));
-  if (opts.refine === false || opts.quick) return pickBest(drawn);
-  // Every candidate is also refined by small changes; the best of all finished drawings is kept.
+  if (opts.refine === false || opts.quick || fast) return pickBest(drawn);
+  // Only the three candidates whose drawings score best are refined (the earlier one when equal); the others compete as drawn.
+  const ranked = preps
+    .map((p, i) => ({ p, best: bestOf(drawn.slice(i * shapes.length, (i + 1) * shapes.length)), i }))
+    .sort((a, b) => compareScores(a.best, b.best) || a.i - b.i)
+    .slice(0, 3)
+    .sort((a, b) => a.i - b.i)
+    .map((r) => r.p);
+  // Every one of them is refined by small changes; the best of all finished drawings is kept. Drawings already made are kept in a table.
+  const memo = new Map<string, Layout | null>();
   const refined = [false, true].flatMap((crossingsFirst) =>
-    preps.flatMap((p) => {
-      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed, false), { tight: tightPlacer(p), crossingsFirst, ...(terminal ? { maxDraws: 60 } : {}) });
+    ranked.flatMap((p) => {
+      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed, false), { tight: tightPlacer(p), crossingsFirst, memo, tag: `${p.variant.name}|${p.placed.ruler.rankGap}`, ...(terminal ? { maxDraws: 60 } : {}) });
       return r.accepted > 0 ? shapes.map((e) => finalize(p, r.placed, e)) : [];
     }),
   );
   return pickBest([...drawn, ...refined]);
+}
+
+function bestOf(drawings: Layout[]): number[] {
+  return score(pickBest(drawings));
+}
+
+function compareScores(a: number[], b: number[]): number {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return (a[i] as number) - (b[i] as number);
+  return 0;
 }
