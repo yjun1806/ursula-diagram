@@ -231,3 +231,55 @@ describe('a line that goes into a box', () => {
     }
   });
 });
+
+const LIMITATION = `flowchart LR
+  subgraph subgraph1
+    direction TB
+    top1[top] --> bottom1[bottom]
+  end
+  subgraph subgraph2
+    direction TB
+    top2[top] --> bottom2[bottom]
+  end
+  outside --> subgraph1
+  outside ---> top2`;
+
+describe('clusters: subgraph direction, block ranks and sibling size', () => {
+  it('drops the direction of a subgraph whose node has an edge to a node outside it', () => {
+    const l = drawn(LIMITATION);
+    const node = (id: string) => l.nodes.find((n) => n.id === id) as Layout['nodes'][number];
+    // subgraph1 is only the end of `outside --> subgraph1`: it keeps TB.
+    expect(node('top1').x).toBeCloseTo(node('bottom1').x, 6);
+    expect(node('bottom1').y).toBeGreaterThan(node('top1').y);
+    // subgraph2 has `outside ---> top2`: it reads left to right like its parent.
+    expect(node('top2').y).toBeCloseTo(node('bottom2').y, 6);
+    expect(node('bottom2').x).toBeGreaterThan(node('top2').x);
+  });
+
+  it('lets lines written to subgraphs, not the lines of their nodes, decide the ranks of the boxes', () => {
+    const l = drawn(FLOW);
+    const box = (id: string) => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(box('one').y).toBeCloseTo(box('three').y, 6);
+    expect(box('two').y).toBeGreaterThan(box('one').y + box('one').h - 1e-6);
+  });
+
+  it('keeps the ranks the node lines give when no line is written to a subgraph', () => {
+    const l = drawn('flowchart TB\n  c1-->a2\n  subgraph one\n  subgraph inner\n  a1-->a2\n  end\n  end\n  subgraph three\n  c1-->c2\n  end');
+    const box = (id: string) => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(box('three').y).toBeLessThan(box('one').y);
+  });
+
+  it('gives boxes in one column the same width and boxes in one row the same height', () => {
+    const l = drawn(DIRECTIONS);
+    const box = (id: string) => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(box('B1').w).toBe(box('B2').w);
+    const wide = drawn(LIMITATION);
+    const side = (id: string) => (wide.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    // Boxes that do not share a centre keep their own size.
+    expect(side('subgraph1').w).not.toBe(side('subgraph2').w);
+    const flow = drawn(FLOW);
+    const part = (id: string) => (flow.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(part('one').h).toBe(part('three').h);
+    expect(part('two').w).toBe(part('three').w);
+  });
+});

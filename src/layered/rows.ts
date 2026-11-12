@@ -344,7 +344,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     graph.edges.forEach((e, edge) => {
       const a = index.get(e.from);
       const b = index.get(e.to);
-      if (a !== undefined && b !== undefined && a !== b && laneOf[a] === lane && laneOf[b] === lane) inLane.push({ edge, a, b });
+      if (a !== undefined && b !== undefined && a !== b && laneOf[a] === lane && laneOf[b] === lane && e.unranked !== true) inLane.push({ edge, a, b });
     });
     const size = graph.nodes.length;
     const out: LaneEdge[][] = [];

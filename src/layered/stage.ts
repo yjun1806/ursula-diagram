@@ -28,7 +28,7 @@ export function stageOf(graph: Graph, rows: Rows): number[] {
   graph.edges.forEach((e, edge) => {
     const a = index.get(e.from);
     const b = index.get(e.to);
-    if (a === undefined || b === undefined || a === b) return;
+    if (a === undefined || b === undefined || a === b || e.unranked === true) return;
     const same = laneOf[a] === laneOf[b];
     const [from, to] = same && rows.reversed[edge] ? [b, a] : [a, b];
     links.push({ a: from, b: to, w: same ? 1 : 0, main: onMain.has(`${from}|${to}`) });

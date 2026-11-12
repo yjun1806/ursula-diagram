@@ -162,6 +162,31 @@ interface Plan {
   home: string;
 }
 
+/** The sizes child boxes grow to: the widest of a column (centres on one x, transitively) and the tallest of a row (centres on one y). Empty when nothing changes. */
+function alignBoxes(layout: Layout, kids: Map<string, Block>): Map<string, { w: number; h: number }> {
+  const boxes = layout.nodes.filter((n) => kids.has(n.id));
+  const size = new Map(boxes.map((n) => [n.id, { w: (kids.get(n.id) as Block).size.w, h: (kids.get(n.id) as Block).size.h }] as const));
+  const group = (overlap: (a: LayoutNode, b: LayoutNode) => boolean): LayoutNode[][] => {
+    const root = boxes.map((_, i) => i);
+    const find = (i: number): number => ((root[i] as number) === i ? i : (root[i] = find(root[i] as number)));
+    boxes.forEach((a, i) => boxes.forEach((b, j) => {
+      if (i < j && overlap(a, b)) root[find(j)] = find(i);
+    }));
+    const out = new Map<number, LayoutNode[]>();
+    boxes.forEach((n, i) => out.set(find(i), [...(out.get(find(i)) ?? []), n]));
+    return [...out.values()];
+  };
+  for (const col of group((a, b) => Math.abs(a.x + a.w / 2 - (b.x + b.w / 2)) < 1)) {
+    const w = Math.max(...col.map((n) => (size.get(n.id) as { w: number }).w));
+    for (const n of col) (size.get(n.id) as { w: number }).w = w;
+  }
+  for (const row of group((a, b) => Math.abs(a.y + a.h / 2 - (b.y + b.h / 2)) < 1)) {
+    const h = Math.max(...row.map((n) => (size.get(n.id) as { h: number }).h));
+    for (const n of row) (size.get(n.id) as { h: number }).h = h;
+  }
+  return new Map([...size].filter(([id, v]) => v.w !== (kids.get(id) as Block).size.w || v.h !== (kids.get(id) as Block).size.h));
+}
+
 function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' | 'BT' | undefined): Block {
   const { graph, ruler, tree } = plan;
   const kids = new Map<string, Block>();
@@ -187,16 +212,25 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
       nodes.push({ ...rest, lane: plan.home });
     }
   }
-  const edges: GraphEdge[] = plan.edges
-    .filter((r) => r.level === id)
-    .map(({ index, edge, from, to }) => {
-      const { id: _id, ...rest } = edge;
-      return { ...rest, from, to, id: marker(index) };
-    });
+  const here = plan.edges.filter((r) => r.level === id);
+  // While a line is written to or from a subgraph, the lines of its nodes between two boxes do not decide the ranks of the boxes.
+  const subgraphLevel = here.some((r) => tree.label.has(r.edge.from) || tree.label.has(r.edge.to));
+  const edges: GraphEdge[] = here.map(({ index, edge, from, to }) => {
+    const { id: _id, ...rest } = edge;
+    const lifted = from !== to && tree.label.has(from) && tree.label.has(to) && from !== edge.from && to !== edge.to;
+    return { ...rest, from, to, id: marker(index), ...(subgraphLevel && lifted ? { unranked: true as const } : {}) };
+  });
   const level: Graph = { direction, ...(mirror === undefined ? {} : { mirror }), lanes: graph.lanes.slice(0, 1), nodes, edges };
   const { maxWidth, maxHeight, ...rest } = plan.opts;
   const root = id === '';
-  const layout = plan.draw(level, ruler, { ...rest, engine: 'layered', legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
+  const drawLevel = (g: Graph): Layout => plan.draw(g, ruler, { ...rest, engine: 'layered', legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
+  let layout = drawLevel(level);
+  // Boxes that stand one above the other share their width, boxes side by side share their height; the level is drawn once more with the grown boxes.
+  const grown = alignBoxes(layout, kids);
+  if (grown.size > 0) {
+    layout = drawLevel({ ...level, nodes: nodes.map((n) => (grown.has(n.id) ? { ...n, box: grown.get(n.id) as { w: number; h: number } } : n)) });
+    for (const [c, box] of grown) kids.set(c, { ...(kids.get(c) as Block), size: box });
+  }
   const content = contentOf(layout);
   const name = ruler.textWidth(tree.label.get(id) ?? '', 'lane') + 2 * CLUSTER_NAME_INSET;
   const size = {
