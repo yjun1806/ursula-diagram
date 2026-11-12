@@ -1,3 +1,4 @@
+import { tightPasses } from './clearance.ts';
 import type { Ruler } from '../metrics.ts';
 import { gridUp, measureNodes } from '../layout/place.ts';
 import type { LegendOption } from '../layout/legend.ts';
@@ -383,7 +384,28 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
-  const usedGap = ruler.rankGap;
+  let usedGap = ruler.rankGap;
+  // A line that passes beside a box it does not end on keeps its room: the rank gap grows by pairs of grid steps, at most to twice the default, while that takes such passes away.
+  if (bounded && limit !== undefined && !ruler.uniform) {
+    const total = (d: Layout): number => (td ? d.height : d.width);
+    // The default canvas is a wish, not a border: room for passing lines may take up to 15% more than it. A size the caller gave is kept.
+    const room = (td ? opts.maxHeight : opts.maxWidth) === undefined ? limit * 1.15 : limit;
+    let tight = tightPasses(drawn);
+    for (let gap = ruler.rankGap + 2 * ruler.nodeGrid; tight > 0 && gap <= 2 * base.rankGap && gap <= common - 2 * ruler.nodeGrid; gap += 2 * ruler.nodeGrid) {
+      const r = { ...ruler, rankGap: gap };
+      const u = frameFor(graph, r, undefined).unit;
+      // Wider gaps coarsen the port lattice: stop when a box would lose a port an edge needs.
+      const need = portDemand(placed.ladder, placed.plan);
+      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && portOffsets(boxLength(n.units, u, gap), portStep(u, r)).length < Math.max(need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
+      const wider = draw(r);
+      if (total(wider) > room) break;
+      const now = tightPasses(wider);
+      if (now >= tight) continue;
+      drawn = wider;
+      usedGap = gap;
+      tight = now;
+    }
+  }
   // Gaps stay as wide as what stands in them needs: spare width is left empty, not spread between the boxes.
   // Stages: the reading direction is the layer axis, so a shortfall is taken out of the bands between layers.
   const reading = td ? (opts.maxWidth ?? base.defaultWidth) : opts.maxHeight;
