@@ -1,6 +1,7 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Scene, SceneItem } from '../types.ts';
 import type { Theme } from '../render/theme.ts';
+import type { Scene, SceneItem } from '../types.ts';
 import type { Ishikawa, IshikawaCategory } from './parse.ts';
 
 const MARGIN = 24;
@@ -58,7 +59,6 @@ export interface IshikawaOptions {
   assign?: Assign;
 }
 
-const ceil = (v: number, step: number): number => Math.ceil(v / step) * step;
 
 interface Draft {
   category: IshikawaCategory;
@@ -82,7 +82,7 @@ function assignSides(categories: IshikawaCategory[], mode: Assign): Side[] {
 }
 
 export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, heading?: string, opts: IshikawaOptions = {}): IshikawaLayout {
-  const nameW = (s: string): number => ceil(Math.max(BOX_MIN_W, ruler.textWidth(s, 'title') + BOX_PAD), 8);
+  const nameW = (s: string): number => ceilTo(Math.max(BOX_MIN_W, ruler.textWidth(s, 'title') + BOX_PAD), 8);
   const sides = assignSides(model.categories, opts.assign ?? 'alternate');
   const ranks = { top: 0, bottom: 0 };
   const drafts: Draft[] = model.categories.map((category, i) => {
@@ -106,7 +106,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
   const listHeight = (d: Draft): number => d.offsets[d.offsets.length - 1] ?? 0;
   const reach = (side: Side): number => {
     const own = drafts.filter((d) => d.side === side);
-    return own.length === 0 ? 0 : ceil(Math.max(MIN_REACH, ...own.map((d) => 2 * EDGE_GAP + listHeight(d))), 8);
+    return own.length === 0 ? 0 : ceilTo(Math.max(MIN_REACH, ...own.map((d) => 2 * EDGE_GAP + listHeight(d))), 8);
   };
   const reachOf = { top: reach('top'), bottom: reach('bottom') };
   // Rows lie at a distance from the spine: above, counted down from the far end; below, counted down from the spine.
@@ -124,7 +124,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
         const rows = d.offsets.map((o, r) => distance(d, o) / 2 + (d.ticks[r] ?? 0) + TEXT_GAP + (d.widths[r] ?? 0));
         return Math.max(reachOf[d.side] / 2 + d.boxW / 2, ...rows);
       });
-      joinX.push(ceil(MARGIN + Math.max(0, ...left), 4));
+      joinX.push(ceilTo(MARGIN + Math.max(0, ...left), 4));
       continue;
     }
     const pitch = here.map((d) => {
@@ -132,7 +132,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
       const text = Math.max(0, ...d.widths.map((w, r) => (d.ticks[r] ?? 0) + TEXT_GAP + w)) + CLEAR;
       return Math.max(text, prev === undefined ? 0 : (prev.boxW + d.boxW) / 2 + CLEAR);
     });
-    joinX.push((joinX[k - 1] ?? 0) + ceil(Math.max(0, ...pitch), 4));
+    joinX.push((joinX[k - 1] ?? 0) + ceilTo(Math.max(0, ...pitch), 4));
   }
 
   const titleH = heading === undefined ? 0 : TITLE_H;
@@ -165,10 +165,10 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
 
   const lastJoin = joinX[columns - 1] ?? MARGIN + HEAD_GAP;
   const boxRight = Math.max(0, ...bones.map((b) => b.box.x + b.box.w + 2 * CLEAR));
-  const headW = ceil(Math.max(BOX_MIN_W, ruler.textWidth(model.head, 'title') + BOX_PAD), 8);
-  const headX = ceil(Math.max(lastJoin + HEAD_GAP, boxRight), 4);
+  const headW = ceilTo(Math.max(BOX_MIN_W, ruler.textWidth(model.head, 'title') + BOX_PAD), 8);
+  const headX = ceilTo(Math.max(lastJoin + HEAD_GAP, boxRight), 4);
   const head = { x: headX, y: spineY - BOX_H / 2, w: headW, h: BOX_H };
-  const width = Math.max(headX + headW + MARGIN, heading === undefined ? 0 : ceil(ruler.textWidth(heading, 'title') + 2 * MARGIN, 4));
+  const width = Math.max(headX + headW + MARGIN, heading === undefined ? 0 : ceilTo(ruler.textWidth(heading, 'title') + 2 * MARGIN, 4));
   const spine = { x1: MARGIN, x2: headX, y: spineY };
 
   const lines: SceneItem[] = [{ kind: 'line', points: [{ x: spine.x1, y: spineY }, { x: spine.x2, y: spineY }], role: ['edge', 'edge--arrow'], data: { part: 'spine' } }];

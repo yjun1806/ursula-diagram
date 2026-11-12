@@ -1,3 +1,4 @@
+import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 import type { Pie, PieSlice } from './model.ts';
 
@@ -17,14 +18,11 @@ export function parsePie(src: string, heading?: string): Pie {
   let bodyTitle = false;
   let showData = false;
   let headerSeen = false;
-  let inDescription = false;
+  const acc = createAccessibilityReader();
   for (let n = 0; n < rows.length; n++) {
     const lineNo = n + 1;
     const s = (rows[n] ?? '').trim();
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '' || s.startsWith('%%')) continue;
 
     if (!headerSeen) {
@@ -67,11 +65,7 @@ export function parsePie(src: string, heading?: string): Pie {
       }
       continue;
     }
-    if (/^accTitle\s*:/u.test(s) || /^accDescr\s*:/u.test(s)) continue;
-    if (/^accDescr\s*\{/u.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
 
     const m = SLICE.exec(s);
     if (m === null) fail(`Cannot read "${s}"; a slice is written "label" : value.`, lineNo);

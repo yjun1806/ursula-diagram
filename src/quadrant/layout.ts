@@ -1,6 +1,8 @@
+import { ceilTo, floorTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
+import { wrapWords } from '../text/wrap.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
@@ -15,8 +17,6 @@ const TITLE_SCALE = 15 / 13;
 /** Multiplier on the ruler widths for the medium and bold weights; the ruler already measures wide. */
 const WEIGHT = 1;
 
-const up4 = (v: number): number => Math.ceil(v / 4) * 4;
-const down4 = (v: number): number => Math.floor(v / 4) * 4;
 
 interface Rect {
   x: number;
@@ -68,35 +68,6 @@ function inside(inner: Rect, outer: Rect): boolean {
   return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
 }
 
-/** Breaks `text` at spaces into lines no wider than `maxW`; a word wider than that is cut between characters. */
-function wrap(text: string, maxW: number, measure: (s: string) => number): string[] {
-  const lines: string[] = [];
-  let cur = '';
-  const push = (word: string): void => {
-    const next = cur === '' ? word : `${cur} ${word}`;
-    if (measure(next) <= maxW) {
-      cur = next;
-      return;
-    }
-    if (cur !== '') lines.push(cur);
-    cur = '';
-    if (measure(word) <= maxW) {
-      cur = word;
-      return;
-    }
-    for (const ch of word) {
-      if (cur !== '' && measure(cur + ch) > maxW) {
-        lines.push(cur);
-        cur = '';
-      }
-      cur += ch;
-    }
-  };
-  for (const word of text.split(/\s+/u).filter((w) => w !== '')) push(word);
-  if (cur !== '') lines.push(cur);
-  return lines;
-}
-
 /** Computes the scene of a quadrant chart; the theme sets the default point radius. */
 export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme = 'solid'): QuadrantLayout {
   const body = (s: string): number => ruler.textWidth(s, 'line') * WEIGHT;
@@ -108,7 +79,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   const plotH = chart.chartHeight ?? DEFAULT_PLOT;
   const yW = chart.yAxis === undefined ? 0 : Math.max(body(chart.yAxis.low), chart.yAxis.high === undefined ? 0 : body(chart.yAxis.high));
   const titleW = chart.title === undefined ? 0 : ruler.textWidth(chart.title, 'title') * TITLE_SCALE * WEIGHT;
-  const plotX = chart.yAxis === undefined ? MARGIN : up4(MARGIN + yW + 16);
+  const plotX = chart.yAxis === undefined ? MARGIN : ceilTo(MARGIN + yW + 16);
   const top = chart.title === undefined ? MARGIN : 80;
   const bottom = top + plotH;
   const right = plotX + plotW;
@@ -134,7 +105,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
     const x = plotX + col * (zw + ZONE_GAP);
     const y = top + row * (zh + ZONE_GAP);
     const text = chart.quadrants[quadrant - 1] ?? '';
-    const lines = text === '' ? [] : wrap(text, zw - 2 * ZONE_PAD, name);
+    const lines = text === '' ? [] : wrapWords(text, zw - 2 * ZONE_PAD, name);
     zones.push({ x, y, w: zw, h: zh, quadrant, lines });
     items.push({ kind: 'box', style: 'frame', x, y, w: zw, h: zh, role: (col + row) % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'] });
   }
@@ -149,8 +120,8 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
     items.push({ kind: 'text', x: plotX, y, text: low, anchor: 'start', role: ['axis-name'] });
     if (high !== undefined) {
       items.push({ kind: 'text', x: right, y, text: high, anchor: 'end', role: ['axis-name'] });
-      const x1 = up4(plotX + body(low) + 16);
-      const x2 = down4(right - body(high) - 16);
+      const x1 = ceilTo(plotX + body(low) + 16);
+      const x2 = floorTo(right - body(high) - 16);
       if (x2 - x1 >= 24) items.push({ kind: 'line', points: [{ x: x1, y: y - 4 }, { x: x2, y: y - 4 }], role: ['edge', 'edge--arrow'] });
     }
   }
@@ -160,8 +131,8 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
     items.push({ kind: 'text', x, y: bottom - 12, text: low, anchor: 'end', role: ['axis-name'] });
     if (high !== undefined) {
       items.push({ kind: 'text', x, y: top + 12, text: high, anchor: 'end', role: ['axis-name'] });
-      const y1 = down4(bottom - 32);
-      const y2 = up4(top + 32);
+      const y1 = floorTo(bottom - 32);
+      const y2 = ceilTo(top + 32);
       if (y1 - y2 >= 24) items.push({ kind: 'line', points: [{ x: plotX - 20, y: y1 }, { x: plotX - 20, y: y2 }], role: ['edge', 'edge--arrow'] });
     }
   }
@@ -224,7 +195,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
     const anchor = l.side === 'right' ? 'start' : l.side === 'left' ? 'end' : 'middle';
     const x = l.side === 'right' ? l.x : l.side === 'left' ? l.x + l.w : l.x + l.w / 2;
     items.push({ kind: 'text', x, y: l.y + LINE_H / 2, text: q.name, anchor, role: ['body'] });
-    width = Math.max(width, up4(l.x + l.w + MARGIN));
+    width = Math.max(width, ceilTo(l.x + l.w + MARGIN));
   }
 
   items.unshift({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });

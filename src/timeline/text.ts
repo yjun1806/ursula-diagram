@@ -1,11 +1,10 @@
 import { cellWidth } from '../metrics.ts';
+import { padEnd } from '../text/terminal.ts';
 import type { TextSpan } from '../types.ts';
 import type { TimelineModel } from './model.ts';
 import { wrapLines } from './wrap.ts';
 
 const GAP = 2;
-
-const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - cellWidth(s)));
 
 /** Draws a timeline for a terminal: periods in the left column, events beside them from top to bottom, sections as bold rules. */
 export function layoutTimelineText(model: TimelineModel, maxWidth: number | undefined): TextSpan[][] {
@@ -33,7 +32,7 @@ export function layoutTimelineText(model: TimelineModel, maxWidth: number | unde
       const events = p.events.flatMap((e) => wrapLines(e, eventW, cellWidth));
       const n = Math.max(label.length, events.length);
       for (let i = 0; i < n; i++) {
-        const l = pad(label[i] ?? '', labelW);
+        const l = padEnd(label[i] ?? '', labelW);
         const e = events[i];
         line(e === undefined ? l.trimEnd() : `${l}${' '.repeat(GAP)}${e}`);
       }
@@ -41,5 +40,3 @@ export function layoutTimelineText(model: TimelineModel, maxWidth: number | unde
   });
   return out;
 }
-
-export const joinSpans = (spans: TextSpan[]): string => spans.map((s) => s.text).join('');

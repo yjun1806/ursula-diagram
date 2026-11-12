@@ -1,5 +1,5 @@
 import { cellWidth } from '../metrics.ts';
-import { fitName } from './layout.ts';
+import { shrinkToFit } from '../text/fit.ts';
 import { splitFields } from './model.ts';
 import type { Packet } from './model.ts';
 
@@ -53,7 +53,7 @@ export function layoutPacketText(packet: Packet, maxWidth: number | undefined): 
       bottom[x1] = nextJoined ? '┴' : '┘';
       mid[x1] = '│';
       const room = x1 - x0 - 1;
-      const name = fitName(p.label, room, cellWidth);
+      const name = shrinkToFit(p.label, room, cellWidth) ?? '…';
       put(mid, x0 + 1 + Math.floor((room - cellWidth(name)) / 2), name);
       const num = String(p.left);
       const nextAt = mine[i + 1] === undefined ? total : (mine[i + 1]?.c0 ?? 0) * k;

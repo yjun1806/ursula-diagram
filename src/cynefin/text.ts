@@ -1,18 +1,8 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, padEnd } from '../text/terminal.ts';
 import { DOMAIN_NAMES } from './model.ts';
 import type { Cynefin, Domain } from './model.ts';
 
-function cut(text: string, cap: number): string {
-  if (cellWidth(text) <= cap) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(`${out}${ch}…`) > cap) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
-const padEnd = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - cellWidth(s)));
 const ORDER: Domain[] = ['complex', 'complicated', 'chaotic', 'clear', 'confusion'];
 
 /**

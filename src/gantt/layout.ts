@@ -1,5 +1,7 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Theme } from '../render/theme.ts';
+import { clip } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Gantt, GanttTask } from './model.ts';
 import { planTicks } from './ticks.ts';
@@ -25,7 +27,6 @@ const INNER_MIN = 40;
 const UNITS_MS = [1, 1000, 60_000, 3_600_000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
 const SCALES = [32, 24, 16, 12, 8, 6, 4, 3, 2, 1.5, 1];
 
-const ceil4 = (v: number): number => Math.ceil(v / 4) * 4;
 
 export interface PlacedBar {
   /** Index into `Gantt.tasks`. */
@@ -103,7 +104,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const chips: Geo['chips'] = [];
     for (const [on, text] of [[t.done, 'done'], [t.active, 'active'], [t.milestone, 'milestone']] as const) {
       if (!on) continue;
-      const cw = ceil4(w11(text) + 16);
+      const cw = ceilTo(w11(text) + 16);
       const dx = at + (chips.length === 0 ? TAG_GAP : 4);
       chips.push({ dx, w: cw, text });
       at = dx + cw;
@@ -137,10 +138,10 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
 
   // Columns
   const named = model.sections.some((s) => s !== '');
-  const sectionW = named ? Math.max(SECTION_MIN, ceil4(Math.max(...model.sections.map(w13)) + 16)) : 0;
+  const sectionW = named ? Math.max(SECTION_MIN, ceilTo(Math.max(...model.sections.map(w13)) + 16)) : 0;
   const nameX = LEFT + sectionW;
   const nameW = Math.max(...lines.map((l) => w12(taskOf(l[0] ?? 0).label)));
-  const x0 = Math.max(nameX + NAME_ROOM, ceil4(nameX + nameW + 24));
+  const x0 = Math.max(nameX + NAME_ROOM, ceilTo(nameX + nameW + 24));
   const xOf = (t: number): number => x0 + posOf(t);
 
   // Rows' places
@@ -161,7 +162,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const cy = y + HALF;
     bars.push({ task: ti, row, x, y, w: g.w, h: BAND, cx: x + g.w / 2, cy });
     const durX = x + g.w + TAG_GAP;
-    const chips = g.chips.map((c) => ({ x: ceil4(x0 + c.dx), w: c.w, text: c.text }));
+    const chips = g.chips.map((c) => ({ x: ceilTo(x0 + c.dx), w: c.w, text: c.text }));
     const right = chips.length === 0 ? durX + w11(g.dur) : (chips[chips.length - 1]?.x ?? 0) + (chips[chips.length - 1]?.w ?? 0);
     labels.set(ti, { dur: { x: durX, text: g.dur }, chips, right });
     obstacles[row]?.push({ x0: x, x1: x + g.w, y0: y, y1: y + BAND }, { x0: durX, x1: right, y0: cy - 10, y1: cy + 10 });
@@ -189,7 +190,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const tickRight = Math.max(...plan.ticks.map((t) => (t.label === '' ? 0 : xOf(t.t) + w11(t.label))), ...plan.ticks.map((t) => (t.month === undefined ? 0 : xOf(t.t) + w12(t.month))));
   const titleRight = model.title === undefined ? 0 : LEFT + (w13(model.title) * 15) / 13;
   const rightMost = Math.max(x1, tickRight, titleRight, ...[...labels.values()].map((l) => l.right), ...vertLabels.map((v) => v.right));
-  const width = ceil4(rightMost) + 40;
+  const width = ceilTo(rightMost) + 40;
   const height = gridBottom + 40 + (vertLabels.length === 0 ? 0 : 16 * levelEnds.length + 8);
 
   const items: SceneItem[] = [];
@@ -332,16 +333,6 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
 }
 
 /** `text` cut to `limit` with an ellipsis when it does not fit. */
-function clip(text: string, limit: number, width: (s: string) => number): string {
-  if (width(text) <= limit) return text;
-  let out = '';
-  for (const ch of text) {
-    if (width(`${out}${ch}…`) > limit) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
 function range(from: number, to: number): number[] {
   return Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i);
 }

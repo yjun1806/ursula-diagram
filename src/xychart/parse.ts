@@ -1,5 +1,6 @@
-import { UrsulaError } from '../types.ts';
 import type { FrontValue } from '../front-matter.ts';
+import { configSection } from '../front/options.ts';
+import { UrsulaError } from '../types.ts';
 import type { XyChart, XyConfig, XyPoint, XyRange, XySeries } from './model.ts';
 
 const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)`;
@@ -55,8 +56,7 @@ const unquote = (text: string): string => (text.length >= 2 && text.startsWith('
 
 /** Reads the `xyChart` section of the options a front matter gave; values of an unexpected type are ignored. */
 export function readXyConfig(config: Record<string, FrontValue> | undefined): { config: XyConfig; horizontal?: boolean } {
-  const section = config?.['xyChart'];
-  const raw: Record<string, FrontValue> = section !== null && typeof section === 'object' ? section : {};
+  const raw = configSection(config, 'xyChart') ?? {};
   const out: XyConfig = {};
   const size = (k: string): number | undefined => {
     const v = raw[k];

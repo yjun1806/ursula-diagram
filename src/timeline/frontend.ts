@@ -1,9 +1,10 @@
 import { pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
+import { joinSpans } from '../text/terminal.ts';
 import { layoutTimeline } from './layout.ts';
 import { parseTimeline } from './parse.ts';
-import { joinSpans, layoutTimelineText } from './text.ts';
+import { layoutTimelineText } from './text.ts';
 
 registerFrontEnd({
   name: 'timeline',

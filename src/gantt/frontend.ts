@@ -1,9 +1,10 @@
 import { pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
+import { joinSpans } from '../text/terminal.ts';
 import { layoutGantt } from './layout.ts';
 import { parseGantt } from './parse.ts';
-import { joinSpans, layoutGanttText } from './text.ts';
+import { layoutGanttText } from './text.ts';
 
 registerFrontEnd({
   name: 'gantt',

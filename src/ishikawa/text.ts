@@ -1,4 +1,5 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, span } from '../text/terminal.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import type { Ishikawa, IshikawaCause } from './parse.ts';
 
@@ -10,18 +11,6 @@ interface Node {
   children: Node[];
 }
 
-const span = (text: string, tone: TextTone = 'normal'): TextSpan => ({ text, tone });
-
-/** Cuts `text` to at most `limit` cells, ending in an ellipsis when something is left out. */
-function fit(text: string, limit: number): string {
-  if (cellWidth(text) <= limit) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(out + ch) > limit - 1) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
 
 /** Nests a flat run of causes by their depth. */
 function nest(causes: IshikawaCause[]): Node[] {
@@ -42,7 +31,7 @@ export function layoutIshikawaText(model: Ishikawa, maxWidth: number | undefined
   const rows: Row[] = [];
   const push = (guide: string, text: string, tone: TextTone): void => {
     const room = limit - cellWidth(guide);
-    rows.push([...(guide === '' ? [] : [span(guide, 'dim')]), span(room >= 1 ? fit(text, room) : '', tone)]);
+    rows.push([...(guide === '' ? [] : [span(guide, 'dim')]), span(room >= 1 ? cut(text, room) : '', tone)]);
   };
   const walk = (nodes: Node[], prefix: string): void => {
     nodes.forEach((node, i) => {
@@ -59,5 +48,3 @@ export function layoutIshikawaText(model: Ishikawa, maxWidth: number | undefined
   });
   return rows;
 }
-
-export const joinSpans = (row: Row): string => row.map((s) => s.text).join('');
