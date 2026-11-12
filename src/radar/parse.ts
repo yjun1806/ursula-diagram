@@ -1,6 +1,6 @@
+import { nearestSeries } from '../chart/series-color.ts';
 import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
-import { nearestSeries } from './colors.ts';
 import type { Graticule, Radar, RadarAxis, RadarCurve } from './model.ts';
 
 const NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)$/u;

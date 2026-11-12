@@ -31,6 +31,7 @@
 .ursula-box--pending{stroke:var(--ursula-zone-dash,#c4c1d0);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
 .ursula-active{fill:var(--ursula-active-fill,#e3d6fe);stroke:var(--ursula-active-stroke,none);stroke-width:0}
 .ursula-note{fill:var(--ursula-note-fill,#ffffff);stroke:var(--ursula-note-stroke,#e4e2ec);stroke-width:2}
+.ursula-note--in-zone{fill:var(--ursula-note-in-zone,#ffffff)}
 .ursula-token{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0}
 .ursula-tile{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0}
 .ursula-tile--in-zone{fill:var(--ursula-box-in-zone,#ffffff)}
@@ -39,6 +40,7 @@
 .ursula-end-ring{fill:var(--ursula-bg,#ffffff);stroke:var(--ursula-ink,#1c1a24);stroke-width:2.5}
 .ursula-end-dot{fill:var(--ursula-ink,#1c1a24)}
 .ursula-rule{fill:none;stroke:var(--ursula-rule,#ffffff);stroke-width:2}
+.ursula-rule--in-zone{stroke:var(--ursula-rule-in-zone,#ecebf1);stroke-width:1}
 .ursula-tag{fill:var(--ursula-tag-fill,#e9e7f0)}
 .ursula-tag--in-zone{fill:var(--ursula-tag-fill-zone,#f3f2f7)}
 .ursula-edge{fill:none;stroke:var(--ursula-edge,#c4c1d0);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
@@ -59,6 +61,7 @@
 .ursula-chip--accent{fill:var(--ursula-chip-accent-fill,#f2edff);stroke:var(--ursula-chip-accent-stroke,#ffffff)}
 .ursula-zone{fill:var(--ursula-zone-fill,#f3f2f7);stroke:var(--ursula-zone-stroke,none);stroke-width:0}
 .ursula-zone--plain{fill:var(--ursula-zone-plain,#ffffff);stroke:var(--ursula-zone-plain-stroke,#e4e2ec);stroke-width:2}
+.ursula-zone-face{fill:var(--ursula-zone-fill,#f3f2f7)}
 .ursula-zone--dashed{fill:none;stroke:var(--ursula-zone-dash,#c4c1d0);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
 .ursula-frame{fill:none;stroke:var(--ursula-frame,#e4e2ec);stroke-width:2}
 .ursula-frame-split{fill:none;stroke:var(--ursula-frame,#e4e2ec);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
@@ -146,6 +149,7 @@
 .ursula-box--pending{stroke:var(--ursula-zone-dash,#6a6779);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
 .ursula-active{fill:var(--ursula-active-fill,rgba(116,71,200,0.24));stroke:var(--ursula-active-stroke,none);stroke-width:0}
 .ursula-note{fill:var(--ursula-note-fill,#1c1b22);stroke:var(--ursula-note-stroke,#3a3846);stroke-width:2}
+.ursula-note--in-zone{fill:var(--ursula-note-in-zone,#1c1b22)}
 .ursula-token{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0}
 .ursula-tile{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0}
 .ursula-tile--in-zone{fill:var(--ursula-box-in-zone,#34323e)}
@@ -154,6 +158,7 @@
 .ursula-end-ring{fill:var(--ursula-bg,#1c1b22);stroke:var(--ursula-ink,#ecebf2);stroke-width:2.5}
 .ursula-end-dot{fill:var(--ursula-ink,#ecebf2)}
 .ursula-rule{fill:none;stroke:var(--ursula-rule,#1c1b22);stroke-width:2}
+.ursula-rule--in-zone{stroke:var(--ursula-rule-in-zone,#474454);stroke-width:1}
 .ursula-tag{fill:var(--ursula-tag-fill,#2e2c38)}
 .ursula-tag--in-zone{fill:var(--ursula-tag-fill-zone,#2a2833)}
 .ursula-edge{fill:none;stroke:var(--ursula-edge,#6a6779);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
@@ -174,6 +179,7 @@
 .ursula-chip--accent{fill:var(--ursula-chip-accent-fill,rgba(116,71,200,0.24));stroke:var(--ursula-chip-accent-stroke,#1c1b22)}
 .ursula-zone{fill:var(--ursula-zone-fill,#211f29);stroke:var(--ursula-zone-stroke,none);stroke-width:0}
 .ursula-zone--plain{fill:var(--ursula-zone-plain,#1c1b22);stroke:var(--ursula-zone-plain-stroke,#3a3846);stroke-width:2}
+.ursula-zone-face{fill:var(--ursula-zone-fill,#211f29)}
 .ursula-zone--dashed{fill:none;stroke:var(--ursula-zone-dash,#6a6779);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
 .ursula-frame{fill:none;stroke:var(--ursula-frame,#3a3846);stroke-width:2}
 .ursula-frame-split{fill:none;stroke:var(--ursula-frame,#3a3846);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}

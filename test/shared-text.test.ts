@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellWidth } from '../src/metrics.ts';
+import { cellRuler, cellWidth, pixelRuler, spansWidth } from '../src/metrics.ts';
 import { clip, shrinkToFit } from '../src/text/fit.ts';
 import { cut, joinSpans, padEnd, padStart, span } from '../src/text/terminal.ts';
 import { wrapParagraphs, wrapWords } from '../src/text/wrap.ts';
@@ -78,5 +78,20 @@ describe('terminal helpers', () => {
   it('builds spans with a tone and joins them without tones', () => {
     expect(span('x')).toEqual({ text: 'x', tone: 'normal' });
     expect(joinSpans([span('a'), span('b', 'bold')])).toBe('ab');
+  });
+});
+
+describe('spansWidth', () => {
+  it('adds the runs, a bold run measured wider than the same plain run', () => {
+    const px = pixelRuler();
+    const plain = px.textWidth('Root', 'title') + px.textWidth(' with', 'title');
+    expect(spansWidth(px, [{ text: 'Root' }, { text: ' with' }], 'title')).toBeCloseTo(plain, 6);
+    const bold = spansWidth(px, [{ text: 'Root', weight: 'bold' }, { text: ' with' }], 'title');
+    expect(bold).toBeGreaterThan(plain);
+    expect(spansWidth(px, [{ text: 'Root', italic: true }], 'title')).toBeCloseTo(px.textWidth('Root', 'title'), 6);
+  });
+
+  it('counts a bold run in cells as wide as a plain one', () => {
+    expect(spansWidth(cellRuler(), [{ text: 'Root', weight: 'bold' }, { text: ' with' }], 'line')).toBe(9);
   });
 });

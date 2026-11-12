@@ -350,7 +350,23 @@ export interface SceneText {
   tone?: SceneTone;
   /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
   role?: string[];
+  /**
+   * Runs of one line drawn in their own weight, slant or roles; `text` stays the whole line. Spaces between runs are
+   * the spaces inside their text.
+   */
+  spans?: SceneTextSpan[];
+  /** Turn in degrees about the anchor point. */
+  rotate?: number;
   data?: Record<string, string>;
+}
+
+/** One run of a scene text. */
+export interface SceneTextSpan {
+  text: string;
+  weight?: 'bold';
+  italic?: true;
+  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  role?: string[];
 }
 
 export interface SceneLine {

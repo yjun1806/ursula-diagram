@@ -241,7 +241,7 @@ function textBoxes(src: string): { boxes: Box[]; chips: Box[]; width: number; he
     const mono = (t.role ?? []).includes('mono');
     const w = mono ? monoWidth(t.text, ruler) : ruler.textWidth(t.text, 'line');
     const x0 = t.anchor === 'middle' ? t.x - w / 2 : t.anchor === 'end' ? t.x - w : t.x;
-    const deg = Number(t.data?.['rotate'] ?? 0);
+    const deg = t.rotate ?? 0;
     boxes.push({ pts: corners(x0, x0 + w, t.y - TEXT_HALF, t.y + TEXT_HALF, deg, t.x, t.y), text: t.text });
   }
   return { boxes, chips, width: layout.scene.width, height: layout.scene.height, scene: layout.scene };
@@ -401,8 +401,8 @@ describe('git layout', () => {
     const rotated = textBoxes(EXAMPLES[11] ?? '').scene.items.filter((it) => it.kind === 'text' && (it.role ?? []).includes('mono'));
     const flat = textBoxes(EXAMPLES[12] ?? '').scene.items.filter((it) => it.kind === 'text' && (it.role ?? []).includes('mono'));
     expect(rotated.length).toBe(10);
-    expect(rotated.every((it) => it.kind === 'text' && it.data?.['rotate'] === '-45')).toBe(true);
-    expect(flat.every((it) => it.kind === 'text' && it.data?.['rotate'] === undefined)).toBe(true);
+    expect(rotated.every((it) => it.kind === 'text' && it.rotate === -45)).toBe(true);
+    expect(flat.every((it) => it.kind === 'text' && it.rotate === undefined)).toBe(true);
     expect(render(EXAMPLES[11] ?? '')).toMatch(/<text class="ursula-mono ursula-end" x="([\d.]+)" y="([\d.]+)"[^>]*transform="rotate\(-45 \1 \2\)"/u);
     expect(render(EXAMPLES[1] ?? '')).not.toContain('rotate(');
   });

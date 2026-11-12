@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { cellRuler, cellWidth, layoutSequence, parseSequence, render, renderText, renderTextSpans, selectFrontEnd, spansToAnsi, UrsulaError } from '../src/index.ts';
 import type { TextSpan } from '../src/index.ts';
+import { pixelRuler } from '../src/metrics.ts';
 
 const upload = `sequenceDiagram
   participant U as User
@@ -84,8 +85,9 @@ describe('sequence svg', () => {
 
   it('draws a rect block as a zone that sits under the lifelines', () => {
     const out = body(render('sequenceDiagram\nA->>B: a\nrect rgb(240, 240, 255)\nB->>A: b\nend\nA->>B: c'));
-    // The zone itself and the backing of the label that lies inside it; the other labels sit on the page.
-    expect(out.match(/class="ursula-zone"/g)).toHaveLength(2);
+    // The zone itself, and the zone face backing the label that lies inside it; the other labels sit on the page.
+    expect(out.match(/class="ursula-zone"/g)).toHaveLength(1);
+    expect(out.match(/class="ursula-zone-face"/g)).toHaveLength(1);
     expect(out.indexOf('class="ursula-zone"')).toBeLessThan(out.indexOf('class="ursula-lifeline"'));
     expect(out).not.toContain('rgb(');
   });
@@ -486,3 +488,29 @@ describe('sequence speed', () => {
     expect(textMs).toBeLessThan(20);
   });
 });
+
+describe('sequence backings and notes inside zones', () => {
+  const src = `sequenceDiagram
+    participant Alice
+    participant John
+    rect rgb(191, 223, 255)
+    note right of Alice: Alice calls John.
+    Alice->>+John: Hello John, how are you?
+    end
+    note right of Alice: Outside.
+    Alice->>John: Bye`;
+
+  it('backs a label in a zone with the zone face, which has no outline', () => {
+    const items = layoutSequence(parseSequence(src), pixelRuler()).scene.items;
+    const backs = items.filter((it) => it.kind === 'box' && it.style === 'label');
+    expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone-face'))).toBe(true);
+    expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone'))).toBe(false);
+  });
+
+  it('marks a note inside a zone, and only that one', () => {
+    const notes = layoutSequence(parseSequence(src), pixelRuler()).scene.items.filter((it) => it.kind === 'box' && it.role?.includes('note'));
+    expect(notes).toHaveLength(2);
+    expect(notes.map((n) => n.kind === 'box' && (n.role?.includes('note--in-zone') ?? false))).toEqual([true, false]);
+  });
+});
+

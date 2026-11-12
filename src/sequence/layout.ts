@@ -518,10 +518,8 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     return { lo, hi, label: gr.label };
   });
   for (const gs of groupSpans) span(gs.lo, gs.hi);
-  const backRole = (x: number): string[] => {
-    if (zoneOpen.length > 0) return (zoneOpen.length - 1) % 2 === 0 ? ['zone'] : ['bg'];
-    return groupSpans.some((gs) => x >= gs.lo && x <= gs.hi) ? ['zone'] : ['bg'];
-  };
+  const onZone = (x: number): boolean => (zoneOpen.length > 0 ? (zoneOpen.length - 1) % 2 === 0 : groupSpans.some((gs) => x >= gs.lo && x <= gs.hi));
+  const backRole = (x: number): string[] => (onZone(x) ? ['zone-face'] : ['bg']);
 
   const rows: PlacedRow[] = [];
   const messages: PlacedMessage[] = [];
@@ -771,7 +769,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         }
         const top = cursor + gapFor('note');
         const box: Box = { x: bx, y: top, w: bw, h: sz.h };
-        boxItems.push({ kind: 'box', style: 'note', role: ['note'], ...box, data: { note: String(notes.length) } });
+        boxItems.push({ kind: 'box', style: 'note', role: onZone(box.x + box.w / 2) ? ['note', 'note--in-zone'] : ['note'], ...box, data: { note: String(notes.length) } });
         span(box.x, box.x + box.w - S.stroke);
         frameSpan(box.x, box.x + box.w - S.stroke);
         const nl = Math.max(1, lines.length);

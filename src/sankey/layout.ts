@@ -1,10 +1,10 @@
 import { boxesOverlap } from '../chart/label-place.ts';
 import type { Box } from '../chart/label-place.ts';
 import { ceilTo, floorTo, round2 } from '../chart/grid.ts';
+import { nearestSeries } from '../chart/series-color.ts';
 import type { Ruler } from '../metrics.ts';
 import { shrinkToFit } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
-import { nearestSeries } from './colors.ts';
 import { valueText } from './model.ts';
 import type { Sankey } from './model.ts';
 
@@ -14,7 +14,6 @@ const NODE_PAD = 16;
 /** A label above a node stands in the gap between two nodes, so a gap is never narrower than a label line. */
 const LABEL_H = 16;
 const LABEL_GAP = 8;
-const VALUE_GAP = 6;
 const TARGET_W = 840;
 const MIN_PLOT_H = 400;
 const MIN_STEP = 64;
@@ -43,7 +42,7 @@ export interface PlacedSankeyNode {
   w: number;
   h: number;
   /** Where the name and the value are written and the box both take. */
-  label: { side: 'left' | 'right' | 'above'; nameX: number; valueX: number; y: number; nameAnchor: 'start' | 'end'; box: Box };
+  label: { side: 'left' | 'right' | 'above'; nameX: number; y: number; nameAnchor: 'start' | 'end'; box: Box };
 }
 
 export interface PlacedBand {
@@ -261,7 +260,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const labelW = (i: number): number => {
     const s = shown[i];
     if (s === undefined) return 0;
-    return s.nameW + ('hide' in s ? 0 : VALUE_GAP + numW(s.text));
+    return s.nameW + ('hide' in s ? 0 : numW(` ${s.text}`));
   };
   const widest = (c: number): number => Math.max(0, ...(order[c] ?? []).map(labelW));
   const left = ceilTo(MARGIN + widest(0) + LABEL_GAP);
@@ -282,36 +281,30 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
       const w = labelW(i);
       const s = shown[i];
       const hasValue = s !== undefined && !('hide' in s);
-      const vW = hasValue ? numW(s.text) : 0;
-      const nW = s?.nameW ?? 0;
       let side: 'left' | 'right' | 'above';
       let box: Box;
       let nameX: number;
-      let valueX: number;
       let cy = y + h / 2;
       let nameAnchor: 'start' | 'end' = 'start';
       if (c === 0) {
         side = 'left';
         const right = x - LABEL_GAP;
         nameAnchor = 'end';
-        valueX = right;
-        nameX = hasValue ? right - vW - VALUE_GAP : right;
+        nameX = right;
         box = { x0: right - w, x1: right, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
       } else if (c === columns - 1) {
         side = 'right';
         const start = x + nodeW + LABEL_GAP;
         nameX = start;
-        valueX = start + nW + VALUE_GAP;
         box = { x0: start, x1: start + w, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
       } else {
         side = 'above';
         const start = x + nodeW / 2 - w / 2;
         cy = y - LABEL_H / 2;
         nameX = start;
-        valueX = start + nW + VALUE_GAP;
         box = { x0: start, x1: start + w, y0: y - LABEL_H, y1: y };
       }
-      return { name: nd.name, value: value[i] ?? 0, valueText: hasValue ? s.text : valueText(value[i] ?? 0), column: c, series: seriesOf(i, nd.name), x, y, w: nodeW, h, label: { side, nameX, valueX, y: cy, nameAnchor, box } };
+      return { name: nd.name, value: value[i] ?? 0, valueText: hasValue ? s.text : valueText(value[i] ?? 0), column: c, series: seriesOf(i, nd.name), x, y, w: nodeW, h, label: { side, nameX, y: cy, nameAnchor, box } };
     });
     return { width, placed };
   };
@@ -384,10 +377,12 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   }
   for (const n of placed) {
     const anchor = n.label.nameAnchor;
-    items.push({ kind: 'text', x: round2(n.label.nameX), y: round2(n.label.y), text: n.name, anchor, role: map.outlined ? ['name', 'tick--halo'] : ['name'], data: { node: n.name } });
-    if (map.showValues) {
-      items.push({ kind: 'text', x: round2(n.label.valueX), y: round2(n.label.y), text: n.valueText, anchor, role: map.outlined ? ['value'] : ['value', 'value--plain'], data: { node: n.name } });
-    }
+    const role = map.outlined ? ['name', 'tick--halo'] : ['name'];
+    const value = ` ${n.valueText}`;
+    const text = map.showValues
+      ? { text: `${n.name}${value}`, spans: [{ text: n.name }, { text: value, role: map.outlined ? ['value'] : ['value', 'value--plain'] }] }
+      : { text: n.name };
+    items.push({ kind: 'text', x: round2(n.label.nameX), y: round2(n.label.y), ...text, anchor, role, data: { node: n.name } });
   }
 
   const label = map.accTitle ?? (map.title !== undefined ? `Sankey: ${map.title}` : `Sankey: ${count} nodes, ${map.links.length} flows`);

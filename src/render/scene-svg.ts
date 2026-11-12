@@ -1,10 +1,10 @@
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
-import type { SceneThemeSpec } from './scene-theme.ts';
+import type { Arrow, SceneThemeSpec } from './scene-theme.ts';
 import { escapeXml, num, pathData } from './svg.ts';
 import { SHADOW_FILTER, THEMES } from './theme.ts';
 import type { Theme } from './theme.ts';
 import { UrsulaError } from '../types.ts';
-import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText } from '../types.ts';
+import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
 
 const FONT = "'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif";
 const FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
@@ -26,6 +26,9 @@ function sceneRules(spec: SceneThemeSpec): string[] {
           '.ursula-head--accent{stroke:$accent}',
           '.ursula-head--msg{stroke:$edge-msg}',
         ];
+  // A message call whose head the theme fills while every other head is open.
+  const msg = spec.msgArrow;
+  const msgHead = msg?.kind === 'filled' ? [`.ursula-head.ursula-head--msg{fill:$edge-msg;stroke:$edge-msg;stroke-width:${msg.stroke};stroke-linejoin:round}`] : [];
   // A series mark is written `series-N--tint` or as the two roles `series-N`, `tint`; both reach the same rule.
   const seriesRules = SERIES.flatMap((n) => {
     const form = (modifier: string, body: string): string => `.ursula-series-${n}--${modifier},.ursula-series-${n}.ursula-${modifier}{${body}}`;
@@ -71,6 +74,7 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-box--pending{stroke:$zone-dash;stroke-width:%zone-dash-w;stroke-dasharray:%dash;stroke-linecap:round}',
     '.ursula-active{fill:$active-fill;stroke:$active-stroke;stroke-width:%active-w}',
     '.ursula-note{fill:$note-fill;stroke:$note-stroke;stroke-width:%note-w}',
+    '.ursula-note--in-zone{fill:$note-in-zone}',
     '.ursula-token{fill:$box-fill;stroke:$box-stroke;stroke-width:%box-w}',
     '.ursula-tile{fill:$box-fill;stroke:$box-stroke;stroke-width:%box-w}',
     '.ursula-tile--in-zone{fill:$box-in-zone}',
@@ -79,6 +83,8 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-end-ring{fill:$bg;stroke:$ink;stroke-width:%edge-w}',
     '.ursula-end-dot{fill:$ink}',
     '.ursula-rule{fill:none;stroke:$rule;stroke-width:%rule-w}',
+    // A rule of the page colour is a gap; on a white box in a filled zone it would vanish, so there it is a hairline.
+    '.ursula-rule--in-zone{stroke:$rule-in-zone;stroke-width:1}',
     '.ursula-tag{fill:$tag-fill}',
     '.ursula-tag--in-zone{fill:$tag-fill-zone}',
     '.ursula-edge{fill:none;stroke:$edge;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
@@ -99,6 +105,7 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-chip--accent{fill:$chip-accent-fill;stroke:$chip-accent-stroke}',
     '.ursula-zone{fill:$zone-fill;stroke:$zone-stroke;stroke-width:%zone-w}',
     '.ursula-zone--plain{fill:$zone-plain;stroke:$zone-plain-stroke;stroke-width:%zone-plain-w}',
+    '.ursula-zone-face{fill:$zone-fill}',
     '.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:%zone-dash-w;stroke-dasharray:%dash;stroke-linecap:round}',
     '.ursula-frame{fill:none;stroke:$frame;stroke-width:%frame-w}',
     '.ursula-frame-split{fill:none;stroke:$frame;stroke-width:%frame-w;stroke-dasharray:%dash;stroke-linecap:round}',
@@ -110,6 +117,7 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-dot{fill:$dot-neutral}',
     ...seriesRules,
     ...head,
+    ...msgHead,
   ];
 }
 
@@ -132,9 +140,12 @@ type End = 'end' | 'start';
 
 const markerId = (variant: Variant, end: End): string => `ursula-arrow-${variant}-${end}`;
 
+/** Head a line of `variant` takes. */
+const arrowOf = (spec: SceneThemeSpec, variant: Variant): Arrow => (variant === 'msg' ? (spec.msgArrow ?? spec.arrow) : spec.arrow);
+
 /** The arrowhead: the line stops `arrow.length` short of the tip and the marker draws the head from there. */
 function markerSvg(spec: SceneThemeSpec, variant: Variant, end: End): string {
-  const a = spec.arrow;
+  const a = arrowOf(spec, variant);
   const s = end === 'end' ? 1 : -1;
   const cy = a.width / 2;
   const x = (v: number): string => num(s * v);
@@ -202,12 +213,21 @@ function boxSvg(item: SceneBox, spec: SceneThemeSpec): string {
   );
 }
 
+function spanSvg(span: SceneTextSpan): string {
+  const weight = span.weight === undefined ? '' : ` font-weight="${span.weight}"`;
+  const slant = span.italic === true ? ' font-style="italic"' : '';
+  const cls = span.role === undefined || span.role.length === 0 ? '' : ` class="${classOf(span.role)}"`;
+  return `<tspan${weight}${slant}${cls}>${escapeXml(span.text)}</tspan>`;
+}
+
 function textSvg(item: SceneText): string {
   const roles = item.role ?? ['body'];
   const anchor = item.anchor === undefined ? [] : [item.anchor];
+  const turn = item.rotate === undefined ? '' : ` transform="rotate(${num(item.rotate)} ${num(item.x)} ${num(item.y)})"`;
+  const body = item.spans === undefined ? escapeXml(item.text) : item.spans.map(spanSvg).join('');
   return (
     `<text class="${classOf(roles, anchor)}" x="${num(item.x)}" y="${num(item.y)}" dominant-baseline="central"` +
-    `${dataAttrs(item.data)}>${escapeXml(item.text)}</text>`
+    `${turn}${dataAttrs(item.data)}>${body}</text>`
   );
 }
 
@@ -229,7 +249,7 @@ function trimStart(points: readonly Point[], by: number): Point[] {
 function lineSvg(item: SceneLine, spec: SceneThemeSpec): string {
   const roles = Array.isArray(item.role) ? item.role : ['edge'];
   const { variant, end, start } = arrowsOf(roles);
-  const head = spec.arrow.length;
+  const head = arrowOf(spec, variant).length;
   const points = start ? trimStart(item.points, head) : item.points;
   const d = pathData(points, item.radius ?? spec.bend, end ? head : 0);
   const markers = `${start ? ` marker-start="url(#${markerId(variant, 'start')})"` : ''}${end ? ` marker-end="url(#${markerId(variant, 'end')})"` : ''}`;

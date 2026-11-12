@@ -377,7 +377,7 @@ function buildGit(graph: GitGraph, ruler: Ruler, theme: Theme, delays: ReadonlyM
       const ax = p.x - TURN_BACK;
       const ay = l + TURN_DROP;
       if (id !== undefined) {
-        labels.push({ kind: 'text', x: ax, y: ay, text: id, anchor: 'end', role: ['mono'], data: { rotate: String(TURN) } });
+        labels.push({ kind: 'text', x: ax, y: ay, text: id, anchor: 'end', role: ['mono'], rotate: TURN });
         shapes.push({ x0: ax - idW(c), x1: ax, y0: ay - TEXT_HALF, y1: ay + TEXT_HALF, turn: TURN, ax, ay, t });
       }
       if (tag !== undefined) chip(p.x - chipW(c) / 2, l - ID_ABOVE - 4, chipW(c), tag, t);

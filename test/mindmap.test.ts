@@ -123,6 +123,37 @@ describe('mindmap parse', () => {
     expect(m.root.children[1]?.paragraphs).toEqual(['Regular labels still works']);
   });
 
+  it('keeps bold and italic of a markdown string as runs of the plain paragraph', () => {
+    const m = parseMindmap(MARKDOWN);
+    expect(m.root.runs?.[0]).toEqual([{ text: 'Root', bold: true }, { text: ' with' }]);
+    expect(m.root.runs?.[1]).toEqual([{ text: 'a second line' }]);
+    expect(m.root.children[0]?.runs?.[0]).toEqual([
+      { text: 'The dog in ' },
+      { text: 'the', bold: true },
+      { text: ' hog... a ' },
+      { text: 'very long text', italic: true },
+      { text: ' that wraps to a new line' },
+    ]);
+    expect(m.root.children[1]?.runs).toBeUndefined();
+    const under = parseMindmap('mindmap\n  a["`an _odd_ snake_case_name`"]');
+    expect(under.root.paragraphs).toEqual(['an odd snake_case_name']);
+    expect(under.root.runs?.[0]).toEqual([{ text: 'an ' }, { text: 'odd', italic: true }, { text: ' snake_case_name' }]);
+  });
+
+  it('draws the runs of a markdown string as spans of each wrapped line', () => {
+    const lay = layoutMindmap(parseMindmap(MARKDOWN), pixelRuler());
+    const texts = lay.scene.items.filter((i): i is SceneText => i.kind === 'text');
+    const root = texts.find((t) => t.text === 'Root with');
+    expect(root?.spans).toEqual([{ text: 'Root', weight: 'bold' }, { text: ' with' }]);
+    const dog = texts.filter((t) => t.spans?.some((s) => s.text.includes('dog') || s.italic === true));
+    expect(dog.length).toBeGreaterThan(1);
+    for (const t of dog) expect(t.spans?.map((s) => s.text).join('')).toBe(t.text);
+    expect(dog.flatMap((t) => t.spans ?? []).filter((s) => s.italic === true).map((s) => s.text).join(' ')).toBe('very long text');
+    expect(texts.find((t) => t.text === 'Regular labels still works')?.spans).toBeUndefined();
+    const svg = render(MARKDOWN);
+    expect(svg).toContain('<tspan font-weight="bold">Root</tspan><tspan> with</tspan>');
+  });
+
   it('ignores icon and class lines', () => {
     const m = parseMindmap(OTHERS.find(([n]) => n === 'classes')?.[1] ?? '');
     expect(m.root.children.map((c) => c.paragraphs[0])).toEqual(['A', 'B', 'C']);

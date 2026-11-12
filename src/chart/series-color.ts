@@ -1,3 +1,7 @@
+/**
+ * A colour the source asks for is never painted as it is: it takes the nearest of the theme's eight series colours, so
+ * that it stays in harmony in the dark scheme and in all three themes.
+ */
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 
 const SERIES = 8;
@@ -17,13 +21,17 @@ function hsl(hex: string): { h: number; s: number } {
   return { h: (h * 60 + 360) % 360, s };
 }
 
-/** One-based series whose palette colour is nearest in hue to `hex`; a greyish colour takes the neutral last series. */
-export function nearestSeries(hex: string): number {
+/**
+ * One-based series whose palette colour is nearest in hue to `hex`; a greyish colour takes the neutral last series.
+ * With `skipFirst` the first series is never chosen, for charts where it is the colour of an unstyled mark.
+ */
+export function nearestSeries(hex: string, opts: { skipFirst?: boolean } = {}): number {
   const want = hsl(hex);
   if (want.s < GREY) return SERIES;
-  let best = 1;
+  const first = opts.skipFirst === true ? 2 : 1;
+  let best = first;
   let bestGap = Infinity;
-  for (let n = 1; n < SERIES; n++) {
+  for (let n = first; n < SERIES; n++) {
     const pair = SCENE_THEME_SPECS.solid.colors[`s${n}`];
     if (pair === undefined) continue;
     const gap = Math.abs(((hsl(pair[0]).h - want.h + 540) % 360) - 180);

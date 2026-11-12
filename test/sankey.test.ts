@@ -164,7 +164,10 @@ function textBoxes(items: readonly (SceneText | SceneBox | { kind: string })[]):
   return items.flatMap((it) => {
     if (it.kind !== 'text') return [];
     const t = it as SceneText;
-    const w = ruler.textWidth(t.text, t.role?.includes('value') === true ? 'line' : 'title');
+    const w =
+      t.spans === undefined
+        ? ruler.textWidth(t.text, 'title')
+        : t.spans.reduce((a, sp) => a + ruler.textWidth(sp.text, sp.role?.includes('value') === true ? 'line' : 'title'), 0);
     return [{ text: t.text, box: anchoredBox(t.x, t.y, w, t.anchor ?? 'start', 16) }];
   });
 }
@@ -212,8 +215,8 @@ describe('sankey: reading', () => {
     expect(m.links).toHaveLength(68);
     expect(m.nodes[0]?.name).toBe("Agricultural 'waste'");
     expect(m.showValues).toBe(true);
-    expect(render(EXAMPLES['example'] ?? '')).not.toMatch(/<text class="ursula-value/u);
-    expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<text class="ursula-value/u);
+    expect(render(EXAMPLES['example'] ?? '')).not.toMatch(/class="ursula-value/u);
+    expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<tspan class="ursula-value/u);
   });
 
   it('reads the settings of the front matter', () => {
@@ -401,5 +404,23 @@ describe('sankey: text', () => {
     const r = renderText('sankey\nA very long source name,An even longer target name,1', 24);
     if ('error' in r) throw new Error(r.error);
     expect(r.lines.every((l) => l.length <= 24)).toBe(true);
+  });
+});
+
+describe('sankey: node label', () => {
+  it('writes name and value as two spans of one text, one space apart, and sizes the label box by their widths', () => {
+    const lay = layoutOf(EXAMPLES['basic'] ?? '');
+    const texts = lay.scene.items.filter((i): i is SceneText => i.kind === 'text' && i.data?.['node'] !== undefined);
+    expect(texts).toHaveLength(lay.nodes.length);
+    for (const n of lay.nodes) {
+      const t = texts.find((x) => x.data?.['node'] === n.name);
+      expect(t?.text).toBe(`${n.name} ${n.valueText}`);
+      expect(t?.spans?.[0]?.text).toBe(n.name);
+      expect(t?.spans?.[1]?.text).toBe(` ${n.valueText}`);
+      expect(t?.spans?.[1]?.role).toContain('value');
+      const w = ruler.textWidth(n.name, 'title') + ruler.textWidth(` ${n.valueText}`, 'line');
+      expect(n.label.box.x1 - n.label.box.x0).toBeCloseTo(w, 6);
+    }
+    expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<text class="ursula-name ursula-(start|end|middle)"[^>]*><tspan>[^<]+<\/tspan><tspan class="ursula-value ursula-value--plain"> [0-9]/u);
   });
 });

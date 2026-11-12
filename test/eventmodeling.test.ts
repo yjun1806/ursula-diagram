@@ -35,6 +35,22 @@ describe('eventmodeling svg', () => {
     }
   }
 
+  it('draws the data rule of a box in a filled lane as an in-zone rule, and of other boxes as a plain rule', () => {
+    const { scene } = layoutEventModel(parseEventModeling(examples['04-data-block'] ?? ''), pixelRuler());
+    const boxes = scene.items.filter((it): it is SceneBox => it.kind === 'box' && (it.role?.includes('box') ?? false));
+    const rules = scene.items.filter((it) => it.kind === 'line' && Array.isArray(it.role) && it.role.includes('rule'));
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) {
+      if (rule.kind !== 'line' || !Array.isArray(rule.role)) continue;
+      const y = rule.points[0]?.y ?? 0;
+      const x = rule.points[0]?.x ?? 0;
+      const box = boxes.find((b) => b.x === x && y > b.y && y < b.y + b.h);
+      expect(box).toBeDefined();
+      expect(rule.role.includes('rule--in-zone')).toBe(box?.role?.includes('box--in-zone') ?? false);
+    }
+    expect(rules.some((r) => r.kind === 'line' && Array.isArray(r.role) && r.role.includes('rule--in-zone'))).toBe(true);
+  });
+
   it('is picked by the header', () => {
     expect(selectFrontEnd(examples['01-timeline'] ?? '').name).toBe('eventmodeling');
   });

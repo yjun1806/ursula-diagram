@@ -200,7 +200,7 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, _theme?: Theme
     boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 18, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
     boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 48, text: frame.name, anchor: 'middle', role: start ? ['name', 'on-start'] : ['name'], data });
     if (size.rows.length > 0) {
-      boxItems.push({ kind: 'line', points: [{ x: p.x, y: p.y + BOX_H }, { x: p.x + p.w, y: p.y + BOX_H }], role: ['rule'], data });
+      boxItems.push({ kind: 'line', points: [{ x: p.x, y: p.y + BOX_H }, { x: p.x + p.w, y: p.y + BOX_H }], role: filled ? ['rule', 'rule--in-zone'] : ['rule'], data });
       size.rows.forEach((row, ri) => {
         boxItems.push({ kind: 'text', x: p.x + BOX_PAD, y: p.y + BOX_H + DATA_PAD + DATA_ROW * ri + DATA_ROW / 2, text: row, anchor: 'start', role: start ? ['body', 'on-start'] : ['body'], data });
       });

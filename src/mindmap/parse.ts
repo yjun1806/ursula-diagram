@@ -1,6 +1,6 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
-import type { MindNode, MindShape, Mindmap } from './model.ts';
+import type { MindNode, MindRun, MindShape, Mindmap } from './model.ts';
 
 function fail(message: string, line: number, code = 'syntax'): never {
   throw new UrsulaError(message, code, line);
@@ -19,9 +19,21 @@ const SHAPES: Array<[MindShape, RegExp]> = [
 const MD_OPEN = '"`';
 const MD_CLOSE = '`"';
 
-/** Bold and italic markers of a markdown string carry no shape of their own here; the words stay. */
-function stripMarkdown(text: string): string {
-  return text.replace(/\*\*([^*]+)\*\*/gu, '$1').replace(/\*([^*]+)\*/gu, '$1');
+/** `**bold**`, `*italic*` and `_italic_` of a markdown string; an underscore inside a word is a letter. */
+const EMPHASIS = /\*\*([^*]+)\*\*|\*([^*]+)\*|(?<![\p{L}\p{N}])_([^_]+)_(?![\p{L}\p{N}])/gu;
+
+/** A paragraph of a markdown string as runs, its emphasis marks dropped. */
+function runsOf(paragraph: string): MindRun[] {
+  const runs: MindRun[] = [];
+  let at = 0;
+  for (const m of paragraph.matchAll(EMPHASIS)) {
+    if (m.index > at) runs.push({ text: paragraph.slice(at, m.index) });
+    if (m[1] !== undefined) runs.push({ text: m[1], bold: true });
+    else runs.push({ text: m[2] ?? m[3] ?? '', italic: true });
+    at = m.index + m[0].length;
+  }
+  if (at < paragraph.length) runs.push({ text: paragraph.slice(at) });
+  return runs;
 }
 
 function paragraphsOf(text: string): string[] {
@@ -33,12 +45,21 @@ function paragraphsOf(text: string): string[] {
   return out;
 }
 
-/** The label text of a shape's inside: a quoted string loses its quotes, a markdown string its marks. */
-function labelOf(inside: string): string[] {
+interface Label {
+  paragraphs: string[];
+  runs?: MindRun[][];
+}
+
+/** The label of a shape's inside: a quoted string loses its quotes, a markdown string its marks, which become runs. */
+function labelOf(inside: string): Label {
   const t = inside.trim();
-  if (t.startsWith(MD_OPEN) && t.endsWith(MD_CLOSE) && t.length >= 4) return paragraphsOf(stripMarkdown(t.slice(2, -2)));
+  if (t.startsWith(MD_OPEN) && t.endsWith(MD_CLOSE) && t.length >= 4) {
+    const runs = paragraphsOf(t.slice(2, -2)).map(runsOf);
+    const paragraphs = runs.map((r) => r.map((run) => run.text).join(''));
+    return runs.some((r) => r.some((run) => run.bold === true || run.italic === true)) ? { paragraphs, runs } : { paragraphs };
+  }
   const quoted = /^"([\s\S]*)"$/u.exec(t);
-  return paragraphsOf(quoted === null ? t : (quoted[1] ?? ''));
+  return { paragraphs: paragraphsOf(quoted === null ? t : (quoted[1] ?? '')) };
 }
 
 /** Drops a trailing `:::class` list; the classes are not drawn. */
@@ -46,18 +67,18 @@ function withoutClasses(text: string): string {
   return text.replace(/\s*:::[^\]})"`]*$/u, '');
 }
 
-function readNode(content: string, line: number): { id: string; paragraphs: string[]; shape: MindShape } {
+function readNode(content: string, line: number): { id: string; paragraphs: string[]; runs?: MindRun[][]; shape: MindShape } {
   const text = withoutClasses(content.trim());
   for (const [shape, re] of SHAPES) {
     const m = re.exec(text);
     if (m === null) continue;
-    const paragraphs = labelOf(m[2] ?? '');
-    if (paragraphs.length === 0) fail('A node needs text between its shape delimiters.', line, 'empty');
-    return { id: m[1] ?? '', paragraphs, shape };
+    const label = labelOf(m[2] ?? '');
+    if (label.paragraphs.length === 0) fail('A node needs text between its shape delimiters.', line, 'empty');
+    return { id: m[1] ?? '', ...label, shape };
   }
-  const paragraphs = labelOf(text);
-  if (paragraphs.length === 0) fail('A node needs text.', line, 'empty');
-  return { id: text, paragraphs, shape: 'default' };
+  const label = labelOf(text);
+  if (label.paragraphs.length === 0) fail('A node needs text.', line, 'empty');
+  return { id: text, ...label, shape: 'default' };
 }
 
 interface Open {

@@ -57,6 +57,8 @@ export interface Ruler {
   uniform?: boolean;
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
   defaultWidth?: number;
+  /** How much wider a bold run is than the same run in the regular weight; 1 when absent. */
+  boldScale?: number;
   /** Spacing used by the sequence diagram family. */
   sequence: SequenceMetrics;
 }
@@ -230,6 +232,7 @@ export function pixelRuler(): Ruler {
       return em * size(role);
     },
     lineHeight: (role) => (role === 'title' ? 18 : 16),
+    boldScale: 1.05,
     nodePadX: 16,
     nodePadY: 12,
     nodeBorder: 0,
@@ -301,6 +304,11 @@ export function pixelRuler(): Ruler {
       legendBelow: 12,
     },
   };
+}
+
+/** Width of a line written as runs: the sum of the runs, a bold run widened by the ruler's `boldScale`. */
+export function spansWidth(ruler: Ruler, spans: readonly { text: string; weight?: 'bold'; italic?: true }[], role: TextRole): number {
+  return spans.reduce((sum, span) => sum + ruler.textWidth(span.text, role) * (span.weight === 'bold' ? (ruler.boldScale ?? 1) : 1), 0);
 }
 
 export function cellRuler(): Ruler {
