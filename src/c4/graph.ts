@@ -29,9 +29,9 @@ function wrap(text: string, ruler: Ruler): string[] {
 
 function compartmentsOf(e: C4Element, ruler: Ruler): Compartment[] {
   const body = [...(e.tech === undefined ? [] : wrap(`[${e.tech}]`, ruler)), ...(e.descr === undefined ? [] : wrap(e.descr, ruler))];
+  const name = e.label.split('\n').map((l) => l.trim());
   return [
-    { lines: [elementTag(e)], align: 'center', emphasis: 'tag' },
-    { lines: e.label.split('\n').map((l) => l.trim()), align: 'center', emphasis: 'title' },
+    { lines: [elementTag(e), ...name], lineEmphasis: ['tag', ...name.map((): 'title' => 'title')], align: 'center', emphasis: 'title' },
     ...(body.length === 0 ? [] : [{ lines: body, align: 'center', emphasis: 'body' } satisfies Compartment]),
   ];
 }

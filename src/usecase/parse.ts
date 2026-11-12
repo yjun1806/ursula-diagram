@@ -1,4 +1,4 @@
-import type { EdgeEnd, Graph, GraphCluster, GraphEdge, GraphNode } from '../types.ts';
+import type { Compartment, EdgeEnd, Graph, GraphCluster, GraphEdge, GraphNode } from '../types.ts';
 import { UrsulaError } from '../types.ts';
 import { jsonRows } from './json.ts';
 import type { ElementMeta, UsecaseModel } from './model.ts';
@@ -36,6 +36,11 @@ function fail(message: string, line: number): never {
 /** Entity codes (`#quot;`, `#40;`) become the character they stand for. */
 function decode(text: string): string {
   return text.replace(/#quot;/g, '"').replace(/#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)));
+}
+
+/** A single head band whose first `tags` lines are small tags over the name lines. */
+function headOf(lines: string[], tags: number): Compartment {
+  return { lines, lineEmphasis: lines.map((_, i) => (i < tags ? 'tag' : 'title')), align: 'center', emphasis: 'title' };
 }
 
 /** Takes the emphasis markers out of a Markdown string; the text of a plain string or an unquoted label stays as written. */
@@ -506,6 +511,8 @@ export function parseUsecase(src: string): UsecaseModel {
       shape: actor ? 'actor' : e.rect ? 'rect' : 'ellipse',
       lane: LANE.id,
       ...(e.cluster === undefined ? {} : { cluster: e.cluster }),
+      // A box can hold the stereotype as a small tag line over its name; an ellipse has no band to put it in.
+      ...(!actor && e.rect && stereo.length > 0 ? { compartments: [headOf(all, stereo.length)] } : {}),
     });
   }
   const noteEdges: GraphEdge[] = [];

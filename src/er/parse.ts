@@ -46,7 +46,8 @@ const ATTRIBUTE = /^(\S+)\s+(\S+)(?:\s+((?:PK|FK|UK)(?:\s*,\s*(?:PK|FK|UK))*))?(
 interface Entity {
   id: string;
   label: string;
-  rows: string[];
+  /** Cells of each attribute line: type, name, keys, comment (a cell is empty when the line has none). */
+  rows: string[][];
   cluster: string | undefined;
 }
 
@@ -114,18 +115,18 @@ function wordEnd(text: string): EdgeEnd {
   throw new Error(`unreachable cardinality ${text}`);
 }
 
-/** Two no-break spaces: the gap between the parts of an attribute row, which a drawing does not collapse. */
+/** Two no-break spaces: the gap between the cells of an attribute line where the cells are drawn as one text. */
 const GAP = '\u00A0\u00A0';
 
-/** One line of an entity block as shown: type and name, then the keys, then the comment in quotes. */
-function attributeRow(text: string, line: number): string {
+/** One line of an entity block as cells: the type, the name, the keys and the comment in quotes (an empty cell where there is none). */
+function attributeRow(text: string, line: number): string[] {
   const found = ATTRIBUTE.exec(text);
   if (!found) throw new UrsulaError(`Cannot read the attribute "${text}"; expected "type name [PK, FK, UK] [\\"comment\\"]".`, 'er-attribute', line);
   const [, type, rawName, keys, comment] = found;
   const name = (rawName as string).startsWith('*') ? (rawName as string).slice(1) : (rawName as string);
   const star = (rawName as string).startsWith('*') && keys === undefined ? 'PK' : undefined;
   const marks = keys === undefined ? star : (keys as string).split(',').map((k) => k.trim()).join(', ');
-  return [`${type as string}${GAP}${name}`, ...(marks === undefined ? [] : [marks]), ...(comment === undefined || comment === '' ? [] : [`"${comment}"`])].join(GAP);
+  return [type as string, name, marks ?? '', comment === undefined || comment === '' ? '' : `"${comment}"`];
 }
 
 /** Reads an ER source into entities (boxes with a head and a body), relationships and subgraphs. */
@@ -276,7 +277,10 @@ export function parseEr(src: string, heading?: string): ErModel {
     }));
   const empty = new Set([...groups.keys()].filter((id) => !filled.has(id)));
   const nodes: GraphNode[] = [...entities.values()].map((e) => {
-    const compartments: Compartment[] = [{ lines: [e.label] }, { lines: e.rows }];
+    const compartments: Compartment[] = [
+      { lines: [e.label] },
+      { lines: e.rows.map((cells) => cells.filter((c) => c !== '').join(GAP)), columns: e.rows, columnEmphasis: ['tag', 'body', 'body', 'tag'] },
+    ];
     return { id: e.id, title: e.label, lines: [], shape: 'rect', lane: LANE.id, ...(e.cluster === undefined ? {} : { cluster: e.cluster }), compartments };
   });
   const graph: Graph = {

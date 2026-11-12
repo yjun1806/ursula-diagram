@@ -11,31 +11,34 @@ const TEXT_LIMIT_PX = 192;
 /** Terminal cells: the same for a terminal drawing. */
 const TEXT_LIMIT_CELLS = 24;
 
+/** A band of key and value pairs: the keys stand in a column of their own, small and muted, and the values line up beside them. */
+function factsCell(facts: Array<[string, string]>): Compartment {
+  return { lines: facts.map(([key, value]) => `${key}: ${value}`), columns: facts.map(([key, value]) => [key, value]), columnEmphasis: ['tag', 'body'], emphasis: 'body' };
+}
+
+/** The head band: the kind of the box as a small tag over its name. */
+const headCell = (tag: string, name: string): Compartment => ({ lines: [tag, name], lineEmphasis: ['tag', 'title'], align: 'center', emphasis: 'title' });
+
 function requirementCells(node: RequirementNode, ruler: Ruler): Compartment[] {
-  const cells: Compartment[] = [
-    { lines: [`<<${KIND_TAGS[node.type]}>>`], align: 'center', emphasis: 'tag' },
-    { lines: [node.name], align: 'center', emphasis: 'title' },
-  ];
+  const cells: Compartment[] = [headCell(`<<${KIND_TAGS[node.type]}>>`, node.name)];
   if (node.text !== undefined) {
     const limit = ruler.terminal === true ? TEXT_LIMIT_CELLS : TEXT_LIMIT_PX;
     cells.push({ lines: wrapWords(node.text, limit, (s) => ruler.textWidth(s, 'line'), { longWord: 'break' }), emphasis: 'body' });
   }
-  const facts = [
-    ...(node.id === undefined ? [] : [`id: ${node.id}`]),
-    ...(node.risk === undefined ? [] : [`risk: ${node.risk}`]),
-    ...(node.verifymethod === undefined ? [] : [`verifymethod: ${node.verifymethod}`]),
-  ];
-  if (facts.length > 0) cells.push({ lines: facts, emphasis: 'body' });
+  const facts: Array<[string, string]> = [];
+  if (node.id !== undefined) facts.push(['id', node.id]);
+  if (node.risk !== undefined) facts.push(['risk', node.risk]);
+  if (node.verifymethod !== undefined) facts.push(['verifymethod', node.verifymethod]);
+  if (facts.length > 0) cells.push(factsCell(facts));
   return cells;
 }
 
 function elementCells(node: ElementNode): Compartment[] {
-  const cells: Compartment[] = [
-    { lines: ['<<Element>>'], align: 'center', emphasis: 'tag' },
-    { lines: [node.name], align: 'center', emphasis: 'title' },
-  ];
-  const facts = [...(node.type === undefined ? [] : [`type: ${node.type}`]), ...(node.docref === undefined ? [] : [`docref: ${node.docref}`])];
-  if (facts.length > 0) cells.push({ lines: facts, emphasis: 'body' });
+  const cells: Compartment[] = [headCell('<<Element>>', node.name)];
+  const facts: Array<[string, string]> = [];
+  if (node.type !== undefined) facts.push(['type', node.type]);
+  if (node.docref !== undefined) facts.push(['docref', node.docref]);
+  if (facts.length > 0) cells.push(factsCell(facts));
   return cells;
 }
 
@@ -56,7 +59,7 @@ export function requirementGraph(model: RequirementModel, ruler: Ruler): Graph {
     to: r.to,
     label: `<<${r.type}>>`,
     style: 'normal',
-    ...(r.type === 'contains' ? { startEnd: 'circle', end: 'none' } : { end: 'arrow' }),
+    ...(r.type === 'contains' ? { startEnd: 'circle-plus', end: 'none' } : { end: 'arrow' }),
   }));
   return { direction, ...(mirror === undefined ? {} : { mirror }), ignored: model.ignored, lanes: [LANE], nodes, edges };
 }

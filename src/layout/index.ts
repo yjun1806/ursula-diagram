@@ -15,6 +15,7 @@ import type { SlotResult } from './slots.ts';
 import { placeSlots, shiftHalfSteps } from './slots.ts';
 import { crossingCount } from './check.ts';
 import { mirrorLayout } from './mirror.ts';
+import { drawAttached, splitAttached } from '../layered/attach.ts';
 import { layoutLayered } from '../layered/index.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
@@ -234,6 +235,14 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
+  const attached = splitAttached(graph);
+  if (attached === undefined) return arrange(graph, ruler, opts);
+  // Notes and lollipop stubs are not arranged: they are drawn beside their nodes once everything else has its place.
+  const { legend: _drawn, ...bare } = arrange(attached.graph, ruler, opts);
+  return withLegend(drawAttached(bare, attached, ruler), ruler, opts.legend);
+}
+
+function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, layout);
     const flat = layout(flattenClusters(graph), ruler, opts);

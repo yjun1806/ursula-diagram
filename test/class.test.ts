@@ -215,3 +215,20 @@ describe('class diagram: drawing', () => {
     expect(cellRuler().terminal).toBe(true);
   });
 });
+
+describe('class diagram: interfaces on stubs and tags', () => {
+  it('reads `()` as a stub of the other class named after the interface, and adds no box for it', () => {
+    const g = parseClass('classDiagram\n  class Class01\n  Class01 --() bar\n  foo ()-- Class01');
+    expect(g.nodes.map((n) => n.id)).toEqual(['Class01']);
+    expect(g.edges).toEqual([
+      { from: 'Class01', to: 'Class01', style: 'normal', end: 'lollipop', endLabel: 'bar' },
+      { from: 'Class01', to: 'Class01', style: 'normal', end: 'lollipop', endLabel: 'foo' },
+    ]);
+  });
+
+  it('puts the annotation in the head as a tag line over the name', () => {
+    const head = parseClass('classDiagram\n  class Payment {\n    <<interface>>\n    +pay()\n  }').nodes[0]?.compartments?.[0];
+    expect(head?.lines).toEqual(['«interface»', 'Payment']);
+    expect(head?.lineEmphasis).toEqual(['tag', 'title']);
+  });
+});

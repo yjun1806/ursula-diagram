@@ -197,6 +197,8 @@ export function recordRules(spec: ThemeSpec): string[] {
   const noteLine = note.width > 0 ? `stroke:$${note.line};stroke-width:${note.width};stroke-linejoin:round` : 'stroke:none';
   return [
     `.ursula-rule{fill:none;stroke:$${rule.token};stroke-width:${rule.width}}`,
+    // A face that is white (a box in a filled zone) shows no white gap: its rules are hairlines.
+    '.ursula-node--on-lane .ursula-rule{stroke:$hair;stroke-width:1}',
     '.ursula-cell-title{fill:$fg;font-size:13px;font-weight:600}',
     '.ursula-cell-tag{fill:$muted;font-size:11px;font-weight:500}',
     '.ursula-cell-body{fill:$fg;font-size:12px;font-weight:400}',
