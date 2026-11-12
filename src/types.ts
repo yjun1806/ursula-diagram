@@ -73,7 +73,7 @@ export interface LayoutEdge {
   label?: { text: string; x: number; y: number; w: number; h: number; lines?: string[] };
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'question';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'question';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {

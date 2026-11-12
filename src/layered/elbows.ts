@@ -1,4 +1,6 @@
 import type { Ruler } from '../metrics.ts';
+import type { Directions } from './sides.ts';
+import { designatedSide, sideOfPoint } from './sides.ts';
 import type { LayoutEdge, LayoutNode, Point } from '../types.ts';
 
 const EPS = 1e-6;
@@ -50,7 +52,7 @@ const length = (points: Point[]): number => segs(points).reduce((n, s) => n + Ma
  * time; a shape is used only when nothing is in its way, no port is shared, and no crossing is added.
  * Returns the number of edges changed.
  */
-export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, td: boolean): number {
+export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, td: boolean, directions?: Directions): number {
   if (ruler.sidePorts < 3 && !ruler.uniform) return 0;
   const byId = new Map(nodes.map((n) => [n.id, n] as const));
   const box = (n: LayoutNode): Box => (td ? { o0: n.y, o1: n.y + n.h, l0: n.x, l1: n.x + n.w } : { o0: n.x, o1: n.x + n.w, l0: n.y, l1: n.y + n.h });
@@ -69,6 +71,19 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
     const candidates: Array<{ path: Point[]; side: Point }> = [];
     // Positions on a side of a box along the layer axis, most wanted first. A terminal box has one port per text line
     // (per cell on a side that runs across the lines); the title line is the last choice, since a flat edge between neighbours uses the middle.
+    // An end may leave the side its direction asks for only when no other edge of that node looks the same way.
+    const may = (node: LayoutNode, other: LayoutNode, at: Point): boolean => {
+      if (!directions) return true;
+      const wanted = designatedSide(node, other, directions);
+      if (sideOfPoint(node, at) === wanted) return true;
+      const same = edges.filter((e) => {
+        const a = byId.get(e.from);
+        const b = byId.get(e.to);
+        if (!a || !b || a === b) return false;
+        return (a === node && designatedSide(a, b, directions) === wanted) || (b === node && designatedSide(b, a, directions) === wanted);
+      });
+      return same.length <= 1;
+    };
     // A side no other edge ends on takes the edge at its centre (the left or upper cell where two share the middle).
     const sole = (node: LayoutNode, border: number): boolean =>
       !edges.some((e, i) => i !== index && [e.points[0], e.points[e.points.length - 1]].some((q) => {
@@ -88,6 +103,7 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
     if (p2.o > bu.o1 + EPS || p2.o < bu.o0 - EPS) {
       for (const ls of ports(bu, p3.l, p0.l, sole(u, p2.o > bu.o1 ? bu.o1 : bu.o0))) {
         const path = [phys(p2.o > bu.o1 ? bu.o1 : bu.o0, ls), phys(p2.o, ls), phys(p3.o, p3.l)];
+        if (!may(u, v, path[0] as Point)) continue;
         candidates.push({ path, side: path[0] as Point });
       }
     }
@@ -95,6 +111,7 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
     if (p0.o > bv.o1 + EPS || p0.o < bv.o0 - EPS) {
       for (const lt of ports(bv, p0.l, p3.l, sole(v, p0.o > bv.o1 ? bv.o1 : bv.o0))) {
         const path = [phys(p0.o, p0.l), phys(p0.o, lt), phys(p0.o > bv.o1 ? bv.o1 : bv.o0, lt)];
+        if (!may(v, u, path[2] as Point)) continue;
         candidates.push({ path, side: path[2] as Point });
       }
     }

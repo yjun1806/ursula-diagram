@@ -23,6 +23,7 @@ import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
 import type { Variant } from './choose.ts';
 import { CANDIDATES, FOLDED, pickBest } from './choose.ts';
+import { directionsOf, mixedSideEnds } from './sides.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
@@ -356,7 +357,7 @@ function mainEdges(graph: Graph, rows: Rows): ReadonlySet<string> {
 }
 
 function plainDraw(p: Prep, placed: Placed, elbows = p.opts.elbows !== false): Layout {
-  const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows, ...(p.apart ? {} : { main: mainEdges(p.graph, placed.rows) }) };
+  const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows, stages: p.apart, ...(p.apart ? {} : { main: mainEdges(p.graph, placed.rows) }) };
   return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
 }
 
@@ -365,7 +366,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   const ruler = placed.ruler;
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {
-    const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows, ...(apart ? {} : { main: mainEdges(graph, placed.rows) }) };
+    const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows, stages: apart, ...(apart ? {} : { main: mainEdges(graph, placed.rows) }) };
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
@@ -421,7 +422,10 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
   const graph: Graph = { ...source, lanes, direction: stages ? (source.direction === 'LR' ? 'TD' : 'LR') : source.direction };
   const laid = stages ? finalize(prepare(graph, given, opts, true, CANDIDATES[0] as Variant)) : drawLanes(graph, given, opts);
-  return { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
+  const drawn: Layout = { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
+  // Edges that look the same way at a node should leave by the same side of it.
+  const mixed = mixedSideEnds(drawn, directionsOf(drawn));
+  return mixed.length === 0 ? drawn : { ...drawn, diagnostics: [...drawn.diagnostics, ...mixed] };
 }
 
 function withQuestions(source: Graph, drawn: Layout, given: Ruler, opts: LayeredOptions): Layout {

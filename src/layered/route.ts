@@ -27,6 +27,8 @@ export interface Frame {
   limit?: number;
   /** Added to (or taken from) the default room of every band between two layers along the layer axis. */
   spread?: number;
+  /** The bands cross the reading direction (the drawing is made for stages). */
+  stages?: boolean;
   /** Let edges between two layers leave or enter through the side of a box (one bend instead of two). */
   elbows?: boolean;
   /** Edges (`from|to`) that join two nodes of the main flow in turn. */
@@ -615,7 +617,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });
 
-  if (f.elbows) useElbows(edges, nodes, ruler, td);
+  if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });
 
   // Labels. A terminal label never starts before the first cell.
   const obstacles: Rect[] = ruler.uniform ? [...rects, td ? { x: -1000, y: -1000, w: 3000, h: 1000 } : { x: -1000, y: -1000, w: 1000, h: 3000 }] : rects;
