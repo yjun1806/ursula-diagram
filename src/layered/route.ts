@@ -601,7 +601,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     if (b === 0) return ruler.lanePad;
     if (b === count) return bottomPad[l.layerLane[count - 1] ?? 0] ?? ruler.lanePad;
     if (l.layerLane[b - 1] === l.layerLane[b]) return ruler.rowGap;
-    return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + ruler.laneGap + ruler.lanePad;
+    // Lines that turn between two lanes run in the gap between the lane borders, clear of both.
+    const between = (trackCount[b] ?? 0) === 0 ? ruler.laneGap : Math.max(ruler.laneGap, ((trackCount[b] ?? 0) + 1) * ruler.trackGap + ruler.nodeGrid);
+    return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + between + ruler.lanePad;
   };
   // A terminal band holds the lane's name line (when the lane below has a name) and one line per track, and at least one line between two rows.
   const nameLine = (b: number): number => (b < count && (b === 0 || l.layerLane[b - 1] !== l.layerLane[b]) && (graph.lanes[l.layerLane[b] ?? 0]?.label ?? '') !== '' ? 1 : 0);
