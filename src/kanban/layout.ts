@@ -1,6 +1,8 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Scene, SceneItem } from '../types.ts';
 import type { Theme } from '../render/theme.ts';
+import { wrapWords } from '../text/wrap.ts';
+import type { Scene, SceneItem } from '../types.ts';
 import type { Kanban, KanbanCard, KanbanLayout, PlacedCard, PlacedColumn, PlacedTag } from './model.ts';
 
 const MARGIN = 24;
@@ -15,38 +17,6 @@ const TAG_GAP = 4;
 const TAG_ROW = 24;
 const TAG_KEYS = ['ticket', 'assigned', 'priority'] as const;
 
-const ceil4 = (v: number): number => Math.ceil(v / 4) * 4;
-
-/** Breaks `text` into lines no wider than `limit`, at spaces; a word wider than a line is cut between characters. */
-export function wrapTitle(text: string, limit: number, width: (s: string) => number): string[] {
-  const lines: string[] = [];
-  let current = '';
-  const push = (word: string): void => {
-    const joined = current === '' ? word : `${current} ${word}`;
-    if (width(joined) <= limit) {
-      current = joined;
-      return;
-    }
-    if (current !== '') {
-      lines.push(current);
-      current = '';
-    }
-    if (width(word) <= limit) {
-      current = word;
-      return;
-    }
-    for (const ch of word) {
-      if (current !== '' && width(current + ch) > limit) {
-        lines.push(current);
-        current = '';
-      }
-      current += ch;
-    }
-  };
-  for (const word of text.split(/\s+/).filter((w) => w !== '')) push(word);
-  if (current !== '') lines.push(current);
-  return lines;
-}
 
 function tagsOf(card: KanbanCard): Array<{ key: PlacedTag['key']; text: string }> {
   return TAG_KEYS.flatMap((key) => {
@@ -60,7 +30,7 @@ export function ticketHref(base: string | undefined, ticket: string): string | u
 }
 
 export function layoutKanban(model: Kanban, ruler: Ruler, theme?: Theme): KanbanLayout {
-  const tagWidth = (text: string): number => ceil4(ruler.textWidth(text, 'line') + 16);
+  const tagWidth = (text: string): number => ceilTo(ruler.textWidth(text, 'line') + 16);
   const widestTag = Math.max(0, ...model.columns.flatMap((c) => c.cards.flatMap((card) => tagsOf(card).map((t) => tagWidth(t.text)))));
   const inner = Math.max(MIN_INNER, widestTag);
   const cardW = inner + 2 * CARD_PAD;
@@ -75,7 +45,7 @@ export function layoutKanban(model: Kanban, ruler: Ruler, theme?: Theme): Kanban
     const x = MARGIN + ci * (zoneW + ZONE_GAP);
     let y = MARGIN + ZONE_TOP;
     column.cards.forEach((card, index) => {
-      const titleLines = wrapTitle(card.title, inner, titleWidth);
+      const titleLines = wrapWords(card.title, inner, titleWidth);
       const tags = tagsOf(card);
       const cx = x + ZONE_PAD;
       // Tags flow left to right and start a new row when the next one does not fit.

@@ -22,9 +22,9 @@ describe('parseSequence participants', () => {
   it('declares participants and actors with optional labels', () => {
     const seq = parseSequence('sequenceDiagram\nparticipant A\nparticipant B as Checkout Service\nactor C as 고객');
     expect(seq.participants).toEqual([
-      { id: 'A', lines: ['A'], actor: false },
-      { id: 'B', lines: ['Checkout Service'], actor: false },
-      { id: 'C', lines: ['고객'], actor: true },
+      { id: 'A', lines: ['A'], kind: 'participant' },
+      { id: 'B', lines: ['Checkout Service'], kind: 'participant' },
+      { id: 'C', lines: ['고객'], kind: 'actor' },
     ]);
   });
 

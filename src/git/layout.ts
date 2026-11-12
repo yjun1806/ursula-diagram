@@ -1,3 +1,4 @@
+import { ceilTo, FLOAT_NOISE, GRID } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
@@ -33,7 +34,8 @@ const SERIES = 8;
 /** Advance of one ASCII character of the commit id font. */
 const MONO = 7.4;
 
-export const snap4Up = (v: number): number => Math.ceil(v / 4 - 1e-9) * 4;
+/** Rounds up to the grid; float noise just above a multiple does not jump to the next one. */
+const snap4Up = (v: number): number => ceilTo(v, GRID, FLOAT_NOISE);
 
 /** Width of a commit id: the monospaced font for ASCII, the ruler for everything else. */
 export function monoWidth(text: string, ruler: Ruler): number {

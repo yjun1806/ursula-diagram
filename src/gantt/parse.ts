@@ -1,3 +1,4 @@
+import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
 import type { Gantt, GanttTask, TickUnit } from './model.ts';
 import { addDuration, compileDateFormat, DAY, floorDiv, lengthLabel, parseDuration, skipExcluded, stretchOverExcluded, weekdayIndex } from './time.ts';
@@ -33,12 +34,6 @@ function tickIntervalOf(text: string): Gantt['tickInterval'] {
   return m === null || unit === undefined ? undefined : { step: Number(m[1]), unit };
 }
 
-function ganttConfig(config: unknown): Record<string, unknown> {
-  if (typeof config !== 'object' || config === null || !('gantt' in config)) return {};
-  const section: unknown = config.gantt;
-  return typeof section === 'object' && section !== null ? { ...section } : {};
-}
-
 const stringOf = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined);
 
 /**
@@ -47,7 +42,7 @@ const stringOf = (v: unknown): string | undefined => (typeof v === 'string' && v
  */
 export function parseGantt(src: string, opts: { heading?: string; config?: unknown; frontMatter?: unknown } = {}): Gantt {
   const rows = src.split(/\r?\n/);
-  const fromConfig = ganttConfig(opts.config);
+  const fromConfig = configSection(opts.config, 'gantt') ?? {};
   let title: string | undefined;
   let accTitle: string | undefined;
   let dateFormat = 'YYYY-MM-DD';

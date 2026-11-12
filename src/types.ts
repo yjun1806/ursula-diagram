@@ -65,10 +65,25 @@ export interface GraphNode {
   lines: string[];
   shape: NodeShape;
   lane: string;
+  /** The innermost cluster the node stands in; absent for a node outside every cluster. */
+  cluster?: string;
+  /** A size set from outside (a drawn cluster box): the layout gives the node a box at least this large. */
+  box?: { w: number; h: number };
   /** The shape name the source asked for when it is not drawn yet (the node is drawn as a rectangle). */
   shapeAsked?: string;
   /** A box divided by rules; when present it is drawn instead of `title` and `lines`. */
   compartments?: Compartment[];
+}
+
+/** A group of nodes drawn as a box around them; clusters nest through `parent`. */
+export interface GraphCluster {
+  id: string;
+  label: string;
+  parent?: string;
+  /** The reading direction inside the cluster; the parent's when absent. */
+  direction?: Direction;
+  /** Set when the cluster reads right to left (`RL`) or bottom to top (`BT`): it is laid out in `direction` and mirrored. */
+  mirror?: 'RL' | 'BT';
 }
 
 export interface GraphEdge {
@@ -99,6 +114,8 @@ export interface Graph {
   /** Statements that were read and left out of the drawing (classes and styles, edge animations). */
   ignored?: string[];
   lanes: Lane[];
+  /** Clusters drawn as boxes. The `from` and `to` of an edge may name one; a node names its innermost one in `cluster`. */
+  clusters?: GraphCluster[];
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
@@ -139,6 +156,8 @@ export interface LayoutNode {
   outline?: { x: number; y: number; w: number; h: number };
   /** Bands of a box divided by rules; drawn instead of `title` and `lines`. */
   compartments?: Compartment[];
+  /** The innermost cluster box the node stands in. */
+  cluster?: string;
 }
 
 /** A small text beside an end of a line. */
@@ -148,6 +167,17 @@ export interface EndLabel {
   y: number;
   w: number;
   h: number;
+}
+
+/** A cluster drawn as a box around its nodes and inner clusters; `depth` is 1 for a box that stands in no other. */
+export interface LayoutCluster {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  depth: number;
 }
 
 export interface LayoutEdge {
@@ -171,7 +201,7 @@ export interface LayoutEdge {
   endLabel?: EndLabel;
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question' | 'direction-mirrored-in-text';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {
@@ -236,6 +266,8 @@ export interface Layout {
   gap?: number;
   gapDefault?: number;
   lanes: LayoutLane[];
+  /** Cluster boxes, outer ones before the ones inside them. */
+  clusters?: LayoutCluster[];
   nodes: LayoutNode[];
   edges: LayoutEdge[];
   diagnostics: Diagnostic[];

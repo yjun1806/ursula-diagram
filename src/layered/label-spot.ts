@@ -165,11 +165,21 @@ export function chooseSpot(q: SpotQuery): Spot {
   return { rect: best.rect, moved: best.rect !== q.basic, overlap: best.overlap };
 }
 
+/** The place of a label on the middle of the longest straight stretch of a line that was drawn again: on a horizontal one the label sits on it, on a vertical one beside it. */
+function onLongest(own: Segment[], label: Rect, ruler: Ruler): Rect {
+  const long = (sg: Segment): number => Math.abs(sg[1].x - sg[0].x) + Math.abs(sg[1].y - sg[0].y);
+  const [p, z] = own.reduce((a, b) => (long(b) > long(a) ? b : a)) as Segment;
+  const horizontal = p.y === z.y;
+  const cx = horizontal ? (p.x + z.x) / 2 : p.x + label.w / 2 + ruler.labelPadX;
+  const cy = horizontal ? p.y : (p.y + z.y) / 2;
+  return { x: edgeNear(ruler, cx - label.w / 2), y: edgeNear(ruler, cy - label.h / 2), w: label.w, h: label.h };
+}
+
 /**
  * Moves the labels of a finished drawing that stand too near the line of another edge or another label. Labels are
  * handled in the order of the edges, each against the labels before it; edges and boxes stay where they are.
  */
-export function refineLabels(layout: Layout, ruler: Ruler): Layout {
+export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<number> = new Set()): Layout {
   const segsOf = (points: Point[]): Segment[] => points.slice(1).map((q, i) => [points[i] as Point, q] as Segment);
   const all = layout.edges.map((e) => segsOf(e.points));
   const nodes: Rect[] = layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
@@ -180,11 +190,11 @@ export function refineLabels(layout: Layout, ruler: Ruler): Layout {
     if (!label) return edge;
     const own = all[ei] as Segment[];
     const foreign = all.flatMap((ss, k) => (k === ei ? [] : ss));
-    const basic: Rect = { x: label.x, y: label.y, w: label.w, h: label.h };
+    const basic: Rect = redrawn.has(ei) ? onLongest(own, label, ruler) : { x: label.x, y: label.y, w: label.w, h: label.h };
     const near = own.map((sg) => segmentToRect(sg, basic));
     const spot = chooseSpot({ own, foreign, nodes, placed: finals, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)) });
     finals.push(spot.rect);
-    if (!spot.moved) return edge;
+    if (!spot.moved && !redrawn.has(ei)) return edge;
     changed = true;
     return { ...edge, label: { ...label, x: spot.rect.x, y: spot.rect.y } };
   });

@@ -1,4 +1,5 @@
 import type { FrontValue } from '../front-matter.ts';
+import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
 import type { BitOrder, Packet, PacketField } from './model.ts';
 
@@ -44,9 +45,8 @@ interface Settings {
 
 /** Reads the packet keys of a config map; values of another type are ignored. */
 function readSettings(config: unknown): Settings {
-  const packet = typeof config === 'object' && config !== null ? (config as Record<string, unknown>)['packet'] : undefined;
-  if (typeof packet !== 'object' || packet === null) return {};
-  const c = packet as Record<string, unknown>;
+  const c = configSection(config, 'packet');
+  if (c === undefined) return {};
   const out: Settings = {};
   if (typeof c['showBits'] === 'boolean') out.showBits = c['showBits'];
   if (c['bitOrder'] === 'ascending' || c['bitOrder'] === 'descending') out.bitOrder = c['bitOrder'];

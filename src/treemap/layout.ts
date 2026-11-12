@@ -1,6 +1,8 @@
+import { makeFormatter } from '../chart/format.ts';
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
+import { shrinkToFit } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
-import { makeFormatter } from './format.ts';
 import { isLeaf, total } from './model.ts';
 import type { TreeNode, Treemap } from './model.ts';
 
@@ -23,7 +25,6 @@ const TILE_AREA_H = 400;
 const MARGIN = 40;
 const MIN_MARGIN = 16;
 const SERIES = 8;
-const ELLIPSIS = '…';
 
 export interface Rect {
   x: number;
@@ -154,18 +155,6 @@ function widthFor(items: LNode[], k: number, height: number): number {
   return (lo + hi) / 2;
 }
 
-/** Cuts `text` with an ellipsis until it fits `room`; undefined when not even the ellipsis fits. */
-function fitText(text: string, room: number, width: (t: string) => number): string | undefined {
-  if (width(text) <= room) return text;
-  const chars = [...text];
-  while (chars.length > 0) {
-    chars.pop();
-    const cut = `${chars.join('').trimEnd()}${ELLIPSIS}`;
-    if (width(cut) <= room) return cut;
-  }
-  return width(ELLIPSIS) <= room ? ELLIPSIS : undefined;
-}
-
 /** Places a treemap: columns side by side in input order, each as tall as the others, tile areas following the values. */
 export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
   const fmt = makeFormatter(map.valueFormat);
@@ -174,7 +163,7 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
   /** What a column stacks: the children of a group, or the leaf itself. */
   const itemsOf = (t: LNode): LNode[] => (isLeaf(t.node) ? [t] : t.kids);
 
-  const margin = Math.max(MIN_MARGIN, Math.ceil((map.diagramPadding ?? MARGIN) / 4) * 4);
+  const margin = Math.max(MIN_MARGIN, ceilTo(map.diagramPadding ?? MARGIN));
   const nameW = (t: string): number => ruler.textWidth(t, 'title');
   const valueW = (t: string): number => ruler.textWidth(t, 'line');
 
@@ -220,7 +209,7 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
     const both = t.h >= 2 * TILE_PAD + NAME_H + VALUE_H && nameW(label) <= room && valueW(valueText) <= room;
     if (both) return { ...base, nameShown: label, valueShown: valueText };
     if (t.h >= 2 * TILE_PAD + NAME_H) {
-      const shown = fitText(label, room, nameW);
+      const shown = shrinkToFit(label, room, nameW);
       if (shown !== undefined) return { ...base, nameShown: shown };
     }
     return base;
@@ -228,15 +217,15 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
 
   const groups: PlacedName[] = raw.groups.flatMap((g) => {
     const label = g.node.node.label;
-    const shown = fitText(label, g.w, nameW);
+    const shown = shrinkToFit(label, g.w, nameW);
     return shown === undefined ? [] : [{ label, shown, x: g.x, y: g.y + NAME_LINE / 2, total: total(g.node.node) }];
   });
 
-  const rootLabel = root === undefined ? undefined : fitText(root.label, CONTENT_W, nameW);
-  const titleShown = map.title === undefined ? undefined : fitText(map.title, CONTENT_W, (t) => (nameW(t) * TITLE_SIZE) / 13);
+  const rootLabel = root === undefined ? undefined : shrinkToFit(root.label, CONTENT_W, nameW);
+  const titleShown = map.title === undefined ? undefined : shrinkToFit(map.title, CONTENT_W, (t) => (nameW(t) * TITLE_SIZE) / 13);
 
   const width = CONTENT_W + 2 * margin;
-  const height = Math.ceil((y + regionH + margin) / 4) * 4;
+  const height = ceilTo(y + regionH + margin);
   const items: SceneItem[] = [{ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] }];
   if (titleShown !== undefined) items.push({ kind: 'text', x: margin, y: titleY, text: titleShown, anchor: 'start', role: ['title'] });
   if (rootLabel !== undefined) items.push({ kind: 'text', x: margin, y: rootY, text: rootLabel, anchor: 'start', role: ['zone-name'] });

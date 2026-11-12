@@ -1,3 +1,4 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Theme } from '../render/theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
@@ -24,7 +25,6 @@ const DETOUR_BAND = 36;
 const LANE_SHIFT = 8;
 const PORT_R = 3.25;
 
-const ceil4 = (v: number): number => Math.ceil(v / 4) * 4;
 
 export interface PlacedZone {
   domain: Domain;
@@ -85,16 +85,16 @@ const stackH = (n: number): number => ITEM_TOP + n * ITEM_H + (n - 1) * ITEM_GAP
  */
 export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): CynefinLayout {
   const textW = (s: string): number => ruler.textWidth(s, 'title');
-  const chipW = (label: string | undefined): number => (label === undefined ? BARE_CHIP_W : ceil4(ruler.textWidth(label, 'line') + 16));
+  const chipW = (label: string | undefined): number => (label === undefined ? BARE_CHIP_W : ceilTo(ruler.textWidth(label, 'line') + 16));
   const transitions = model.transitions;
   const pairs = transitions.map(pairOf);
   const count = (p: Pair): number => pairs.filter((q) => q === p).length;
 
   const texts = (['complex', 'complicated', 'chaotic', 'clear', 'confusion'] as const).flatMap((d) => model.items[d]);
   const verticalChip = Math.max(0, ...transitions.filter((_, i) => pairs[i] === 'left' || pairs[i] === 'right').map((t) => chipW(t.label)));
-  const itemW = Math.max(MIN_ITEM_W, ceil4(Math.max(0, ...texts.map(textW)) + 32), verticalChip === 0 ? 0 : verticalChip + 36);
+  const itemW = Math.max(MIN_ITEM_W, ceilTo(Math.max(0, ...texts.map(textW)) + 32), verticalChip === 0 ? 0 : verticalChip + 36);
   const longestArrow = Math.max(0, ...transitions.filter((_, i) => pairs[i] === 'top' || pairs[i] === 'bottom').map((t) => chipW(t.label) + ARROW_EXTRA));
-  const zoneW = ceil4(Math.max(1.5 * itemW + 82, itemW + 32 + longestArrow / 2));
+  const zoneW = ceilTo(Math.max(1.5 * itemW + 82, itemW + 32 + longestArrow / 2));
 
   const rowsMax = Math.max(1, ...(['complex', 'complicated', 'chaotic', 'clear'] as const).map((d) => model.items[d].length));
   const rowsConfusion = Math.max(1, model.items.confusion.length);
@@ -105,7 +105,7 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): Cyne
   while (ROW * lowRow + 32 < confusionH / 2 + 4) lowRow += 1;
   const topArrows = count('top');
   const bottomArrows = count('bottom');
-  const zoneH = ceil4(
+  const zoneH = ceilTo(
     Math.max(stackH(rowsMax), topArrows > 0 ? 80 + ROW * (topArrows - 1) + confusionH / 2 : 0, bottomArrows > 0 ? stackH(lowRow + bottomArrows) : 0),
   );
 
@@ -119,7 +119,7 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): Cyne
   const centreX = MARGIN + zoneW + GAP / 2;
   const centreY = top + zoneH + GAP / 2;
   const titleW = model.title === undefined ? 0 : (ruler.textWidth(model.title, 'title') * 15) / 13;
-  const width = Math.max(2 * MARGIN + 2 * zoneW + GAP, ceil4(2 * MARGIN + titleW));
+  const width = Math.max(2 * MARGIN + 2 * zoneW + GAP, ceilTo(2 * MARGIN + titleW));
   const height = lowerY + zoneH + MARGIN + (cornerB ? DETOUR_BAND / 3 : 0);
 
   const zoneAt: Record<Exclude<Domain, 'confusion'>, { x: number; y: number; outerLeft: boolean }> = {

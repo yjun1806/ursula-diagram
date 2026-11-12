@@ -1,5 +1,7 @@
-import { UrsulaError } from '../types.ts';
 import type { FrontValue } from '../front-matter.ts';
+import { createAccessibilityReader } from '../front/accessibility.ts';
+import { configSection } from '../front/options.ts';
+import { UrsulaError } from '../types.ts';
 import type { TreeNode, Treemap } from './model.ts';
 
 const HEADERS = new Set(['treemap-beta', 'treemap']);
@@ -18,8 +20,8 @@ export interface TreemapSettings {
 
 /** Reads the `treemap` section of a front-matter `config` map; values of the wrong type are ignored. */
 export function readTreemapConfig(config: Record<string, FrontValue> | undefined): TreemapSettings {
-  const section = config?.['treemap'];
-  if (section === undefined || section === null || typeof section !== 'object') return {};
+  const section = configSection(config, 'treemap');
+  if (section === undefined) return {};
   const out: TreemapSettings = {};
   const format = section['valueFormat'];
   if (typeof format === 'string' && format.trim() !== '') out.valueFormat = format.trim();
@@ -55,8 +57,7 @@ export function parseTreemap(src: string, heading?: string, config?: Record<stri
   const stack: Open[] = [];
   let headerSeen = false;
   let title: string | undefined;
-  let accTitle: string | undefined;
-  let inDescription = false;
+  const acc = createAccessibilityReader({ emptyTitle: 'keep' });
   let directive = '';
   let inDirective = false;
   let init: TreemapSettings = {};
@@ -73,10 +74,7 @@ export function parseTreemap(src: string, heading?: string, config?: Record<stri
       }
       continue;
     }
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '') continue;
     if (s.startsWith('%%{') && !s.includes('}%%')) {
       inDirective = true;
@@ -94,16 +92,7 @@ export function parseTreemap(src: string, heading?: string, config?: Record<stri
       continue;
     }
 
-    const acc = /^accTitle\s*:\s*(.*)$/u.exec(s);
-    if (acc !== null) {
-      if ((acc[1] ?? '').trim() !== '') accTitle = (acc[1] ?? '').trim();
-      continue;
-    }
-    if (/^accDescr\s*:/u.test(s)) continue;
-    if (/^accDescr\s*\{/u.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
     const t = /^title\s+(.+)$/u.exec(s);
     if (t !== null) {
       title = (t[1] ?? '').trim();
@@ -155,7 +144,7 @@ export function parseTreemap(src: string, heading?: string, config?: Record<stri
   const shownTitle = title ?? (heading !== undefined && heading !== '' ? heading : undefined);
   return {
     ...(shownTitle === undefined ? {} : { title: shownTitle }),
-    ...(accTitle === undefined ? {} : { accTitle }),
+    ...(acc.title === undefined ? {} : { accTitle: acc.title }),
     roots,
     classDefs,
     valueFormat: settings.valueFormat ?? ',',

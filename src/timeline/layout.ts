@@ -1,3 +1,4 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
@@ -62,7 +63,6 @@ export interface TimelineLayout {
   zones: PlacedZone[];
 }
 
-const up4 = (v: number): number => Math.ceil(v / 4) * 4;
 
 interface Col {
   label: string[];
@@ -178,7 +178,7 @@ function columns(model: TimelineModel, width: (s: string) => number): Col[][] {
       const events = p.events.map((e) => wrapLines(e, TEXT_MAX, width));
       const label = wrapLines(p.label, TEXT_MAX, width);
       const text = Math.max(widest(label, width), ...events.map((e) => widest(e, width)));
-      return { label, events, w: Math.max(BOX_MIN, up4(text + BOX_PAD)), heights: events.map((e) => boxHeight(e.length)) };
+      return { label, events, w: Math.max(BOX_MIN, ceilTo(text + BOX_PAD)), heights: events.map((e) => boxHeight(e.length)) };
     }),
   );
 }
@@ -257,7 +257,7 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
     top = end + ROW_GAP;
   });
 
-  const titleWidth = model.title === undefined ? 0 : up4(ruler.textWidth(model.title, 'title') * TITLE_SIZE_RATIO) + 2 * MARGIN;
+  const titleWidth = model.title === undefined ? 0 : ceilTo(ruler.textWidth(model.title, 'title') * TITLE_SIZE_RATIO) + 2 * MARGIN;
   const w = Math.max(sceneWidth, titleWidth);
   const h = bottom + MARGIN;
   return {
@@ -275,13 +275,13 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): Timel
   const zones = model.groups.some((g) => g.name !== undefined);
   const labels = model.groups.map((g) => g.periods.map((p) => wrapLines(p.label, TEXT_MAX, width)));
   const nameW = Math.max(0, ...labels.flat().map((l) => widest(l, width)));
-  const axisX = up4(MARGIN + (zones ? ZONE_PAD : 0) + nameW + NAME_RISE);
+  const axisX = ceilTo(MARGIN + (zones ? ZONE_PAD : 0) + nameW + NAME_RISE);
   const boxLeft = axisX + STEM;
 
   const rowsOf = model.groups.map((g, gi) =>
     g.periods.map((p, pi) => {
       const lines = p.events.map((e) => wrapLines(e, TEXT_MAX, width));
-      const ws = lines.map((l) => Math.max(BOX_MIN, up4(widest(l, width) + BOX_PAD)));
+      const ws = lines.map((l) => Math.max(BOX_MIN, ceilTo(widest(l, width) + BOX_PAD)));
       const h = Math.max(48, ...lines.map((l) => boxHeight(l.length)), LINE * (labels[gi]?.[pi]?.length ?? 1));
       return { lines, ws, h, boxH: Math.max(0, ...lines.map((l) => boxHeight(l.length))) };
     }),
@@ -344,7 +344,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): Timel
     (seg, i): SceneItem => ({ kind: 'line', points: [{ x: axisX, y: seg.from }, { x: axisX, y: seg.to }], role: i === segments.length - 1 ? ['edge', 'edge--arrow'] : ['edge'] }),
   );
   items.push(...zoneItems, ...axisLines, ...lineItems, ...dotItems, ...contentItems);
-  const titleWidth = model.title === undefined ? 0 : up4(ruler.textWidth(model.title, 'title') * TITLE_SIZE_RATIO) + 2 * MARGIN;
+  const titleWidth = model.title === undefined ? 0 : ceilTo(ruler.textWidth(model.title, 'title') * TITLE_SIZE_RATIO) + 2 * MARGIN;
   const w = Math.max(contentRight + MARGIN, titleWidth);
   const h = bottom + MARGIN;
   return { scene: { width: w, height: h, title: model.title ?? 'timeline', items, theme }, width: w, height: h, direction: 'TD', periods, zones: placedZones };

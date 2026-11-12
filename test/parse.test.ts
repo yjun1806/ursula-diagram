@@ -85,7 +85,7 @@ describe('parse', () => {
     expect(failure('flowchart XY\nA')).toMatchObject({ code: 'syntax', line: 1 });
     expect(failure('flowchart LR\nA --> B\nsequenceDiagram')).toMatchObject({ line: 3 });
     expect(failure('sequenceDiagram\nA->>B: hi')).toMatchObject({ code: 'unsupported-diagram', line: 1 });
-    expect(failure('flowchart LR\nsubgraph a\nsubgraph b\nend\nend')).toMatchObject({ code: 'nested-subgraph', line: 3 });
+    expect(failure('flowchart LR\nsubgraph a\ndirection XY\nA\nend')).toMatchObject({ code: 'syntax', line: 3 });
     expect(failure('flowchart LR\nsubgraph a\nA')).toMatchObject({ line: 2 });
     expect(failure('flowchart LR\nend')).toMatchObject({ line: 2 });
     expect(failure('flowchart LR\nA --> B\nA ~~ B')).toMatchObject({ line: 3 });

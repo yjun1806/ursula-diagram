@@ -1,7 +1,11 @@
-import type { Ruler } from '../metrics.ts';
+import { ceilTo, round2 } from '../chart/grid.ts';
+import { anchoredBox, clashCost, pickLeastClash, trendAt } from '../chart/label-place.ts';
+import type { Box } from '../chart/label-place.ts';
 import { monotonePath } from '../chart/monotone.ts';
+import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
+import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Journey } from './model.ts';
 
@@ -64,46 +68,6 @@ export interface JourneyLayout {
   overflow: boolean;
 }
 
-const up4 = (v: number): number => Math.ceil(v / 4) * 4;
-const r2 = (v: number): number => Math.round(v * 100) / 100;
-
-/** Breaks a line at spaces into lines no wider than `max`; a word wider than `max` is cut between characters. */
-function wrap(text: string, max: number, width: (s: string) => number): string[] {
-  const out: string[] = [];
-  let cur = '';
-  for (const word of text.split(' ')) {
-    if (word === '') continue;
-    const joined = cur === '' ? word : `${cur} ${word}`;
-    if (width(joined) <= max) {
-      cur = joined;
-      continue;
-    }
-    if (cur !== '') out.push(cur);
-    cur = '';
-    if (width(word) <= max) {
-      cur = word;
-      continue;
-    }
-    for (const ch of word) {
-      if (cur !== '' && width(cur + ch) > max) {
-        out.push(cur);
-        cur = '';
-      }
-      cur += ch;
-    }
-  }
-  if (cur !== '') out.push(cur);
-  return out.length === 0 ? [''] : out;
-}
-
-interface Box {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-}
-
-const hit = (a: Box, b: Box, pad: number): boolean => a.x0 < b.x1 + pad && a.x1 > b.x0 - pad && a.y0 < b.y1 + pad && a.y1 > b.y0 - pad;
 
 interface Plan {
   boxW: number;
@@ -123,13 +87,13 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
   const nameW = (t: string): number => ruler.textWidth(t, 'title');
   const smallW = (t: string): number => (ruler.textWidth(t, 'line') * 11) / 12;
   const tasks = journey.sections.flatMap((s) => s.tasks);
-  const tagW = (t: string): number => up4(smallW(t) + TAG_PAD);
+  const tagW = (t: string): number => ceilTo(smallW(t) + TAG_PAD);
   const widestTag = Math.max(0, ...tasks.flatMap((t) => t.actors.map(tagW)));
   const widestName = Math.max(0, ...tasks.map((t) => nameW(t.name)));
   const hasName = journey.sections.some((s) => s.name !== undefined);
 
   const plan = (boxW: number): Plan => {
-    const names = tasks.map((t) => wrap(t.name, boxW - BOX_PAD, nameW));
+    const names = tasks.map((t) => wrapWords(t.name, boxW - BOX_PAD, nameW, { split: 'space', blank: true }));
     const tagRows = tasks.map((t) => {
       const rows: { text: string; w: number }[][] = [];
       let cur: { text: string; w: number }[] = [];
@@ -154,7 +118,7 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
     const zoneW = journey.sections.map((s) => {
       const group = s.tasks.length * boxW + Math.max(0, s.tasks.length - 1) * BOX_GAP;
       const natural = s.tasks.length === 0 ? 0 : group + 2 * ZONE_PAD;
-      const nameNeed = s.name === undefined ? 0 : up4(nameW(s.name) + 32);
+      const nameNeed = s.name === undefined ? 0 : ceilTo(nameW(s.name) + 32);
       const base = s.tasks.length === 0 ? Math.max(nameNeed, 120) : natural;
       return base >= nameNeed ? base : group + 2 * (ZONE_PAD + 4 * Math.ceil((nameNeed - natural) / 8));
     });
@@ -162,9 +126,9 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
     return { boxW, names, tagRows, titleLines, rows, boxH, zoneW, right };
   };
 
-  const natural = Math.max(BOX_W, up4(widestName + BOX_PAD), widestTag + TAG_PAD);
+  const natural = Math.max(BOX_W, ceilTo(widestName + BOX_PAD), widestTag + TAG_PAD);
   const widestWord = Math.max(0, ...tasks.flatMap((t) => t.name.split(' ').map(nameW)));
-  const floor = Math.max(BOX_MIN, widestTag + TAG_PAD, up4(widestWord + BOX_PAD));
+  const floor = Math.max(BOX_MIN, widestTag + TAG_PAD, ceilTo(widestWord + BOX_PAD));
   let chosen = plan(natural);
   if (chosen.right > limit) {
     let w = natural - 4;
@@ -184,14 +148,14 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
   const items: SceneItem[] = [];
   const titleText = journey.title;
   const titleW = titleText === undefined ? 0 : (ruler.textWidth(titleText, 'title') * 15) / 13;
-  const width = Math.max(chosen.right, up4(titleW + 2 * MARGIN));
+  const width = Math.max(chosen.right, ceilTo(titleW + 2 * MARGIN));
   const zoneTop = titleText === undefined ? MARGIN : 56;
   const head = hasName ? NAME_HEAD : PLAIN_HEAD;
   const zoneH = head + boxH + ZONE_FOOT;
   const gridTop = zoneTop + zoneH + PLOT_GAP;
   const axisY = gridTop + 4 * STEP;
   const height = axisY + FOOT;
-  const scoreY = (s: number): number => r2(gridTop + (5 - s) * STEP);
+  const scoreY = (s: number): number => round2(gridTop + (5 - s) * STEP);
   const plotRight = width - MARGIN;
 
   if (titleText !== undefined) items.push({ kind: 'text', x: MARGIN, y: TITLE_Y, text: titleText, anchor: 'start', role: ['title'] });
@@ -245,7 +209,7 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
 
   const dots = placed.map((t) => t.dot);
   if (dots.length > 1) {
-    const d = spec.interpolation === 'linear' ? dots.map((p, i) => `${i === 0 ? 'M' : 'L'}${r2(p.x)} ${r2(p.y)}`).join(' ') : monotonePath(dots);
+    const d = spec.interpolation === 'linear' ? dots.map((p, i) => `${i === 0 ? 'M' : 'L'}${round2(p.x)} ${round2(p.y)}`).join(' ') : monotonePath(dots);
     items.push({ kind: 'path', d, role: ['mark-line'] });
   }
   for (const p of dots) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: ['mark-dot'] });
@@ -282,15 +246,8 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
   const dotBoxes: Box[] = dots.map((p) => ({ x0: p.x - spec.dotRadius, x1: p.x + spec.dotRadius, y0: p.y - spec.dotRadius, y1: p.y + spec.dotRadius }));
   const bounds: Box = { x0: LEFT, x1: plotRight, y0: zoneTop + zoneH + 4, y1: height - 4 };
   const taken: Box[] = [];
-  const boxOf = (x: number, y: number, w: number, anchor: 'start' | 'middle'): Box => {
-    const x0 = anchor === 'start' ? x : x - w / 2;
-    return { x0, x1: x0 + w, y0: y - VALUE_H / 2, y1: y + VALUE_H / 2 };
-  };
-  const clash = (b: Box): number =>
-    (b.x0 >= bounds.x0 && b.x1 <= bounds.x1 && b.y0 >= bounds.y0 && b.y1 <= bounds.y1 ? 0 : 100) +
-    dotBoxes.filter((o) => hit(b, o, 1)).length +
-    taken.filter((o) => hit(b, o, 2)).length * 2 +
-    samples.filter((s) => s.x > b.x0 - 1 && s.x < b.x1 + 1 && s.y > b.y0 - 1 && s.y < b.y1 + 1).length;
+  const boxOf = (x: number, y: number, w: number, anchor: 'start' | 'middle'): Box => anchoredBox(x, y, w, anchor, VALUE_H);
+  const clash = (b: Box): number => clashCost(b, { bounds, fixed: dotBoxes, placed: taken, samples });
   const scoreOf = (i: number): number => placed[i]?.score ?? 0;
   const labels: SceneItem[] = [];
   dots.forEach((p, i) => {
@@ -299,14 +256,8 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
     const cur = scoreOf(i);
     const prev = i > 0 ? scoreOf(i - 1) : undefined;
     const next = i < dots.length - 1 ? scoreOf(i + 1) : undefined;
-    let side: 'above' | 'below' | 'right-up' | 'right-down' = 'above';
-    if (prev !== undefined || next !== undefined) {
-      const before = prev ?? 2 * cur - (next ?? cur);
-      const after = next ?? 2 * cur - before;
-      if (cur >= before && cur >= after) side = 'above';
-      else if (cur <= before && cur <= after) side = 'below';
-      else side = cur > before ? 'right-down' : 'right-up';
-    }
+    const trend = trendAt(cur, prev, next);
+    const side: 'above' | 'below' | 'right-up' | 'right-down' = trend === 'peak' ? 'above' : trend === 'valley' ? 'below' : trend === 'rising' ? 'right-down' : 'right-up';
     const at = (kind: typeof side, extra: number): { x: number; y: number; anchor: 'start' | 'middle' } => {
       const o = off + extra;
       if (kind === 'above') return { x: p.x, y: p.y - (o + 8), anchor: 'middle' };
@@ -315,22 +266,10 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
       return { x: p.x + o, y: p.y + (o + 4), anchor: 'start' };
     };
     const order: (typeof side)[] = [side, side === 'above' ? 'below' : side === 'below' ? 'above' : side === 'right-up' ? 'above' : 'below', 'right-up', 'right-down', 'above', 'below'];
-    let best: { x: number; y: number; anchor: 'start' | 'middle' } | undefined;
-    let bestScore = Infinity;
-    search: for (const extra of [0, 4, 8, 12]) {
-      for (const kind of order) {
-        const c = at(kind, extra);
-        const score = clash(boxOf(c.x, c.y, w, c.anchor));
-        if (score < bestScore) {
-          best = c;
-          bestScore = score;
-        }
-        if (score === 0) break search;
-      }
-    }
-    const c = best ?? at(side, 0);
+    const spots = [0, 4, 8, 12].flatMap((extra) => order.map((kind) => at(kind, extra)));
+    const c = pickLeastClash(spots, (spot) => boxOf(spot.x, spot.y, w, spot.anchor), clash)?.candidate ?? at(side, 0);
     taken.push(boxOf(c.x, c.y, w, c.anchor));
-    labels.push({ kind: 'text', x: r2(c.x), y: r2(c.y), text, anchor: c.anchor, role: ['value'] });
+    labels.push({ kind: 'text', x: round2(c.x), y: round2(c.y), text, anchor: c.anchor, role: ['value'] });
   });
   items.push(...labels);
 

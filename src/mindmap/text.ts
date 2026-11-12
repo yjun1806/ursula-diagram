@@ -1,15 +1,5 @@
-import { cellWidth } from '../metrics.ts';
+import { cut } from '../text/terminal.ts';
 import type { MindNode, Mindmap } from './model.ts';
-
-function cut(text: string, cap: number): string {
-  if (cellWidth(text) <= cap) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(`${out}${ch}…`) > cap) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
 
 const labelOf = (n: MindNode): string => n.paragraphs.join(' ');
 

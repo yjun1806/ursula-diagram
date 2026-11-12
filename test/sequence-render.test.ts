@@ -58,7 +58,7 @@ describe('sequence svg', () => {
   it('draws an actor as a figure, a participant as a box, and writes the frame tag in capitals', () => {
     const out = render('sequenceDiagram\nactor P\nparticipant S\nloop Retry\nP->>S: ping\nend');
     expect(out.match(/<rect class="ursula-box"/g)).toHaveLength(1);
-    expect(out.match(/<circle class="ursula-edge ursula-edge--msg"[^>]*data-participant="P"/g)).toHaveLength(1);
+    expect(out.match(/<circle class="ursula-edge"[^>]*data-participant="P"/g)).toHaveLength(1);
     expect(out).toContain('<rect class="ursula-frame"');
     expect(out).toContain('<rect class="ursula-tag"');
     expect(out).toContain('class="ursula-tag-text ursula-middle"');

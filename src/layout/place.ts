@@ -152,7 +152,7 @@ export interface Measure {
 
 /** Sizes that depend on the text alone, never on where a node is placed. */
 export function measureNodes(
-  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined }>,
+  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined; box?: { w: number; h: number } | undefined }>,
   lanes: ReadonlyArray<{ label: string }>,
   ruler: Ruler,
   td: boolean,
@@ -186,6 +186,9 @@ export function measureNodes(
   });
   const w = content.map((c) => snapW(c.w));
   const sorted = [...w].sort((a, b) => a - b);
+  // A box given from outside has that size; its text still counts for the shared width, as it would in any other box.
+  const sizedW = w.map((v, i) => { const box = nodes[i]?.box; return box === undefined ? v : snapW(box.w); });
+  const sizedH = (h: number, i: number): number => { const box = nodes[i]?.box; return box === undefined ? h : gridUp(ruler, box.h); };
   // The common width: the widest box in a terminal drawing; with `commonWithin`, the widest that is not an outlier; otherwise the width three quarters of the boxes fit. Wider boxes take two places.
   const middle = sorted[Math.floor((sorted.length - 1) / 2)] ?? 0;
   const within = ruler.commonWithin;
@@ -203,7 +206,7 @@ export function measureNodes(
   const gutter = !labelled
     ? 0
     : gridUp(ruler, 2 * ruler.laneLabelGap + (td ? ruler.lineHeight('lane') : Math.max(0, ...labelWidths)));
-  return { w, h: content.map((c, i) => (!td && own[i] !== undefined ? c.h : contentH)), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter };
+  return { w: sizedW, h: content.map((c, i) => sizedH(!td && own[i] !== undefined ? c.h : contentH, i)), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter };
 }
 
 export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', needs: Map<string, Need>): Skeleton {

@@ -1,4 +1,6 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
+import { shrinkToFit } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import { splitFields } from './model.ts';
 import type { Packet } from './model.ts';
@@ -14,18 +16,6 @@ const TALL_EXTRA = 20;
 const TITLE_Y = 40;
 const NAME_SCALE = 13 / 12;
 const TITLE_SCALE = 15 / 13;
-
-/** Shortens `text` with an ellipsis until it fits `room`; the ellipsis alone when nothing else does. */
-export function fitName(text: string, room: number, width: (s: string) => number): string {
-  if (width(text) <= room) return text;
-  const chars = [...text];
-  while (chars.length > 0) {
-    chars.pop();
-    const cut = `${chars.join('').trimEnd()}…`;
-    if (width(cut) <= room) return cut;
-  }
-  return '…';
-}
 
 interface Cell {
   field: number;
@@ -77,7 +67,7 @@ export function layoutPacket(packet: Packet, ruler: Ruler): PacketLayout {
   for (let r = 0; r < rows; r++) tops.push(r === 0 ? firstTop : (tops[r - 1] ?? 0) + ROW_PITCH);
 
   const titleW = packet.title === undefined ? 0 : Math.ceil(ruler.textWidth(packet.title, 'title') * TITLE_SCALE);
-  const width = Math.ceil(Math.max(n * BIT_W + MARGIN * 2, titleW + MARGIN * 2) / 4) * 4;
+  const width = ceilTo(Math.max(n * BIT_W + MARGIN * 2, titleW + MARGIN * 2));
   const bottom = Math.max(...cells.map((c) => (tops[c.row0] ?? 0) + (c.row1 - c.row0 + 1) * ROW_H));
   const tailNumber = bits && cells.some((c) => c.row1 > c.row0 && (tops[c.row0] ?? 0) + (c.row1 - c.row0 + 1) * ROW_H === bottom);
   const height = bottom + MARGIN + (tailNumber ? TALL_EXTRA : 0);
@@ -103,7 +93,7 @@ export function layoutPacket(packet: Packet, ruler: Ruler): PacketLayout {
         items.push({ kind: 'text', x: x + w - INSET, y: dropY, text: String(c.right), anchor: 'end', role: ['mono'], data });
       }
     }
-    items.push({ kind: 'text', x: x + w / 2, y: y + h / 2, text: fitName(c.label, w - 4, nameWidth), anchor: 'middle', role: ['name'], data });
+    items.push({ kind: 'text', x: x + w / 2, y: y + h / 2, text: shrinkToFit(c.label, w - 4, nameWidth) ?? '…', anchor: 'middle', role: ['name'], data });
   }
 
   const label = packet.title === undefined ? `packet — ${packet.fields.length} fields` : `packet — ${packet.title}`;

@@ -12,6 +12,7 @@ import type {
   PlacedNote,
   PlacedParticipant,
   PlacedRow,
+  ParticipantKind,
   Sequence,
   SequenceLayout,
   SequenceLegendOption,
@@ -98,21 +99,72 @@ function crossMark(x: number, y: number): SceneItem[] {
   return [stroke(-half, half), stroke(half, -half)];
 }
 
-/** Path data of an actor figure `h` high with its head circle left out: four strokes, `y` is the top. */
-function actorStrokes(cx: number, y: number, h: number): string {
-  const r = h * 0.18;
-  const neck = y + 2 * r;
-  const hip = y + h * 0.62;
-  const arms = neck + (hip - neck) * 0.35;
-  const reach = h * 0.28;
-  const foot = h * 0.26;
-  const f = (v: number): string => String(Math.round(v * 100) / 100);
+/** Sizes of the participant symbols, in pixels. A symbol sits above its name, {@link NAME_GAP} apart. */
+const NAME_GAP = 8;
+const CIRCLE = 32;
+/** Height of each symbol that has a name below it. */
+const SYMBOL_HEIGHT: Partial<Record<ParticipantKind, number>> = {
+  actor: 48,
+  boundary: CIRCLE,
+  control: CIRCLE + 4,
+  entity: CIRCLE,
+  database: 44,
+};
+/** The back box of `collections` is shifted right and up by this much. */
+const STACK_STEP = 4;
+const DATABASE_W = 40;
+const DATABASE_CAP = 8;
+const QUEUE_CAP = 8;
+
+const fmt = (v: number): string => String(Math.round(v * 100) / 100);
+
+/** Path data of an actor's body, arms and legs below a head circle of diameter 16; `y` is the top of the figure. */
+function actorStrokes(cx: number, y: number): string {
   return [
-    `M${f(cx)} ${f(neck)}V${f(hip)}`,
-    `M${f(cx - reach)} ${f(arms)}H${f(cx + reach)}`,
-    `M${f(cx)} ${f(hip)}L${f(cx - foot)} ${f(y + h)}`,
-    `M${f(cx)} ${f(hip)}L${f(cx + foot)} ${f(y + h)}`,
+    `M${fmt(cx)} ${fmt(y + 16)}V${fmt(y + 32)}`,
+    `M${fmt(cx - 12)} ${fmt(y + 20)}H${fmt(cx + 12)}`,
+    `M${fmt(cx)} ${fmt(y + 32)}L${fmt(cx - 8)} ${fmt(y + 48)}`,
+    `M${fmt(cx)} ${fmt(y + 32)}L${fmt(cx + 8)} ${fmt(y + 48)}`,
   ].join('');
+}
+
+/** Boundary: a bar 12 to the left of the circle, joined to it by a short line. */
+function boundaryStrokes(cx: number, y: number): string {
+  const bar = cx - CIRCLE / 2 - 12;
+  return `M${fmt(bar)} ${fmt(y)}V${fmt(y + CIRCLE)}M${fmt(bar)} ${fmt(y + CIRCLE / 2)}H${fmt(cx - CIRCLE / 2)}`;
+}
+
+/** Control: an arrowhead 8 wide on top of the circle, pointing left; the circle starts 4 below `y`. */
+function controlStrokes(cx: number, y: number): string {
+  return `M${fmt(cx + 4)} ${fmt(y)}L${fmt(cx - 4)} ${fmt(y + 4)}L${fmt(cx + 4)} ${fmt(y + 8)}`;
+}
+
+/** Entity: a line as wide as the circle directly below it. */
+function entityStrokes(cx: number, y: number): string {
+  return `M${fmt(cx - CIRCLE / 2)} ${fmt(y + CIRCLE)}H${fmt(cx + CIRCLE / 2)}`;
+}
+
+/** Database: a cylinder with a lid, drawn as one closed outline plus the front edge of the lid. */
+function databasePath(cx: number, y: number, h: number): string {
+  const rx = DATABASE_W / 2;
+  const ry = DATABASE_CAP / 2;
+  const [x0, x1] = [cx - rx, cx + rx];
+  return (
+    `M${fmt(x0)} ${fmt(y + ry)}A${rx} ${ry} 0 0 1 ${fmt(x1)} ${fmt(y + ry)}V${fmt(y + h - ry)}` +
+    `A${rx} ${ry} 0 0 1 ${fmt(x0)} ${fmt(y + h - ry)}Z` +
+    `M${fmt(x0)} ${fmt(y + ry)}A${rx} ${ry} 0 0 0 ${fmt(x1)} ${fmt(y + ry)}`
+  );
+}
+
+/** Queue: a cylinder lying on its side between `x0` and `x1`, its lid on the right. */
+function queuePath(x0: number, x1: number, y: number, h: number): string {
+  const rx = QUEUE_CAP / 2;
+  const ry = h / 2;
+  return (
+    `M${fmt(x0 + rx)} ${fmt(y)}H${fmt(x1 - rx)}A${rx} ${ry} 0 0 1 ${fmt(x1 - rx)} ${fmt(y + h)}` +
+    `H${fmt(x0 + rx)}A${rx} ${ry} 0 0 1 ${fmt(x0 + rx)} ${fmt(y)}Z` +
+    `M${fmt(x1 - rx)} ${fmt(y)}A${rx} ${ry} 0 0 0 ${fmt(x1 - rx)} ${fmt(y + h)}`
+  );
 }
 
 function wrapLine(line: string, cap: number, measure: (s: string) => number): string[] {
@@ -160,8 +212,18 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const headerLabelW = Math.max(0, ...seq.participants.map((p) => widest(p.lines, 'title')));
   const hw = up2(Math.max(S.headMinW, headerLabelW + S.headPadX)) + S.stroke;
   const half = (hw - S.stroke) / 2;
-  const headLines = Math.max(1, ...seq.participants.map((p) => p.lines.length));
-  const headH = up(S.headH + (headLines - 1) * lhT);
+  // Symbols (actor, boundary, ...) exist only in the pixel drawing; the terminal ruler keeps boxes.
+  const symbols = !R.terminal;
+  const symbolOf = (k: ParticipantKind): number | undefined => (symbols ? SYMBOL_HEIGHT[k] : undefined);
+  const boxLines = Math.max(1, ...seq.participants.filter((p) => symbolOf(p.kind) === undefined).map((p) => p.lines.length));
+  const boxH = up(S.headH + (boxLines - 1) * lhT);
+  // The header area is as high as the tallest participant; every lifeline starts at its bottom.
+  const extentOf = (p: (typeof seq.participants)[number]): number => {
+    const sym = symbolOf(p.kind);
+    if (sym !== undefined) return sym + NAME_GAP + p.lines.length * lhT;
+    return symbols && p.kind === 'collections' ? boxH + STACK_STEP : boxH;
+  };
+  const headH = up(Math.max(boxH, ...seq.participants.map(extentOf)));
   const headerBottom = margin + headH;
   const hb = down(S.barW / 2);
 
@@ -275,26 +337,64 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   };
 
   const placed: PlacedParticipant[] = [];
-  const figures: Array<{ lx: number; y: number; h: number; data: Record<string, string> }> = [];
+  // Paths are shifted by the final offset, which is only known at the end.
+  const shifted = new Map<SceneItem, (dx: number) => SceneItem>();
+  const later = (items: SceneItem[], make: (dx: number) => SceneItem): void => {
+    const slot: SceneItem = { kind: 'path', d: '', role: [] };
+    shifted.set(slot, make);
+    items.push(slot);
+  };
   seq.participants.forEach((p, i) => {
     const lx = xs[i] ?? 0;
     const box: Box = { x: lx - half, y: margin, w: hw, h: headH };
     placed.push({ id: p.id, x: lx, box });
-    span(box.x, box.x + box.w - S.stroke);
     const data = { participant: p.id };
-    // An actor is a figure above its name; the name sits at the bottom of the header area.
-    const top = p.actor ? box.y + headH - p.lines.length * lhT : box.y + (headH - p.lines.length * lhT) / 2;
-    if (p.actor) {
-      const figure = Math.min(28, top - box.y - 4);
-      if (figure >= 8) {
-        boxItems.push({ kind: 'circle', cx: lx, cy: box.y + 2 + figure * 0.18, r: figure * 0.18, role: ['edge', 'edge--msg'], data });
-        figures.push({ lx, y: box.y + 2, h: figure, data });
+    const nameH = p.lines.length * lhT;
+    const sym = symbolOf(p.kind);
+    const line = (top: number, k: number, text: string): SceneItem => ({
+      kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text, anchor: 'middle', font: 'title', tone: 'fg', role: ['name'],
+    });
+    if (sym !== undefined) {
+      // Symbol above, name below on the shared bottom line.
+      const nameTop = headerBottom - nameH;
+      const top = nameTop - NAME_GAP - sym;
+      span(box.x, box.x + box.w - S.stroke);
+      const ring = (cy: number): SceneItem => ({ kind: 'circle', cx: lx, cy, r: CIRCLE / 2, role: ['edge'], data });
+      const strokes = (d: (dx: number) => string): void =>
+        later(boxItems, (dx) => ({ kind: 'path', d: d(dx), role: ['edge'], data }));
+      if (p.kind === 'actor') {
+        boxItems.push({ kind: 'circle', cx: lx, cy: top + 8, r: 8, role: ['edge'], data });
+        strokes((dx) => actorStrokes(lx + dx, top));
+      } else if (p.kind === 'boundary') {
+        boxItems.push(ring(top + CIRCLE / 2));
+        strokes((dx) => boundaryStrokes(lx + dx, top));
+      } else if (p.kind === 'control') {
+        boxItems.push(ring(top + 4 + CIRCLE / 2));
+        strokes((dx) => controlStrokes(lx + dx, top));
+      } else if (p.kind === 'entity') {
+        boxItems.push(ring(top + CIRCLE / 2));
+        strokes((dx) => entityStrokes(lx + dx, top));
+      } else {
+        later(boxItems, (dx) => ({ kind: 'path', d: databasePath(lx + dx, top, sym), role: ['box'], data }));
       }
-      else boxItems.push({ kind: 'box', style: 'actor', ...box, role: ['box'], data });
-    } else boxItems.push({ kind: 'box', style: 'box', ...box, role: ['box'], data });
-    p.lines.forEach((line, k) =>
-      textItems.push({ kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text: line, anchor: 'middle', font: 'title', tone: 'fg', role: ['name'] }),
-    );
+      p.lines.forEach((l, k) => textItems.push(line(nameTop, k, l)));
+      return;
+    }
+    // Boxes sit on the bottom line, so that they touch their lifeline.
+    const front: Box = { x: box.x, y: headerBottom - boxH, w: hw, h: boxH };
+    const style = p.kind === 'actor' ? 'actor' : 'box';
+    if (symbols && p.kind === 'collections') {
+      span(box.x, box.x + box.w - S.stroke + STACK_STEP);
+      boxItems.push({ kind: 'box', style: 'box', x: front.x + STACK_STEP, y: front.y - STACK_STEP, w: hw, h: boxH, role: ['box'], data });
+      boxItems.push({ kind: 'box', style: 'box', ...front, role: ['box'], data });
+    } else if (symbols && p.kind === 'queue') {
+      span(box.x, box.x + box.w - S.stroke);
+      later(boxItems, (dx) => ({ kind: 'path', d: queuePath(front.x + dx, front.x + dx + hw, front.y, boxH), role: ['box'], data }));
+    } else {
+      span(box.x, box.x + box.w - S.stroke);
+      boxItems.push({ kind: 'box', style, ...front, role: ['box'], data });
+    }
+    p.lines.forEach((l, k) => textItems.push(line(front.y + (boxH - nameH) / 2, k, l)));
   });
 
   const bars: Bar[][] = seq.participants.map(() => []);
@@ -741,10 +841,9 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const sceneItems: SceneItem[] = items.map((it): SceneItem => {
     if (it.kind === 'line') return { ...it, points: it.points.map((p) => ({ x: p.x + dx, y: p.y })) };
     if (it.kind === 'circle') return { ...it, cx: it.cx + dx };
-    if (it.kind === 'path') return it;
+    if (it.kind === 'path') return shifted.get(it)?.(dx) ?? it;
     return { ...it, x: it.x + dx };
   });
-  for (const fg of figures) sceneItems.push({ kind: 'path', d: actorStrokes(fg.lx + dx, fg.y, fg.h), role: ['edge', 'edge--msg'], data: fg.data });
   let height = bottom + margin;
   if (legend.length > 0) {
     const widths = legend.map((e) => R.legendSample + R.legendCaptionGap + captionW(e.caption));
