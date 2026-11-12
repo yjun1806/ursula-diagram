@@ -14,6 +14,7 @@ import { boxLength, growForPorts, LINE_PITCH, planFlat, portDemand, portOffsets,
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
+import { refineLabels } from './label-spot.ts';
 import type { Frame } from './route.ts';
 import { CORNER_CLEAR, route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
@@ -471,7 +472,7 @@ function stackGaps(source: Graph): number[] {
 
 export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptions = {}): Layout {
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
-  if (!given.terminal || opts.gap !== undefined) return withQuestions(source, layoutAt(source, given, opts), given, opts);
+  if (!given.terminal || opts.gap !== undefined) return withQuestions(source, given.terminal ? layoutAt(source, given, opts) : refineLabels(layoutAt(source, given, opts), given), given, opts);
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
   const limit = opts.maxWidth;
