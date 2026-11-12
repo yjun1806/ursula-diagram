@@ -495,6 +495,8 @@ interface Inside {
   target: Rect;
   /** Nodes and boxes the line must go round. */
   obstacles: Rect[];
+  /** Boxes the line may run along but not enter. */
+  walls?: Rect[];
   /** Lines already drawn. */
   drawn: Seg[];
   /** Points of the target that other lines already end at. */
@@ -530,8 +532,9 @@ function pathInside(g: Inside): Point[] | undefined {
   const hi = { x: region.x + region.w - CORRIDOR, y: region.y + region.h - CORRIDOR };
   const near = (r: Rect): boolean => r.x < region.x + region.w && r.x + r.w > region.x && r.y < region.y + region.h && r.y + r.h > region.y;
   const obstacles = g.obstacles.filter(near);
-  const rx = [lo.x, hi.x, ...obstacles.flatMap((o) => [o.x - CORRIDOR, o.x + o.w + CORRIDOR, o.x, o.x + o.w]), target.x - CORRIDOR, target.x + target.w + CORRIDOR];
-  const ry = [lo.y, hi.y, ...obstacles.flatMap((o) => [o.y - CORRIDOR, o.y + o.h + CORRIDOR, o.y, o.y + o.h]), target.y - CORRIDOR, target.y + target.h + CORRIDOR];
+  const walls = (g.walls ?? []).filter(near);
+  const rx = [lo.x, hi.x, ...walls.flatMap((o) => [o.x - CORRIDOR, o.x + o.w + CORRIDOR, o.x, o.x + o.w]), ...obstacles.flatMap((o) => [o.x - CORRIDOR, o.x + o.w + CORRIDOR, o.x, o.x + o.w]), target.x - CORRIDOR, target.x + target.w + CORRIDOR];
+  const ry = [lo.y, hi.y, ...walls.flatMap((o) => [o.y - CORRIDOR, o.y + o.h + CORRIDOR, o.y, o.y + o.h]), ...obstacles.flatMap((o) => [o.y - CORRIDOR, o.y + o.h + CORRIDOR, o.y, o.y + o.h]), target.y - CORRIDOR, target.y + target.h + CORRIDOR];
   const xs = candidates(rx, lo.x, hi.x, [start.x, ...faces.map((f) => f.p.x)]);
   const ys = candidates(ry, lo.y, hi.y, [start.y, ...faces.map((f) => f.p.y)]);
   const nx = xs.length;
@@ -584,7 +587,7 @@ function pathInside(g: Inside): Point[] | undefined {
       const b: Point = { x: xs[mx] as number, y: ys[my] as number };
       const next = at(mx, my) * 4 + nd;
       const arrival = goal.get(next);
-      if (obstacles.some((o) => through(a, b, o, CLEAR))) continue;
+      if (obstacles.some((o) => through(a, b, o, CLEAR)) || walls.some((o) => through(a, b, o, 0))) continue;
       if (arrival === undefined && through(a, b, target, 2)) continue;
       const len = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
       const total = cost + len + (nd === d ? 0 : BEND_COST) + clash(a, b, g.drawn) + (arrival?.price ?? 0);
@@ -743,53 +746,55 @@ const faceOfPoint = (p: Point, box: Rect): Face | undefined => {
   return undefined;
 };
 
-/**
- * A line that leaves a node inside a cluster for a node outside it leaves through the face of the cluster box that
- * looks at the outside node: top or bottom when that node is further away vertically, left or right otherwise. The line
- * `forward`, which ends on the border of `box`, is cut where it crosses the lane beside that face and led on to it;
- * it stays as it was when the face is the one it meets already, or when no lane leads there clear of the boxes.
- */
-function reface(forward: Point[], g: { box: Rect; target: Rect; other: Rect; keep: Rect; meets: Point[]; obstacles: Rect[]; others: Seg[] }): Point[] {
-  const { box, target, other, keep } = g;
-  const b = forward.at(-1) as Point;
-  const now = faceOfPoint(b, box);
-  if (now === undefined) return forward;
+const opposite = (f: Face): Face => (f === 'top' ? 'bottom' : f === 'bottom' ? 'top' : f === 'left' ? 'right' : 'left');
+
+/** The faces a line between `target` (inside a cluster) and `other` (outside it) may use at `target`: the one that points at `other`, then the two across it, the one on the side of `other` first. */
+function exitFaces(target: Rect, other: Rect): Face[] {
   const dx = other.x + other.w / 2 - (target.x + target.w / 2);
   const dy = other.y + other.h / 2 - (target.y + target.h / 2);
-  const want: Face = Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'top' : 'bottom') : dx < 0 ? 'left' : 'right';
-  if (want === now) return forward;
-  const flat = want === 'top' || want === 'bottom';
-  const lo = (flat ? box.x : box.y) + FACE_CLEAR;
-  const hi = (flat ? box.x + box.w : box.y + box.h) - FACE_CLEAR;
-  const floor = want === 'top' ? Math.max(lo, Math.ceil(keep.x + keep.w)) : want === 'left' ? Math.max(lo, Math.ceil(keep.y + keep.h)) : lo;
-  if (hi < floor) return forward;
-  const wanted = Math.min(hi, Math.max(floor, flat ? target.x + target.w / 2 : target.y + target.h / 2));
-  const along = (p: Point): number => (flat ? p.x : p.y);
-  const same = g.meets.filter((m) => faceOfPoint(m, box) === want);
-  let v: number | undefined;
-  for (let k = 0; k <= 6 && v === undefined; k++) {
-    for (const sign of k === 0 ? [0] : [1, -1]) {
-      const c = wanted + sign * k * FACE_PITCH;
-      if (c >= floor - EPS && c <= hi + EPS && same.every((m) => Math.abs(along(m) - c) >= FACE_PITCH - EPS)) {
-        v = c;
-        break;
-      }
-    }
+  const vertical: Face = dy < 0 ? 'top' : 'bottom';
+  const horizontal: Face = dx < 0 ? 'left' : 'right';
+  return Math.abs(dy) >= Math.abs(dx) ? [vertical, horizontal, opposite(horizontal)] : [horizontal, vertical, opposite(vertical)];
+}
+
+/** Where along `face` a straight line between the face of `target` and the border of `box` may stand: on the face of the node, clear of the corners of both, and off the name of the box. */
+function exitRange(face: Face, box: Rect, target: Rect, keep: Rect): [number, number] | undefined {
+  const flat = face === 'top' || face === 'bottom';
+  const floor = face === 'top' ? Math.ceil(keep.x + keep.w) : face === 'left' ? Math.ceil(keep.y + keep.h) : -Infinity;
+  const lo = Math.max((flat ? box.x : box.y) + FACE_CLEAR, (flat ? target.x : target.y) + FACE_CLEAR, floor);
+  const hi = Math.min((flat ? box.x + box.w : box.y + box.h) - FACE_CLEAR, (flat ? target.x + target.w : target.y + target.h) - FACE_CLEAR);
+  return lo <= hi + EPS ? [lo, hi] : undefined;
+}
+
+/** The ends of the straight line at `v` along `face`: on the face of `target`, and on the border of `box`. */
+function exitEnds(face: Face, v: number, box: Rect, target: Rect): { inner: Point; border: Point } {
+  switch (face) {
+    case 'top':
+      return { inner: { x: v, y: target.y }, border: { x: v, y: box.y } };
+    case 'bottom':
+      return { inner: { x: v, y: target.y + target.h }, border: { x: v, y: box.y + box.h } };
+    case 'left':
+      return { inner: { x: target.x, y: v }, border: { x: box.x, y: v } };
+    default:
+      return { inner: { x: target.x + target.w, y: v }, border: { x: box.x + box.w, y: v } };
   }
-  if (v === undefined) return forward;
-  const edge = want === 'top' ? box.y : want === 'bottom' ? box.y + box.h : want === 'left' ? box.x : box.x + box.w;
-  const q: Point = flat ? { x: v, y: edge } : { x: edge, y: v };
-  let best: { path: Point[]; cost: number } | undefined;
-  // The lane lies a corridor from the border, then a pitch further each time: the one that clashes least with the lines already drawn.
-  for (let k = 0; k <= 3; k++) {
-    const lane = edge + (want === 'top' || want === 'left' ? -1 : 1) * (CORRIDOR + k * FACE_PITCH);
-    const stub: Point = flat ? { x: v, y: lane } : { x: lane, y: v };
-    const path = joinAt(forward, lane, flat, stub, q, g.obstacles);
-    if (path === undefined) continue;
-    const cost = segmentsOf(path).reduce((sum, t) => sum + clash(t.a, t.b, g.others), 0);
-    if (best === undefined || cost < best.cost - EPS) best = { path, cost };
+}
+
+/** The lanes beside a face: a corridor from the border, then a pitch further each time. */
+const lanesOf = (face: Face, box: Rect): number[] => {
+  const edge = face === 'top' ? box.y : face === 'bottom' ? box.y + box.h : face === 'left' ? box.x : box.x + box.w;
+  const way = face === 'top' || face === 'left' ? -1 : 1;
+  return [0, 1, 2, 3].map((k) => edge + way * (CORRIDOR + k * FACE_PITCH));
+};
+
+/** Where along the face the line `forward` goes up to the lane `lane` before it is led to the face: the place it crosses the lane. */
+function crossingAlong(forward: Point[], lane: number, flat: boolean): number | undefined {
+  for (let i = forward.length - 2; i >= 0; i--) {
+    const a = forward[i] as Point;
+    const c = forward[i + 1] as Point;
+    if (flat ? Math.abs(a.x - c.x) < EPS && Math.min(a.y, c.y) + EPS < lane && lane < Math.max(a.y, c.y) - EPS : Math.abs(a.y - c.y) < EPS && Math.min(a.x, c.x) + EPS < lane && lane < Math.max(a.x, c.x) - EPS) return flat ? a.x : a.y;
   }
-  return best === undefined ? forward : best.path;
+  return undefined;
 }
 
 /** `forward` cut where it crosses the lane (a horizontal one when `flat`), and led along the lane to `stub` and on to `q`; undefined when a box stands in the way. */
@@ -808,10 +813,73 @@ function joinAt(forward: Point[], lane: number, flat: boolean, stub: Point, q: P
   return undefined;
 }
 
+/** Where along `face` the border of `box` may be met: clear of the corners and off the name of the box. */
+function borderRange(face: Face, box: Rect, keep: Rect): [number, number] | undefined {
+  const flat = face === 'top' || face === 'bottom';
+  const floor = face === 'top' ? Math.ceil(keep.x + keep.w) : face === 'left' ? Math.ceil(keep.y + keep.h) : -Infinity;
+  const lo = Math.max((flat ? box.x : box.y) + FACE_CLEAR, floor);
+  const hi = (flat ? box.x + box.w : box.y + box.h) - FACE_CLEAR;
+  return lo <= hi + EPS ? [lo, hi] : undefined;
+}
+
+/** The way from the border point at `v` to `target`: straight to its face, or, when `at` is given, along to `at` on a lane below the name row and then straight; undefined when there is no room for the lane. */
+function innerPath(face: Face, v: number, at: number | undefined, box: Rect, target: Rect): Point[] | undefined {
+  const { inner, border } = exitEnds(face, v, box, target);
+  if (at === undefined || Math.abs(at - v) < EPS) return [border, inner];
+  const flat = face === 'top' || face === 'bottom';
+  const lane = face === 'top' ? Math.max(box.y + CLUSTER_NAME_ROW + 6, target.y - CORRIDOR) : face === 'bottom' ? target.y + target.h + CORRIDOR : face === 'left' ? target.x - CORRIDOR : target.x + target.w + CORRIDOR;
+  const face0 = flat ? inner.y : inner.x;
+  if (Math.abs(lane - face0) < 2 || (lane - face0) * (flat ? border.y - face0 : border.x - face0) < 0) return undefined;
+  const there = exitEnds(face, at, box, target).inner;
+  return flat ? [border, { x: v, y: lane }, { x: at, y: lane }, there] : [border, { x: lane, y: v }, { x: lane, y: at }, there];
+}
+
 /** A path that ignores everything but the target, when none goes round it. */
 function straightIn(start: Point, inward: number, target: Rect): Point[] {
   const mid = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
   return inward % 2 === 1 ? [start, { x: start.x, y: mid.y }, { x: mid.x, y: mid.y }] : [start, { x: mid.x, y: start.y }, { x: mid.x, y: mid.y }];
+}
+
+/** Room kept between the drawing and the edge of the canvas when a line or a label has to go past it. */
+const EDGE_ROOM = 8;
+
+/** The layout with the canvas grown, and everything moved, where a line or a label went past its edge; as it was otherwise. */
+function withinCanvas(layout: Layout): Layout {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  const take = (x: number, y: number, w = 0, h = 0): void => {
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x + w);
+    y1 = Math.max(y1, y + h);
+  };
+  for (const e of layout.edges) {
+    for (const p of e.points) take(p.x, p.y);
+    for (const t of [e.label, e.startLabel, e.endLabel]) if (t) take(t.x, t.y, t.w, t.h);
+  }
+  const dx = Math.max(0, EDGE_ROOM - x0);
+  const dy = Math.max(0, EDGE_ROOM - y0);
+  const width = Math.max(layout.width + dx, x1 + dx + EDGE_ROOM);
+  const height = Math.max(layout.height + dy, y1 + dy + EDGE_ROOM);
+  if (dx === 0 && dy === 0 && width === layout.width && height === layout.height) return layout;
+  const move = <T extends { x: number; y: number }>(t: T): T => ({ ...t, x: tidy(t.x + dx), y: tidy(t.y + dy) });
+  return {
+    ...layout,
+    width: tidy(width),
+    height: tidy(height),
+    nodes: layout.nodes.map((n) => ({ ...move(n), ...(n.outline ? { outline: move(n.outline) } : {}) })),
+    clusters: (layout.clusters ?? []).map(move),
+    lanes: layout.lanes.map((l) => ({ ...move(l), ...(l.labelBox ? { labelBox: move(l.labelBox) } : {}) })),
+    edges: layout.edges.map((e) => ({
+      ...e,
+      points: e.points.map((p) => ({ x: tidy(p.x + dx), y: tidy(p.y + dy) })),
+      ...(e.label ? { label: move(e.label) } : {}),
+      ...(e.startLabel ? { startLabel: move(e.startLabel) } : {}),
+      ...(e.endLabel ? { endLabel: move(e.endLabel) } : {}),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -850,21 +918,208 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
     return out;
   };
 
-  // A line that crosses a cluster border meets it level with the node it goes on to, so that its stretch inside is one straight line.
+  const near = (o: Rect, box: Rect): boolean => o.x < box.x + box.w && o.x + o.w > box.x && o.y < box.y + box.h && o.y + o.h > box.y;
+  /** What a straight line from `end` to the border of `box` must not pass through: the nodes and boxes round it, and the names of the clusters it goes through. */
+  const blockersFor = (box: Rect, entry: string, end: string): Rect[] => {
+    const chain = tree.chain(acc.clusterRect.has(end) ? end : nodeCluster.get(end));
+    return [...obstaclesFor(end), ...chain.slice(chain.indexOf(entry) + 1).filter((c) => c !== end).map(keepOf)].filter((o) => near(o, box));
+  };
+
+  // A line between a node inside a cluster and a node outside it goes straight from a face of the node to the border
+  // of the cluster: the face that points at the other node, else one of the two across it. The lines that meet one
+  // side of a border stand along it in the order of their outside ends, so that they do not cross on the way there.
+  interface Exit {
+    r: Routed;
+    end: 'from' | 'to';
+    box: Rect;
+    target: Rect;
+    face: Face;
+    range: [number, number];
+    wanted: number;
+    own: Point[];
+    blockers: Rect[];
+    sort: number[];
+    /** Where along the face of the node the line ends, when that is not level with where it meets the border. */
+    jog?: number;
+    at?: number;
+    /** Which lane beside the border the line runs along to meet it: the deepest first. */
+    lane?: number;
+  }
+  const direct = new Map<string, Point[]>();
+  const exits: Exit[] = [];
   for (const r of plan.edges) {
     for (const end of ['from', 'to'] as const) {
       const piece = acc.pieces.get(r.index);
       if (piece === undefined || piece.invisible || piece.points.length < 2 || r[end] === r.edge[end]) continue;
       const box = acc.clusterRect.get(r[end]);
       const target = rectOf(r.edge[end]);
+      const other = rectOf(r.edge[end === 'to' ? 'from' : 'to']);
+      if (box === undefined || target === undefined || other === undefined) continue;
+      const own = end === 'to' ? piece.points : [...piece.points].reverse();
+      const keep = keepOf(r[end]);
+      const blockers = blockersFor(box, r[end], r.edge[end]);
+      for (const face of exitFaces(target, other)) {
+        const flat = face === 'top' || face === 'bottom';
+        const centre = flat ? target.x + target.w / 2 : target.y + target.h / 2;
+        const range = exitRange(face, box, target, keep);
+        if (range === undefined) {
+          // Only the name of the cluster keeps a straight line off this face: the line meets the border to the right of it and goes along below the name row.
+          const loose = exitRange(face, box, target, { x: 0, y: 0, w: -Infinity, h: -Infinity });
+          const border = borderRange(face, box, keep);
+          if (loose === undefined || border === undefined) continue;
+          const t = Math.min(loose[1], Math.max(loose[0], centre));
+          const level = exitEnds(face, t, box, target);
+          if (blockers.some((o) => through(level.inner, level.border, o, 0))) continue;
+          const wanted = Math.min(border[1], Math.max(border[0], centre));
+          const path = innerPath(face, wanted, t, box, target);
+          if (path === undefined || segmentsOf(path).some((sg) => blockers.some((o) => through(sg.a, sg.b, o, 0)))) continue;
+          const cut = crossingAlong(own, lanesOf(face, box)[0] as number, flat);
+          const outer = flat ? other.x + other.w / 2 : other.y + other.h / 2;
+          exits.push({ r, end, box, target, face, range: border, wanted, own, blockers, sort: [outer, centre, cut ?? outer], jog: t });
+          break;
+        }
+        const wanted = Math.min(range[1], Math.max(range[0], centre));
+        const ends = exitEnds(face, wanted, box, target);
+        if (blockers.some((o) => through(ends.inner, ends.border, o, 0))) continue;
+        const cut = crossingAlong(own, lanesOf(face, box)[0] as number, flat);
+        const outer = flat ? other.x + other.w / 2 : other.y + other.h / 2;
+        exits.push({ r, end, box, target, face, range, wanted, own, blockers, sort: [outer, centre, cut ?? outer] });
+        break;
+      }
+    }
+  }
+  const groups = new Map<string, Exit[]>();
+  /** Where lines already stand along the face of a node. */
+  const onNode = new Map<string, number[]>();
+  for (const e of exits) groups.set(`${e.r[e.end]}|${e.face}`, [...(groups.get(`${e.r[e.end]}|${e.face}`) ?? []), e]);
+  for (const group of groups.values()) {
+    const [first] = group;
+    if (first === undefined) continue;
+    const flat = first.face === 'top' || first.face === 'bottom';
+    const inGroup = new Set(group.map((e) => e.r.index));
+    // The ends of the other lines on that face stay where they are.
+    const fixed = [...acc.pieces].filter(([index, e]) => !inGroup.has(index) && !e.invisible).flatMap(([, e]) => [e.points[0] as Point, e.points[e.points.length - 1] as Point]).filter((m) => faceOfPoint(m, first.box) === first.face).map((m) => (flat ? m.x : m.y));
+    let last = -Infinity;
+    for (const e of [...group].sort((a, b) => (a.sort[0] as number) - (b.sort[0] as number) || (a.sort[1] as number) - (b.sort[1] as number) || (a.sort[2] as number) - (b.sort[2] as number))) {
+      let v = Math.max(e.wanted, last + FACE_PITCH);
+      const own = `${e.r.edge[e.end]}|${e.face}`;
+      const landing = (c: number): number => e.jog ?? c;
+      while (v <= e.range[1] + EPS && (fixed.some((m) => Math.abs(m - v) < FACE_PITCH - EPS) || (e.jog === undefined && (onNode.get(own) ?? []).some((m) => Math.abs(m - v) < FACE_PITCH - EPS)))) v += FACE_PITCH;
+      const path = innerPath(e.face, v, e.jog, e.box, e.target);
+      if (v > e.range[1] + EPS || path === undefined || segmentsOf(path).some((sg) => e.blockers.some((o) => through(sg.a, sg.b, o, 0)))) continue;
+      e.at = v;
+      last = v;
+      onNode.set(own, [...(onNode.get(own) ?? []), landing(v)]);
+    }
+  }
+  // The lines that leave one face of an outside node for one side of a border stand along that face in the order they meet the border, so that they do not cross on the way.
+  const leaving = new Map<string, Exit[]>();
+  for (const e of exits) {
+    if (e.at === undefined || e.face === 'left' || e.face === 'right') continue;
+    const piece = acc.pieces.get(e.r.index) as LayoutEdge;
+    const start = (e.end === 'to' ? piece.points : [...piece.points].reverse())[0] as Point;
+    const outside = rectOf(e.r.edge[e.end === 'to' ? 'from' : 'to']);
+    if (outside === undefined || e.r[e.end === 'to' ? 'from' : 'to'] !== e.r.edge[e.end === 'to' ? 'from' : 'to']) continue;
+    const face = faceOfPoint(start, outside);
+    if (face === 'top' || face === 'bottom') leaving.set(`${e.r.edge[e.end === 'to' ? 'from' : 'to']}|${face}|${e.box.x}|${e.box.y}`, [...(leaving.get(`${e.r.edge[e.end === 'to' ? 'from' : 'to']}|${face}|${e.box.x}|${e.box.y}`) ?? []), e]);
+  }
+  for (const group of leaving.values()) {
+    if (group.length < 2) continue;
+    const startOf = (e: Exit): Point[] => {
+      const piece = acc.pieces.get(e.r.index) as LayoutEdge;
+      return e.end === 'to' ? piece.points : [...piece.points].reverse();
+    };
+    const ports = group.map((e) => (startOf(e)[0] as Point).x).sort((a, b) => a - b);
+    const ordered = [...group].sort((a, b) => (a.at as number) - (b.at as number));
+    ordered.forEach((e, i) => {
+      const pts = startOf(e);
+      const [a, c] = [pts[0] as Point, pts[1] as Point];
+      const x = ports[i] as number;
+      if (Math.abs(a.x - c.x) > EPS || Math.abs(a.x - x) < EPS) return;
+      const moved = [{ x, y: a.y }, { x, y: c.y }, ...pts.slice(2)];
+      const piece = acc.pieces.get(e.r.index) as LayoutEdge;
+      acc.pieces.set(e.r.index, { ...piece, points: e.end === 'to' ? moved : [...moved].reverse() });
+    });
+  }
+  // Lines that go along the lane towards where they meet the border nest: the one that comes from furthest away takes the deepest lane, so that they do not cross.
+  for (const group of groups.values()) {
+    const placed = group.filter((e) => e.at !== undefined && e.face !== undefined);
+    const flat = (group[0] as Exit).face === 'top' || (group[0] as Exit).face === 'bottom';
+    const origin = (e: Exit): number => {
+      const piece = acc.pieces.get(e.r.index) as LayoutEdge;
+      return crossingAlong(e.end === 'to' ? piece.points : [...piece.points].reverse(), lanesOf(e.face, e.box)[0] as number, flat) ?? (e.at as number);
+    };
+    const right = placed.filter((e) => origin(e) < (e.at as number) - EPS).sort((a, b) => origin(a) - origin(b));
+    const left = placed.filter((e) => origin(e) > (e.at as number) + EPS).sort((a, b) => origin(b) - origin(a));
+    right.forEach((e, i) => (e.lane = Math.min(3, i)));
+    left.forEach((e, i) => (e.lane = Math.min(3, right.length + i)));
+  }
+  for (const e of exits) {
+    if (e.at === undefined) continue;
+    const piece = acc.pieces.get(e.r.index) as LayoutEdge;
+    const flat = e.face === 'top' || e.face === 'bottom';
+    const ends = exitEnds(e.face, e.at, e.box, e.target);
+    const ownNow = e.end === 'to' ? piece.points : [...piece.points].reverse();
+    const rest = [...acc.pieces].filter(([index]) => index !== e.r.index).map(([, v]) => v).filter((v) => !v.invisible);
+    const others = rest.flatMap((v) => segmentsOf(v.points));
+    const obstacles: Rect[] = [...acc.nodes.values(), ...[...acc.clusterRect.values()].filter((c) => !(c.x <= e.box.x && c.y <= e.box.y && c.x + c.w >= e.box.x + e.box.w && c.y + c.h >= e.box.y + e.box.h))].filter((o) => o !== e.target);
+    let best: { path: Point[]; cost: number } | undefined;
+    const lanes = lanesOf(e.face, e.box);
+    for (const lane of e.lane === undefined ? lanes : [lanes[e.lane] as number, ...lanes.filter((_, k) => k !== e.lane)]) {
+      const stub: Point = flat ? { x: e.at, y: lane } : { x: lane, y: e.at };
+      const path = joinAt(ownNow, lane, flat, stub, ends.border, obstacles);
+      if (path === undefined) continue;
+      const cost = segmentsOf(path).reduce((sum, t) => sum + clash(t.a, t.b, others), 0);
+      if (e.lane !== undefined && lane === lanes[e.lane]) {
+        best = { path, cost };
+        break;
+      }
+      if (best === undefined || cost < best.cost - EPS) best = { path, cost };
+    }
+    // When the line cannot be cut and led on, it is drawn again from the border to the node at its other end, round everything else.
+    const otherEnd = e.end === 'to' ? 'from' : 'to';
+    const far = e.r[otherEnd] === e.r.edge[otherEnd] ? acc.nodes.get(e.r.edge[otherEnd]) : undefined;
+    if (best === undefined && far !== undefined) {
+      const holds = new Set([...tree.chain(nodeCluster.get(e.r.edge[otherEnd])), ...tree.chain(e.r[e.end]), e.r[e.end]]);
+      const room = CLUSTER_NAME_ROW - CORRIDOR;
+      const around = [...acc.nodes].filter(([id]) => id !== e.r.edge[otherEnd]).map(([, n]) => n as Rect).concat([...acc.clusterRect].filter(([id]) => !holds.has(id)).map(([, c]) => c));
+      const found = pathInside({ region: { x: 0, y: -room, w: top.layout.width, h: top.layout.height + room }, start: ends.border, inward: e.face === 'top' ? 3 : e.face === 'bottom' ? 1 : e.face === 'left' ? 2 : 0, target: far, obstacles: around, walls: [e.box], drawn: others, taken: new Set<string>() });
+      if (found !== undefined) best = { path: [...found].reverse(), cost: 0 };
+    }
+    if (best === undefined) continue;
+    // The line is drawn this way only when that costs less than the way it was drawn: bends, length and crossings.
+    const price = (pts: Point[]): number => segmentsOf(pts).reduce((sum, t) => sum + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y) + clash(t.a, t.b, others), 0) + BEND_COST * Math.max(0, pts.length - 2);
+    const along = innerPath(e.face, e.at, e.jog, e.box, e.target) ?? [ends.border, ends.inner];
+    const slid = slideEnd(ownNow, {
+      box: e.box,
+      target: e.target,
+      others,
+      meets: rest.flatMap((v) => [v.points[0] as Point, v.points[v.points.length - 1] as Point]),
+      keep: keepOf(e.r[e.end]),
+      obstacles: [...acc.nodes.values(), ...[...acc.clusterRect.values()].filter((c) => !(c.x <= e.box.x && c.y <= e.box.y && c.x + c.w >= e.box.x + e.box.w && c.y + c.h >= e.box.y + e.box.h))],
+      inner: blockersFor(e.box, e.r[e.end], e.r.edge[e.end]),
+    });
+    const entry = slid.at(-1) as Point;
+    const inward = dirOf(slid.at(-2) as Point, entry);
+    const around = pathInside({ region: e.box, start: entry, inward, target: e.target, obstacles: blockersFor(e.box, e.r[e.end], e.r.edge[e.end]), drawn: others, taken: new Set<string>() }) ?? straightIn(entry, inward, e.target);
+    if (price([...slid, ...around.slice(1)]) <= price([...best.path, ...along.slice(1)]) + EPS) continue;
+    acc.pieces.set(e.r.index, { ...piece, points: e.end === 'to' ? best.path : [...best.path].reverse() });
+    direct.set(`${e.r.index}:${e.end}`, innerPath(e.face, e.at, e.jog, e.box, e.target) ?? [ends.border, ends.inner]);
+  }
+
+  // A line that crosses a cluster border meets it level with the node it goes on to, so that its stretch inside is one straight line.
+  for (const r of plan.edges) {
+    for (const end of ['from', 'to'] as const) {
+      const piece = acc.pieces.get(r.index);
+      if (piece === undefined || piece.invisible || piece.points.length < 2 || r[end] === r.edge[end] || direct.has(`${r.index}:${end}`)) continue;
+      const box = acc.clusterRect.get(r[end]);
+      const target = rectOf(r.edge[end]);
       if (box === undefined || target === undefined) continue;
       const rest = [...acc.pieces].filter(([index]) => index !== r.index).map(([, e]) => e).filter((e) => !e.invisible);
       const obstacles: Rect[] = [...acc.nodes.values(), ...[...acc.clusterRect.values()].filter((c) => !(c.x <= box.x && c.y <= box.y && c.x + c.w >= box.x + box.w && c.y + c.h >= box.y + box.h))];
       const keep = keepOf(r[end]);
-      const outside = rectOf(r.edge[end === 'to' ? 'from' : 'to']);
-      const own = end === 'to' ? piece.points : [...piece.points].reverse();
+      const forward = end === 'to' ? piece.points : [...piece.points].reverse();
       const meets = rest.flatMap((e) => [e.points[0] as Point, e.points[e.points.length - 1] as Point]);
-      const forward = outside === undefined ? own : reface(own, { box, target, other: outside, keep, meets, obstacles: obstacles.filter((o) => o !== target), others: rest.flatMap((e) => segmentsOf(e.points)) });
       const moved = slideEnd(forward, {
         box,
         target,
@@ -899,21 +1154,34 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
     return found;
   };
 
+  /** The way in from the border: the straight line chosen for it, or the path round what stands in the way. */
+  const via = (r: Routed, end: 'from' | 'to', start: Point, towards: Point, own: Seg[]): Point[] => {
+    const straight = direct.get(`${r.index}:${end}`);
+    if (straight === undefined) return inside(r[end], r.edge[end], start, towards, own);
+    const last = straight.at(-1);
+    if (last !== undefined) taken.add(key(last));
+    drawn.push(...segmentsOf(straight));
+    return straight;
+  };
+
   const edges: LayoutEdge[] = [];
+  /** The lines drawn again from their ends, whose labels are placed again on their longest stretch. */
+  const redrawn = new Set<number>();
   for (const r of plan.edges) {
     const piece = acc.pieces.get(r.index);
     if (piece === undefined || piece.points.length < 2) continue;
+    if (direct.has(`${r.index}:from`) || direct.has(`${r.index}:to`)) redrawn.add(edges.length);
     let points = piece.points;
     if (!piece.invisible) {
       const own = pieceSegs.get(r.index) ?? [];
       if (r.from !== r.edge.from) {
         const [p, q] = points as [Point, Point];
-        points = [...inside(r.from, r.edge.from, p, q, own).reverse(), ...points.slice(1)];
+        points = [...via(r, 'from', p, q, own).reverse(), ...points.slice(1)];
       }
       if (r.to !== r.edge.to) {
         const p = points.at(-1) as Point;
         const q = points.at(-2) as Point;
-        points = [...points.slice(0, -1), ...inside(r.to, r.edge.to, p, q, own)];
+        points = [...points.slice(0, -1), ...via(r, 'to', p, q, own)];
       }
     }
     const { id: _id, ...rest } = piece;
@@ -932,5 +1200,5 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
     diagnostics: acc.diagnostics,
   };
   // The labels were placed level by level; once every level and every inner stretch is in, they are placed again against all the lines.
-  return withLegend(ruler.terminal === true ? base : refineLabels(base, layeredRuler(ruler)), ruler, opts.legend);
+  return withLegend(ruler.terminal === true ? base : withinCanvas(refineLabels(base, layeredRuler(ruler), redrawn)), ruler, opts.legend);
 }

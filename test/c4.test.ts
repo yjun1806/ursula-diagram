@@ -492,7 +492,7 @@ describe('c4 boundaries keep their size and lines keep off their names', () => {
     for (const e of laid.edges) {
       for (const s of segmentsOf(e)) {
         const vertical = Math.abs(s.a.x - s.b.x) < 1e-6;
-        if (vertical && Math.min(s.a.y, s.b.y) < c.y && Math.max(s.a.y, s.b.y) > c.y) expect(s.a.x).toBeGreaterThanOrEqual(right - 1e-6);
+        if (vertical && s.a.x > c.x && s.a.x < c.x + c.w && Math.min(s.a.y, s.b.y) < c.y && Math.max(s.a.y, s.b.y) > c.y) expect(s.a.x).toBeGreaterThanOrEqual(right - 1e-6);
       }
     }
   });
