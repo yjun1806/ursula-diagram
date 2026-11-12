@@ -1,3 +1,5 @@
+import { layeredRuler } from '../layered/index.ts';
+import { refineLabels } from '../layered/label-spot.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Direction, Graph, GraphEdge, GraphNode, Layout, LayoutCluster, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { LayoutOptions } from './index.ts';
@@ -491,6 +493,95 @@ const dirOf = (from: Point, to: Point): number => {
   return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 2) : dy >= 0 ? 1 : 3;
 };
 
+/** A line slid along a cluster face stays this far from the corners of the box, and keeps this much of its run before and after a jog. */
+const FACE_CLEAR = 20;
+const JOG = 24;
+/** Distance between two lines that meet the same face of a cluster box. */
+const FACE_PITCH = 8;
+
+interface Slide {
+  box: Rect;
+  target: Rect;
+  /** Lines of the other edges. */
+  others: Seg[];
+  /** Where the other edges meet the borders of boxes. */
+  meets: Point[];
+  /** What a line may not pass through. */
+  obstacles: Rect[];
+  /** What stands between the border and the target inside the box: a line that cannot run straight to the target stays where it is. */
+  inner: Rect[];
+  label?: Rect;
+}
+
+/**
+ * The line `points`, which ends on a border of the box `box`, made to meet that border level with the centre of
+ * `target` (the node or box it goes on to inside), so that what lies inside is one straight stretch; when something
+ * stands in the way of that stretch the line stays as it was. The meeting
+ * point takes the nearest free place a pitch apart from the others on that face, clear of the corners. A line that
+ * cannot move without passing through a box, crossing more lines than before, or leaving its label behind stays as it was.
+ */
+function slideEnd(points: Point[], g: Slide): Point[] {
+  const n = points.length;
+  if (n < 2) return points;
+  const b = points[n - 1] as Point;
+  const a = points[n - 2] as Point;
+  const { box, target } = g;
+  const onX = Math.abs(b.x - box.x) < EPS || Math.abs(b.x - (box.x + box.w)) < EPS;
+  const onY = Math.abs(b.y - box.y) < EPS || Math.abs(b.y - (box.y + box.h)) < EPS;
+  if (onX === onY) return points;
+  const along = (p: Point): number => (onX ? p.y : p.x);
+  const across = (p: Point): number => (onX ? p.x : p.y);
+  const at = (al: number, ac: number): Point => (onX ? { x: ac, y: al } : { x: al, y: ac });
+  const lo = (onX ? box.y : box.x) + FACE_CLEAR;
+  const hi = (onX ? box.y + box.h : box.x + box.w) - FACE_CLEAR;
+  if (hi < lo) return points;
+  const centre = onX ? target.y + target.h / 2 : target.x + target.w / 2;
+  if (centre < lo - EPS || centre > hi + EPS) return points;
+  const reach = onX ? (across(b) < target.x ? target.x : target.x + target.w) : across(b) < target.y ? target.y : target.y + target.h;
+  const run = [at(centre, across(b)), at(centre, reach)] as const;
+  if (g.inner.some((o) => through(run[0], run[1], o, 0))) return points;
+  const sameFace = g.meets.filter((m) => Math.abs(across(m) - across(b)) < EPS);
+  let chosen: number | undefined;
+  for (let k = 0; k <= 6 && chosen === undefined; k++) {
+    for (const sign of k === 0 ? [0] : [1, -1]) {
+      const v = centre + sign * k * FACE_PITCH;
+      if (v >= lo - EPS && v <= hi + EPS && sameFace.every((m) => Math.abs(along(m) - v) >= FACE_PITCH - EPS)) {
+        chosen = v;
+        break;
+      }
+    }
+  }
+  if (chosen === undefined || Math.abs(along(b) - chosen) < EPS) return points;
+  const label = g.label;
+  const touches = (p: Point, q: Point): boolean => label !== undefined && Math.min(p.x, q.x) < label.x + label.w + 1 && Math.max(p.x, q.x) > label.x - 1 && Math.min(p.y, q.y) < label.y + label.h + 1 && Math.max(p.y, q.y) > label.y - 1;
+  let moved: Point[];
+  let changed: Point[];
+  if (n === 2) {
+    const span = Math.abs(across(a) - across(b));
+    const room = label === undefined ? 0 : (onX ? label.w : label.h) + 16;
+    if (span < 2 * JOG + room) return points;
+    const jog = across(b) + (across(a) < across(b) ? -JOG : JOG);
+    moved = [a, at(along(a), jog), at(chosen, jog), at(chosen, across(b))];
+    changed = moved;
+    if (Math.abs(along(a) - chosen) < EPS) {
+      moved = [a, at(chosen, across(b))];
+      changed = moved;
+    }
+  } else {
+    const c = points[n - 3] as Point;
+    if (Math.abs(across(c) - across(a)) > EPS || Math.abs(along(a) - along(b)) > EPS) return points;
+    if (touches(c, a) || touches(a, b)) return points;
+    const [na, nb] = [at(chosen, across(a)), at(chosen, across(b))];
+    moved = [...points.slice(0, n - 2), na, nb];
+    changed = [c, na, nb];
+  }
+  const before = n === 2 ? [a, b] : [points[n - 3] as Point, a, b];
+  const price = (path: Point[]): number => segmentsOf(path).reduce((sum, s) => sum + clash(s.a, s.b, g.others), 0);
+  if (price(changed) > price(before) + EPS) return points;
+  if (segmentsOf(changed).some((s) => g.obstacles.some((o) => through(s.a, s.b, o, 0)))) return points;
+  return moved;
+}
+
 /** A path that ignores everything but the target, when none goes round it. */
 function straightIn(start: Point, inward: number, target: Rect): Point[] {
   const mid = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
@@ -512,24 +603,54 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
   assemble(plan, top, 0, 0, 1, acc);
 
   const rectOf = (id: string): Rect | undefined => acc.clusterRect.get(id) ?? acc.nodes.get(id);
+  const nodeCluster = new Map(graph.nodes.map((n) => [n.id, n.cluster] as const));
+
+  /** The nodes and boxes a line that goes on to `end` inside a cluster must go round: everything but `end` and the clusters that hold it. */
+  const obstaclesFor = (end: string): Rect[] => {
+    const holds = new Set(tree.chain(acc.clusterRect.has(end) ? end : nodeCluster.get(end)));
+    if (acc.clusterRect.has(end)) holds.delete(end);
+    const out: Rect[] = [];
+    for (const [id, r] of acc.clusterRect) if (!holds.has(id) && id !== end) out.push(r);
+    for (const [id, n] of acc.nodes) {
+      const c = nodeCluster.get(id);
+      if (id !== end && (c === undefined || holds.has(c))) out.push(n);
+    }
+    return out;
+  };
+
+  // A line that crosses a cluster border meets it level with the node it goes on to, so that its stretch inside is one straight line.
+  for (const r of plan.edges) {
+    for (const end of ['from', 'to'] as const) {
+      const piece = acc.pieces.get(r.index);
+      if (piece === undefined || piece.invisible || piece.points.length < 2 || r[end] === r.edge[end]) continue;
+      const box = acc.clusterRect.get(r[end]);
+      const target = rectOf(r.edge[end]);
+      if (box === undefined || target === undefined) continue;
+      const rest = [...acc.pieces].filter(([index]) => index !== r.index).map(([, e]) => e).filter((e) => !e.invisible);
+      const obstacles: Rect[] = [...acc.nodes.values(), ...[...acc.clusterRect.values()].filter((c) => !(c.x <= box.x && c.y <= box.y && c.x + c.w >= box.x + box.w && c.y + c.h >= box.y + box.h))];
+      const forward = end === 'to' ? piece.points : [...piece.points].reverse();
+      const moved = slideEnd(forward, {
+        box,
+        target,
+        others: rest.flatMap((e) => segmentsOf(e.points)),
+        meets: rest.flatMap((e) => [e.points[0] as Point, e.points[e.points.length - 1] as Point]),
+        obstacles,
+        inner: obstaclesFor(r.edge[end]).filter((o) => o.x < box.x + box.w && o.x + o.w > box.x && o.y < box.y + box.h && o.y + o.h > box.y),
+        ...(piece.label === undefined ? {} : { label: { x: piece.label.x, y: piece.label.y, w: piece.label.w, h: piece.label.h } }),
+      });
+      acc.pieces.set(r.index, { ...piece, points: end === 'to' ? moved : [...moved].reverse() });
+    }
+  }
   const pieceSegs = new Map([...acc.pieces].map(([index, e]) => [index, e.invisible ? [] : segmentsOf(e.points)] as const));
   const drawn: Seg[] = [...pieceSegs.values()].flat();
   const taken = new Set<string>();
-  const nodeCluster = new Map(graph.nodes.map((n) => [n.id, n.cluster] as const));
 
   /** The path from the border where a line meets the cluster `entry` to its end `end` inside it. */
   const inside = (entry: string, end: string, start: Point, towards: Point, own: Seg[]): Point[] => {
     const target = rectOf(end) as Rect;
     const region = acc.clusterRect.get(entry) as Rect;
     const inward = dirOf(towards, start);
-    const holds = new Set(tree.chain(acc.clusterRect.has(end) ? end : nodeCluster.get(end)));
-    if (acc.clusterRect.has(end)) holds.delete(end);
-    const obstacles: Rect[] = [];
-    for (const [id, r] of acc.clusterRect) if (!holds.has(id) && id !== end) obstacles.push(r);
-    for (const [id, n] of acc.nodes) {
-      const c = nodeCluster.get(id);
-      if (id !== end && (c === undefined || holds.has(c))) obstacles.push(n);
-    }
+    const obstacles = obstaclesFor(end);
     const others = drawn.filter((s) => !own.includes(s));
     const found = pathInside({ region, start, inward, target, obstacles, drawn: others, taken }) ?? straightIn(start, inward, target);
     const last = found.at(-1);
@@ -570,5 +691,6 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
     clusters: acc.clusters,
     diagnostics: acc.diagnostics,
   };
-  return withLegend(base, ruler, opts.legend);
+  // The labels were placed level by level; once every level and every inner stretch is in, they are placed again against all the lines.
+  return withLegend(ruler.terminal === true ? base : refineLabels(base, layeredRuler(ruler)), ruler, opts.legend);
 }

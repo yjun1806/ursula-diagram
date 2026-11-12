@@ -24,7 +24,7 @@ describe('the side an edge is meant to use', () => {
 });
 
 describe('edges that look the same way at a node use the same side of it', () => {
-  const stages = 'flowchart LR\n  subgraph one[One]\n    a[A]\n    b[B]\n  end\n  subgraph two[Two]\n    c[C]\n    d[D]\n    e[E]\n  end\n  a --> c\n  a --> d\n  b --> e\n  a --> e';
+  const stages = 'swimlane-beta LR\n  subgraph one[One]\n    a[A]\n    b[B]\n  end\n  subgraph two[Two]\n    c[C]\n    d[D]\n    e[E]\n  end\n  a --> c\n  a --> d\n  b --> e\n  a --> e';
 
   it('holds in every drawing the engine makes of a few graphs, in pixels and cells', () => {
     for (const ruler of [pixelRuler(), cellRuler()]) {

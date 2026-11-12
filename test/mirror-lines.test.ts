@@ -11,7 +11,7 @@ const edgeOf = (l: Layout, from: string, to: string) => l.edges.find((e) => e.fr
 
 describe('pieces between the same two boxes', () => {
   const title = 'A box whose title is much longer than the shared width of one column of boxes';
-  const narrowUnder = `flowchart LR\nsubgraph one[One]\n  p[P] --> a[${title}]\nend\nsubgraph two[Two]\n  x[X] --> b[B]\nend\na --> b\nb --> a`;
+  const narrowUnder = `swimlane-beta LR\nsubgraph one[One]\n  p[P] --> a[${title}]\nend\nsubgraph two[Two]\n  x[X] --> b[B]\nend\na --> b\nb --> a`;
 
   it('stand a step apart, symmetric about the middle of the narrower box', () => {
     const l = layout(parse(narrowUnder), pixelRuler());
@@ -26,7 +26,7 @@ describe('pieces between the same two boxes', () => {
   });
 
   it('keep that place when another box sends an edge to the same side of the wide box', () => {
-    const src = `flowchart LR\nsubgraph one[One]\n  p[P] --> a[${title}]\nend\nsubgraph two[Two]\n  x[X] --> b[B]\n  b --> q[Q]\nend\nsubgraph three[Three]\n  y[Y]\nend\na --> b\nb --> a\ny --> a`;
+    const src = `swimlane-beta LR\nsubgraph one[One]\n  p[P] --> a[${title}]\nend\nsubgraph two[Two]\n  x[X] --> b[B]\n  b --> q[Q]\nend\nsubgraph three[Three]\n  y[Y]\nend\na --> b\nb --> a\ny --> a`;
     const l = layout(parse(src), pixelRuler());
     const ab = edgeOf(l, 'a', 'b')?.points ?? [];
     const ba = edgeOf(l, 'b', 'a')?.points ?? [];
@@ -40,7 +40,7 @@ describe('pieces between the same two boxes', () => {
 });
 
 describe('a box with two partners in the next zone', () => {
-  const src = 'flowchart LR\nsubgraph z0[Z0]\n  a[a]\nend\nsubgraph z1[Z1]\n  b[b]\n  c[c]\n  d[d]\nend\nsubgraph z2[Z2]\n  e[e]\n  f[f]\nend\na --> c\na --> b\nb --> e\nc --> f\nd --> f\nd --> e';
+  const src = 'swimlane-beta LR\nsubgraph z0[Z0]\n  a[a]\nend\nsubgraph z1[Z1]\n  b[b]\n  c[c]\n  d[d]\nend\nsubgraph z2[Z2]\n  e[e]\n  f[f]\nend\na --> c\na --> b\nb --> e\nc --> f\nd --> f\nd --> e';
 
   it('stands level with the middle of the two, and its two edges mirror each other', () => {
     const l = layout(parse(src), pixelRuler(), { composition: 'stages' });

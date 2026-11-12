@@ -54,7 +54,7 @@ describe('spread: the boxes one box leads to stand side by side', () => {
   });
 
   it('is not made for a drawing with a zone', () => {
-    const src = 'flowchart TD\n  subgraph s[Zone]\n    a[Start] --> d{Decide}\n    d --> x[Alpha]\n    d --> y[Beta]\n    d --> z[Gamma]\n  end';
+    const src = 'swimlane-beta TD\n  subgraph s[Zone]\n    a[Start] --> d{Decide}\n    d --> x[Alpha]\n    d --> y[Beta]\n    d --> z[Gamma]\n  end';
     expect(unzoned(parse(src))).toBe(false);
     expect(unzoned(parse(fan('TD')))).toBe(true);
     expect(layout(parse(src), ruler).composition).toBe('lanes');

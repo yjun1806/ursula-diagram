@@ -3,7 +3,7 @@ import { checkLines, layout, parse, pixelRuler } from '../src/index.ts';
 import { score } from '../src/layered/choose.ts';
 import { pictureOf } from '../src/layered/questions.ts';
 
-const mixed = `flowchart LR
+const mixed = `swimlane-beta LR
   subgraph desk[Desk]
     start[Start]
     end1[End one]
@@ -22,7 +22,7 @@ const mixed = `flowchart LR
   mid2 --> end2
   mid2 --> end3`;
 
-const split = `flowchart LR
+const split = `swimlane-beta LR
   subgraph first[First]
     start[Start]
   end
@@ -62,14 +62,14 @@ describe('questions', () => {
     const q = asked(mixed).find((d) => d.code === 'isolated-nodes');
     expect(q?.lane).toBe('Desk');
     expect(q?.nodes).toEqual(['idle1', 'idle2']);
-    const one = asked('flowchart LR\nsubgraph a[A]\nP --> Q\nlonely\nend');
+    const one = asked('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nlonely\nend');
     expect(one.map((d) => d.nodes)).toEqual([['lonely']]);
-    expect(asked('flowchart LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nS\nend')).toEqual([]);
+    expect(asked('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nS\nend')).toEqual([]);
   });
 
   it('does not ask to split when the bands already go one way or send edges both ways', () => {
     expect(asked(split).find((d) => d.code === 'split-lane')).toBeUndefined();
-    expect(asked('flowchart LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR --> S\nend\nQ --> R\nS --> P').find((d) => d.code === 'split-lane')).toBeUndefined();
+    expect(asked('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR --> S\nend\nQ --> R\nS --> P').find((d) => d.code === 'split-lane')).toBeUndefined();
   });
 
   it('can be switched off, and never counts as a problem', () => {

@@ -1,4 +1,4 @@
-export const twoLanes = `flowchart LR
+export const twoLanes = `swimlane-beta LR
   subgraph customer[Customer]
     A[주문 접수] --> B[결제 확인]
     B --> C[배송 준비]
@@ -37,7 +37,7 @@ export const topDown = `flowchart TD
   deploy -->|no| stop[Stop]
 `;
 
-export const library = `flowchart LR
+export const library = `swimlane-beta LR
   subgraph desk[Front desk]
     r1[Member card] --> r2[Check out book]
     r2 --> r3[Due date stamp]

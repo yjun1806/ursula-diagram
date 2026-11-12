@@ -43,7 +43,7 @@ describe('one-bend edges', () => {
   });
 
   it('can be switched off and keeps every drawing valid', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph a[A]
     p1[One] --> p2[Two] --> p3[Three]
   end
@@ -131,7 +131,7 @@ describe('one-bend edges leaving through the side of a box that the other end ha
 
 describe('start node', () => {
   it('stands in the first place of the reading direction and the first row of its lane', () => {
-    const src = 'flowchart LR\nsubgraph a[A]\nS[Start] --> M[Middle]\nX[Other] --> M\nY[Side] --> X\nend\nsubgraph b[B]\nZ[Far]\nend\nM --> Z';
+    const src = 'swimlane-beta LR\nsubgraph a[A]\nS[Start] --> M[Middle]\nX[Other] --> M\nY[Side] --> X\nend\nsubgraph b[B]\nZ[Far]\nend\nM --> Z';
     const g = parse(src);
     for (const ruler of [pixelRuler(), cellRuler()]) {
       const l = layout(g, ruler, ruler.terminal === true ? { quality: 'best' } : {});

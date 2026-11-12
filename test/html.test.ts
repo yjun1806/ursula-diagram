@@ -3,7 +3,7 @@ import { renderHtml } from '../src/html.ts';
 import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import { BAKE_SOURCE, decodeSource, encodeSource, fileBase } from '../src/render/html.ts';
 
-const SRC = `flowchart LR
+const SRC = `swimlane-beta LR
   subgraph a[Alpha]
     n1[First<br>line] --> n2[Second]
   end

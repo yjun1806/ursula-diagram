@@ -16,35 +16,35 @@ const stages = (src: string): Record<string, number> => {
 
 describe('stage of a node', () => {
   it('moves on by one along an edge inside a lane and stays along an edge between lanes', () => {
-    const s = stages('flowchart LR\nsubgraph a[A]\nP --> Q --> R\nend\nsubgraph b[B]\nX\nend\nR --> X\nP --> X');
+    const s = stages('swimlane-beta LR\nsubgraph a[A]\nP --> Q --> R\nend\nsubgraph b[B]\nX\nend\nR --> X\nP --> X');
     expect([s.P, s.Q, s.R]).toEqual([0, 1, 2]);
     expect(s.X).toBe(3);
   });
 
   it('keeps the main flow when a cycle is cut', () => {
-    const s = stages('flowchart LR\nsubgraph a[A]\nP --> Q --> R --> S\nend\nsubgraph b[B]\nX\nend\nS --> X\nX --> P');
+    const s = stages('swimlane-beta LR\nsubgraph a[A]\nP --> Q --> R --> S\nend\nsubgraph b[B]\nX\nend\nS --> X\nX --> P');
     expect([s.P, s.Q, s.R, s.S]).toEqual([0, 1, 2, 3]);
   });
 
   it('puts a node nobody leads to as late as its partner allows', () => {
-    const s = stages('flowchart LR\nsubgraph a[A]\nP --> Q --> R\nL\nend\nsubgraph b[B]\nX\nend\nR --> X\nL --> X');
+    const s = stages('swimlane-beta LR\nsubgraph a[A]\nP --> Q --> R\nL\nend\nsubgraph b[B]\nX\nend\nR --> X\nL --> X');
     expect(s.L).toBe(s.X);
   });
 
   it('lets nodes of one lane that lead to the same nodes share the later stage', () => {
-    const s = stages('flowchart LR\nsubgraph a[A]\nP --> Q --> R\nU\nend\nsubgraph b[B]\nX\nend\nR --> X\nU --> X\nA1[One] --> U');
+    const s = stages('swimlane-beta LR\nsubgraph a[A]\nP --> Q --> R\nU\nend\nsubgraph b[B]\nX\nend\nR --> X\nU --> X\nA1[One] --> U');
     expect(s.R).toBe(s.U);
   });
 
   it('stands a node the flow ends in one stage behind what leads to it', () => {
-    const s = stages('flowchart LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nZ\nend\nQ --> Z');
+    const s = stages('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nZ\nend\nQ --> Z');
     expect(s.Z).toBe((s.Q ?? 0) + 1);
   });
 });
 
 describe('rows by stage', () => {
   it('never puts two nodes of one lane in one row at one stage, and keeps the main flow on the first row', () => {
-    const src = 'flowchart LR\nsubgraph a[A]\nP --> Q --> R\nP --> S\nT\nend\nsubgraph b[B]\nX\nend\nR --> X\nS --> X\nT --> X';
+    const src = 'swimlane-beta LR\nsubgraph a[A]\nP --> Q --> R\nP --> S\nT\nend\nsubgraph b[B]\nX\nend\nR --> X\nS --> X\nT --> X';
     const g = parse(src);
     const base = assignLayers(g, g.nodes.map(() => 2), Infinity);
     const s = stageOf(g, base);
@@ -61,7 +61,7 @@ describe('rows by stage', () => {
 });
 
 describe('refinement', () => {
-  const twoBands = `flowchart LR
+  const twoBands = `swimlane-beta LR
   subgraph top[Top]
     t1[Intake]
     t2[Close]

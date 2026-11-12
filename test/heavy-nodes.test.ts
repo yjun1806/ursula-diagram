@@ -4,7 +4,7 @@ import { offCentreEnds } from '../src/layered/centre.ts';
 import { directionsOf, mixedSideEnds } from '../src/layered/sides.ts';
 import { geometryViolations } from './helpers.ts';
 
-const fanOut = `flowchart LR
+const fanOut = `swimlane-beta LR
   subgraph early[Early]
     hub[Source]
   end
@@ -21,7 +21,7 @@ const fanOut = `flowchart LR
   hub --> t4
   hub --> t5`;
 
-const fanIn = `flowchart LR
+const fanIn = `swimlane-beta LR
   subgraph top[Top]
     s1[One]
     s2[Two]

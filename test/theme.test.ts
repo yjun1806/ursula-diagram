@@ -21,7 +21,7 @@ function tipOf(d: string, theme: Theme): Point {
 
 const FLOW = 'flowchart TD\n a[Start] --> b{Check}\n b -->|yes| c[Done]\n b -->|no| d[Retry]';
 
-const LANES = 'flowchart LR\nsubgraph one[One]\n a[Alpha] --> b[Beta]\nend\nsubgraph two[Two]\n c[Gamma]\nend\nb --> c';
+const LANES = 'swimlane-beta LR\nsubgraph one[One]\n a[Alpha] --> b[Beta]\nend\nsubgraph two[Two]\n c[Gamma]\nend\nb --> c';
 
 const RX: Record<Theme, number> = { solid: 18, outline: 12, card: 16 };
 const LINE: Record<Theme, number> = { solid: 2.5, outline: 1.5, card: 1.75 };

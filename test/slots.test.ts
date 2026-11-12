@@ -15,7 +15,7 @@ vi.mock('../src/layout/solve.ts', async (original) => {
 const { layout, parse, pixelRuler } = await import('../src/index.ts');
 const { Placement } = await import('../src/layout/slots.ts');
 
-const fourteen = `flowchart LR
+const fourteen = `swimlane-beta LR
 subgraph a[Intake]
 n1[Receive] --> n2[Validate] --> n3[Enrich] --> n4[Queue]
 n5[Audit] --> n6[Notify]

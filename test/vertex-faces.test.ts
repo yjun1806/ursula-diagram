@@ -15,7 +15,7 @@ const cross = (a: LayoutEdge, b: LayoutEdge): number => segs(a.points).reduce((n
 
 /** Three zones; a diamond takes one line from the left and sends one down and one back to the left zone. */
 const loop = [
-  'flowchart TD',
+  'swimlane-beta TD',
   '  subgraph left["Left"]',
   '    a[One] --> b[Two]',
   '    b --> m[Three]',

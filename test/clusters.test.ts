@@ -157,3 +157,74 @@ describe('boxes in text', () => {
     expect(l.edges).toHaveLength(parse(FLOW).edges.filter((e) => !['one', 'two', 'three'].some((c) => e.from === c || e.to === c)).length);
   });
 });
+
+describe('a subgraph of a flowchart', () => {
+  const body = '\n  subgraph one [First]\n    a[Start] --> b[Check]\n  end\n  subgraph two [Second]\n    c[Finish]\n  end\n  b --> c';
+
+  it('is a box in a flowchart and in a graph, however plain', () => {
+    for (const header of ['flowchart LR', 'flowchart TD', 'graph LR', 'graph']) {
+      const g = parse(`${header}${body}`);
+      expect(g.clusters?.map((c) => c.id), header).toEqual(['one', 'two']);
+      expect(g.lanes).toHaveLength(1);
+    }
+  });
+
+  it('is a band only under swimlane-beta', () => {
+    const g = parse(`swimlane-beta LR${body}`);
+    expect(g.clusters).toBeUndefined();
+    expect(g.lanes.map((l) => l.id)).toEqual(['one', 'two']);
+  });
+
+  it('keeps a left to right flow left to right', () => {
+    const l = drawn('flowchart LR\n  subgraph one\n    a --> b\n  end\n  subgraph two\n    c --> d\n  end\n  b --> c');
+    const box = (id: string): LayoutCluster => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(box('one').x + box('one').w).toBeLessThanOrEqual(box('two').x);
+  });
+});
+
+describe('a line that goes into a box', () => {
+  const src = 'flowchart LR\n  Client --> Create\n  subgraph Core\n    Create --> Read\n    Create --> Update\n    Create --> Delete\n  end';
+  const l = drawn(src);
+  const node = (id: string): { x: number; y: number; w: number; h: number } => l.nodes.find((n) => n.id === id) as { x: number; y: number; w: number; h: number };
+
+  it('runs level with its node from the border on, as one straight stretch', () => {
+    const e = l.edges.find((v) => v.from === 'Client' && v.to === 'Create') as Layout['edges'][number];
+    const core = (l.clusters ?? []).find((c) => c.id === 'Core') as LayoutCluster;
+    const y = node('Create').y + node('Create').h / 2;
+    const crossing = segmentsOf(e).find((s) => Math.min(s.a.x, s.b.x) <= core.x + 1e-6 && Math.max(s.a.x, s.b.x) >= core.x + 1e-6) as { a: Point; b: Point };
+    expect(crossing.a.y).toBeCloseTo(y, 4);
+    expect(crossing.b.y).toBeCloseTo(y, 4);
+    expect(crossing.b.x).toBeCloseTo(node('Create').x, 4);
+    expect(e.points.at(-1)?.x).toBeCloseTo(node('Create').x, 4);
+  });
+
+  it('keeps the lines that cross one face of a box 8 apart', () => {
+    for (const [name, text] of SOURCES) {
+      const d = drawn(text);
+      for (const c of d.clusters ?? []) {
+        const meets: Array<{ face: string; at: number; edge: number }> = [];
+        d.edges.forEach((e, edge) => {
+          for (const s of segmentsOf(e)) {
+            const horizontal = Math.abs(s.a.y - s.b.y) < 1e-6;
+            for (const [face, line] of horizontal ? ([['left', c.x], ['right', c.x + c.w]] as const) : ([['top', c.y], ['bottom', c.y + c.h]] as const)) {
+              const [p, q] = horizontal ? [s.a.x, s.b.x] : [s.a.y, s.b.y];
+              const at = horizontal ? s.a.y : s.a.x;
+              const [lo, hi] = horizontal ? [c.y, c.y + c.h] : [c.x, c.x + c.w];
+              if (Math.min(p, q) < line - 1e-6 && Math.max(p, q) > line + 1e-6 && at > lo && at < hi) meets.push({ face, at, edge });
+            }
+          }
+        });
+        for (const m of meets) for (const o of meets) if (m.face === o.face && m.edge < o.edge) expect(Math.abs(m.at - o.at), `${name}: ${c.id} ${m.face}`).toBeGreaterThanOrEqual(8 - 1e-6);
+      }
+    }
+  });
+
+  it('puts a label where no other line runs', () => {
+    const labelled = drawn('flowchart LR\n  Client -->|calls| Create\n  Client --> Other\n  subgraph Core\n    Create --> Read\n  end\n  subgraph Other\n    x\n  end');
+    for (const e of labelled.edges) {
+      if (e.label === undefined) continue;
+      const box = { x: e.label.x, y: e.label.y, w: e.label.w, h: e.label.h };
+      for (const f of labelled.edges) if (f !== e) for (const s of segmentsOf(f)) expect(crossesInterior(s, box), `${e.from}->${e.to} label on ${f.from}->${f.to}`).toBe(false);
+    }
+  });
+});

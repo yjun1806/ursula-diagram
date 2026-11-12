@@ -32,11 +32,11 @@ const placed = (src: string, rank: Record<string, number>, row: Record<string, n
     new Map(Object.entries(span)),
   );
 
-const lanes2 = 'flowchart LR\nsubgraph a[Top]\nP[Receive order]\nQ[Check stock]\nend\nsubgraph b[Bottom]\nM[Pack items]\nend\nP --> M\nQ --> M';
+const lanes2 = 'swimlane-beta LR\nsubgraph a[Top]\nP[Receive order]\nQ[Check stock]\nend\nsubgraph b[Bottom]\nM[Pack items]\nend\nP --> M\nQ --> M';
 
 describe('slot units', () => {
   it('draws a cross-lane edge between boxes whose unit ranges overlap as one straight segment', () => {
-    const l = placed('flowchart LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y', { X: 0, Y: 1 });
+    const l = placed('swimlane-beta LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y', { X: 0, Y: 1 });
     const [x, y, e] = [node(l, 'X'), node(l, 'Y'), l.edges[0]];
     expect(e?.points).toHaveLength(2);
     expect(e?.points[0]?.x).toBe(e?.points[1]?.x);
@@ -51,13 +51,13 @@ describe('slot units', () => {
   });
 
   it('keeps every box on an even unit when no box needs the half step', () => {
-    for (const src of ['flowchart LR\nA --> B --> C --> D', 'flowchart LR\nsubgraph a[T]\na1 --> a2\nend\nsubgraph b[B]\nb1 --> b2\nend\na1 --> b1\na2 --> b2']) {
+    for (const src of ['flowchart LR\nA --> B --> C --> D', 'swimlane-beta LR\nsubgraph a[T]\na1 --> a2\nend\nsubgraph b[B]\nb1 --> b2\nend\na1 --> b1\na2 --> b2']) {
       expect(layout(parse(src), pixelRuler()).nodes.map((n) => n.rank % 2)).toEqual(new Array(layout(parse(src), pixelRuler()).nodes.length).fill(0));
     }
   });
 
   it('gives connected boxes of the same column identical attachment coordinates and a one-segment edge', () => {
-    const l = layout(parse('flowchart LR\nsubgraph a[Top]\nu1 --> u2\nend\nsubgraph b[Bottom]\nd1 --> d2\nend\nu1 --> d1\nu2 --> d2'), pixelRuler());
+    const l = layout(parse('swimlane-beta LR\nsubgraph a[Top]\nu1 --> u2\nend\nsubgraph b[Bottom]\nd1 --> d2\nend\nu1 --> d1\nu2 --> d2'), pixelRuler());
     for (const [from, to] of [['u1', 'd1'], ['u2', 'd2']] as const) {
       const e = l.edges.find((x) => x.from === from && x.to === to);
       expect(e?.points).toHaveLength(2);
@@ -152,10 +152,10 @@ describe('ports', () => {
   });
 
   it('lets a half-step pair meet at a port both boxes have, as one segment', () => {
-    const l = placed('flowchart LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y', { X: 0, Y: 1 });
+    const l = placed('swimlane-beta LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y', { X: 0, Y: 1 });
     const [x, y, e] = [node(l, 'X'), node(l, 'Y'), l.edges[0]];
     const at = e?.points[0]?.x ?? 0;
-    const graph = parse('flowchart LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y');
+    const graph = parse('swimlane-beta LR\nsubgraph a[Top]\nX[Receive order]\nend\nsubgraph b[Bottom]\nY[Check stock]\nend\nX --> Y');
     const pitch = portStep(measureNodes(graph.nodes, graph.lanes, ruler, false).unit, ruler);
     expect(e?.points).toHaveLength(2);
     expect(on(at - x.x - x.w / 2, pitch)).toBe(true);
@@ -164,7 +164,7 @@ describe('ports', () => {
 
   const hub = (targets: number): Layout => {
     const names = Array.from({ length: targets }, (_, i) => `T${i + 1}`);
-    const src = `flowchart LR\nsubgraph a[Top]\nH\nend\nsubgraph b[Bottom]\n${names.join('\n')}\nend\n${names.map((t) => `H --> ${t}`).join('\n')}`;
+    const src = `swimlane-beta LR\nsubgraph a[Top]\nH\nend\nsubgraph b[Bottom]\n${names.join('\n')}\nend\n${names.map((t) => `H --> ${t}`).join('\n')}`;
     const rank: Record<string, number> = { H: 0 };
     const row: Record<string, number> = {};
     names.forEach((t, i) => {
@@ -185,7 +185,7 @@ describe('ports', () => {
 
   it('puts 3 straight edges on one side on distinct ports symmetric about the centre', () => {
     const l = placed(
-      'flowchart LR\nsubgraph a[Top]\nH[A hub that covers three columns]\nend\nsubgraph b[Bottom]\nT1[First]\nT2[Second]\nT3[Third]\nend\nH --> T1\nH --> T2\nH --> T3',
+      'swimlane-beta LR\nsubgraph a[Top]\nH[A hub that covers three columns]\nend\nsubgraph b[Bottom]\nT1[First]\nT2[Second]\nT3[Third]\nend\nH --> T1\nH --> T2\nH --> T3',
       { H: 0, T1: 0, T2: 2, T3: 4 },
       {},
       { H: 6 },

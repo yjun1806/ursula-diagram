@@ -23,7 +23,7 @@ describe('structure parity', () => {
 });
 
 describe('geometry invariants', () => {
-  const sources = { ...fx, tdLanes: 'flowchart TD\nsubgraph x[Intake]\na1[Receive]-->a2[Validate]\nend\nsubgraph y[Office]\nb1[Approve]-->b2[Archive]\nend\na2-->|ok|b1\na1-->b2' };
+  const sources = { ...fx, tdLanes: 'swimlane-beta TD\nsubgraph x[Intake]\na1[Receive]-->a2[Validate]\nend\nsubgraph y[Office]\nb1[Approve]-->b2[Archive]\nend\na2-->|ok|b1\na1-->b2' };
   for (const [name, src] of Object.entries(sources)) {
     for (const [rn, ruler] of [['pixel', pixelRuler()], ['cell', cellRuler()]] as const) {
       it(`${name} (${rn}) is sound`, () => {
@@ -39,7 +39,7 @@ describe('geometry invariants', () => {
   });
 
   it('draws a cross-lane edge between nodes sharing a rank as one straight segment', () => {
-    const g = parse('flowchart LR\nsubgraph a[Top]\nX --> Y\nend\nsubgraph b[Bottom]\nZ\nend\nY --> Z');
+    const g = parse('swimlane-beta LR\nsubgraph a[Top]\nX --> Y\nend\nsubgraph b[Bottom]\nZ\nend\nY --> Z');
     for (const ruler of [pixelRuler(), cellRuler()]) {
       const l = layout(g, ruler, { composition: 'lanes' });
       const y = l.nodes.find((n) => n.id === 'Y');
@@ -69,7 +69,7 @@ describe('geometry invariants', () => {
   });
 
   it('lays out and renders a 14-node, 15-edge two-lane graph in under 300 ms', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
 subgraph a[Intake]
 n1[Receive] --> n2[Validate] --> n3[Enrich] --> n4[Queue]
 n5[Audit] --> n6[Notify]

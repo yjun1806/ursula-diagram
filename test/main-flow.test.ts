@@ -6,7 +6,7 @@ import { assignLayers } from '../src/layered/rows.ts';
 import type { Layout } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
 
-const twoBands = `flowchart LR
+const twoBands = `swimlane-beta LR
   subgraph top[Top]
     t1[Intake]
     t2[Close]
@@ -30,13 +30,13 @@ describe('main flow', () => {
   });
 
   it('prefers the path whose nodes are linked to more other bands when lengths are equal', () => {
-    const g = parse('flowchart LR\nsubgraph a[A]\nP1 --> P2\nQ1 --> Q2\nend\nsubgraph b[B]\nR\nend\nQ1 --> R\nQ2 --> R');
+    const g = parse('swimlane-beta LR\nsubgraph a[A]\nP1 --> P2\nQ1 --> Q2\nend\nsubgraph b[B]\nR\nend\nQ1 --> R\nQ2 --> R');
     const rows = assignLayers(g, g.nodes.map(() => 2), Infinity);
     expect(rows.main).toEqual(idOf(g, ['Q1', 'Q2']));
   });
 
   it('falls back to the written order when everything else is equal', () => {
-    const g = parse('flowchart LR\nsubgraph a[A]\nP1 --> P2\nQ1 --> Q2\nend');
+    const g = parse('swimlane-beta LR\nsubgraph a[A]\nP1 --> P2\nQ1 --> Q2\nend');
     const rows = assignLayers(g, g.nodes.map(() => 2), Infinity);
     expect(rows.main).toEqual(idOf(g, ['P1', 'P2']));
   });
@@ -180,7 +180,7 @@ describe('main flow in the drawing', () => {
     const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes', questions: false });
     const marked = l.edges.filter((e) => e.main).map((e) => `${e.from}>${e.to}`).sort();
     expect(marked).toEqual(['m1>m2', 'm2>m3', 'm3>m4', 'm4>m5']);
-    const staged = layout(parse('flowchart LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nend\nQ --> R'), pixelRuler(), { composition: 'stages', questions: false });
+    const staged = layout(parse('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nend\nQ --> R'), pixelRuler(), { composition: 'stages', questions: false });
     expect(staged.edges.some((e) => e.main)).toBe(false);
   });
 
@@ -195,7 +195,7 @@ describe('main flow in the drawing', () => {
   });
 
   it('finds the fan-out nodes that are off the middle of their partners', () => {
-    const l = layout(parse('flowchart LR\nsubgraph a[A]\nP\nend\nsubgraph b[B]\nX\nY\nZ\nend\nP --> X\nP --> Y\nP --> Z'), pixelRuler(), { composition: 'lanes', questions: false });
+    const l = layout(parse('swimlane-beta LR\nsubgraph a[A]\nP\nend\nsubgraph b[B]\nX\nY\nZ\nend\nP --> X\nP --> Y\nP --> Z'), pixelRuler(), { composition: 'lanes', questions: false });
     expect(Array.isArray(offCentre(l))).toBe(true);
     expect(offCentre({ ...l, pitch: undefined } as Layout)).toEqual([]);
   });

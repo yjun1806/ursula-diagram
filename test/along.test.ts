@@ -29,7 +29,7 @@ const solves = (source: string, laneAxis: 'auto' | 'across'): number => {
 };
 
 /** Two lanes whose steps line up one to one: edges leave the lanes, but nothing is gained by placing the lanes along the flow. */
-const ladder = `flowchart LR
+const ladder = `swimlane-beta LR
   subgraph top[Top]
     a1[First] --> a2[Second]
     a3[Third]
@@ -45,7 +45,7 @@ const ladder = `flowchart LR
 `;
 
 /** Two lanes, every edge between them: two producers feed six consumers. */
-const fan = (dir: 'LR' | 'TD'): string => `flowchart ${dir}
+const fan = (dir: 'LR' | 'TD'): string => `swimlane-beta ${dir}
   subgraph prod[Producers]
     p1[Sensor feed]
     p2[Batch import]

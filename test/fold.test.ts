@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../src/index.ts';
 import { assignLayers } from '../src/layered/rows.ts';
 
-const src = `flowchart LR
+const src = `swimlane-beta LR
   subgraph up[Up]
     a[Source]
     z[Sink]

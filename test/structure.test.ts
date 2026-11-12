@@ -25,7 +25,7 @@ const rowsPerLane = (l: Layout): number[] =>
   l.lanes.map((lane) => 1 + Math.max(...l.nodes.filter((n) => n.lane === lane.id).map((n) => n.row)));
 
 describe('components along the flow axis', () => {
-  const src = `flowchart LR
+  const src = `swimlane-beta LR
 subgraph a[Orders]
 o1[Receive] --> o2[Validate] --> o3[Confirm]
 o4[Audit]
@@ -50,13 +50,13 @@ o2 --> w1`;
   });
 
   it('does not stack isolated nodes into extra rows', () => {
-    const l = layout(parse('flowchart LR\nsubgraph x[Top]\nA\nB\nC\nD\nend\nsubgraph y[Bottom]\nE\nF\nend'), pixelRuler());
+    const l = layout(parse('swimlane-beta LR\nsubgraph x[Top]\nA\nB\nC\nD\nend\nsubgraph y[Bottom]\nE\nF\nend'), pixelRuler());
     expect(rowsPerLane(l)).toEqual([1, 1]);
     expect(l.width).toBeGreaterThan(l.height);
   });
 
   it('lets a component use ranks that an earlier component leaves free in other lanes', () => {
-    const g = parse('flowchart LR\nsubgraph x[Top]\nA --> B --> C\nend\nsubgraph y[Bottom]\nD --> E\nend');
+    const g = parse('swimlane-beta LR\nsubgraph x[Top]\nA --> B --> C\nend\nsubgraph y[Bottom]\nD --> E\nend');
     const rank = assignRanks(g);
     expect(rank.get('D')).toBe(0);
     expect(rank.get('E')).toBe(1);
@@ -65,7 +65,7 @@ o2 --> w1`;
   it('draws a wide picture for several unrelated chains', () => {
     const l = layout(
       parse(
-        'flowchart LR\nsubgraph x[Library]\na1[Borrow] --> a2[Return]\nb1[Reserve] --> b2[Notify]\nc1[Renew]\nend\nsubgraph y[Desk]\nd1[Scan] --> d2[Shelve]\nend',
+        'swimlane-beta LR\nsubgraph x[Library]\na1[Borrow] --> a2[Return]\nb1[Reserve] --> b2[Notify]\nc1[Renew]\nend\nsubgraph y[Desk]\nd1[Scan] --> d2[Shelve]\nend',
       ),
       pixelRuler(),
     );
@@ -76,7 +76,7 @@ o2 --> w1`;
 
 describe('structure search', () => {
   // One node of the top lane talks to three nodes of the bottom lane.
-  const fanOut = `flowchart LR
+  const fanOut = `swimlane-beta LR
 subgraph a[Intake]
 n1[Receive] --> n2[Triage] --> n3[Assign] --> n4[Close]
 end
@@ -117,7 +117,7 @@ m3 --> n4`;
   });
 
   it('uses at most two rows per lane for a pipeline with side branches', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
 subgraph ci[Pipeline]
 c1[Checkout] --> c2[Build] --> c3[Test] --> c4[Package]
 c2 --> c5[Lint] --> c3
@@ -135,7 +135,7 @@ c5 --> r2`;
 
   it('draws a cross-lane edge between facing nodes of one rank as a short vertical line', () => {
     const l = layout(
-      parse('flowchart LR\nsubgraph a[Front]\nx1[Receive] --> x2[Confirm]\nend\nsubgraph b[Kitchen]\ny1[Prepare] --> y2[Deliver]\nend\nx1 --> y1\nx2 --> y2'),
+      parse('swimlane-beta LR\nsubgraph a[Front]\nx1[Receive] --> x2[Confirm]\nend\nsubgraph b[Kitchen]\ny1[Prepare] --> y2[Deliver]\nend\nx1 --> y1\nx2 --> y2'),
       pixelRuler(),
     );
     for (const [from, to] of [['x1', 'y1'], ['x2', 'y2']] as const) {
@@ -158,7 +158,7 @@ c5 --> r2`;
 });
 
 describe('edge labels', () => {
-  const src = `flowchart LR
+  const src = `swimlane-beta LR
 subgraph a[Intake]
 n1[Receive] -->|accepted| n2[Triage]
 end
@@ -243,7 +243,7 @@ describe('uniform node width', () => {
   it('grows only the box that needs room for many edges on one side', () => {
     const l = layout(
       parse(
-        'flowchart LR\nsubgraph a[Top]\nhub[Hub]\nend\nsubgraph b[Bottom]\np1[P1]\np2[P2]\np3[P3]\np4[P4]\np5[P5]\nend\nhub --> p1\nhub --> p2\nhub --> p3\nhub --> p4\nhub --> p5',
+        'swimlane-beta LR\nsubgraph a[Top]\nhub[Hub]\nend\nsubgraph b[Bottom]\np1[P1]\np2[P2]\np3[P3]\np4[P4]\np5[P5]\nend\nhub --> p1\nhub --> p2\nhub --> p3\nhub --> p4\nhub --> p5',
       ),
       pixelRuler(),
     );
@@ -255,7 +255,7 @@ describe('uniform node width', () => {
 });
 
 describe('canvas columns', () => {
-  const long = `flowchart LR
+  const long = `swimlane-beta LR
 subgraph a[Intake]
 i1[Register] --> i2[Triage] --> i3[Assess] --> i4[Admit] --> i5[Treat] --> i6[Review] --> i7[Discharge] --> i8[Follow up] --> i9[Close]
 end
@@ -301,7 +301,7 @@ i7 --> b3`;
 });
 
 describe('wide nodes', () => {
-  const src = `flowchart LR
+  const src = `swimlane-beta LR
 subgraph a[Top]
 p1[One] --> p2[Two] --> p3[Three]
 end
@@ -337,7 +337,7 @@ p3 --> q3`;
 
 describe('facing rows', () => {
   it('puts the node that talks across the lanes on the row next to the other lane', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
 subgraph a[Top]
 t1[Intake] --> t2[Review] --> t3[Decide]
 t4[Archive]
@@ -359,7 +359,7 @@ describe('fine grid', () => {
   it('puts every node, lane and gap on a multiple of the grid', () => {
     const ruler = pixelRuler();
     const l = layout(
-      parse(`flowchart LR
+      parse(`swimlane-beta LR
 subgraph a[Intake]
 n1[Receive order] --> n2[Validate] --> n3[Enrich]
 end

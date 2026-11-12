@@ -13,11 +13,13 @@ const body = `
   b --> c`;
 
 describe('the swimlane header', () => {
-  it('reads the same graph as a flowchart with the same body', () => {
+  it('reads the subgraphs as lanes, where a flowchart with the same body reads them as boxes', () => {
     const lanes = parse(`swimlane-beta LR${body}`);
     const flow = parse(`flowchart LR${body}`);
-    expect(lanes).toEqual(flow);
+    expect(lanes.clusters).toBeUndefined();
     expect(lanes.lanes.map((l) => l.label)).toEqual(['First', 'Second']);
+    expect(flow.clusters?.map((c) => c.label)).toEqual(['First', 'Second']);
+    expect(flow.lanes).toHaveLength(1);
   });
 
   it('draws, and takes top to bottom when no direction is given', () => {

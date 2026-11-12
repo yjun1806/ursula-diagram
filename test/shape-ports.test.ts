@@ -94,7 +94,7 @@ function svgPath(svg: string, from: string, to: string): Point[] {
 const near = (p: Point, q: Point): boolean => Math.hypot(p.x - q.x, p.y - q.y) <= 8.5;
 
 describe('edge ends on a diamond with four edges', () => {
-  const src = 'flowchart TD\nsubgraph s0\nt[Top] --> d{Check}\nend\nsubgraph s1\na[Alpha]\nend\nsubgraph s2\nb[Beta]\nend\nsubgraph s3\nc[Gamma]\nend\nd --> a\nd --> b\nd --> c';
+  const src = 'swimlane-beta TD\nsubgraph s0\nt[Top] --> d{Check}\nend\nsubgraph s1\na[Alpha]\nend\nsubgraph s2\nb[Beta]\nend\nsubgraph s3\nc[Gamma]\nend\nd --> a\nd --> b\nd --> c';
 
   it('meet four different corners and leave no shared port', () => {
     const l = layout(parse(src), ruler);

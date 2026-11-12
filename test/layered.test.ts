@@ -44,7 +44,7 @@ describe('layered rows', () => {
   });
 
   it('anchors a node without in-lane edges toward the lane its partner is in', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph top[Top]
     a[Above]
   end
@@ -67,7 +67,7 @@ describe('layered rows', () => {
   });
 
   it('stacks blocks that face opposite lanes instead of widening the row', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph top[Top]
     a[Above]
   end
@@ -103,7 +103,7 @@ describe('layered rows', () => {
 
 describe('layered dummies', () => {
   it('gives an edge over three layers two dummies', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph a[A]
     n1[First]
   end
@@ -130,7 +130,7 @@ describe('layered dummies', () => {
 });
 
 describe('layered ordering', () => {
-  const two = `flowchart LR
+  const two = `swimlane-beta LR
   subgraph top[Top]
     a1[A1]
     a2[A2]
@@ -171,7 +171,7 @@ describe('layered alignment', () => {
     const { layers } = orderLayers(g, ladder, rows);
     return { g, ladder, layers, ...align(ladder, layers) };
   };
-  const lanes3 = `flowchart LR
+  const lanes3 = `swimlane-beta LR
   subgraph a[A]
     x[Top]
   end
@@ -190,7 +190,7 @@ describe('layered alignment', () => {
   });
 
   it('puts a node with two partners in its layer over the median one and keeps integer starts and separations', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph a[A]
     p[Left] --> q[Right]
   end
@@ -218,7 +218,7 @@ describe('layered straightening', () => {
   const edge = (l: ReturnType<typeof lay>, from: string, to: string) => l.edges.find((e) => e.from === from && e.to === to);
 
   it('keeps the best of the four alignments instead of a half-step average', () => {
-    const l = lay(`flowchart LR
+    const l = lay(`swimlane-beta LR
   subgraph top[Top]
     a[Receive] --> b[Check]
     b --> c[Approve]
@@ -234,7 +234,7 @@ describe('layered straightening', () => {
   });
 
   it('aligns a pair when the cells are free', () => {
-    const l = lay(`flowchart LR
+    const l = lay(`swimlane-beta LR
   subgraph top[Top]
     a[One] --> b[Two] --> c[Three]
   end
@@ -246,7 +246,7 @@ describe('layered straightening', () => {
   });
 
   it('refuses a move that would break another straight piece', () => {
-    const l = lay(`flowchart LR
+    const l = lay(`swimlane-beta LR
   subgraph top[Top]
     p[Left] --> q[Right]
   end
@@ -261,7 +261,7 @@ describe('layered straightening', () => {
   });
 
   it('puts the line of a partner on a port of a wide node', () => {
-    const g = parse(`flowchart LR
+    const g = parse(`swimlane-beta LR
   subgraph top[Top]
     w[A very long title that needs a much wider box than the others]
   end
@@ -283,7 +283,7 @@ describe('layered ports on a box side', () => {
   const hub = (flip: boolean): string => {
     const hubLane = '  subgraph hubs[Hub]\n    h[Hub box]\n  end';
     const partners = '  subgraph ring[Partners]\n    p1[One]\n    p2[Two]\n    p3[Three]\n    p4[Four]\n    p5[Five]\n  end';
-    return `flowchart LR\n${flip ? `${hubLane}\n${partners}` : `${partners}\n${hubLane}`}\n  p1 --> h\n  h --> p2\n  p3 --> h\n  h --> p4\n  p5 --> h`;
+    return `swimlane-beta LR\n${flip ? `${hubLane}\n${partners}` : `${partners}\n${hubLane}`}\n  p1 --> h\n  h --> p2\n  p3 --> h\n  h --> p4\n  p5 --> h`;
   };
   for (const flip of [false, true]) {
     it(`gives pieces of a hub with five partners ports in the order of their other ends (partners ${flip ? 'below' : 'above'})`, () => {
@@ -360,7 +360,7 @@ describe('layered pass-through lines', () => {
   });
 
   it('keeps every line out of the boxes and the drawing inside the canvas', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph top[Top]
     a1[Receive] --> a2[Check]
     a3[Plan]
@@ -410,7 +410,7 @@ describe('layered grid and width remedies', () => {
   });
 
   it('keeps a four-box main path horizontal in a crowded lane with a branch, a wide box and a singleton', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph top[Top]
     t1[Filed] --> t2[Applied] --> t3[Limited]
     t4[Closed early]
@@ -442,7 +442,7 @@ describe('layered grid and width remedies', () => {
 
 describe('layered routing', () => {
   it('draws an aligned pair as one straight segment centre to centre', () => {
-    const l = layout(parse('flowchart LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { engine: 'layered', composition: 'lanes' });
+    const l = layout(parse('swimlane-beta LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { engine: 'layered', composition: 'lanes' });
     const [x, y] = l.nodes;
     expect(l.edges[0]?.points.length).toBe(2);
     expect(l.edges[0]?.points[0]?.x).toBeCloseTo((x?.x ?? 0) + (x?.w ?? 0) / 2);
@@ -501,7 +501,7 @@ function generate(seed: number): string {
   const members: string[][] = Array.from({ length: lanes }, () => []);
   for (let i = 0; i < count; i++) members[pick(lanes)]?.push(`n${i}`);
   const title = (i: number): string => `n${i}[${WORDS[(i * 7 + seed) % WORDS.length]}]`;
-  const lines = [`flowchart ${dir}`];
+  const lines = [`swimlane-beta ${dir}`];
   members.forEach((ids, k) => {
     if (ids.length === 0) return;
     lines.push(`subgraph l${k}[Lane ${k}]`, ...ids.map((id) => title(Number(id.slice(1)))), 'end');

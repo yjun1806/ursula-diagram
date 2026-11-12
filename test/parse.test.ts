@@ -59,7 +59,7 @@ describe('parse', () => {
   });
 
   it('puts nodes into subgraph lanes and the rest into an implicit lane', () => {
-    const g = parse('flowchart LR\nsubgraph s1[First lane]\nA --> B\nend\nsubgraph "Second"\nC\nend\nB --> C\nD');
+    const g = parse('swimlane-beta LR\nsubgraph s1[First lane]\nA --> B\nend\nsubgraph "Second"\nC\nend\nB --> C\nD');
     expect(g.lanes.map((l) => l.label)).toEqual(['First lane', 'Second', '']);
     expect(g.nodes.map((n) => [n.id, n.lane])).toEqual([
       ['A', 's1'],

@@ -10,7 +10,7 @@ const draw = (src: string) => {
 };
 
 const lanes = (targets: string[]): string =>
-  ['flowchart TD', 'subgraph one[One]', 'a[Alpha]', 'end', 'subgraph two[Two]', ...targets.map((t) => `${t}[Node ${t}]`), 'end', ...targets.map((t) => `a --> ${t}`)].join('\n');
+  ['swimlane-beta TD', 'subgraph one[One]', 'a[Alpha]', 'end', 'subgraph two[Two]', ...targets.map((t) => `${t}[Node ${t}]`), 'end', ...targets.map((t) => `a --> ${t}`)].join('\n');
 
 describe('port lattices of a box side', () => {
   it('holds one port on whole steps and three on the dense lattice of a 48px side with a 24px step', () => {

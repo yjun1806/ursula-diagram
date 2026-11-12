@@ -10,7 +10,7 @@ const SKIP_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Verify]\n  c-->d[Save]
 /** The same row without the skip edge: both sizes score the same, and three units draw it narrower. */
 const PLAIN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Verify]\n  c-->d[Save]\n  d-->e[Tell]\n  e-->f[End]';
 /** A wider lane sets the size of the drawing, so three units change neither the score nor the size. */
-const SAME_SIZE = 'flowchart LR\n  subgraph top[Top]\n    a[Go]-->b[Run]\n    b-->c[Save]\n    c-->d[Tell]\n    d-->e[End]\n    e-->f[Log]\n    f-->g[Sync]\n  end\n  subgraph low[Low]\n    x[Go]-->y[Verify]\n    y-->z[End]\n  end';
+const SAME_SIZE = 'swimlane-beta LR\n  subgraph top[Top]\n    a[Go]-->b[Run]\n    b-->c[Save]\n    c-->d[Tell]\n    d-->e[End]\n    e-->f[Log]\n    f-->g[Sync]\n  end\n  subgraph low[Low]\n    x[Go]-->y[Verify]\n    y-->z[End]\n  end';
 /** No box is wider than the common width. */
 const EVEN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Save]\n  c-->d[Tell]\n  d-->e[End]\n  a-->d';
 /** Three slot units make the drawing score worse than whole pairs. */

@@ -398,7 +398,7 @@ describe('markdown text', () => {
   });
 
   it('reads it in edge labels and subgraph titles', () => {
-    const g = parse('flowchart LR\nsubgraph "`**Two**`"\nc("`The **cat**\n  in the hat`") -- "`Bold **edge label**`" --> d\nend');
+    const g = parse('swimlane-beta LR\nsubgraph "`**Two**`"\nc("`The **cat**\n  in the hat`") -- "`Bold **edge label**`" --> d\nend');
     expect(g.lanes[0]?.label).toBe('Two');
     expect(g.edges[0]?.label).toBe('Bold edge label');
     expect(nodeOf(g, 'c')).toMatchObject({ title: 'The cat', lines: ['in the hat'] });
@@ -420,8 +420,8 @@ describe('directions RL and BT', () => {
   });
 
   it('mirrors the nodes of RL about the middle of the drawing and keeps their rows', () => {
-    const lr = draw('flowchart LR');
-    const rl = draw('flowchart RL');
+    const lr = draw('swimlane-beta LR');
+    const rl = draw('swimlane-beta RL');
     expect(rl.direction).toBe('RL');
     expect(rl.width).toBe(lr.width);
     expect(rl.height).toBe(lr.height);
@@ -434,8 +434,8 @@ describe('directions RL and BT', () => {
   });
 
   it('mirrors the nodes of BT about the middle of the drawing', () => {
-    const td = draw('flowchart TD');
-    const bt = draw('flowchart BT');
+    const td = draw('swimlane-beta TD');
+    const bt = draw('swimlane-beta BT');
     expect(bt.direction).toBe('BT');
     for (const a of td.nodes) {
       const b = bt.nodes.find((n) => n.id === a.id);
@@ -445,8 +445,8 @@ describe('directions RL and BT', () => {
   });
 
   it('mirrors the points of the edges, their labels and the bands of subgraphs', () => {
-    const lr = draw('flowchart LR');
-    const rl = draw('flowchart RL');
+    const lr = draw('swimlane-beta LR');
+    const rl = draw('swimlane-beta RL');
     lr.edges.forEach((e, i) => {
       const m = rl.edges[i];
       e.points.forEach((p, k) => {
@@ -464,8 +464,8 @@ describe('directions RL and BT', () => {
   });
 
   it('keeps text upright: a label sits at the middle of its mirrored box', () => {
-    const svg = render(`flowchart RL\n${SRC}`);
-    const rl = draw('flowchart RL');
+    const svg = render(`swimlane-beta RL\n${SRC}`);
+    const rl = draw('swimlane-beta RL');
     const a = rl.nodes.find((n) => n.id === 'A');
     expect(svg).toContain(`<text class="ursula-node-title" x="${Math.round(((a?.x ?? 0) + (a?.w ?? 0) / 2) * 100) / 100}"`);
   });
@@ -505,7 +505,7 @@ describe('subgraphs as boxes', () => {
   });
 
   it('keeps flat subgraphs without a direction or an edge to them as lanes', () => {
-    const g = parse('flowchart LR\nsubgraph a\nA --> B\nend\nsubgraph b\nC\nend\nB --> C');
+    const g = parse('swimlane-beta LR\nsubgraph a\nA --> B\nend\nsubgraph b\nC\nend\nB --> C');
     expect(g.clusters).toBeUndefined();
     expect(g.lanes.map((l) => l.id)).toEqual(['a', 'b']);
   });
@@ -522,7 +522,7 @@ const EXAMPLES: Array<[string, string]> = [
   ['04 markdown formatting', 'flowchart LR\n    markdown["`This **is** _Markdown_`"]\n    newLines["`Line1\n    Line 2\n    Line 3`"]\n    markdown --> newLines'],
   [
     '105 markdown strings',
-    'flowchart LR\nsubgraph "One"\n  a("`The **cat**\n  in the hat`") -- "edge label" --> b{{"`The **dog** in the hog`"}}\nend\nsubgraph "`**Two**`"\n  c("`The **cat**\n  in the hat`") -- "`Bold **edge label**`" --> d("The dog in the hog")\nend',
+    'swimlane-beta LR\nsubgraph "One"\n  a("`The **cat**\n  in the hat`") -- "edge label" --> b{{"`The **dog** in the hog`"}}\nend\nsubgraph "`**Two**`"\n  c("`The **cat**\n  in the hat`") -- "`Bold **edge label**`" --> d("The dog in the hog")\nend',
   ],
   ['14 asymmetric', 'flowchart LR\n    id1>This is the text in the box]'],
   ['18 parallelogram alt', 'flowchart TD\n    id1[\\This is the text in the box\\]'],

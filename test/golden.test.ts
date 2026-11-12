@@ -66,6 +66,10 @@ function outputs(): Record<string, string> {
   const graphs: Record<string, string> = { fanOut, fanIn };
   for (let seed = 1; seed <= 40; seed++) graphs[`generated-${seed}`] = generate(seed);
   for (const name of examples) graphs[name] = readFileSync(join(import.meta.dirname, '..', 'examples', `${name}.mmd`), 'utf8');
+  // The same drawings as bands: the header decides whether a subgraph is a box or a band.
+  graphs['lanes-fanOut'] = fanOut.replace('flowchart', 'swimlane-beta');
+  graphs['lanes-fanIn'] = fanIn.replace('flowchart', 'swimlane-beta');
+  graphs['lanes-order-flow'] = (graphs['order-flow'] ?? '').replace(/^flowchart/m, 'swimlane-beta');
   const out: Record<string, string> = {};
   for (const [name, src] of Object.entries(graphs)) {
     out[`${name} svg`] = hash(render(src));

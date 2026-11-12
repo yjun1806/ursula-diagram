@@ -27,6 +27,8 @@ interface State {
   implicitLane: string | null;
   /** What each subgraph says about itself beyond its name. */
   groups: Map<string, { parent?: string; direction?: Direction; mirror?: 'RL' | 'BT' }>;
+  /** The header was `swimlane-beta`. */
+  swimlane: boolean;
 }
 
 const IMPLICIT_LANE = '_';
@@ -521,7 +523,7 @@ function parseChain(stmt: string, line: number, st: State): void {
   }
 }
 
-function parseHeader(stmt: string, line: number): { direction: 'LR' | 'TD'; mirror?: 'RL' | 'BT' } {
+function parseHeader(stmt: string, line: number): { direction: 'LR' | 'TD'; mirror?: 'RL' | 'BT'; swimlane: boolean } {
   const m = /^(flowchart|graph|swimlane-beta)(?:\s+(\S+))?$/.exec(stmt);
   if (!m) {
     const word = stmt.split(/\s+/)[0] ?? stmt;
@@ -531,11 +533,12 @@ function parseHeader(stmt: string, line: number): { direction: 'LR' | 'TD'; mirr
     throw new UrsulaError("expected a 'flowchart' or 'graph' header", 'syntax', line);
   }
   const dir = m[2];
-  if (dir === undefined) return { direction: 'TD' };
-  if (dir === 'LR') return { direction: 'LR' };
-  if (dir === 'TD' || dir === 'TB') return { direction: 'TD' };
-  if (dir === 'RL') return { direction: 'LR', mirror: 'RL' };
-  if (dir === 'BT') return { direction: 'TD', mirror: 'BT' };
+  const swimlane = m[1] === 'swimlane-beta';
+  if (dir === undefined) return { direction: 'TD', swimlane };
+  if (dir === 'LR') return { direction: 'LR', swimlane };
+  if (dir === 'TD' || dir === 'TB') return { direction: 'TD', swimlane };
+  if (dir === 'RL') return { direction: 'LR', mirror: 'RL', swimlane };
+  if (dir === 'BT') return { direction: 'TD', mirror: 'BT', swimlane };
   throw new UrsulaError(`unknown direction '${dir}'`, 'syntax', line);
 }
 
@@ -574,6 +577,7 @@ export function parse(src: string): Graph {
     openLine: 0,
     implicitLane: null,
     groups: new Map(),
+    swimlane: false,
   };
   let headerSeen = false;
   for (const { text, line: lineNo } of logicalLines(src)) {
@@ -581,6 +585,7 @@ export function parse(src: string): Graph {
       if (!headerSeen) {
         const header = parseHeader(stmt, lineNo);
         st.direction = header.direction;
+        st.swimlane = header.swimlane;
         if (header.mirror) st.mirror = header.mirror;
         headerSeen = true;
       } else if (DIAGRAM_TYPES.test(stmt)) {
@@ -606,10 +611,12 @@ export function parse(src: string): Graph {
 }
 
 /**
- * The subgraphs as boxes: some subgraph holds another, has a direction of its own, or is the end of an edge.
- * Otherwise they are bands (lanes).
+ * Whether the subgraphs are drawn as boxes. In a `flowchart` or `graph` every subgraph is a box. In a `swimlane-beta`
+ * they are boxes only when some subgraph holds another, has a direction of its own, or is the end of an edge;
+ * otherwise they are bands (lanes).
  */
 function needsBoxes(st: State): boolean {
+  if (!st.swimlane) return st.lanes.length > 0;
   const ids = new Set(st.lanes.map((l) => l.id));
   return [...st.groups.values()].some((g) => g.parent !== undefined || g.direction !== undefined) || st.edges.some((e) => ids.has(e.from) || ids.has(e.to));
 }

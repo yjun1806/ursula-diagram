@@ -8,7 +8,7 @@ const flip = (g: Graph): Graph => ({ ...g, direction: g.direction === 'LR' ? 'TD
 const ports = (l: Layout, ruler: ReturnType<typeof pixelRuler>, g: Graph): string[] =>
   portViolations(l, layeredRuler(ruler), l.composition === 'stages' ? flip(g) : g);
 
-const chain = `flowchart LR
+const chain = `swimlane-beta LR
   subgraph s1[First]
     a1[Draft]
   end
@@ -32,32 +32,32 @@ describe('composition rule', () => {
   });
 
   it('picks lanes when two bands send edges to each other', () => {
-    const g = parse('flowchart LR\nsubgraph p[P]\nA\nB\nend\nsubgraph q[Q]\nC\nD\nend\nA --> C\nD --> B');
+    const g = parse('swimlane-beta LR\nsubgraph p[P]\nA\nB\nend\nsubgraph q[Q]\nC\nD\nend\nA --> C\nD --> B');
     expect(planZones(g).composition).toBe('lanes');
   });
 
   it('picks lanes when edges inside bands outnumber the links between them', () => {
-    const g = parse('flowchart LR\nsubgraph p[P]\nA --> B --> C\nend\nsubgraph q[Q]\nD\nend\nC --> D');
+    const g = parse('swimlane-beta LR\nsubgraph p[P]\nA --> B --> C\nend\nsubgraph q[Q]\nD\nend\nC --> D');
     expect(planZones(g).composition).toBe('lanes');
   });
 
   it('keeps the current behaviour without bands or with one band', () => {
     expect(planZones(parse('flowchart LR\nA --> B')).composition).toBe('lanes');
-    expect(planZones(parse('flowchart LR\nsubgraph p[P]\nA --> B\nend')).composition).toBe('lanes');
+    expect(planZones(parse('swimlane-beta LR\nsubgraph p[P]\nA --> B\nend')).composition).toBe('lanes');
   });
 
   it('orders stages by reading order and breaks ties by the order they are written in', () => {
-    const g = parse('flowchart LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nS --> T\nF --> T');
+    const g = parse('swimlane-beta LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nS --> T\nF --> T');
     const plan = planZones(g);
     expect(plan.composition).toBe('stages');
     expect(plan.order.map((i) => g.lanes[i]?.id)).toEqual(['z2', 'z1', 'z3']);
     // The band of the first node of the text comes first among bands of one rank.
-    const started = parse('flowchart LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nF --> T\nS --> T');
+    const started = parse('swimlane-beta LR\nsubgraph z3[Third]\nT\nend\nsubgraph z2[Second]\nS\nend\nsubgraph z1[First]\nF\nend\nF --> T\nS --> T');
     expect(planZones(started).order.map((i) => started.lanes[i]?.id)).toEqual(['z1', 'z2', 'z3']);
   });
 
   it('leaves a band that no edge touches out of the decision and puts it last in both compositions', () => {
-    const src = 'flowchart LR\nsubgraph idle[Idle]\nX\nend\nsubgraph s1[One]\nA\nend\nsubgraph s2[Two]\nB\nend\nA --> B';
+    const src = 'swimlane-beta LR\nsubgraph idle[Idle]\nX\nend\nsubgraph s1[One]\nA\nend\nsubgraph s2[Two]\nB\nend\nA --> B';
     const g = parse(src);
     const staged = planZones(g);
     expect(staged.composition).toBe('stages');
@@ -68,7 +68,7 @@ describe('composition rule', () => {
 
   it('can be forced either way', () => {
     expect(planZones(parse(chain), 'lanes').composition).toBe('lanes');
-    const g = parse('flowchart LR\nsubgraph p[P]\nA\nend\nsubgraph q[Q]\nB\nend\nA --> B\nB --> A');
+    const g = parse('swimlane-beta LR\nsubgraph p[P]\nA\nend\nsubgraph q[Q]\nB\nend\nA --> B\nB --> A');
     expect(planZones(g).composition).toBe('lanes');
     expect(planZones(g, 'stages').composition).toBe('stages');
   });
@@ -78,7 +78,7 @@ describe('stages drawing', () => {
   for (const [name, ruler] of [['pixel', pixelRuler()], ['cell', cellRuler()]] as const) {
     for (const direction of ['LR', 'TD']) {
       it(`keeps boxes apart and edges off boxes (${name}, ${direction})`, () => {
-        const g = parse(chain.replace('flowchart LR', `flowchart ${direction}`));
+        const g = parse(chain.replace('swimlane-beta LR', `swimlane-beta ${direction}`));
         const l = layout(g, ruler, ruler === pixelRuler() ? {} : { maxWidth: 160 });
         expect(l.composition).toBe('stages');
         expect(l.direction).toBe(direction);
@@ -98,14 +98,14 @@ describe('stages drawing', () => {
   });
 
   it('puts the bands of a TD drawing one below the other', () => {
-    const l = layout(parse(chain.replace('flowchart LR', 'flowchart TD')), pixelRuler());
+    const l = layout(parse(chain.replace('swimlane-beta LR', 'swimlane-beta TD')), pixelRuler());
     const y = (id: string): number => l.nodes.find((n) => n.id === id)?.y ?? NaN;
     expect(y('a1')).toBeLessThan(y('b1'));
     expect(y('b1')).toBeLessThan(y('c1'));
   });
 
   it('keeps nodes without edges in their band one place further along, apart from the connected ones', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph s1[One]
     a1[Start]
   end
@@ -120,7 +120,7 @@ describe('stages drawing', () => {
   });
 
   it('puts nodes with no edge at all in a later place than the band nodes that other bands link to', () => {
-    const src = `flowchart LR
+    const src = `swimlane-beta LR
   subgraph s1[One]
     a1[Start]
   end
@@ -177,7 +177,7 @@ function staged(seed: number): string {
   const members: string[][] = Array.from({ length: bands }, () => []);
   const count = bands * (1 + pick(3));
   for (let i = 0; i < count; i++) members[i % bands]?.push(`n${i}`);
-  const lines = [`flowchart ${dir}`];
+  const lines = [`swimlane-beta ${dir}`];
   members.forEach((ids, k) => lines.push(`subgraph b${k}[Band ${k}]`, ...ids.map((id) => `${id}[Item ${id.slice(1)}]`), 'end'));
   for (let i = 0; i < count; i++) {
     // Members are dealt round robin: the next one is in the next band (a forward link), the one `bands` later is in the same band.

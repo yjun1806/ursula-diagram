@@ -3,7 +3,7 @@ import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
 import { offCentreEnds } from '../src/layered/centre.ts';
 import * as fixtures from './fixtures.ts';
 
-const wide = 'flowchart LR\n  subgraph top[Top]\n    a[One] --> b[Two] --> c[Three]\n  end\n  subgraph bottom[Bottom]\n    x[Lone]\n  end\n  c --> x';
+const wide = 'swimlane-beta LR\n  subgraph top[Top]\n    a[One] --> b[Two] --> c[Three]\n  end\n  subgraph bottom[Bottom]\n    x[Lone]\n  end\n  c --> x';
 
 describe('an edge alone on the side of a box ends at the middle of that side', () => {
   it('holds in pixels, and says so when it does not', () => {

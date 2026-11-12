@@ -33,7 +33,7 @@ describe('svg', () => {
     const svg = render(twoLanes);
     const lanes = svg.match(/<rect class="ursula-lane[^"]*"/g) ?? [];
     expect(lanes).toEqual(['<rect class="ursula-lane ursula-lane--tint"', '<rect class="ursula-lane"']);
-    expect(render('flowchart LR\nsubgraph s[Solo]\nA --> B\nend')).toContain('ursula-lane ursula-lane--tint');
+    expect(render('swimlane-beta LR\nsubgraph s[Solo]\nA --> B\nend')).toContain('ursula-lane ursula-lane--tint');
   });
 
   it('marks accent colour on thick edges and their labels', () => {

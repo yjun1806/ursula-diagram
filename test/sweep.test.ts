@@ -31,7 +31,7 @@ function generate(seed: number): string {
   const members: string[][] = Array.from({ length: lanes }, () => []);
   for (let i = 0; i < count; i++) members[pick(lanes)]?.push(`n${i}`);
   const title = (i: number): string => `n${i}[${WORDS[(i * 7 + seed) % WORDS.length]}]`;
-  const lines = [`flowchart ${dir}`];
+  const lines = [`swimlane-beta ${dir}`];
   members.forEach((ids, k) => {
     if (ids.length === 0) return;
     lines.push(`subgraph l${k}[Lane ${k}]`, ...ids.map((id) => title(Number(id.slice(1)))), 'end');
