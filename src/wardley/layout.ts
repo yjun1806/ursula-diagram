@@ -27,8 +27,16 @@ const FORCE_H = 24;
 const PIPE_PAD = 12;
 const PIPE_HALF = 16;
 const TICK_PAD = 8;
+const LIST_PAD = 8;
+/** How far right of a component's edge its inertia bar reaches. */
+const INERTIA_REACH = 8;
+/** Extra cost of a name crossing a stage line: less than any real clash, so it only breaks ties. */
+const STAGE_LINE_COST = 0.5;
 
-export type LabelSide = 'right' | 'left' | 'above' | 'below';
+export type LabelSide = 'right' | 'left' | 'above' | 'below' | 'above-left' | 'above-right' | 'below-left' | 'below-right';
+
+/** The text anchor of a name on that side of its point. */
+const anchorOfSide = (side: LabelSide): 'start' | 'middle' | 'end' => (side.endsWith('left') ? 'end' : side.endsWith('right') ? 'start' : 'middle');
 
 export interface PlacedNode {
   name: string;
@@ -64,12 +72,12 @@ const inflate = (b: Box, by: number): Box => ({ x0: b.x0 - by, x1: b.x1 + by, y0
 
 function reachOf(node: WardleyNode, dot: number): number {
   switch (node.sourcing) {
-    case 'build':
-      return RING_R;
-    case 'buy':
-    case 'outsource':
-      return 8;
     case 'market':
+      return RING_R;
+    case 'build':
+    case 'buy':
+      return 8;
+    case 'outsource':
       return 6;
     default:
       return dot;
@@ -144,11 +152,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
 
   if (map.title !== undefined) fixed.push({ x0: MARGIN, x1: MARGIN + strong(map.title) * (15 / 13), y0: 56 - 10, y1: 56 + 10 });
   for (const n of nodes) {
-    if (n.kind === 'anchor') {
-      const w = strong(n.name);
-      const box = anchoredBox(n.cx, n.cy - 8, w, 'middle', LINE_H);
-      fixed.push(box);
-    } else {
+    if (n.kind === 'component') {
       const right = n.reach + (n.inertia ? 8 : 0);
       fixed.push({ x0: n.cx - n.reach, x1: n.cx + right, y0: n.cy - Math.max(n.reach, n.inertia ? 10 : 0), y1: n.cy + Math.max(n.reach, n.inertia ? 10 : 0) });
     }
@@ -201,7 +205,8 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
     const n = at(e.name);
     const tx = xOf(e.target);
     const dir = tx >= n.cx ? 1 : -1;
-    const start = { x: n.cx + dir * (n.reach + ARROW_GAP), y: n.cy };
+    const clear = n.reach + (dir > 0 && n.inertia ? INERTIA_REACH : 0);
+    const start = { x: n.cx + dir * (clear + ARROW_GAP), y: n.cy };
     const tip = { x: tx - dir * (EVOLVE_R + 4), y: n.cy };
     if ((tip.x - start.x) * dir > 20) evolveItems.push({ kind: 'line', points: [start, tip], role: ['edge', 'edge--pending', 'edge--arrow'], data: { evolve: e.name } });
     evolveItems.push({ kind: 'circle', cx: tx, cy: n.cy, r: EVOLVE_R, role: ['end-open'], data: { evolve: e.name } });
@@ -217,6 +222,31 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
     evolveItems.push({ kind: 'circle', cx: target.x, cy: target.y, r: EVOLVE_R, role: ['end-open'], data: { trend: t.name } });
     samples.push(...samplesOf(start, target));
     fixed.push({ x0: target.x - EVOLVE_R, x1: target.x + EVOLVE_R, y0: target.y - EVOLVE_R, y1: target.y + EVOLVE_R });
+  }
+
+  // Stage lines, which names keep off when another side is as free.
+  const boundaries = map.stages.slice(0, -1).map((st) => xOf(st.end));
+  const stageLineCost = (b: Box): number => (b.y1 > top && b.y0 < bottom && boundaries.some((x) => x > b.x0 - 1 && x < b.x1 + 1) ? STAGE_LINE_COST : 0);
+
+  // Anchor names: above the point, or on another side or corner of it when a line crosses there. Lines that end at
+  // the anchor itself start at the name, so they do not count against it.
+  const anchorSides: LabelSide[] = ['above', 'above-left', 'above-right', 'below', 'below-left', 'below-right', 'left', 'right'];
+  for (const n of nodes) {
+    if (n.kind !== 'anchor') continue;
+    const w = strong(n.name);
+    const boxOf = (side: LabelSide): Box => {
+      // A corner keeps 2 off the point so a line through the point clears the name.
+      const corner = side.includes('-') ? 2 : 0;
+      const y = side.startsWith('below') ? n.cy + LINE_H / 2 + corner : side === 'left' || side === 'right' ? n.cy : n.cy - LINE_H / 2 - corner;
+      const x = side === 'left' ? n.cx - LABEL_GAP : side === 'right' ? n.cx + LABEL_GAP : n.cx + (side.endsWith('left') ? -corner : side.endsWith('right') ? corner : 0);
+      return anchoredBox(x, y, w, anchorOfSide(side), LINE_H);
+    };
+    const own = samples.filter((p) => Math.hypot(p.x - n.cx, p.y - n.cy) >= 4);
+    const ctx: ClashContext = { bounds: { x0: 16, x1: width - 16, y0: 16, y1: height - 16 }, fixed, placed: [], samples: own };
+    const pick = pickLeastClash(anchorSides, boxOf, (b) => clashCost(b, ctx) + stageLineCost(b));
+    const side = pick?.candidate ?? 'above';
+    n.label = { ...(pick?.box ?? boxOf('above')), side, text: n.name };
+    fixed.push(n.label);
   }
 
   // Forces: a block arrow pointing the way evolution is pushed.
@@ -254,8 +284,8 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
     let list: Box;
     if (map.annotationsAt !== undefined) {
       const raw = boxAt(xOf(map.annotationsAt.evolution), yOf(map.annotationsAt.visibility));
-      const dx = Math.min(0, plotBox.x1 - raw.x1);
-      const dy = Math.min(0, plotBox.y1 - raw.y1);
+      const dx = Math.min(0, plotBox.x1 - raw.x1 - LIST_PAD);
+      const dy = Math.min(0, plotBox.y1 - raw.y1 - LIST_PAD);
       list = { x0: raw.x0 + dx, x1: raw.x1 + dx, y0: raw.y0 + dy, y1: raw.y1 + dy };
     } else {
       const corners: Box[] = [
@@ -267,13 +297,16 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
       const ctx: ClashContext = { bounds: inflate(plotBox, 0), fixed, placed: [], samples };
       list = pickLeastClash(corners, (b) => b, (b) => clashCost(b, ctx))?.box ?? (corners[0] as Box);
     }
+    // The list sits on a note panel, so stage lines and links behind it do not run through its text.
+    const panel = inflate(list, LIST_PAD);
+    annItems.push({ kind: 'box', style: 'note', x: panel.x0, y: panel.y0, w: panel.x1 - panel.x0, h: panel.y1 - panel.y0, role: ['note'], data: { annotations: 'list' } });
     annSorted.forEach((a, i) => {
       const cy = list.y0 + ROW / 2 + i * ROW;
       annItems.push({ kind: 'circle', cx: list.x0 + MARKER_R, cy, r: MARKER_R, role: ['end-ring'], data: { annotation: String(a.number), list: 'true' } });
       annItems.push({ kind: 'text', x: list.x0 + MARKER_R, y: cy, text: String(a.number), anchor: 'middle', role: ['tick'] });
       annItems.push({ kind: 'text', x: list.x0 + MARKER_R * 2 + 8, y: cy, text: a.text, anchor: 'start', role: ['body'] });
     });
-    fixed.push(list);
+    fixed.push(panel);
   }
 
   // Names of components: an asked-for side first, then right, left, below and above, taking the first that touches nothing.
@@ -288,12 +321,16 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
   map.nodes.forEach((src, i) => {
     const n = nodes[i];
     if (n === undefined) return;
-    if (n.kind === 'anchor') {
-      n.label = { ...anchoredBox(n.cx, n.cy - 8, strong(n.name), 'middle', LINE_H), side: 'above', text: n.name };
+    if (n.kind === 'anchor') return;
+    const w = text(n.name);
+    // The owner of a pipeline is named above the pipeline box, apart from the names inside it.
+    const pipeIndex = map.pipelines.findIndex((p) => p.name === n.name);
+    const pipe = pipeBoxes[pipeIndex];
+    if (pipe !== undefined) {
+      n.label = { ...anchoredBox(n.cx, pipe.y0 - 4 - LINE_H / 2, w, 'middle', LINE_H), side: 'above', text: n.name };
       placed.push(n.label);
       return;
     }
-    const w = text(n.name);
     const rightReach = n.reach + (n.inertia ? 8 : 0);
     const dy = src.labelOffset?.dy ?? 0;
     const boxOf = (side: LabelSide): Box => {
@@ -304,7 +341,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
       return anchoredBox(n.cx, n.cy - n.reach - LABEL_GAP - LINE_H / 2, w, 'middle', LINE_H);
     };
     const ctx = ctxNow();
-    const pick = pickLeastClash(sidesFor(src.labelOffset), boxOf, (b) => clashCost(b, ctx));
+    const pick = pickLeastClash(sidesFor(src.labelOffset), boxOf, (b) => clashCost(b, ctx) + stageLineCost(b));
     const side = pick?.candidate ?? 'right';
     const box = pick?.box ?? boxOf('right');
     n.label = { ...box, side, text: n.name };
@@ -366,7 +403,6 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
   });
 
   // Assemble in paint order.
-  const boundaries = map.stages.slice(0, -1).map((st) => xOf(st.end));
   if (map.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: 56, text: map.title, anchor: 'start', role: ['title'] });
   for (const bx of boundaries) items.push({ kind: 'line', points: [{ x: bx, y: top }, { x: bx, y: bottom }], role: ['grid'] });
   items.push({ kind: 'line', points: [{ x: plotX, y: bottom }, { x: plotX + plotW, y: bottom }], role: ['axis'] });
@@ -378,13 +414,14 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
     if (n.kind === 'anchor') continue;
     const d = { name: n.name, ...(n.sourcing === undefined ? {} : { sourcing: n.sourcing }), ...(n.inertia ? { inertia: 'true' } : {}) };
     const { cx, cy } = n;
-    if (n.sourcing === 'build') {
+    // The symbols the syntax documentation names: build a triangle, buy a diamond, outsource a square, market a circle.
+    if (n.sourcing === 'market') {
       items.push({ kind: 'circle', cx, cy, r: RING_R, role: ['end-open'], data: d }, { kind: 'circle', cx, cy, r: dot, role: ['dot'] });
     } else if (n.sourcing === 'buy') {
       items.push({ kind: 'path', d: `M${cx} ${cy - 8}L${cx + 8} ${cy}L${cx} ${cy + 8}L${cx - 8} ${cy}Z`, role: ['dot'], data: d });
-    } else if (n.sourcing === 'outsource') {
+    } else if (n.sourcing === 'build') {
       items.push({ kind: 'path', d: `M${cx} ${cy - 8}L${cx + 8} ${cy + 6}L${cx - 8} ${cy + 6}Z`, role: ['dot'], data: d });
-    } else if (n.sourcing === 'market') {
+    } else if (n.sourcing === 'outsource') {
       items.push({ kind: 'path', d: `M${cx - 6} ${cy - 6}H${cx + 6}V${cy + 6}H${cx - 6}Z`, role: ['dot'], data: d });
     } else {
       items.push({ kind: 'circle', cx, cy, r: dot, role: ['dot'], data: d });
@@ -394,13 +431,10 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'sol
   items.push(...evolveItems.filter((it) => it.kind === 'circle'), ...annItems);
   for (const n of nodes) {
     const l = n.label;
-    if (n.kind === 'anchor') {
-      items.push({ kind: 'text', x: n.cx, y: n.cy - 8, text: n.name, anchor: 'middle', role: ['name'], data: { anchor: n.name } });
-    } else {
-      const anchor = l.side === 'right' ? 'start' : l.side === 'left' ? 'end' : 'middle';
-      const x = l.side === 'right' ? l.x0 : l.side === 'left' ? l.x1 : (l.x0 + l.x1) / 2;
-      items.push({ kind: 'text', x, y: (l.y0 + l.y1) / 2, text: n.name, anchor, role: ['body'] });
-    }
+    const anchor = anchorOfSide(l.side);
+    const x = anchor === 'start' ? l.x0 : anchor === 'end' ? l.x1 : (l.x0 + l.x1) / 2;
+    if (n.kind === 'anchor') items.push({ kind: 'text', x, y: (l.y0 + l.y1) / 2, text: n.name, anchor, role: ['name'], data: { anchor: n.name } });
+    else items.push({ kind: 'text', x, y: (l.y0 + l.y1) / 2, text: n.name, anchor, role: ['body'] });
     width = Math.max(width, ceilTo(l.x1 + MARGIN));
     height = Math.max(height, ceilTo(l.y1 + MARGIN / 2));
   }

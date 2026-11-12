@@ -170,3 +170,22 @@ describe('eventmodeling errors', () => {
     expect(() => render('eventmodeling\ntf 01 xyz A')).toThrowError(/line 2/);
   });
 });
+
+describe('eventmodeling relation lines', () => {
+  it('never run through a box other than the two they join', () => {
+    for (const [name, src] of Object.entries(examples)) {
+      const l = layoutEventModel(parseEventModeling(src), pixelRuler());
+      for (const e of l.edges) {
+        for (const [i, a] of e.points.entries()) {
+          const b = e.points[i + 1];
+          if (b === undefined) continue;
+          for (const p of l.frames) {
+            if (p.number === e.from || p.number === e.to) continue;
+            const crosses = Math.max(a.x, b.x) > p.x && Math.min(a.x, b.x) < p.x + p.w && Math.max(a.y, b.y) > p.y && Math.min(a.y, b.y) < p.y + p.h;
+            expect(crosses, `${name}: ${e.from}>${e.to} through ${p.number}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+});

@@ -295,3 +295,87 @@ describe('wardley map text', () => {
     expect(r.lines.every((l) => l.length <= 30)).toBe(true);
   });
 });
+
+describe('wardley map label and mark placement', () => {
+  const at = (src: string) => layoutWardley(parseWardley(src), ruler);
+  const nameBox = (l: ReturnType<typeof at>, name: string) => {
+    const n = l.nodes.find((x) => x.name === name);
+    if (n === undefined) throw new Error(`no ${name}`);
+    return n.label;
+  };
+
+  it.each(['03-coordinate-system.mmd', '12-custom-evolution-stages.mmd', '13-dual-labels.mmd', '14-custom-stage-widths.mmd', '11-pipelines.mmd'])(
+    'keeps names in %s off the stage lines',
+    (f) => {
+      const l = at(EXAMPLES[f] ?? '');
+      for (const n of l.nodes) {
+        for (const x of l.boundaries) expect(x > n.label.x0 - 1 && x < n.label.x1 + 1, `${n.name} on ${x}`).toBe(false);
+      }
+    },
+  );
+
+  it('keeps every dependency line off the names it does not end at', () => {
+    for (const [f, src] of Object.entries(EXAMPLES)) {
+      const l = at(src);
+      for (const it of l.scene.items) {
+        if (it.kind !== 'line' || it.data?.['link'] === undefined) continue;
+        const [a, b] = it.points;
+        if (a === undefined || b === undefined) continue;
+        for (const n of l.nodes) {
+          if (n.name === it.data['from'] || n.name === it.data['to']) continue;
+          const box = n.label;
+          for (let t = 0; t <= 1; t += 0.01) {
+            const x = a.x + (b.x - a.x) * t;
+            const y = a.y + (b.y - a.y) * t;
+            expect(x > box.x0 && x < box.x1 && y > box.y0 && y < box.y1, `${f}: ${it.data['from']}>${it.data['to']} crosses ${n.name}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('draws the sourcing symbols the documentation names', () => {
+    const l = at(SOURCING);
+    const shape = (name: string) => l.scene.items.filter((i) => i.data?.['name'] === name || (i.kind === 'circle' && i.role.includes('dot') && l.nodes.find((n) => n.name === name)?.cx === i.cx && l.nodes.find((n) => n.name === name)?.cy === i.cy));
+    const pathOf = (name: string): string => {
+      const p = shape(name).find((i) => i.kind === 'path');
+      return p?.kind === 'path' ? p.d : '';
+    };
+    // build: triangle (three corners), buy: diamond (four corners, none level with the centre row), outsource: square, market: circle.
+    expect(pathOf('Custom App').match(/[ML]/g)).toHaveLength(3);
+    expect(pathOf('Off-the-shelf Tool').match(/[ML]/g)).toHaveLength(4);
+    expect(pathOf('Managed Service')).toMatch(/H.*V.*H/);
+    expect(shape('Cloud Platform').some((i) => i.kind === 'circle' && i.role.includes('end-open'))).toBe(true);
+  });
+
+  it('names the pipeline owner above its pipeline box', () => {
+    const l = at(PIPELINE);
+    const frame = l.scene.items.find((i) => i.kind === 'box' && i.data?.['pipeline'] === 'Database');
+    if (frame?.kind !== 'box') throw new Error('no pipeline box');
+    const label = nameBox(l, 'Database');
+    expect(label.y1).toBeLessThanOrEqual(frame.y);
+    const db = l.nodes.find((n) => n.name === 'Database');
+    expect(Math.abs((label.x0 + label.x1) / 2 - (db?.cx ?? 0))).toBeLessThanOrEqual(1);
+  });
+
+  it('backs the annotation list with a panel over the stage lines', () => {
+    const l = at(EXAMPLES['19-complete-example.mmd'] ?? '');
+    const panel = l.scene.items.find((i) => i.kind === 'box' && i.data?.['annotations'] === 'list');
+    if (panel?.kind !== 'box') throw new Error('no panel');
+    const rows = textBoxes(l.scene).filter((t) => ['User touchpoints', 'Integration layer', 'Data persistence'].includes(t.text));
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(r.x0).toBeGreaterThanOrEqual(panel.x);
+      expect(r.x1).toBeLessThanOrEqual(panel.x + panel.w);
+    }
+    expect(l.scene.items.indexOf(panel)).toBeGreaterThan(l.scene.items.findIndex((i) => i.kind === 'line' && (i.role ?? []).includes('grid')));
+  });
+
+  it('starts an evolve arrow past the inertia bar', () => {
+    const l = at(EXAMPLES['19-complete-example.mmd'] ?? '');
+    const bar = l.scene.items.find((i) => i.kind === 'line' && i.data?.['inertia'] === 'Database');
+    const arrow = l.scene.items.find((i) => i.kind === 'line' && i.data?.['evolve'] === 'Database');
+    if (bar?.kind !== 'line' || arrow?.kind !== 'line') throw new Error('missing');
+    expect(arrow.points[0]?.x ?? 0).toBeGreaterThan((bar.points[0]?.x ?? 0) + 2);
+  });
+});
