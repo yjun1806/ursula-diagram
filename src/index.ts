@@ -7,6 +7,7 @@ import type { SvgOptions } from './render/svg.ts';
 import './kanban/frontend.ts';
 import './quadrant/frontend.ts';
 import './sequence/frontend.ts';
+import './timeline/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
 
