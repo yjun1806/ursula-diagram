@@ -22,6 +22,7 @@ import './sequence/frontend.ts';
 import './state/frontend.ts';
 import './timeline/frontend.ts';
 import './treeview/frontend.ts';
+import './usecase/frontend.ts';
 import './treemap/frontend.ts';
 import './venn/frontend.ts';
 import './xychart/frontend.ts';
