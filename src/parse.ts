@@ -1,4 +1,4 @@
-import type { EdgeEnd, EdgeStyle, Graph, GraphEdge, Lane, NodeShape } from './types.ts';
+import type { Direction, EdgeEnd, EdgeStyle, Graph, GraphCluster, GraphEdge, Lane, NodeShape } from './types.ts';
 import { UrsulaError } from './types.ts';
 
 interface NodeDraft {
@@ -19,9 +19,14 @@ interface State {
   /** Source line of every edge, in the order of `edges`. */
   edgeLines: number[];
   ignored: string[];
+  /** The innermost subgraph that is open. */
   openLane: string | null;
+  /** Subgraphs that are open, outermost first. */
+  stack: string[];
   openLine: number;
   implicitLane: string | null;
+  /** What each subgraph says about itself beyond its name. */
+  groups: Map<string, { parent?: string; direction?: Direction; mirror?: 'RL' | 'BT' }>;
 }
 
 const IMPLICIT_LANE = '_';
@@ -436,7 +441,6 @@ function touchNode(st: State, read: NodeRead): void {
 }
 
 function parseSubgraph(rest: string, line: number, st: State): void {
-  if (st.openLane !== null) throw new UrsulaError('nested subgraphs are not supported yet', 'nested-subgraph', line);
   let id: string;
   let label: string;
   const quoted = /^"([^"]*)"$/.exec(rest);
@@ -457,8 +461,26 @@ function parseSubgraph(rest: string, line: number, st: State): void {
     throw new UrsulaError(`duplicate subgraph '${id}'`, 'syntax', line);
   }
   st.lanes.push({ id, label: label.replace(/<br\s*\/?>|\r?\n/gi, ' ') });
+  st.groups.set(id, st.openLane === null ? {} : { parent: st.openLane });
+  st.stack.push(id);
   st.openLane = id;
   st.openLine = line;
+}
+
+/** Reads `direction X` inside a subgraph. */
+function parseGroupDirection(stmt: string, line: number, st: State): void {
+  const word = /^direction\s+(\S+)$/.exec(stmt)?.[1];
+  const group = st.openLane === null ? undefined : st.groups.get(st.openLane);
+  if (group === undefined) return;
+  if (word === 'LR') group.direction = 'LR';
+  else if (word === 'TD' || word === 'TB') group.direction = 'TD';
+  else if (word === 'RL') {
+    group.direction = 'LR';
+    group.mirror = 'RL';
+  } else if (word === 'BT') {
+    group.direction = 'TD';
+    group.mirror = 'BT';
+  } else throw new UrsulaError(`unknown direction '${word ?? ''}'`, 'syntax', line);
 }
 
 function parseChain(stmt: string, line: number, st: State): void {
@@ -548,8 +570,10 @@ export function parse(src: string): Graph {
     edgeLines: [],
     ignored: [],
     openLane: null,
+    stack: [],
     openLine: 0,
     implicitLane: null,
+    groups: new Map(),
   };
   let headerSeen = false;
   for (const { text, line: lineNo } of logicalLines(src)) {
@@ -562,12 +586,13 @@ export function parse(src: string): Graph {
       } else if (DIAGRAM_TYPES.test(stmt)) {
         throw new UrsulaError(`unsupported diagram type '${stmt.split(/\s+/)[0]}'`, 'unsupported-diagram', lineNo);
       } else if (/^direction(\s|$)/.test(stmt) && st.openLane !== null) {
-        throw new UrsulaError('a direction inside a subgraph is not supported yet', 'unsupported', lineNo);
+        parseGroupDirection(stmt, lineNo, st);
       } else if (IGNORED.test(stmt)) {
         if (STYLING.test(stmt)) st.ignored.push(stmt);
       } else if (stmt === 'end') {
         if (st.openLane === null) throw new UrsulaError("'end' without a matching 'subgraph'", 'syntax', lineNo);
-        st.openLane = null;
+        st.stack.pop();
+        st.openLane = st.stack.at(-1) ?? null;
       } else if (/^subgraph(\s|$)/.test(stmt)) {
         parseSubgraph(stmt.slice('subgraph'.length).trim(), lineNo, st);
       } else {
@@ -577,16 +602,59 @@ export function parse(src: string): Graph {
   }
   if (!headerSeen) throw new UrsulaError("expected a 'flowchart' or 'graph' header", 'syntax', 1);
   if (st.openLane !== null) throw new UrsulaError(`subgraph '${st.openLane}' is never closed`, 'syntax', st.openLine);
-  const lane = new Set(st.lanes.map((l) => l.id));
-  st.edges.forEach((e, i) => {
-    const target = lane.has(e.from) ? e.from : lane.has(e.to) ? e.to : undefined;
-    if (target !== undefined) throw new UrsulaError(`an edge to the subgraph '${target}' is not supported yet`, 'subgraph-edge', st.edgeLines[i]);
-  });
-
   return finish(st);
 }
 
+/**
+ * The subgraphs as boxes: some subgraph holds another, has a direction of its own, or is the end of an edge.
+ * Otherwise they are bands (lanes).
+ */
+function needsBoxes(st: State): boolean {
+  const ids = new Set(st.lanes.map((l) => l.id));
+  return [...st.groups.values()].some((g) => g.parent !== undefined || g.direction !== undefined) || st.edges.some((e) => ids.has(e.from) || ids.has(e.to));
+}
+
+/** The graph with every subgraph as a cluster; a subgraph with nothing in it, and the edges that end at it, are left out. */
+function finishClusters(st: State): Graph {
+  const parentOf = (id: string): string | undefined => st.groups.get(id)?.parent;
+  const filled = new Set<string>();
+  for (const n of st.nodes.values()) {
+    for (let g = n.lane === null || n.lane === IMPLICIT_LANE ? undefined : n.lane; g !== undefined; g = parentOf(g)) filled.add(g);
+  }
+  const clusters: GraphCluster[] = st.lanes
+    .filter((l) => filled.has(l.id))
+    .map((l) => {
+      const g = st.groups.get(l.id) ?? {};
+      const parent = g.parent;
+      return { id: l.id, label: l.label, ...(parent === undefined ? {} : { parent }), ...(g.direction === undefined ? {} : { direction: g.direction }), ...(g.mirror === undefined ? {} : { mirror: g.mirror }) };
+    });
+  const empty = new Set(st.lanes.filter((l) => !filled.has(l.id)).map((l) => l.id));
+  const home = { id: IMPLICIT_LANE, label: '' };
+  return {
+    direction: st.direction,
+    ...(st.mirror === undefined ? {} : { mirror: st.mirror }),
+    ...(st.ignored.length === 0 ? {} : { ignored: st.ignored }),
+    lanes: [home],
+    clusters,
+    nodes: [...st.nodes.values()].map((n) => ({
+      id: n.id,
+      title: n.title,
+      lines: n.lines,
+      shape: n.shape,
+      lane: IMPLICIT_LANE,
+      ...(n.lane === null || n.lane === IMPLICIT_LANE ? {} : { cluster: n.lane }),
+      ...(n.shapeAsked === undefined ? {} : { shapeAsked: n.shapeAsked }),
+    })),
+    edges: st.edges.filter((e) => !empty.has(e.from) && !empty.has(e.to)),
+  };
+}
+
 function finish(st: State): Graph {
+  if (needsBoxes(st)) {
+    // A subgraph named in an edge before it was opened was read as a node; it is a cluster.
+    for (const l of st.lanes) st.nodes.delete(l.id);
+    return finishClusters(st);
+  }
   const nodes = [...st.nodes.values()];
   const used = new Set(nodes.map((n) => n.lane));
   // The implicit lane sits where its first node appears relative to the subgraphs.

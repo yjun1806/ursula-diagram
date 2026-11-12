@@ -1,60 +1,230 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="ursula" viewBox="0 0 1096 1072" width="1096" height="1072" role="img"><title>Sequence diagram: 5 participants, 13 messages</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
-.ursula-box{stroke-width:1}
-.ursula-box--box{fill:var(--ursula-surface,#ffffff);stroke:var(--ursula-fg,#1f2937);stroke-opacity:.7}
-.ursula-box--actor{fill:var(--ursula-lane,#f3f4f6);stroke:var(--ursula-fg,#1f2937);stroke-opacity:.7}
-.ursula-box--note{fill:var(--ursula-surface,#ffffff);stroke:var(--ursula-border,#d1d5db)}
-.ursula-box--barback{fill:var(--ursula-surface,#ffffff);stroke:none}
-.ursula-box--bar{fill:var(--ursula-fg,#1f2937);fill-opacity:.07;stroke:var(--ursula-muted,#6b7280);stroke-width:.8}
-.ursula-box--frame{fill:var(--ursula-fg,#1f2937);fill-opacity:.03;stroke:var(--ursula-fg,#1f2937);stroke-opacity:.22}
-.ursula-box--label{fill:var(--ursula-surface,#ffffff);stroke:none}
-.ursula-tab{fill:var(--ursula-surface,#ffffff);stroke:var(--ursula-fg,#1f2937);stroke-opacity:.22;stroke-width:1}
-.ursula-tab-text{fill:var(--ursula-fg,#1f2937);font-size:10px;font-weight:600;letter-spacing:.08em}
-.ursula-line{fill:none;stroke-width:1.2}
-.ursula-line--fg{stroke:var(--ursula-fg,#1f2937)}
-.ursula-line--soft{stroke:var(--ursula-fg,#1f2937);stroke-opacity:.75}
-.ursula-line--muted{stroke:var(--ursula-muted,#6b7280)}
-.ursula-line--dash{stroke-dasharray:5 4}
-.ursula-line--life{stroke:var(--ursula-fg,#1f2937);stroke-opacity:.22;stroke-width:1;stroke-dasharray:3 3}
-.ursula-line--divider{stroke:var(--ursula-fg,#1f2937);stroke-opacity:.2;stroke-width:1;stroke-dasharray:4 3}
-.ursula-line--rule{stroke:var(--ursula-hair,#e5e7eb);stroke-width:1}
-.ursula-arrow{fill:var(--ursula-muted,#6b7280)}
-.ursula-arrow--soft{fill:var(--ursula-fg,#1f2937);fill-opacity:.75}
-.ursula-arrow-open{fill:none;stroke:var(--ursula-muted,#6b7280);stroke-width:1.2}
-.ursula-text{fill:var(--ursula-fg,#1f2937);font-size:12px;font-weight:400}
-.ursula-text--soft{fill:var(--ursula-fg,#1f2937);fill-opacity:.75}
-.ursula-text--muted{fill:var(--ursula-muted,#6b7280)}
-.ursula-text--title{font-size:13px;font-weight:600}
-.ursula-text--label{font-weight:500}
-.ursula-text--num{font-weight:700}
-.ursula-text--caption{font-size:11px;font-weight:400}
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="solid" viewBox="0 0 1096 1104" width="1096" height="1104" role="img"><title>Sequence diagram: 5 participants, 13 messages</title><style>.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula-bg{fill:var(--ursula-bg,#ffffff)}
+.ursula-panel{fill:var(--ursula-panel,none)}
+.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#1c1a24)}
+.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#1c1a24);text-anchor:middle}
+.ursula-sub{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775);text-anchor:middle}
+.ursula-body{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#1c1a24)}
+.ursula-mono{font:400 12px 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;fill:var(--ursula-ink,#1c1a24)}
+.ursula-label{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775);text-anchor:middle}
+.ursula-label--accent{fill:var(--ursula-accent,#7447c8)}
+.ursula-zone-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#1c1a24)}
+.ursula-zone-sub{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775)}
+.ursula-legend{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775)}
+.ursula-axis-name{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775)}
+.ursula-tick{font:400 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775);font-variant-numeric:tabular-nums}
+.ursula-value{font:600 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-value,#4f2b9a);text-anchor:middle;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--ursula-halo,#ffffff);stroke-width:3px;stroke-linejoin:round}
+.ursula-value--bare{stroke:none}
+.ursula-value--plain{stroke:none}
+.ursula-tick--halo{paint-order:stroke;stroke:var(--ursula-halo,#ffffff);stroke-width:3px;stroke-linejoin:round}
+.ursula-tag-text{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#6a6775);text-anchor:middle}
+.ursula-faint{fill:var(--ursula-ink-3,#9795a1)}
+.ursula-start{text-anchor:start}
+.ursula-middle{text-anchor:middle}
+.ursula-end{text-anchor:end}
+.ursula-on-start{fill:var(--ursula-start-ink,#ffffff)}
+.ursula-on-decision{fill:var(--ursula-decision-ink,#4f2b9a)}
+.ursula-box{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0;stroke-linejoin:round}
+.ursula-box--in-zone{fill:var(--ursula-box-in-zone,#ffffff)}
+.ursula-box--start{fill:var(--ursula-start-fill,#7447c8);stroke:var(--ursula-start-stroke,none);stroke-width:0}
+.ursula-box--decision{fill:var(--ursula-decision-fill,#e3d6fe);stroke:var(--ursula-decision-stroke,none);stroke-width:0}
+.ursula-box--pending{stroke:var(--ursula-zone-dash,#c4c1d0);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-active{fill:var(--ursula-active-fill,#e3d6fe);stroke:var(--ursula-active-stroke,none);stroke-width:0}
+.ursula-note{fill:var(--ursula-note-fill,#ffffff);stroke:var(--ursula-note-stroke,#e4e2ec);stroke-width:2}
+.ursula-token{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-tile{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-tile--in-zone{fill:var(--ursula-box-in-zone,#ffffff)}
+.ursula-ellipse{fill:var(--ursula-box-fill,#f3f2f7);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-start-dot{fill:var(--ursula-accent,#7447c8)}
+.ursula-end-ring{fill:var(--ursula-bg,#ffffff);stroke:var(--ursula-ink,#1c1a24);stroke-width:2.5}
+.ursula-end-dot{fill:var(--ursula-ink,#1c1a24)}
+.ursula-rule{fill:none;stroke:var(--ursula-rule,#ffffff);stroke-width:2}
+.ursula-tag{fill:var(--ursula-tag-fill,#e9e7f0)}
+.ursula-tag--in-zone{fill:var(--ursula-tag-fill-zone,#f3f2f7)}
+.ursula-edge{fill:none;stroke:var(--ursula-edge,#c4c1d0);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-edge--pending{stroke-dasharray:2 7}
+.ursula-edge--msg{stroke:var(--ursula-edge-msg,#8f8c9b)}
+.ursula-edge--msg.ursula-edge--pending{stroke-dasharray:6 6}
+.ursula-port{display:none;fill:var(--ursula-halo,#ffffff);stroke:var(--ursula-edge,#c4c1d0);stroke-width:2.5}
+.ursula-port--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-port--msg{stroke:var(--ursula-edge-msg,#8f8c9b)}
+.ursula-end-open{fill:var(--ursula-bg,#ffffff);stroke:var(--ursula-edge,#c4c1d0);stroke-width:2.5;stroke-linejoin:round}
+.ursula-end-fill{fill:var(--ursula-edge,#c4c1d0);stroke:var(--ursula-edge,#c4c1d0);stroke-width:2.5;stroke-linejoin:round}
+.ursula-end-open--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-end-fill--accent{fill:var(--ursula-accent,#7447c8);stroke:var(--ursula-accent,#7447c8)}
+.ursula-lifeline{fill:none;stroke:var(--ursula-lifeline,#e4e2ec);stroke-width:2;stroke-linecap:round}
+.ursula-guide{fill:none;stroke:var(--ursula-guide,#e4e2ec);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ursula-chip{fill:var(--ursula-chip-fill,#f3f2f7);stroke:var(--ursula-chip-stroke,#ffffff);stroke-width:3}
+.ursula-chip--accent{fill:var(--ursula-chip-accent-fill,#f2edff);stroke:var(--ursula-chip-accent-stroke,#ffffff)}
+.ursula-zone{fill:var(--ursula-zone-fill,#f3f2f7);stroke:var(--ursula-zone-stroke,none);stroke-width:0}
+.ursula-zone--plain{fill:var(--ursula-zone-plain,#ffffff);stroke:var(--ursula-zone-plain-stroke,#e4e2ec);stroke-width:2}
+.ursula-zone--dashed{fill:none;stroke:var(--ursula-zone-dash,#c4c1d0);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-frame{fill:none;stroke:var(--ursula-frame,#e4e2ec);stroke-width:2}
+.ursula-frame-split{fill:none;stroke:var(--ursula-frame,#e4e2ec);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-axis{fill:none;stroke:var(--ursula-axis,none);stroke-width:1.25;stroke-linecap:round}
+.ursula-grid{fill:none;stroke:var(--ursula-grid,#f3f2f7);stroke-width:2;stroke-dasharray:none;stroke-linecap:round}
+.ursula-mark{fill:var(--ursula-bar,#cdbdf5)}
+.ursula-mark-line{fill:none;stroke:var(--ursula-data,#4f2b9a);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-mark-dot{fill:var(--ursula-dot-fill,#4f2b9a);stroke:var(--ursula-dot-stroke,#ffffff);stroke-width:2.5}
+.ursula-dot{fill:var(--ursula-dot-neutral,#8f8c9b)}
+.ursula-series-1{fill:var(--ursula-s1,#7447c8)}
+.ursula-series-1--tint,.ursula-series-1.ursula-tint{fill:var(--ursula-s1-tint,#f2edff);stroke:var(--ursula-s1,#7447c8);stroke-width:0}
+.ursula-series-1--overlap,.ursula-series-1.ursula-overlap{fill:var(--ursula-s1,#7447c8);fill-opacity:0.24;stroke:var(--ursula-s1,#7447c8);stroke-width:0;stroke-linejoin:round}
+.ursula-series-1--line,.ursula-series-1.ursula-line{fill:none;stroke:var(--ursula-s1,#7447c8);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-1--dot,.ursula-series-1.ursula-dot{fill:var(--ursula-s1,#7447c8);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-2{fill:var(--ursula-s2,#0f9b95)}
+.ursula-series-2--tint,.ursula-series-2.ursula-tint{fill:var(--ursula-s2-tint,#d7f1ef);stroke:var(--ursula-s2,#0f9b95);stroke-width:0}
+.ursula-series-2--overlap,.ursula-series-2.ursula-overlap{fill:var(--ursula-s2,#0f9b95);fill-opacity:0.24;stroke:var(--ursula-s2,#0f9b95);stroke-width:0;stroke-linejoin:round}
+.ursula-series-2--line,.ursula-series-2.ursula-line{fill:none;stroke:var(--ursula-s2,#0f9b95);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-2--dot,.ursula-series-2.ursula-dot{fill:var(--ursula-s2,#0f9b95);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-3{fill:var(--ursula-s3,#d58d25)}
+.ursula-series-3--tint,.ursula-series-3.ursula-tint{fill:var(--ursula-s3-tint,#fbe8d3);stroke:var(--ursula-s3,#d58d25);stroke-width:0}
+.ursula-series-3--overlap,.ursula-series-3.ursula-overlap{fill:var(--ursula-s3,#d58d25);fill-opacity:0.24;stroke:var(--ursula-s3,#d58d25);stroke-width:0;stroke-linejoin:round}
+.ursula-series-3--line,.ursula-series-3.ursula-line{fill:none;stroke:var(--ursula-s3,#d58d25);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-3--dot,.ursula-series-3.ursula-dot{fill:var(--ursula-s3,#d58d25);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-4{fill:var(--ursula-s4,#1f7dcf)}
+.ursula-series-4--tint,.ursula-series-4.ursula-tint{fill:var(--ursula-s4-tint,#d9eeff);stroke:var(--ursula-s4,#1f7dcf);stroke-width:0}
+.ursula-series-4--overlap,.ursula-series-4.ursula-overlap{fill:var(--ursula-s4,#1f7dcf);fill-opacity:0.24;stroke:var(--ursula-s4,#1f7dcf);stroke-width:0;stroke-linejoin:round}
+.ursula-series-4--line,.ursula-series-4.ursula-line{fill:none;stroke:var(--ursula-s4,#1f7dcf);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-4--dot,.ursula-series-4.ursula-dot{fill:var(--ursula-s4,#1f7dcf);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-5{fill:var(--ursula-s5,#399d57)}
+.ursula-series-5--tint,.ursula-series-5.ursula-tint{fill:var(--ursula-s5-tint,#dcf2df);stroke:var(--ursula-s5,#399d57);stroke-width:0}
+.ursula-series-5--overlap,.ursula-series-5.ursula-overlap{fill:var(--ursula-s5,#399d57);fill-opacity:0.24;stroke:var(--ursula-s5,#399d57);stroke-width:0;stroke-linejoin:round}
+.ursula-series-5--line,.ursula-series-5.ursula-line{fill:none;stroke:var(--ursula-s5,#399d57);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-5--dot,.ursula-series-5.ursula-dot{fill:var(--ursula-s5,#399d57);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-6{fill:var(--ursula-s6,#dd5847)}
+.ursula-series-6--tint,.ursula-series-6.ursula-tint{fill:var(--ursula-s6-tint,#ffe2dc);stroke:var(--ursula-s6,#dd5847);stroke-width:0}
+.ursula-series-6--overlap,.ursula-series-6.ursula-overlap{fill:var(--ursula-s6,#dd5847);fill-opacity:0.24;stroke:var(--ursula-s6,#dd5847);stroke-width:0;stroke-linejoin:round}
+.ursula-series-6--line,.ursula-series-6.ursula-line{fill:none;stroke:var(--ursula-s6,#dd5847);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-6--dot,.ursula-series-6.ursula-dot{fill:var(--ursula-s6,#dd5847);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-7{fill:var(--ursula-s7,#9ca73e)}
+.ursula-series-7--tint,.ursula-series-7.ursula-tint{fill:var(--ursula-s7-tint,#eaeed6);stroke:var(--ursula-s7,#9ca73e);stroke-width:0}
+.ursula-series-7--overlap,.ursula-series-7.ursula-overlap{fill:var(--ursula-s7,#9ca73e);fill-opacity:0.24;stroke:var(--ursula-s7,#9ca73e);stroke-width:0;stroke-linejoin:round}
+.ursula-series-7--line,.ursula-series-7.ursula-line{fill:none;stroke:var(--ursula-s7,#9ca73e);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-7--dot,.ursula-series-7.ursula-dot{fill:var(--ursula-s7,#9ca73e);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-series-8{fill:var(--ursula-s8,#6b727e)}
+.ursula-series-8--tint,.ursula-series-8.ursula-tint{fill:var(--ursula-s8-tint,#e9ebef);stroke:var(--ursula-s8,#6b727e);stroke-width:0}
+.ursula-series-8--overlap,.ursula-series-8.ursula-overlap{fill:var(--ursula-s8,#6b727e);fill-opacity:0.24;stroke:var(--ursula-s8,#6b727e);stroke-width:0;stroke-linejoin:round}
+.ursula-series-8--line,.ursula-series-8.ursula-line{fill:none;stroke:var(--ursula-s8,#6b727e);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-8--dot,.ursula-series-8.ursula-dot{fill:var(--ursula-s8,#6b727e);stroke:var(--ursula-halo,#ffffff);stroke-width:2.5}
+.ursula-head{stroke-width:2;stroke-linejoin:round}
+.ursula-head--edge{fill:var(--ursula-edge,#c4c1d0);stroke:var(--ursula-edge,#c4c1d0)}
+.ursula-head--accent{fill:var(--ursula-accent,#7447c8);stroke:var(--ursula-accent,#7447c8)}
+.ursula-head--msg{fill:var(--ursula-edge-msg,#8f8c9b);stroke:var(--ursula-edge-msg,#8f8c9b)}
 @media (prefers-color-scheme: dark){
-.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
-.ursula-box{stroke-width:1}
-.ursula-box--box{fill:var(--ursula-surface,#1f232b);stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.7}
-.ursula-box--actor{fill:var(--ursula-lane,#22262e);stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.7}
-.ursula-box--note{fill:var(--ursula-surface,#1f232b);stroke:var(--ursula-border,#3a404c)}
-.ursula-box--barback{fill:var(--ursula-surface,#1f232b);stroke:none}
-.ursula-box--bar{fill:var(--ursula-fg,#e8eaee);fill-opacity:.07;stroke:var(--ursula-muted,#a0a6b2);stroke-width:.8}
-.ursula-box--frame{fill:var(--ursula-fg,#e8eaee);fill-opacity:.03;stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.22}
-.ursula-box--label{fill:var(--ursula-surface,#1f232b);stroke:none}
-.ursula-tab{fill:var(--ursula-surface,#1f232b);stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.22;stroke-width:1}
-.ursula-tab-text{fill:var(--ursula-fg,#e8eaee);font-size:10px;font-weight:600;letter-spacing:.08em}
-.ursula-line{fill:none;stroke-width:1.2}
-.ursula-line--fg{stroke:var(--ursula-fg,#e8eaee)}
-.ursula-line--soft{stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.75}
-.ursula-line--muted{stroke:var(--ursula-muted,#a0a6b2)}
-.ursula-line--dash{stroke-dasharray:5 4}
-.ursula-line--life{stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.22;stroke-width:1;stroke-dasharray:3 3}
-.ursula-line--divider{stroke:var(--ursula-fg,#e8eaee);stroke-opacity:.2;stroke-width:1;stroke-dasharray:4 3}
-.ursula-line--rule{stroke:var(--ursula-hair,#2d333b);stroke-width:1}
-.ursula-arrow{fill:var(--ursula-muted,#a0a6b2)}
-.ursula-arrow--soft{fill:var(--ursula-fg,#e8eaee);fill-opacity:.75}
-.ursula-arrow-open{fill:none;stroke:var(--ursula-muted,#a0a6b2);stroke-width:1.2}
-.ursula-text{fill:var(--ursula-fg,#e8eaee);font-size:12px;font-weight:400}
-.ursula-text--soft{fill:var(--ursula-fg,#e8eaee);fill-opacity:.75}
-.ursula-text--muted{fill:var(--ursula-muted,#a0a6b2)}
-.ursula-text--title{font-size:13px;font-weight:600}
-.ursula-text--label{font-weight:500}
-.ursula-text--num{font-weight:700}
-.ursula-text--caption{font-size:11px;font-weight:400}
-}</style><defs><marker id="ursula-arrow-filled-soft" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--soft" d="M0 0L8 3L0 6z"/></marker><marker id="ursula-arrow-filled-muted" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L8 3L0 6z"/></marker><marker id="ursula-arrow-open" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow-open" d="M0 0L8 4L0 8"/></marker><marker id="ursula-arrow-cross" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow-open" d="M1 1L7 7M7 1L1 7"/></marker></defs><path class="ursula-line ursula-line--life" d="M100 84 L100 980" data-participant="User"/><path class="ursula-line ursula-line--life" d="M324 84 L324 980" data-participant="Web"/><path class="ursula-line ursula-line--life" d="M548 84 L548 980" data-participant="API"/><path class="ursula-line ursula-line--life" d="M772 84 L772 980" data-participant="DB"/><path class="ursula-line ursula-line--life" d="M996 84 L996 980" data-participant="Mail"/><rect class="ursula-box ursula-box--barback" x="768" y="356" width="8" height="40" rx="2"/><rect class="ursula-box ursula-box--bar" x="768" y="356" width="8" height="40" rx="2"/><rect class="ursula-box ursula-box--barback" x="320" y="204" width="8" height="380" rx="2"/><rect class="ursula-box ursula-box--bar" x="320" y="204" width="8" height="380" rx="2"/><rect class="ursula-box ursula-box--barback" x="544" y="244" width="8" height="704" rx="2"/><rect class="ursula-box ursula-box--bar" x="544" y="244" width="8" height="704" rx="2"/><rect class="ursula-box ursula-box--label" x="148" y="104" width="128" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="164" y="144" width="96" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="140" y="184" width="144" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="384" y="224" width="104" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="592" y="292" width="120" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="592" y="336" width="136" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="608" y="376" width="104" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="376" y="524" width="120" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="128" y="564" width="168" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="592" y="648" width="136" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="384" y="688" width="104" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="152" y="728" width="120" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="48" y="496" width="120" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="48" y="620" width="120" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="372" y="852" width="128" height="16" rx="2"/><rect class="ursula-box ursula-box--label" x="272" y="824" width="108" height="16" rx="2"/><rect class="ursula-box ursula-box--frame" x="264" y="796" width="344" height="100" rx="4" data-block="loop" data-frame="1"/><rect class="ursula-tab" x="264" y="796" width="48" height="18" rx="3"/><text class="ursula-tab-text" x="288" y="805" text-anchor="middle" dominant-baseline="central">LOOP</text><rect class="ursula-box ursula-box--frame" x="40" y="468" width="1016" height="304" rx="4" data-block="alt" data-frame="0"/><rect class="ursula-tab" x="40" y="468" width="40" height="18" rx="3"/><text class="ursula-tab-text" x="60" y="477" text-anchor="middle" dominant-baseline="central">ALT</text><path class="ursula-line ursula-line--soft" d="M100 124 L324 124" marker-end="url(#ursula-arrow-filled-soft)" data-message="0" data-from="User" data-to="Web" data-kind="call"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M324 164 L100 164" marker-end="url(#ursula-arrow-filled-muted)" data-message="1" data-from="Web" data-to="User" data-kind="reply"/><path class="ursula-line ursula-line--soft" d="M100 204 L320 204" marker-end="url(#ursula-arrow-filled-soft)" data-message="2" data-from="User" data-to="Web" data-kind="call"/><path class="ursula-line ursula-line--soft" d="M328 244 L544 244" marker-end="url(#ursula-arrow-filled-soft)" data-message="3" data-from="Web" data-to="API" data-kind="call"/><path class="ursula-line ursula-line--soft" d="M552 284 L580 284 A8 8 0 0 1 588 292 L588 308 A8 8 0 0 1 580 316 L552 316" marker-end="url(#ursula-arrow-filled-soft)" data-message="4" data-from="API" data-to="API" data-kind="call"/><path class="ursula-line ursula-line--soft" d="M552 356 L768 356" marker-end="url(#ursula-arrow-filled-soft)" data-message="5" data-from="API" data-to="DB" data-kind="call"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M768 396 L552 396" marker-end="url(#ursula-arrow-filled-muted)" data-message="6" data-from="DB" data-to="API" data-kind="reply"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M544 544 L328 544" marker-end="url(#ursula-arrow-filled-muted)" data-message="7" data-from="API" data-to="Web" data-kind="reply"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M320 584 L100 584" marker-end="url(#ursula-arrow-filled-muted)" data-message="8" data-from="Web" data-to="User" data-kind="reply"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M552 668 L996 668" marker-end="url(#ursula-arrow-open)" data-message="9" data-from="API" data-to="Mail" data-kind="async"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M544 708 L328 708" marker-end="url(#ursula-arrow-cross)" data-message="10" data-from="API" data-to="Web" data-kind="failed"/><path class="ursula-line ursula-line--muted ursula-line--dash" d="M324 748 L100 748" marker-end="url(#ursula-arrow-filled-muted)" data-message="11" data-from="Web" data-to="User" data-kind="reply"/><path class="ursula-line ursula-line--divider" d="M48 608 L1048 608"/><path class="ursula-line ursula-line--soft" d="M324 872 L544 872" marker-end="url(#ursula-arrow-filled-soft)" data-message="12" data-from="Web" data-to="API" data-kind="call"/><rect class="ursula-box ursula-box--actor" x="40" y="40" width="120" height="44" rx="6" data-participant="User"/><rect class="ursula-box ursula-box--box" x="264" y="40" width="120" height="44" rx="6" data-participant="Web"/><rect class="ursula-box ursula-box--box" x="488" y="40" width="120" height="44" rx="6" data-participant="API"/><rect class="ursula-box ursula-box--box" x="712" y="40" width="120" height="44" rx="6" data-participant="DB"/><rect class="ursula-box ursula-box--box" x="936" y="40" width="120" height="44" rx="6" data-participant="Mail"/><rect class="ursula-box ursula-box--note" x="784" y="416" width="188" height="28" rx="4" data-note="0"/><rect class="ursula-box ursula-box--note" x="88" y="920" width="248" height="28" rx="4" data-note="1"/><text class="ursula-text ursula-text--title" x="100" y="62" text-anchor="middle" dominant-baseline="central">사용자</text><text class="ursula-text ursula-text--title" x="324" y="62" text-anchor="middle" dominant-baseline="central">Web App</text><text class="ursula-text ursula-text--title" x="548" y="62" text-anchor="middle" dominant-baseline="central">Auth API</text><text class="ursula-text ursula-text--title" x="772" y="62" text-anchor="middle" dominant-baseline="central">User Store</text><text class="ursula-text ursula-text--title" x="996" y="62" text-anchor="middle" dominant-baseline="central">Mail Service</text><text class="ursula-text ursula-text--num" x="155.3" y="112" text-anchor="start" dominant-baseline="central" data-message="0">01</text><text class="ursula-text ursula-text--soft ursula-text--label" x="176.9" y="112" text-anchor="start" dominant-baseline="central" data-message="0">Open login page</text><text class="ursula-text ursula-text--num" x="171.26" y="152" text-anchor="start" dominant-baseline="central" data-message="1">02</text><text class="ursula-text ursula-text--muted ursula-text--label" x="192.86" y="152" text-anchor="start" dominant-baseline="central" data-message="1">Show form</text><text class="ursula-text ursula-text--num" x="144.8" y="192" text-anchor="start" dominant-baseline="central" data-message="2">03</text><text class="ursula-text ursula-text--soft ursula-text--label" x="166.4" y="192" text-anchor="start" dominant-baseline="central" data-message="2">Submit credentials</text><text class="ursula-text ursula-text--num" x="389.2" y="232" text-anchor="start" dominant-baseline="central" data-message="3">04</text><text class="ursula-text ursula-text--soft ursula-text--label" x="410.8" y="232" text-anchor="start" dominant-baseline="central" data-message="3">POST /login</text><text class="ursula-text ursula-text--num" x="596" y="300" text-anchor="start" dominant-baseline="central" data-message="4">05</text><text class="ursula-text ursula-text--soft ursula-text--label" x="617.6" y="300" text-anchor="start" dominant-baseline="central" data-message="4">Hash password</text><text class="ursula-text ursula-text--num" x="596.16" y="344" text-anchor="start" dominant-baseline="central" data-message="5">06</text><text class="ursula-text ursula-text--soft ursula-text--label" x="617.76" y="344" text-anchor="start" dominant-baseline="central" data-message="5">Find user by email</text><text class="ursula-text ursula-text--num" x="612.42" y="384" text-anchor="start" dominant-baseline="central" data-message="6">07</text><text class="ursula-text ursula-text--muted ursula-text--label" x="634.02" y="384" text-anchor="start" dominant-baseline="central" data-message="6">User record</text><text class="ursula-text" x="792" y="430" text-anchor="start" dominant-baseline="central">Lookups are cached for 60 s</text><text class="ursula-text ursula-text--num" x="383.02" y="532" text-anchor="start" dominant-baseline="central" data-message="7">08</text><text class="ursula-text ursula-text--muted ursula-text--label" x="404.62" y="532" text-anchor="start" dominant-baseline="central" data-message="7">Session token</text><text class="ursula-text ursula-text--num" x="133.34" y="572" text-anchor="start" dominant-baseline="central" data-message="8">09</text><text class="ursula-text ursula-text--muted ursula-text--label" x="154.94" y="572" text-anchor="start" dominant-baseline="central" data-message="8">Redirect to dashboard</text><text class="ursula-text ursula-text--num" x="599.88" y="656" text-anchor="start" dominant-baseline="central" data-message="9">10</text><text class="ursula-text ursula-text--muted ursula-text--label" x="621.48" y="656" text-anchor="start" dominant-baseline="central" data-message="9">Send lock notice</text><text class="ursula-text ursula-text--num" x="390.4" y="696" text-anchor="start" dominant-baseline="central" data-message="10">11</text><text class="ursula-text ursula-text--muted ursula-text--label" x="412" y="696" text-anchor="start" dominant-baseline="central" data-message="10">423 Locked</text><text class="ursula-text ursula-text--num" x="156.74" y="736" text-anchor="start" dominant-baseline="central" data-message="11">12</text><text class="ursula-text ursula-text--muted ursula-text--label" x="178.34" y="736" text-anchor="start" dominant-baseline="central" data-message="11">계정이 잠겼습니다</text><text class="ursula-text ursula-text--muted ursula-text--caption" x="52" y="505" text-anchor="start" dominant-baseline="central">[Password matches]</text><text class="ursula-text ursula-text--muted ursula-text--caption" x="52" y="627" text-anchor="start" dominant-baseline="central">[Too many failures]</text><text class="ursula-text ursula-text--num" x="376.18" y="860" text-anchor="start" dominant-baseline="central" data-message="12">13</text><text class="ursula-text ursula-text--soft ursula-text--label" x="397.78" y="860" text-anchor="start" dominant-baseline="central" data-message="12">Refresh session</text><text class="ursula-text ursula-text--muted ursula-text--caption" x="276" y="833" text-anchor="start" dominant-baseline="central">[Every 5 minutes]</text><text class="ursula-text" x="212" y="934" text-anchor="middle" dominant-baseline="central">Session ends on logout</text><path class="ursula-line ursula-line--rule" d="M40 996 L1056 996"/><path class="ursula-line ursula-line--soft" d="M40 1020 L80 1020" marker-end="url(#ursula-arrow-filled-soft)"/><text class="ursula-text ursula-text--muted ursula-text--caption" x="88" y="1020" text-anchor="start" dominant-baseline="central">Call</text><path class="ursula-line ursula-line--muted ursula-line--dash" d="M136 1020 L176 1020" marker-end="url(#ursula-arrow-filled-muted)"/><text class="ursula-text ursula-text--muted ursula-text--caption" x="184" y="1020" text-anchor="start" dominant-baseline="central">Reply</text><path class="ursula-line ursula-line--muted ursula-line--dash" d="M240 1020 L280 1020" marker-end="url(#ursula-arrow-open)"/><text class="ursula-text ursula-text--muted ursula-text--caption" x="288" y="1020" text-anchor="start" dominant-baseline="central">Async</text><path class="ursula-line ursula-line--muted ursula-line--dash" d="M348 1020 L384 1020" marker-end="url(#ursula-arrow-cross)"/><text class="ursula-text ursula-text--muted ursula-text--caption" x="396" y="1020" text-anchor="start" dominant-baseline="central">Failed</text></svg>
+.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula-bg{fill:var(--ursula-bg,#1c1b22)}
+.ursula-panel{fill:var(--ursula-panel,none)}
+.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#ecebf2)}
+.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#ecebf2);text-anchor:middle}
+.ursula-sub{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3);text-anchor:middle}
+.ursula-body{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#ecebf2)}
+.ursula-mono{font:400 12px 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;fill:var(--ursula-ink,#ecebf2)}
+.ursula-label{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3);text-anchor:middle}
+.ursula-label--accent{fill:var(--ursula-accent,#7447c8)}
+.ursula-zone-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink,#ecebf2)}
+.ursula-zone-sub{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3)}
+.ursula-legend{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3)}
+.ursula-axis-name{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3)}
+.ursula-tick{font:400 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3);font-variant-numeric:tabular-nums}
+.ursula-value{font:600 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-value,#d9c9ff);text-anchor:middle;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--ursula-halo,#1c1b22);stroke-width:3px;stroke-linejoin:round}
+.ursula-value--bare{stroke:none}
+.ursula-value--plain{stroke:none}
+.ursula-tick--halo{paint-order:stroke;stroke:var(--ursula-halo,#1c1b22);stroke-width:3px;stroke-linejoin:round}
+.ursula-tag-text{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-ink-2,#a5a2b3);text-anchor:middle}
+.ursula-faint{fill:var(--ursula-ink-3,#6a6779)}
+.ursula-start{text-anchor:start}
+.ursula-middle{text-anchor:middle}
+.ursula-end{text-anchor:end}
+.ursula-on-start{fill:var(--ursula-start-ink,#ffffff)}
+.ursula-on-decision{fill:var(--ursula-decision-ink,#d9c9ff)}
+.ursula-box{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0;stroke-linejoin:round}
+.ursula-box--in-zone{fill:var(--ursula-box-in-zone,#34323e)}
+.ursula-box--start{fill:var(--ursula-start-fill,#7447c8);stroke:var(--ursula-start-stroke,none);stroke-width:0}
+.ursula-box--decision{fill:var(--ursula-decision-fill,rgba(116,71,200,0.24));stroke:var(--ursula-decision-stroke,none);stroke-width:0}
+.ursula-box--pending{stroke:var(--ursula-zone-dash,#6a6779);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-active{fill:var(--ursula-active-fill,rgba(116,71,200,0.24));stroke:var(--ursula-active-stroke,none);stroke-width:0}
+.ursula-note{fill:var(--ursula-note-fill,#1c1b22);stroke:var(--ursula-note-stroke,#3a3846);stroke-width:2}
+.ursula-token{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-tile{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-tile--in-zone{fill:var(--ursula-box-in-zone,#34323e)}
+.ursula-ellipse{fill:var(--ursula-box-fill,#2a2833);stroke:var(--ursula-box-stroke,none);stroke-width:0}
+.ursula-start-dot{fill:var(--ursula-accent,#7447c8)}
+.ursula-end-ring{fill:var(--ursula-bg,#1c1b22);stroke:var(--ursula-ink,#ecebf2);stroke-width:2.5}
+.ursula-end-dot{fill:var(--ursula-ink,#ecebf2)}
+.ursula-rule{fill:none;stroke:var(--ursula-rule,#1c1b22);stroke-width:2}
+.ursula-tag{fill:var(--ursula-tag-fill,#2e2c38)}
+.ursula-tag--in-zone{fill:var(--ursula-tag-fill-zone,#2a2833)}
+.ursula-edge{fill:none;stroke:var(--ursula-edge,#6a6779);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-edge--pending{stroke-dasharray:2 7}
+.ursula-edge--msg{stroke:var(--ursula-edge-msg,#7d7a8c)}
+.ursula-edge--msg.ursula-edge--pending{stroke-dasharray:6 6}
+.ursula-port{display:none;fill:var(--ursula-halo,#1c1b22);stroke:var(--ursula-edge,#6a6779);stroke-width:2.5}
+.ursula-port--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-port--msg{stroke:var(--ursula-edge-msg,#7d7a8c)}
+.ursula-end-open{fill:var(--ursula-bg,#1c1b22);stroke:var(--ursula-edge,#6a6779);stroke-width:2.5;stroke-linejoin:round}
+.ursula-end-fill{fill:var(--ursula-edge,#6a6779);stroke:var(--ursula-edge,#6a6779);stroke-width:2.5;stroke-linejoin:round}
+.ursula-end-open--accent{stroke:var(--ursula-accent,#7447c8)}
+.ursula-end-fill--accent{fill:var(--ursula-accent,#7447c8);stroke:var(--ursula-accent,#7447c8)}
+.ursula-lifeline{fill:none;stroke:var(--ursula-lifeline,#3a3846);stroke-width:2;stroke-linecap:round}
+.ursula-guide{fill:none;stroke:var(--ursula-guide,#3a3846);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ursula-chip{fill:var(--ursula-chip-fill,#2a2833);stroke:var(--ursula-chip-stroke,#1c1b22);stroke-width:3}
+.ursula-chip--accent{fill:var(--ursula-chip-accent-fill,rgba(116,71,200,0.24));stroke:var(--ursula-chip-accent-stroke,#1c1b22)}
+.ursula-zone{fill:var(--ursula-zone-fill,#211f29);stroke:var(--ursula-zone-stroke,none);stroke-width:0}
+.ursula-zone--plain{fill:var(--ursula-zone-plain,#1c1b22);stroke:var(--ursula-zone-plain-stroke,#3a3846);stroke-width:2}
+.ursula-zone--dashed{fill:none;stroke:var(--ursula-zone-dash,#6a6779);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-frame{fill:none;stroke:var(--ursula-frame,#3a3846);stroke-width:2}
+.ursula-frame-split{fill:none;stroke:var(--ursula-frame,#3a3846);stroke-width:2;stroke-dasharray:2 7;stroke-linecap:round}
+.ursula-axis{fill:none;stroke:var(--ursula-axis,none);stroke-width:1.25;stroke-linecap:round}
+.ursula-grid{fill:none;stroke:var(--ursula-grid,#26242e);stroke-width:2;stroke-dasharray:none;stroke-linecap:round}
+.ursula-mark{fill:var(--ursula-bar,rgba(116,71,200,0.4))}
+.ursula-mark-line{fill:none;stroke:var(--ursula-data,#d9c9ff);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-mark-dot{fill:var(--ursula-dot-fill,#d9c9ff);stroke:var(--ursula-dot-stroke,#1c1b22);stroke-width:2.5}
+.ursula-dot{fill:var(--ursula-dot-neutral,#7d7a8c)}
+.ursula-series-1{fill:var(--ursula-s1,#7447c8)}
+.ursula-series-1--tint,.ursula-series-1.ursula-tint{fill:var(--ursula-s1-tint,rgba(116,71,200,0.24));stroke:var(--ursula-s1,#7447c8);stroke-width:0}
+.ursula-series-1--overlap,.ursula-series-1.ursula-overlap{fill:var(--ursula-s1,#7447c8);fill-opacity:0.24;stroke:var(--ursula-s1,#7447c8);stroke-width:0;stroke-linejoin:round}
+.ursula-series-1--line,.ursula-series-1.ursula-line{fill:none;stroke:var(--ursula-s1,#7447c8);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-1--dot,.ursula-series-1.ursula-dot{fill:var(--ursula-s1,#7447c8);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-2{fill:var(--ursula-s2,#0f9b95)}
+.ursula-series-2--tint,.ursula-series-2.ursula-tint{fill:var(--ursula-s2-tint,rgba(15,155,149,0.24));stroke:var(--ursula-s2,#0f9b95);stroke-width:0}
+.ursula-series-2--overlap,.ursula-series-2.ursula-overlap{fill:var(--ursula-s2,#0f9b95);fill-opacity:0.24;stroke:var(--ursula-s2,#0f9b95);stroke-width:0;stroke-linejoin:round}
+.ursula-series-2--line,.ursula-series-2.ursula-line{fill:none;stroke:var(--ursula-s2,#0f9b95);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-2--dot,.ursula-series-2.ursula-dot{fill:var(--ursula-s2,#0f9b95);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-3{fill:var(--ursula-s3,#d58d25)}
+.ursula-series-3--tint,.ursula-series-3.ursula-tint{fill:var(--ursula-s3-tint,rgba(213,141,37,0.24));stroke:var(--ursula-s3,#d58d25);stroke-width:0}
+.ursula-series-3--overlap,.ursula-series-3.ursula-overlap{fill:var(--ursula-s3,#d58d25);fill-opacity:0.24;stroke:var(--ursula-s3,#d58d25);stroke-width:0;stroke-linejoin:round}
+.ursula-series-3--line,.ursula-series-3.ursula-line{fill:none;stroke:var(--ursula-s3,#d58d25);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-3--dot,.ursula-series-3.ursula-dot{fill:var(--ursula-s3,#d58d25);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-4{fill:var(--ursula-s4,#1f7dcf)}
+.ursula-series-4--tint,.ursula-series-4.ursula-tint{fill:var(--ursula-s4-tint,rgba(31,125,207,0.24));stroke:var(--ursula-s4,#1f7dcf);stroke-width:0}
+.ursula-series-4--overlap,.ursula-series-4.ursula-overlap{fill:var(--ursula-s4,#1f7dcf);fill-opacity:0.24;stroke:var(--ursula-s4,#1f7dcf);stroke-width:0;stroke-linejoin:round}
+.ursula-series-4--line,.ursula-series-4.ursula-line{fill:none;stroke:var(--ursula-s4,#1f7dcf);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-4--dot,.ursula-series-4.ursula-dot{fill:var(--ursula-s4,#1f7dcf);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-5{fill:var(--ursula-s5,#399d57)}
+.ursula-series-5--tint,.ursula-series-5.ursula-tint{fill:var(--ursula-s5-tint,rgba(57,157,87,0.24));stroke:var(--ursula-s5,#399d57);stroke-width:0}
+.ursula-series-5--overlap,.ursula-series-5.ursula-overlap{fill:var(--ursula-s5,#399d57);fill-opacity:0.24;stroke:var(--ursula-s5,#399d57);stroke-width:0;stroke-linejoin:round}
+.ursula-series-5--line,.ursula-series-5.ursula-line{fill:none;stroke:var(--ursula-s5,#399d57);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-5--dot,.ursula-series-5.ursula-dot{fill:var(--ursula-s5,#399d57);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-6{fill:var(--ursula-s6,#dd5847)}
+.ursula-series-6--tint,.ursula-series-6.ursula-tint{fill:var(--ursula-s6-tint,rgba(221,88,71,0.24));stroke:var(--ursula-s6,#dd5847);stroke-width:0}
+.ursula-series-6--overlap,.ursula-series-6.ursula-overlap{fill:var(--ursula-s6,#dd5847);fill-opacity:0.24;stroke:var(--ursula-s6,#dd5847);stroke-width:0;stroke-linejoin:round}
+.ursula-series-6--line,.ursula-series-6.ursula-line{fill:none;stroke:var(--ursula-s6,#dd5847);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-6--dot,.ursula-series-6.ursula-dot{fill:var(--ursula-s6,#dd5847);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-7{fill:var(--ursula-s7,#9ca73e)}
+.ursula-series-7--tint,.ursula-series-7.ursula-tint{fill:var(--ursula-s7-tint,rgba(156,167,62,0.24));stroke:var(--ursula-s7,#9ca73e);stroke-width:0}
+.ursula-series-7--overlap,.ursula-series-7.ursula-overlap{fill:var(--ursula-s7,#9ca73e);fill-opacity:0.24;stroke:var(--ursula-s7,#9ca73e);stroke-width:0;stroke-linejoin:round}
+.ursula-series-7--line,.ursula-series-7.ursula-line{fill:none;stroke:var(--ursula-s7,#9ca73e);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-7--dot,.ursula-series-7.ursula-dot{fill:var(--ursula-s7,#9ca73e);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-series-8{fill:var(--ursula-s8,#6b727e)}
+.ursula-series-8--tint,.ursula-series-8.ursula-tint{fill:var(--ursula-s8-tint,rgba(107,114,126,0.24));stroke:var(--ursula-s8,#6b727e);stroke-width:0}
+.ursula-series-8--overlap,.ursula-series-8.ursula-overlap{fill:var(--ursula-s8,#6b727e);fill-opacity:0.24;stroke:var(--ursula-s8,#6b727e);stroke-width:0;stroke-linejoin:round}
+.ursula-series-8--line,.ursula-series-8.ursula-line{fill:none;stroke:var(--ursula-s8,#6b727e);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.ursula-series-8--dot,.ursula-series-8.ursula-dot{fill:var(--ursula-s8,#6b727e);stroke:var(--ursula-halo,#1c1b22);stroke-width:2.5}
+.ursula-head{stroke-width:2;stroke-linejoin:round}
+.ursula-head--edge{fill:var(--ursula-edge,#6a6779);stroke:var(--ursula-edge,#6a6779)}
+.ursula-head--accent{fill:var(--ursula-accent,#7447c8);stroke:var(--ursula-accent,#7447c8)}
+.ursula-head--msg{fill:var(--ursula-edge-msg,#7d7a8c);stroke:var(--ursula-edge-msg,#7d7a8c)}
+}</style><defs><marker id="ursula-arrow-msg-end" viewBox="0 0 9.5 10" refX="0" refY="5" markerWidth="9.5" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto" overflow="visible"><path class="ursula-head ursula-head--msg" d="M0 0L9.5 5L0 10Z"/></marker></defs><rect class="ursula-bg" x="0" y="0" width="1096" height="1104"/><path class="ursula-lifeline" d="M100 116 L100 1012" data-participant="User"/><path class="ursula-lifeline" d="M324 116 L324 1012" data-participant="Web"/><path class="ursula-lifeline" d="M548 116 L548 1012" data-participant="API"/><path class="ursula-lifeline" d="M772 116 L772 1012" data-participant="DB"/><path class="ursula-lifeline" d="M996 116 L996 1012" data-participant="Mail"/><rect class="ursula-active" x="768" y="388" width="8" height="40" rx="4"/><rect class="ursula-active" x="320" y="236" width="8" height="380" rx="4"/><rect class="ursula-active" x="544" y="276" width="8" height="704" rx="4"/><rect class="ursula-bg" x="148" y="136" width="128" height="16"/><rect class="ursula-bg" x="164" y="176" width="96" height="16"/><rect class="ursula-bg" x="140" y="216" width="144" height="16"/><rect class="ursula-bg" x="384" y="256" width="104" height="16"/><rect class="ursula-bg" x="592" y="324" width="120" height="16"/><rect class="ursula-bg" x="592" y="368" width="136" height="16"/><rect class="ursula-bg" x="608" y="408" width="104" height="16"/><rect class="ursula-bg" x="376" y="556" width="120" height="16"/><rect class="ursula-bg" x="128" y="596" width="168" height="16"/><rect class="ursula-bg" x="592" y="680" width="136" height="16"/><rect class="ursula-bg" x="384" y="720" width="104" height="16"/><rect class="ursula-bg" x="152" y="760" width="120" height="16"/><rect class="ursula-bg" x="48" y="528" width="120" height="16"/><rect class="ursula-bg" x="48" y="652" width="120" height="16"/><rect class="ursula-bg" x="372" y="884" width="128" height="16"/><rect class="ursula-bg" x="272" y="856" width="108" height="16"/><rect class="ursula-frame" x="264" y="828" width="344" height="100" rx="12" data-block="loop" data-frame="1"/><rect class="ursula-frame" x="40" y="500" width="1016" height="304" rx="12" data-block="alt" data-frame="0"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M100 156 L314.5 156" marker-end="url(#ursula-arrow-msg-end)" data-message="0" data-from="User" data-to="Web" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="100" cy="156" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M324 196 L109.5 196" marker-end="url(#ursula-arrow-msg-end)" data-message="1" data-from="Web" data-to="User" data-kind="reply"/><circle class="ursula-port ursula-port--msg" cx="324" cy="196" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M100 236 L310.5 236" marker-end="url(#ursula-arrow-msg-end)" data-message="2" data-from="User" data-to="Web" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="100" cy="236" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M328 276 L534.5 276" marker-end="url(#ursula-arrow-msg-end)" data-message="3" data-from="Web" data-to="API" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="328" cy="276" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M552 316 L572 316 A16 16 0 0 1 588 332 L588 332 A16 16 0 0 1 572 348 L561.5 348" marker-end="url(#ursula-arrow-msg-end)" data-message="4" data-from="API" data-to="API" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="552" cy="316" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M552 388 L758.5 388" marker-end="url(#ursula-arrow-msg-end)" data-message="5" data-from="API" data-to="DB" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="552" cy="388" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M768 428 L561.5 428" marker-end="url(#ursula-arrow-msg-end)" data-message="6" data-from="DB" data-to="API" data-kind="reply"/><circle class="ursula-port ursula-port--msg" cx="768" cy="428" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M544 576 L337.5 576" marker-end="url(#ursula-arrow-msg-end)" data-message="7" data-from="API" data-to="Web" data-kind="reply"/><circle class="ursula-port ursula-port--msg" cx="544" cy="576" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M320 616 L109.5 616" marker-end="url(#ursula-arrow-msg-end)" data-message="8" data-from="Web" data-to="User" data-kind="reply"/><circle class="ursula-port ursula-port--msg" cx="320" cy="616" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M552 700 L986.5 700" marker-end="url(#ursula-arrow-msg-end)" data-message="9" data-from="API" data-to="Mail" data-kind="async"/><circle class="ursula-port ursula-port--msg" cx="552" cy="700" r="3.25"/><path class="ursula-edge ursula-edge--msg ursula-edge--pending" d="M544 740 L328 740" data-message="10" data-from="API" data-to="Web" data-kind="failed"/><circle class="ursula-port ursula-port--msg" cx="544" cy="740" r="3.25"/><path class="ursula-edge ursula-edge--msg" d="M324 736 L332 744"/><path class="ursula-edge ursula-edge--msg" d="M324 744 L332 736"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M324 780 L109.5 780" marker-end="url(#ursula-arrow-msg-end)" data-message="11" data-from="Web" data-to="User" data-kind="reply"/><circle class="ursula-port ursula-port--msg" cx="324" cy="780" r="3.25"/><path class="ursula-frame-split" d="M48 640 L1048 640"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M324 904 L534.5 904" marker-end="url(#ursula-arrow-msg-end)" data-message="12" data-from="Web" data-to="API" data-kind="call"/><circle class="ursula-port ursula-port--msg" cx="324" cy="904" r="3.25"/><circle class="ursula-edge" cx="100" cy="50" r="8" data-participant="User"/><path class="ursula-edge" d="M100 58V74M88 62H112M100 74L92 90M100 74L108 90" data-participant="User"/><rect class="ursula-box" x="264" y="72" width="120" height="44" rx="18" data-participant="Web"/><rect class="ursula-box" x="488" y="72" width="120" height="44" rx="18" data-participant="API"/><rect class="ursula-box" x="712" y="72" width="120" height="44" rx="18" data-participant="DB"/><rect class="ursula-box" x="936" y="72" width="120" height="44" rx="18" data-participant="Mail"/><rect class="ursula-note" x="784" y="448" width="188" height="28" rx="8" data-note="0"/><rect class="ursula-tag" x="48" y="508" width="40" height="20" rx="10"/><rect class="ursula-tag" x="272" y="836" width="48" height="20" rx="10"/><rect class="ursula-note" x="88" y="952" width="248" height="28" rx="8" data-note="1"/><text class="ursula-name ursula-middle" x="100" y="107" dominant-baseline="central">사용자</text><text class="ursula-name ursula-middle" x="324" y="94" dominant-baseline="central">Web App</text><text class="ursula-name ursula-middle" x="548" y="94" dominant-baseline="central">Auth API</text><text class="ursula-name ursula-middle" x="772" y="94" dominant-baseline="central">User Store</text><text class="ursula-name ursula-middle" x="996" y="94" dominant-baseline="central">Mail Service</text><text class="ursula-label ursula-start" x="155.3" y="144" dominant-baseline="central" data-message="0">01</text><text class="ursula-body ursula-start" x="176.9" y="144" dominant-baseline="central" data-message="0">Open login page</text><text class="ursula-label ursula-start" x="171.26" y="184" dominant-baseline="central" data-message="1">02</text><text class="ursula-body ursula-start" x="192.86" y="184" dominant-baseline="central" data-message="1">Show form</text><text class="ursula-label ursula-start" x="144.8" y="224" dominant-baseline="central" data-message="2">03</text><text class="ursula-body ursula-start" x="166.4" y="224" dominant-baseline="central" data-message="2">Submit credentials</text><text class="ursula-label ursula-start" x="389.2" y="264" dominant-baseline="central" data-message="3">04</text><text class="ursula-body ursula-start" x="410.8" y="264" dominant-baseline="central" data-message="3">POST /login</text><text class="ursula-label ursula-start" x="596" y="332" dominant-baseline="central" data-message="4">05</text><text class="ursula-body ursula-start" x="617.6" y="332" dominant-baseline="central" data-message="4">Hash password</text><text class="ursula-label ursula-start" x="596.16" y="376" dominant-baseline="central" data-message="5">06</text><text class="ursula-body ursula-start" x="617.76" y="376" dominant-baseline="central" data-message="5">Find user by email</text><text class="ursula-label ursula-start" x="612.42" y="416" dominant-baseline="central" data-message="6">07</text><text class="ursula-body ursula-start" x="634.02" y="416" dominant-baseline="central" data-message="6">User record</text><text class="ursula-sub ursula-start" x="792" y="462" dominant-baseline="central">Lookups are cached for 60 s</text><text class="ursula-label ursula-start" x="383.02" y="564" dominant-baseline="central" data-message="7">08</text><text class="ursula-body ursula-start" x="404.62" y="564" dominant-baseline="central" data-message="7">Session token</text><text class="ursula-label ursula-start" x="133.34" y="604" dominant-baseline="central" data-message="8">09</text><text class="ursula-body ursula-start" x="154.94" y="604" dominant-baseline="central" data-message="8">Redirect to dashboard</text><text class="ursula-label ursula-start" x="599.88" y="688" dominant-baseline="central" data-message="9">10</text><text class="ursula-body ursula-start" x="621.48" y="688" dominant-baseline="central" data-message="9">Send lock notice</text><text class="ursula-label ursula-start" x="390.4" y="728" dominant-baseline="central" data-message="10">11</text><text class="ursula-body ursula-start" x="412" y="728" dominant-baseline="central" data-message="10">423 Locked</text><text class="ursula-label ursula-start" x="156.74" y="768" dominant-baseline="central" data-message="11">12</text><text class="ursula-body ursula-start" x="178.34" y="768" dominant-baseline="central" data-message="11">계정이 잠겼습니다</text><text class="ursula-tag-text ursula-middle" x="68" y="518" dominant-baseline="central">ALT</text><text class="ursula-label ursula-start" x="52" y="537" dominant-baseline="central">[Password matches]</text><text class="ursula-label ursula-start" x="52" y="659" dominant-baseline="central">[Too many failures]</text><text class="ursula-label ursula-start" x="376.18" y="892" dominant-baseline="central" data-message="12">13</text><text class="ursula-body ursula-start" x="397.78" y="892" dominant-baseline="central" data-message="12">Refresh session</text><text class="ursula-tag-text ursula-middle" x="296" y="846" dominant-baseline="central">LOOP</text><text class="ursula-label ursula-start" x="276" y="865" dominant-baseline="central">[Every 5 minutes]</text><text class="ursula-sub ursula-middle" x="212" y="966" dominant-baseline="central">Session ends on logout</text><path class="ursula-rule" d="M40 1028 L1056 1028"/><path class="ursula-edge ursula-edge--msg ursula-edge--arrow" d="M40 1052 L70.5 1052" marker-end="url(#ursula-arrow-msg-end)"/><text class="ursula-legend ursula-start" x="88" y="1052" dominant-baseline="central">Call</text><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M136 1052 L166.5 1052" marker-end="url(#ursula-arrow-msg-end)"/><text class="ursula-legend ursula-start" x="184" y="1052" dominant-baseline="central">Reply</text><path class="ursula-edge ursula-edge--msg ursula-edge--arrow ursula-edge--pending" d="M240 1052 L270.5 1052" marker-end="url(#ursula-arrow-msg-end)"/><text class="ursula-legend ursula-start" x="288" y="1052" dominant-baseline="central">Async</text><path class="ursula-edge ursula-edge--msg ursula-edge--pending" d="M348 1052 L384 1052"/><path class="ursula-edge ursula-edge--msg" d="M380 1048 L388 1056"/><path class="ursula-edge ursula-edge--msg" d="M380 1056 L388 1048"/><text class="ursula-legend ursula-start" x="396" y="1052" dominant-baseline="central">Failed</text></svg>

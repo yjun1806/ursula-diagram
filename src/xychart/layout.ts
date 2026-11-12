@@ -1,9 +1,14 @@
+import { trimmedNumber } from '../chart/format.ts';
+import { ceilTo, FLOAT_NOISE, floorTo, GRID, round2 } from '../chart/grid.ts';
+import { anchoredBox, clashCost, pickLeastClash, trendAt } from '../chart/label-place.ts';
+import type { Box, TextAnchor } from '../chart/label-place.ts';
 import { monotonePath } from '../chart/monotone.ts';
 import { niceTicks } from '../chart/ticks.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { SceneThemeSpec } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
+import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem, SceneText } from '../types.ts';
 import { UrsulaError } from '../types.ts';
 import type { XyChart, XyRange, XySeries } from './model.ts';
@@ -23,29 +28,9 @@ function widthOf(ruler: Ruler, text: string, px: number, bold = false): number {
   return (ruler.textWidth(text, 'line') * px * (bold ? 1.05 : 1)) / 12;
 }
 
-const up4 = (v: number): number => Math.ceil(v / 4 - 1e-9) * 4;
-const up16 = (v: number): number => Math.ceil(v / 16 - 1e-9) * 16;
-const down4 = (v: number): number => Math.floor(v / 4 + 1e-9) * 4;
-const r2 = (v: number): number => Math.round(v * 100) / 100;
-
-/** Number as shown on an axis: no float noise, no trailing zeros. */
-export function formatNumber(v: number): string {
-  return String(Number(v.toFixed(10)));
-}
-
-function wrapWords(ruler: Ruler, text: string, maxW: number): string[] {
-  const lines: string[] = [];
-  let cur = '';
-  for (const word of text.split(/\s+/).filter((w) => w !== '')) {
-    const next = cur === '' ? word : `${cur} ${word}`;
-    if (cur !== '' && widthOf(ruler, next, 11) > maxW) {
-      lines.push(cur);
-      cur = word;
-    } else cur = next;
-  }
-  if (cur !== '') lines.push(cur);
-  return lines.length === 0 ? [text] : lines;
-}
+const up4 = (v: number): number => ceilTo(v, GRID, FLOAT_NOISE);
+const up16 = (v: number): number => ceilTo(v, 16, FLOAT_NOISE);
+const down4 = (v: number): number => floorTo(v, GRID, FLOAT_NOISE);
 
 interface TickSet {
   range: XyRange;
@@ -95,21 +80,9 @@ function chooseTicks(lo: number, hi: number, fixed: boolean, length: number, min
   return { range: { min: low, max: high }, ticks };
 }
 
-interface Box {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-}
+const boxOf = (x: number, y: number, w: number, anchor: TextAnchor, h = LABEL_H): Box => anchoredBox(x, y, w, anchor, h);
 
-const overlaps = (a: Box, b: Box, pad = 2): boolean => a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
-
-function boxOf(x: number, y: number, w: number, anchor: 'start' | 'middle' | 'end', h = LABEL_H): Box {
-  const x0 = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2;
-  return { x0, x1: x0 + w, y0: y - h / 2, y1: y + h / 2 };
-}
-
-type Anchor = 'start' | 'middle' | 'end';
+type Anchor = TextAnchor;
 
 interface Candidate {
   x: number;
@@ -181,7 +154,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     n = longest;
     if (chart.xRange) {
       const step = n > 1 ? (chart.xRange.max - chart.xRange.min) / (n - 1) : 0;
-      labels = Array.from({ length: n }, (_, i) => formatNumber(chart.xRange!.min + i * step));
+      labels = Array.from({ length: n }, (_, i) => trimmedNumber(chart.xRange!.min + i * step, 10));
     }
   }
 
@@ -250,8 +223,11 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     let plotH: number; // extent on screen, y
     let width: number;
     let height: number;
-    const catWrapped = (cell: number): string[][] => (labels ?? []).map((l) => wrapWords(ruler, l, cell - 8));
-    const tickLabelW = (v: number): number => px(formatNumber(v), 11);
+    const catWrapped = (cell: number): string[][] => (labels ?? []).map((l) => {
+      const lines = wrapWords(l, cell - 8, (t) => widthOf(ruler, t, 11), { longWord: 'keep' });
+      return lines.length === 0 ? [l] : lines;
+    });
+    const tickLabelW = (v: number): number => px(trimmedNumber(v, 10), 11);
     let ticks: TickSet;
     let footLines = 1;
 
@@ -319,7 +295,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       const v = valPos(t);
       const first = t === range.min;
       if (!first) rule(horizontal ? { x: v, y: plotTop } : { x: left, y: v }, horizontal ? { x: v, y: plotTop + plotH } : { x: left + plotW, y: v }, 'grid');
-      const label = formatNumber(t);
+      const label = trimmedNumber(t, 10);
       const w = px(label, 11);
       if (!horizontal) {
         text({ kind: 'text', x: left - 16, y: v, text: label, anchor: 'end', role: ['tick'] });
@@ -348,8 +324,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
         const x1 = c + barW / 2;
         if (len >= 0.5) {
           const d = horizontal
-            ? `M${r2(base)} ${r2(x0)}H${r2(end - radius)}Q${r2(end)} ${r2(x0)} ${r2(end)} ${r2(x0 + radius)}V${r2(x1 - radius)}Q${r2(end)} ${r2(x1)} ${r2(end - radius)} ${r2(x1)}H${r2(base)}Z`
-            : `M${r2(x0)} ${r2(base)}V${r2(end + radius)}Q${r2(x0)} ${r2(end)} ${r2(x0 + radius)} ${r2(end)}H${r2(x1 - radius)}Q${r2(x1)} ${r2(end)} ${r2(x1)} ${r2(end + radius)}V${r2(base)}Z`;
+            ? `M${round2(base)} ${round2(x0)}H${round2(end - radius)}Q${round2(end)} ${round2(x0)} ${round2(end)} ${round2(x0 + radius)}V${round2(x1 - radius)}Q${round2(end)} ${round2(x1)} ${round2(end - radius)} ${round2(x1)}H${round2(base)}Z`
+            : `M${round2(x0)} ${round2(base)}V${round2(end + radius)}Q${round2(x0)} ${round2(end)} ${round2(x0 + radius)} ${round2(end)}H${round2(x1 - radius)}Q${round2(x1)} ${round2(end)} ${round2(x1)} ${round2(end + radius)}V${round2(base)}Z`;
           items.push({ kind: 'path', d, role });
         }
         barRects.push({
@@ -373,7 +349,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       polylines.push(pts);
       if (pts.length >= 2) {
         let d: string;
-        if (spec.interpolation === 'linear') d = pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${r2(p.x)} ${r2(p.y)}`).join('');
+        if (spec.interpolation === 'linear') d = pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${round2(p.x)} ${round2(p.y)}`).join('');
         else if (horizontal) {
           const swapped = monotonePath(pts.map((p) => ({ x: p.y, y: p.x })));
           d = swapped.replace(/(-?[\d.]+)[ ,](-?[\d.]+)/g, '$2 $1');
@@ -448,14 +424,9 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     const fixedObstacles = [...obstacles, ...dotBoxes, ...solidBars];
     const placed: Box[] = [];
     const bounds: Box = horizontal ? { x0: left + 1, x1: width - 24, y0: 24, y1: height - 24 } : { x0: 24, x1: width - 24, y0: 24, y1: base - 1 };
-    const inside = (b: Box): boolean => b.x0 >= bounds.x0 && b.x1 <= bounds.x1 && b.y0 >= bounds.y0 && b.y1 <= bounds.y1;
-    const clash = (b: Box): number =>
-      (inside(b) ? 0 : 100) +
-      fixedObstacles.filter((o) => overlaps(b, o, 1)).length +
-      placed.filter((o) => overlaps(b, o, 2)).length * 2 +
-      lineSamples.filter((s) => s.x > b.x0 - 1 && s.x < b.x1 + 1 && s.y > b.y0 - 1 && s.y < b.y1 + 1).length;
+    const clash = (b: Box): number => clashCost(b, { bounds, fixed: fixedObstacles, placed, samples: lineSamples });
     const emit = (job: LabelJob, cand: Candidate, roles: string[]): void => {
-      text({ kind: 'text', x: r2(cand.x), y: r2(cand.y), text: job.text, anchor: cand.anchor, role: roles });
+      text({ kind: 'text', x: round2(cand.x), y: round2(cand.y), text: job.text, anchor: cand.anchor, role: roles });
     };
     const place = (job: LabelJob, roles: string[], w: number, preferInside?: Candidate): void => {
       const [pc, pv] = job.side;
@@ -469,16 +440,10 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       for (const off of [job.off, job.off + 12, job.off + 24, job.off + 36]) {
         for (const [c, v] of [...order, ...extras]) tries.push(spot(job.p, c, v, off, horizontal));
       }
-      let best: { cand: Candidate; box: Box; cost: number } | undefined;
-      for (const cand of tries) {
-        const box = boxOf(cand.x, cand.y, w, cand.anchor);
-        const cost = clash(box);
-        if (best === undefined || cost < best.cost) best = { cand, box, cost };
-        if (cost === 0) break;
-      }
+      const best = pickLeastClash(tries, (cand) => boxOf(cand.x, cand.y, w, cand.anchor), clash);
       if (best === undefined) return;
       placed.push(best.box);
-      emit(job, best.cand, roles);
+      emit(job, best.candidate, roles);
     };
 
     if (showValues) {
@@ -487,15 +452,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       const valueJobs: { job: LabelJob; w: number; roles: string[]; inner?: Candidate[] }[] = [];
       const lineJobs = new Map<string, true>();
       const sideOf = (s: XySeries, i: number): [-1 | 0 | 1, -1 | 0 | 1] => {
-        const cur = s.points[i]?.value ?? 0;
-        const prev = s.points[i - 1]?.value;
-        const next = s.points[i + 1]?.value;
-        if (prev === undefined && next === undefined) return [0, 1];
-        const before = prev ?? 2 * cur - (next ?? cur);
-        const after = next ?? 2 * cur - before;
-        if (cur >= before && cur >= after) return [0, 1];
-        if (cur <= before && cur <= after) return [0, -1];
-        return cur > before ? [-1, 1] : [1, 1];
+        const trend = trendAt(s.points[i]?.value ?? 0, s.points[i - 1]?.value, s.points[i + 1]?.value);
+        return trend === 'peak' ? [0, 1] : trend === 'valley' ? [0, -1] : trend === 'rising' ? [-1, 1] : [1, 1];
       };
       const lineOff = Math.round(spec.dotRadius + 4);
       lineSeries.forEach(({ s }, li) => {

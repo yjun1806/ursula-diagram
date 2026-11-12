@@ -1,18 +1,9 @@
 import { cellWidth } from '../metrics.ts';
+import { cut } from '../text/terminal.ts';
 import { displayOrder } from './model.ts';
 import type { Commit, GitGraph } from './model.ts';
 
 const GLYPH = { NORMAL: '●', HIGHLIGHT: '◉', REVERSE: '⊗' } as const;
-
-function cut(text: string, cap: number): string {
-  if (cellWidth(text) <= cap) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(`${out}${ch}…`) > cap) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
 
 /** One cell per branch column: a glyph, plus the filler between it and the next column. */
 interface Row {

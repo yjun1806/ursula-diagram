@@ -1,3 +1,4 @@
+import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 
 /** One cause: `depth` 1 is a cause of a category, 2 and deeper are causes of the cause above. */
@@ -34,18 +35,14 @@ export function parseIshikawa(src: string): Ishikawa {
   const rows = src.split(/\r?\n/);
   let headerSeen = false;
   let head: string | undefined;
-  let accTitle: string | undefined;
-  let inAccDescr = false;
+  const acc = createAccessibilityReader();
   let stack: number[] = [];
   const categories: IshikawaCategory[] = [];
 
   rows.forEach((raw, i) => {
     const line = i + 1;
     const text = raw.trim();
-    if (inAccDescr) {
-      if (text.includes('}')) inAccDescr = false;
-      return;
-    }
+    if (acc.insideBlock(text)) return;
     if (text === '' || text.startsWith('%%')) return;
     if (!headerSeen) {
       const word = text.split(/[\s;]+/)[0];
@@ -53,16 +50,7 @@ export function parseIshikawa(src: string): Ishikawa {
       headerSeen = true;
       return;
     }
-    const title = /^accTitle\s*:\s*(.*)$/u.exec(text);
-    if (title !== null) {
-      accTitle = (title[1] ?? '').trim();
-      return;
-    }
-    if (/^accDescr\s*:/u.test(text)) return;
-    if (/^accDescr\s*\{/u.test(text)) {
-      inAccDescr = !text.includes('}');
-      return;
-    }
+    if (acc.read(text)) return;
     if (head === undefined) {
       head = text;
       return;
@@ -85,5 +73,5 @@ export function parseIshikawa(src: string): Ishikawa {
 
   if (!headerSeen) throw new UrsulaError('Expected "ishikawa-beta" as the first line.', 'ishikawa-header', 1);
   if (head === undefined) throw new UrsulaError('An ishikawa diagram needs the problem on the line after the header.', 'ishikawa-empty');
-  return { head, categories, ...(accTitle === undefined ? {} : { accTitle }) };
+  return { head, categories, ...(acc.title === undefined ? {} : { accTitle: acc.title }) };
 }

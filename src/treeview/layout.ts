@@ -1,3 +1,4 @@
+import { ceilTo, roundTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
@@ -38,12 +39,10 @@ export function parentsOf(items: readonly TreeItem[]): number[] {
   });
 }
 
-const snapUp = (v: number, grid: number): number => Math.ceil(v / grid) * grid;
-
 /** Indent per level: the source's `rowIndent` when it leaves room for a guide, else the standard step, on a grid of four. */
 function indentOf(tree: TreeView): number {
   if (tree.rowIndent === undefined) return INDENT;
-  return Math.max(MIN_INDENT, Math.round(tree.rowIndent / 4) * 4);
+  return Math.max(MIN_INDENT, roundTo(tree.rowIndent));
 }
 
 /** Places each item on its own row and draws the guides from a parent down to its children. */
@@ -97,7 +96,7 @@ export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = 'sol
   });
 
   const scene: Scene = {
-    width: snapUp(right + PAD, ruler.grid),
+    width: ceilTo(right + PAD, ruler.grid),
     height: 2 * PAD + ROW * items.length,
     title: 'Tree view',
     items: [...boxes, ...guides, ...texts],

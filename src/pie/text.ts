@@ -1,18 +1,7 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, padEnd, padStart } from '../text/terminal.ts';
 import type { Pie } from './model.ts';
 
-function cut(text: string, cap: number): string {
-  if (cellWidth(text) <= cap) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(`${out}${ch}…`) > cap) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
-const padEnd = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - cellWidth(s)));
-const padStart = (s: string, w: number): string => ' '.repeat(Math.max(0, w - cellWidth(s))) + s;
 
 /** Share of the whole, in percent with one decimal. */
 export function percent(value: number, total: number): string {

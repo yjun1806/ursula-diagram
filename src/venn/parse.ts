@@ -1,3 +1,4 @@
+import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 import type { Venn, VennSet, VennText, VennUnion } from './model.ts';
 
@@ -36,18 +37,14 @@ export function parseVenn(src: string, heading?: string): Venn {
   const texts = new Map<string, VennText>();
   const styleLines: Array<{ ids: string[]; props: string; line: number }> = [];
   let title: string | undefined;
-  let accTitle: string | undefined;
   let headerSeen = false;
-  let inDescription = false;
+  const acc = createAccessibilityReader();
   let current: VennSet | VennUnion | undefined;
 
   for (let n = 0; n < rows.length; n++) {
     const line = n + 1;
     const s = (rows[n] ?? '').trim();
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '' || s.startsWith('%%')) continue;
     if (!headerSeen) {
       if (!/^venn-beta\s*$/u.test(s)) fail('A Venn diagram starts with "venn-beta".', line, 'header');
@@ -61,16 +58,7 @@ export function parseVenn(src: string, heading?: string): Venn {
       if (text !== '') title = text;
       continue;
     }
-    const acc = /^accTitle\s*:\s*(.*)$/u.exec(s);
-    if (acc !== null) {
-      accTitle = (acc[1] ?? '').trim();
-      continue;
-    }
-    if (/^accDescr\s*:/u.test(s)) continue;
-    if (/^accDescr\s*\{/u.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
 
     const set = SET.exec(s);
     if (set !== null) {
@@ -128,5 +116,5 @@ export function parseVenn(src: string, heading?: string): Venn {
   }
 
   const finalTitle = title ?? (heading !== undefined && heading !== '' ? heading : undefined);
-  return { ...(finalTitle === undefined ? {} : { title: finalTitle }), ...(accTitle === undefined || accTitle === '' ? {} : { accTitle }), sets, unions, ignored };
+  return { ...(finalTitle === undefined ? {} : { title: finalTitle }), ...(acc.title === undefined || acc.title === '' ? {} : { accTitle: acc.title }), sets, unions, ignored };
 }

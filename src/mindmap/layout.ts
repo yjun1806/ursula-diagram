@@ -1,5 +1,7 @@
-import type { Ruler } from '../metrics.ts';
+import { ceilTo, floorTo, roundTo } from '../chart/grid.ts';
 import type { FrontValue } from '../front-matter.ts';
+import { configSection } from '../front/options.ts';
+import type { Ruler } from '../metrics.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { MindNode, MindShape, Mindmap } from './model.ts';
 
@@ -54,8 +56,6 @@ export interface MindmapLayout {
   nodes: PlacedMindNode[];
 }
 
-const snap4Up = (v: number): number => Math.ceil(v / 4) * 4;
-const snap4 = (v: number): number => Math.round(v / 4) * 4;
 const num = (v: number): string => String(Math.round(v * 100) / 100);
 
 /** Breaks one paragraph at spaces so no line is wider than `MAX_TEXT`; a single longer word stays whole. */
@@ -95,10 +95,10 @@ function sizeOf(node: MindNode, isRoot: boolean, ruler: Ruler): Size {
   const baseH = heightOf(lines.length);
   const shape: MindShape = isRoot && node.shape === 'default' ? 'circle' : node.shape;
   if (shape === 'circle') {
-    const r = Math.max(isRoot ? ROOT_MIN_R : 24, snap4Up(Math.hypot(textW / 2, (lines.length * LINE) / 2) + 12));
+    const r = Math.max(isRoot ? ROOT_MIN_R : 24, ceilTo(Math.hypot(textW / 2, (lines.length * LINE) / 2) + 12));
     return { lines, w: 2 * r, h: 2 * r, fixedWidth: true };
   }
-  const w = Math.max(MIN_W, snap4Up(textW + PAD_X));
+  const w = Math.max(MIN_W, ceilTo(textW + PAD_X));
   if (shape === 'bang') return { lines, w: w + BANG_W, h: baseH + BANG_H, fixedWidth: false };
   if (shape === 'cloud') return { lines, w: w + CLOUD_W, h: baseH + CLOUD_H, fixedWidth: false };
   if (shape === 'hexagon') return { lines, w: w + 2 * SLANT, h: baseH, fixedWidth: false };
@@ -145,10 +145,10 @@ function measure(t: Tree): void {
 /** Places the children of a node one under another and the node at the middle of its first and last child. */
 function place(t: Tree, top: number): void {
   if (t.children.length === 0) {
-    t.cy = snap4(top + t.slot / 2);
+    t.cy = roundTo(top + t.slot / 2);
     return;
   }
-  let y = top + Math.floor((t.slot - stackHeight(t.children)) / 2 / 4) * 4;
+  let y = top + floorTo((t.slot - stackHeight(t.children)) / 2);
   t.children.forEach((c, i) => {
     if (i > 0) y += gapBetween(t.children[i - 1] as Tree, c);
     place(c, y);
@@ -157,7 +157,7 @@ function place(t: Tree, top: number): void {
   const first = t.children[0] as Tree;
   const last = t.children[t.children.length - 1] as Tree;
   const mid = (first.cy + last.cy) / 2;
-  t.cy = snap4(Math.min(Math.max(mid, top + t.size.h / 2), top + t.slot - t.size.h / 2));
+  t.cy = roundTo(Math.min(Math.max(mid, top + t.size.h / 2), top + t.slot - t.size.h / 2));
 }
 
 function shift(t: Tree, dy: number): void {
@@ -263,8 +263,8 @@ function curve(x1: number, y1: number, x2: number, y2: number): string {
 
 /** Reads `config.mindmap.colorBy`; any other value leaves the drawing uncoloured. */
 export function colorByOf(config: Record<string, FrontValue> | undefined): ColorBy {
-  const section = config?.['mindmap'];
-  if (section === null || section === undefined || typeof section !== 'object') return 'none';
+  const section = configSection(config, 'mindmap');
+  if (section === undefined) return 'none';
   const v = section['colorBy'];
   return v === 'depth' || v === 'branch' ? v : 'none';
 }
@@ -287,7 +287,7 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
     });
     if (trees.length > 0) {
       const mid = ((trees[0] as Tree).cy + (trees[trees.length - 1] as Tree).cy) / 2;
-      trees.forEach((t) => shift(t, -snap4(mid)));
+      trees.forEach((t) => shift(t, -roundTo(mid)));
     }
     return { side, trees };
   });
@@ -340,10 +340,10 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
   const maxY = Math.max(...placed.map((p) => p.y + p.h));
   const bodyW = maxX - minX;
   const extra = Math.max(0, headingW - bodyW);
-  const dx = snap4(MARGIN - minX + extra / 2);
-  const dy = snap4Up(MARGIN + topPad - minY);
-  const width = snap4Up(Math.max(bodyW + extra, headingW) + 2 * MARGIN);
-  const height = snap4Up(maxY + dy + MARGIN);
+  const dx = roundTo(MARGIN - minX + extra / 2);
+  const dy = ceilTo(MARGIN + topPad - minY);
+  const width = ceilTo(Math.max(bodyW + extra, headingW) + 2 * MARGIN);
+  const height = ceilTo(maxY + dy + MARGIN);
 
   const colorBy = opts.colorBy ?? 'none';
   const series = (t: Tree | undefined): string | undefined => {

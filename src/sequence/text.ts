@@ -3,7 +3,7 @@ import type { Ruler, SequenceTextMetrics } from '../metrics.ts';
 import { UrsulaError } from '../types.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import { kindOf } from './model.ts';
-import type { LegendKind, MessageKind, MessageStmt, NoteStmt, Sequence, SequenceLegendOption } from './model.ts';
+import type { LegendKind, MessageKind, MessageStmt, NoteStmt, ParticipantKind, Sequence, SequenceLegendOption } from './model.ts';
 
 interface Cell {
   ch: string;
@@ -161,7 +161,26 @@ interface Rendered {
   width: number;
 }
 
-function prepare(seq: Sequence, R: Ruler, limit: number, headWrap: boolean, list: boolean, legend: SequenceLegendOption | undefined): Ctx {
+/** Short tag written before the name of a participant that is not drawn as a plain box. */
+const KIND_TAGS: Partial<Record<ParticipantKind, string>> = {
+  actor: '[actor]',
+  boundary: '[boundary]',
+  control: '[control]',
+  entity: '[entity]',
+  database: '[db]',
+  collections: '[coll]',
+  queue: '[queue]',
+};
+
+function prepare(
+  seq: Sequence,
+  R: Ruler,
+  limit: number,
+  headWrap: boolean,
+  list: boolean,
+  legend: SequenceLegendOption | undefined,
+  tagged: boolean,
+): Ctx {
   const T = R.sequence.text;
   if (!T) throw new Error('the ruler has no text metrics');
   const S = R.sequence;
@@ -170,8 +189,10 @@ function prepare(seq: Sequence, R: Ruler, limit: number, headWrap: boolean, list
   const colOf = (id: string): number => col.get(id) ?? 0;
 
   const headLines = seq.participants.map((p) => {
-    if (!headWrap) return p.lines;
-    return p.lines.flatMap((l) => {
+    const tag = tagged ? KIND_TAGS[p.kind] : undefined;
+    const named = tag === undefined ? p.lines : p.lines.map((l, k) => (k === 0 ? `${tag} ${l}` : l));
+    if (!headWrap) return named;
+    return named.flatMap((l) => {
       const words = l.split(/\s+/).filter((w) => w !== '');
       const longest = Math.max(0, ...words.map((w) => cellWidth(w)));
       return wrapWords(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
@@ -676,8 +697,13 @@ export function layoutSequenceText(
     { wrap: true, list: true },
   ];
   for (const t of tries) {
-    const r = fit(prepare(seq, ruler, limit, t.wrap, t.list, legend));
-    if (r) return r.lines;
+    const plain = fit(prepare(seq, ruler, limit, t.wrap, t.list, legend, false));
+    if (plain) {
+      // The kind tags widen the headers; they stay only when that costs the drawing no rows at this limit.
+      if (!seq.participants.some((p) => KIND_TAGS[p.kind] !== undefined)) return plain.lines;
+      const tagged = fit(prepare(seq, ruler, limit, t.wrap, t.list, legend, true));
+      return tagged && tagged.lines.length <= plain.lines.length ? tagged.lines : plain.lines;
+    }
     if (limit === Infinity) break;
   }
   throw new UrsulaError(`Sequence diagram does not fit in ${limit} columns.`, 'width');

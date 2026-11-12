@@ -36,7 +36,6 @@ export type { NodeHook, SvgOptions } from './render/svg.ts';
 export { THEMES } from './render/theme.ts';
 export type { Theme } from './render/theme.ts';
 export { renderTextLayout, renderTextScene, spansToAnsi } from './render/text.ts';
-export { renderSceneSvg } from './render/svg.ts';
 export { registerFrontEnd, selectFrontEnd } from './registry.ts';
 export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
 export { layoutSequenceText } from './sequence/text.ts';

@@ -1,5 +1,7 @@
-import { UrsulaError } from '../types.ts';
 import type { FrontValue } from '../front-matter.ts';
+import { createAccessibilityReader } from '../front/accessibility.ts';
+import { configSection } from '../front/options.ts';
+import { UrsulaError } from '../types.ts';
 import type { Branch, Commit, CommitType, GitConfig, GitGraph, Orientation } from './model.ts';
 
 function fail(message: string, line: number, code = 'syntax'): never {
@@ -61,10 +63,6 @@ function readConfig(section: Record<string, unknown> | undefined): Partial<GitCo
   return out;
 }
 
-function asRecord(v: unknown): Record<string, unknown> | undefined {
-  return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
-}
-
 interface Attrs {
   id?: string;
   type?: CommitType;
@@ -112,8 +110,8 @@ export function parseGit(src: string, heading?: string, config?: Record<string, 
   const init = initDirective(src);
   const cfg: GitConfig = {
     ...DEFAULTS,
-    ...readConfig(asRecord(config?.['gitGraph'])),
-    ...readConfig(asRecord(init['gitGraph'])),
+    ...readConfig(configSection(config, 'gitGraph')),
+    ...readConfig(configSection(init, 'gitGraph')),
   };
 
   const rows = src.split(/\r?\n/);
@@ -123,9 +121,8 @@ export function parseGit(src: string, heading?: string, config?: Record<string, 
   let current = cfg.mainBranchName;
   let orientation: Orientation = 'LR';
   let title: string | undefined;
-  let accTitle: string | undefined;
   let headerSeen = false;
-  let inDescription = false;
+  const acc = createAccessibilityReader({ ignoreCase: true });
 
   const exists = (name: string): boolean => heads.has(name);
   const push = (c: Omit<Commit, 'seq' | 'id'> & { id?: string }): Commit => {
@@ -139,10 +136,7 @@ export function parseGit(src: string, heading?: string, config?: Record<string, 
   for (let n = 0; n < rows.length; n++) {
     const line = n + 1;
     const s = (rows[n] ?? '').trim();
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '' || s.startsWith('%%')) continue;
 
     if (!headerSeen) {
@@ -153,16 +147,7 @@ export function parseGit(src: string, heading?: string, config?: Record<string, 
       continue;
     }
 
-    const acc = /^accTitle\s*:\s*(.*)$/iu.exec(s);
-    if (acc !== null) {
-      accTitle = (acc[1] ?? '').trim();
-      continue;
-    }
-    if (/^accDescr\s*:/iu.test(s)) continue;
-    if (/^accDescr\s*\{/iu.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
     const t = /^title(?:\s+(.*))?$/iu.exec(s);
     if (t !== null) {
       title = (t[1] ?? '').trim() || undefined;
@@ -228,5 +213,5 @@ export function parseGit(src: string, heading?: string, config?: Record<string, 
 
   if (!headerSeen) fail('A git graph starts with "gitGraph".', 1, 'header');
   const shownTitle = title ?? (heading === undefined || heading === '' ? undefined : heading);
-  return { orientation, branches, commits, config: cfg, ...(shownTitle === undefined ? {} : { title: shownTitle }), ...(accTitle === undefined || accTitle === '' ? {} : { accTitle }) };
+  return { orientation, branches, commits, config: cfg, ...(shownTitle === undefined ? {} : { title: shownTitle }), ...(acc.title === undefined || acc.title === '' ? {} : { accTitle: acc.title }) };
 }

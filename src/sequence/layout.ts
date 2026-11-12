@@ -12,6 +12,7 @@ import type {
   PlacedNote,
   PlacedParticipant,
   PlacedRow,
+  ParticipantKind,
   Sequence,
   SequenceLayout,
   SequenceLegendOption,
@@ -58,6 +59,11 @@ interface Look {
   arrow: SceneArrow;
 }
 
+/** Radius of the ring at the start of a message line, which only the card theme shows. */
+const PORT_R = 3.25;
+/** Distance of a frame's label tag from the corner of the frame. */
+const TAG_INSET = 8;
+
 const LEGEND_KINDS: readonly LegendKind[] = ['call', 'reply', 'async', 'failed'];
 const LEGEND_CAPTIONS: Record<LegendKind, string> = { call: 'Call', reply: 'Reply', async: 'Async', failed: 'Failed' };
 const LEGEND_LOOKS: Record<LegendKind, Look> = {
@@ -72,6 +78,93 @@ function lookOf(m: MessageStmt): Look {
   if (kind === 'failed') return { tone: 'muted', dash: m.dashed, arrow: 'cross' };
   if (kind === 'plain') return { tone: m.dashed ? 'muted' : 'soft', dash: m.dashed, arrow: 'none' };
   return LEGEND_LOOKS[kind];
+}
+
+/** Roles of a message line in the themed drawing. */
+function lineRoles(look: Look): string[] {
+  return ['edge', 'edge--msg', ...(look.arrow === 'none' || look.arrow === 'cross' ? [] : ['edge--arrow']), ...(look.dash ? ['edge--pending'] : [])];
+}
+
+/** The two strokes of a cross that ends a failed message, centred on `x`, the end of the line. */
+function crossMark(x: number, y: number): SceneItem[] {
+  const half = 4;
+  const stroke = (y1: number, y2: number): SceneItem => ({
+    kind: 'line',
+    points: [
+      { x: x - half, y: y + y1 },
+      { x: x + half, y: y + y2 },
+    ],
+    role: ['edge', 'edge--msg'],
+  });
+  return [stroke(-half, half), stroke(half, -half)];
+}
+
+/** Sizes of the participant symbols, in pixels. A symbol sits above its name, {@link NAME_GAP} apart. */
+const NAME_GAP = 8;
+const CIRCLE = 32;
+/** Height of each symbol that has a name below it. */
+const SYMBOL_HEIGHT: Partial<Record<ParticipantKind, number>> = {
+  actor: 48,
+  boundary: CIRCLE,
+  control: CIRCLE + 4,
+  entity: CIRCLE,
+  database: 44,
+};
+/** The back box of `collections` is shifted right and up by this much. */
+const STACK_STEP = 4;
+const DATABASE_W = 40;
+const DATABASE_CAP = 8;
+const QUEUE_CAP = 8;
+
+const fmt = (v: number): string => String(Math.round(v * 100) / 100);
+
+/** Path data of an actor's body, arms and legs below a head circle of diameter 16; `y` is the top of the figure. */
+function actorStrokes(cx: number, y: number): string {
+  return [
+    `M${fmt(cx)} ${fmt(y + 16)}V${fmt(y + 32)}`,
+    `M${fmt(cx - 12)} ${fmt(y + 20)}H${fmt(cx + 12)}`,
+    `M${fmt(cx)} ${fmt(y + 32)}L${fmt(cx - 8)} ${fmt(y + 48)}`,
+    `M${fmt(cx)} ${fmt(y + 32)}L${fmt(cx + 8)} ${fmt(y + 48)}`,
+  ].join('');
+}
+
+/** Boundary: a bar 12 to the left of the circle, joined to it by a short line. */
+function boundaryStrokes(cx: number, y: number): string {
+  const bar = cx - CIRCLE / 2 - 12;
+  return `M${fmt(bar)} ${fmt(y)}V${fmt(y + CIRCLE)}M${fmt(bar)} ${fmt(y + CIRCLE / 2)}H${fmt(cx - CIRCLE / 2)}`;
+}
+
+/** Control: an arrowhead 8 wide on top of the circle, pointing left; the circle starts 4 below `y`. */
+function controlStrokes(cx: number, y: number): string {
+  return `M${fmt(cx + 4)} ${fmt(y)}L${fmt(cx - 4)} ${fmt(y + 4)}L${fmt(cx + 4)} ${fmt(y + 8)}`;
+}
+
+/** Entity: a line as wide as the circle directly below it. */
+function entityStrokes(cx: number, y: number): string {
+  return `M${fmt(cx - CIRCLE / 2)} ${fmt(y + CIRCLE)}H${fmt(cx + CIRCLE / 2)}`;
+}
+
+/** Database: a cylinder with a lid, drawn as one closed outline plus the front edge of the lid. */
+function databasePath(cx: number, y: number, h: number): string {
+  const rx = DATABASE_W / 2;
+  const ry = DATABASE_CAP / 2;
+  const [x0, x1] = [cx - rx, cx + rx];
+  return (
+    `M${fmt(x0)} ${fmt(y + ry)}A${rx} ${ry} 0 0 1 ${fmt(x1)} ${fmt(y + ry)}V${fmt(y + h - ry)}` +
+    `A${rx} ${ry} 0 0 1 ${fmt(x0)} ${fmt(y + h - ry)}Z` +
+    `M${fmt(x0)} ${fmt(y + ry)}A${rx} ${ry} 0 0 0 ${fmt(x1)} ${fmt(y + ry)}`
+  );
+}
+
+/** Queue: a cylinder lying on its side between `x0` and `x1`, its lid on the right. */
+function queuePath(x0: number, x1: number, y: number, h: number): string {
+  const rx = QUEUE_CAP / 2;
+  const ry = h / 2;
+  return (
+    `M${fmt(x0 + rx)} ${fmt(y)}H${fmt(x1 - rx)}A${rx} ${ry} 0 0 1 ${fmt(x1 - rx)} ${fmt(y + h)}` +
+    `H${fmt(x0 + rx)}A${rx} ${ry} 0 0 1 ${fmt(x0 + rx)} ${fmt(y)}Z` +
+    `M${fmt(x1 - rx)} ${fmt(y)}A${rx} ${ry} 0 0 0 ${fmt(x1 - rx)} ${fmt(y + h)}`
+  );
 }
 
 function wrapLine(line: string, cap: number, measure: (s: string) => number): string[] {
@@ -119,8 +212,18 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const headerLabelW = Math.max(0, ...seq.participants.map((p) => widest(p.lines, 'title')));
   const hw = up2(Math.max(S.headMinW, headerLabelW + S.headPadX)) + S.stroke;
   const half = (hw - S.stroke) / 2;
-  const headLines = Math.max(1, ...seq.participants.map((p) => p.lines.length));
-  const headH = up(S.headH + (headLines - 1) * lhT);
+  // Symbols (actor, boundary, ...) exist only in the pixel drawing; the terminal ruler keeps boxes.
+  const symbols = !R.terminal;
+  const symbolOf = (k: ParticipantKind): number | undefined => (symbols ? SYMBOL_HEIGHT[k] : undefined);
+  const boxLines = Math.max(1, ...seq.participants.filter((p) => symbolOf(p.kind) === undefined).map((p) => p.lines.length));
+  const boxH = up(S.headH + (boxLines - 1) * lhT);
+  // The header area is as high as the tallest participant; every lifeline starts at its bottom.
+  const extentOf = (p: (typeof seq.participants)[number]): number => {
+    const sym = symbolOf(p.kind);
+    if (sym !== undefined) return sym + NAME_GAP + p.lines.length * lhT;
+    return symbols && p.kind === 'collections' ? boxH + STACK_STEP : boxH;
+  };
+  const headH = up(Math.max(boxH, ...seq.participants.map(extentOf)));
   const headerBottom = margin + headH;
   const hb = down(S.barW / 2);
 
@@ -234,16 +337,64 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   };
 
   const placed: PlacedParticipant[] = [];
+  // Paths are shifted by the final offset, which is only known at the end.
+  const shifted = new Map<SceneItem, (dx: number) => SceneItem>();
+  const later = (items: SceneItem[], make: (dx: number) => SceneItem): void => {
+    const slot: SceneItem = { kind: 'path', d: '', role: [] };
+    shifted.set(slot, make);
+    items.push(slot);
+  };
   seq.participants.forEach((p, i) => {
     const lx = xs[i] ?? 0;
     const box: Box = { x: lx - half, y: margin, w: hw, h: headH };
     placed.push({ id: p.id, x: lx, box });
-    span(box.x, box.x + box.w - S.stroke);
-    boxItems.push({ kind: 'box', style: p.actor ? 'actor' : 'box', ...box, data: { participant: p.id } });
-    const top = box.y + (headH - p.lines.length * lhT) / 2;
-    p.lines.forEach((line, k) =>
-      textItems.push({ kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text: line, anchor: 'middle', font: 'title', tone: 'fg' }),
-    );
+    const data = { participant: p.id };
+    const nameH = p.lines.length * lhT;
+    const sym = symbolOf(p.kind);
+    const line = (top: number, k: number, text: string): SceneItem => ({
+      kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text, anchor: 'middle', font: 'title', tone: 'fg', role: ['name'],
+    });
+    if (sym !== undefined) {
+      // Symbol above, name below on the shared bottom line.
+      const nameTop = headerBottom - nameH;
+      const top = nameTop - NAME_GAP - sym;
+      span(box.x, box.x + box.w - S.stroke);
+      const ring = (cy: number): SceneItem => ({ kind: 'circle', cx: lx, cy, r: CIRCLE / 2, role: ['edge'], data });
+      const strokes = (d: (dx: number) => string): void =>
+        later(boxItems, (dx) => ({ kind: 'path', d: d(dx), role: ['edge'], data }));
+      if (p.kind === 'actor') {
+        boxItems.push({ kind: 'circle', cx: lx, cy: top + 8, r: 8, role: ['edge'], data });
+        strokes((dx) => actorStrokes(lx + dx, top));
+      } else if (p.kind === 'boundary') {
+        boxItems.push(ring(top + CIRCLE / 2));
+        strokes((dx) => boundaryStrokes(lx + dx, top));
+      } else if (p.kind === 'control') {
+        boxItems.push(ring(top + 4 + CIRCLE / 2));
+        strokes((dx) => controlStrokes(lx + dx, top));
+      } else if (p.kind === 'entity') {
+        boxItems.push(ring(top + CIRCLE / 2));
+        strokes((dx) => entityStrokes(lx + dx, top));
+      } else {
+        later(boxItems, (dx) => ({ kind: 'path', d: databasePath(lx + dx, top, sym), role: ['box'], data }));
+      }
+      p.lines.forEach((l, k) => textItems.push(line(nameTop, k, l)));
+      return;
+    }
+    // Boxes sit on the bottom line, so that they touch their lifeline.
+    const front: Box = { x: box.x, y: headerBottom - boxH, w: hw, h: boxH };
+    const style = p.kind === 'actor' ? 'actor' : 'box';
+    if (symbols && p.kind === 'collections') {
+      span(box.x, box.x + box.w - S.stroke + STACK_STEP);
+      boxItems.push({ kind: 'box', style: 'box', x: front.x + STACK_STEP, y: front.y - STACK_STEP, w: hw, h: boxH, role: ['box'], data });
+      boxItems.push({ kind: 'box', style: 'box', ...front, role: ['box'], data });
+    } else if (symbols && p.kind === 'queue') {
+      span(box.x, box.x + box.w - S.stroke);
+      later(boxItems, (dx) => ({ kind: 'path', d: queuePath(front.x + dx, front.x + dx + hw, front.y, boxH), role: ['box'], data }));
+    } else {
+      span(box.x, box.x + box.w - S.stroke);
+      boxItems.push({ kind: 'box', style, ...front, role: ['box'], data });
+    }
+    p.lines.forEach((l, k) => textItems.push(line(front.y + (boxH - nameH) / 2, k, l)));
   });
 
   const bars: Bar[][] = seq.participants.map(() => []);
@@ -261,6 +412,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     barItems.push({
       kind: 'box',
       style: 'bar',
+      role: ['active'],
       x: lx - hb + bar.level * S.barNest,
       y: bar.y1,
       w: S.barW,
@@ -271,6 +423,14 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     const stack = bars[c];
     if (stack) stack.push({ col: c, level: stack.length, y1: y });
   };
+
+  // Highlight zones (`rect` blocks): each runs from where it opens to where it closes, across the whole drawing.
+  const zoneOpen: number[] = [];
+  const zones: Array<{ top: number; bottom: number }> = [];
+  const zonePad = Math.min(8, Math.floor(S.gapMsg / 2));
+  let zoneEnd = -Infinity;
+  /** A label backing takes the colour of the zone it lies in, or the page. */
+  const backRole = (): string[] => (zoneOpen.length > 0 ? ['zone'] : ['bg']);
 
   const rows: PlacedRow[] = [];
   const messages: PlacedMessage[] = [];
@@ -300,15 +460,15 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     const w = captionW(text);
     const bx = down(x - S.labelBgPad);
     const by = down(cy - S.condH / 2);
-    backItems.push({ kind: 'box', style: 'label', x: bx, y: by, w: up(x + w + S.labelBgPad) - bx, h: up(S.condH) });
-    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted' });
+    backItems.push({ kind: 'box', style: 'label', role: backRole(), x: bx, y: by, w: up(x + w + S.labelBgPad) - bx, h: up(S.condH) });
+    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
   };
 
   /** A caption on the border row of a frame (cell drawings): the backing keeps a space on both sides. */
   const inlineCaption = (x: number, cy: number, text: string): void => {
     const w = Math.ceil(captionW(text));
-    boxItems.push({ kind: 'box', style: 'label', x: x - S.labelBgPad, y: down(cy), w: w + 2 * S.labelBgPad, h: g });
-    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted' });
+    boxItems.push({ kind: 'box', style: 'label', role: backRole(), x: x - S.labelBgPad, y: down(cy), w: w + 2 * S.labelBgPad, h: g });
+    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
   };
 
   /** Draws a message label on a backing; `x` is its centre or its left end. */
@@ -316,16 +476,16 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     const left = anchor === 'middle' ? x - info.w / 2 : x;
     const bx = down(left - S.labelBgPad);
     const box: Box = { x: bx, y: top, w: up(left + info.w + S.labelBgPad) - bx, h: info.lines.length * lhE };
-    backItems.push({ kind: 'box', style: 'label', ...box });
+    backItems.push({ kind: 'box', style: 'label', role: backRole(), ...box });
     const data = { message: String(idx) };
     info.lines.forEach((line, k) => {
       const cy = top + k * lhE + lhE / 2;
       if (k === 0 && info.numText !== '') {
         const sx = anchor === 'middle' ? x - (info.numExtra + R.textWidth(line, 'edge')) / 2 : x;
-        textItems.push({ kind: 'text', x: sx, y: cy, text: info.numText, anchor: 'start', font: 'num', tone: 'fg', data });
-        if (line !== '') textItems.push({ kind: 'text', x: sx + info.numExtra, y: cy, text: line, anchor: 'start', font: 'label', tone, data });
+        textItems.push({ kind: 'text', x: sx, y: cy, text: info.numText, anchor: 'start', font: 'num', tone: 'fg', role: ['label'], data });
+        if (line !== '') textItems.push({ kind: 'text', x: sx + info.numExtra, y: cy, text: line, anchor: 'start', font: 'label', tone, role: ['body'], data });
       } else {
-        textItems.push({ kind: 'text', x, y: cy, text: line, anchor, font: 'label', tone, data });
+        textItems.push({ kind: 'text', x, y: cy, text: line, anchor, font: 'label', tone, role: ['body'], data });
       }
     });
     return box;
@@ -371,10 +531,14 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             ],
             tone: look.tone,
             dash: look.dash,
-            radius: S.loopR,
+            // The corner radius comes from the theme, except in the cell drawing, which has none.
+            ...(S.loopR === 0 ? { radius: 0 } : {}),
             arrow: look.arrow,
+            role: lineRoles(look),
             data,
           });
+          lineItems.push({ kind: 'circle', cx: e.right, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
+          if (look.arrow === 'cross') lineItems.push(...crossMark(e.right, lineY + S.loopH));
           span(e.left, xv);
           let right = Math.max(lx1 + half, xv);
           if (nl > 0) {
@@ -400,8 +564,11 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             tone: look.tone,
             dash: look.dash,
             arrow: look.arrow,
+            role: lineRoles(look),
             data,
           });
+          lineItems.push({ kind: 'circle', cx: x1, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
+          if (look.arrow === 'cross') lineItems.push(...crossMark(x2, lineY));
           span(Math.min(ea.left, eb.left), Math.max(ea.right, eb.right) - S.stroke);
           span(x1, x2);
           frameSpan(Math.min(lx1, lx2) - half, Math.max(lx1, lx2) + half);
@@ -458,7 +625,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         }
         const top = cursor + gapFor('note');
         const box: Box = { x: bx, y: top, w: bw, h: sz.h };
-        boxItems.push({ kind: 'box', style: 'note', ...box, data: { note: String(notes.length) } });
+        boxItems.push({ kind: 'box', style: 'note', role: ['note'], ...box, data: { note: String(notes.length) } });
         span(box.x, box.x + box.w - S.stroke);
         frameSpan(box.x, box.x + box.w - S.stroke);
         const nl = Math.max(1, lines.length);
@@ -473,6 +640,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             anchor: centred ? 'middle' : 'start',
             font: 'body',
             tone: 'fg',
+            role: ['sub'],
           }),
         );
         notes.push({ statement: si, box });
@@ -528,6 +696,17 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         last = 'branch';
         break;
       }
+      case 'zoneOpen':
+        zoneOpen.push(Math.max(cursor + (last === 'header' ? zonePad : 0), zoneEnd + 4));
+        break;
+      case 'zoneClose': {
+        const top = zoneOpen.pop();
+        if (top === undefined) break;
+        const bottom = cursor + zonePad;
+        zones.unshift({ top, bottom });
+        zoneEnd = Math.max(zoneEnd, bottom);
+        break;
+      }
       case 'close': {
         const f = open.pop();
         if (!f) break;
@@ -565,12 +744,26 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         frameItems.unshift({
           kind: 'box',
           style: 'frame',
+          role: ['frame'],
           x: box.x,
           y: box.y,
           w: box.w,
           h: box.h,
           tab: f.tab,
           data: { block: f.block, frame: String(f.index) },
+        });
+        // The tag is as high as the grid allows: 20 on the pixel grid, where the layout reserves 18.
+        const tagH = up(f.tab.h);
+        boxItems.push({ kind: 'box', style: 'label', role: ['tag'], x: box.x + TAG_INSET, y: box.y + TAG_INSET, w: f.tab.w, h: tagH });
+        textItems.push({
+          kind: 'text',
+          x: box.x + TAG_INSET + f.tab.w / 2,
+          y: box.y + TAG_INSET + tagH / 2,
+          text: f.tab.text,
+          anchor: 'middle',
+          font: 'caption',
+          tone: 'muted',
+          role: ['tag-text'],
         });
         if (f.condition !== '') {
           if (inline) inlineCaption(box.x + f.tab.w + S.tabGap, box.y + S.tabH / 2, f.condition);
@@ -583,7 +776,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
               { x: box.x + S.dividerInset, y: d.y },
               { x: right - S.dividerInset, y: d.y },
             ],
-            role: 'divider',
+            role: ['frame-split'],
             dash: true,
           });
           if (d.text === '') continue;
@@ -614,13 +807,24 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         { x: p.x, y: headerBottom },
         { x: p.x, y: bottom - S.stroke },
       ],
-      role: 'life',
+      role: ['lifeline'],
       dash: true,
       data: { participant: p.id },
     });
   });
 
-  const items: SceneItem[] = [...lifeItems, ...barItems, ...backItems, ...frameItems, ...lineItems, ...boxItems, ...textItems];
+  const zoneItems: SceneItem[] = zones.map(
+    (z): SceneItem => ({
+      kind: 'box',
+      style: 'frame',
+      role: ['zone'],
+      x: Number.isFinite(minX) ? minX : 0,
+      y: z.top,
+      w: Number.isFinite(minX) ? maxX - minX + S.stroke : 0,
+      h: z.bottom - z.top,
+    }),
+  );
+  const items: SceneItem[] = [...zoneItems, ...lifeItems, ...barItems, ...backItems, ...frameItems, ...lineItems, ...boxItems, ...textItems];
   const left = Number.isFinite(minX) ? minX : 0;
   const right = Number.isFinite(maxX) ? maxX : 0;
   const dx = margin - left;
@@ -636,7 +840,8 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   }
   const sceneItems: SceneItem[] = items.map((it): SceneItem => {
     if (it.kind === 'line') return { ...it, points: it.points.map((p) => ({ x: p.x + dx, y: p.y })) };
-    if (it.kind === 'path' || it.kind === 'circle') return it;
+    if (it.kind === 'circle') return { ...it, cx: it.cx + dx };
+    if (it.kind === 'path') return shifted.get(it)?.(dx) ?? it;
     return { ...it, x: it.x + dx };
   });
   let height = bottom + margin;
@@ -652,7 +857,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         { x: margin, y: ruleY },
         { x: width - margin, y: ruleY },
       ],
-      role: 'rule',
+      role: ['rule'],
     });
     let x = margin;
     legend.forEach((e, k) => {
@@ -667,7 +872,9 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         tone: look.tone,
         dash: look.dash,
         arrow: look.arrow,
+        role: lineRoles(look),
       });
+      if (look.arrow === 'cross') sceneItems.push(...crossMark(x2 - S.failGap, rowY));
       sceneItems.push({
         kind: 'text',
         x: x + R.legendSample + R.legendCaptionGap,
@@ -676,6 +883,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         anchor: 'start',
         font: 'caption',
         tone: 'muted',
+        role: ['legend'],
       });
       x = up(x + (widths[k] ?? 0) + R.legendGap);
     });

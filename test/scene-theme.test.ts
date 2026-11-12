@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderThemedScene } from '../src/render/scene-svg.ts';
 import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
-import { renderSceneSvg } from '../src/render/svg.ts';
 import { THEMES } from '../src/render/theme.ts';
 import type { Scene } from '../src/types.ts';
 
@@ -102,9 +101,5 @@ describe('themed scene', () => {
   it('styles a series tint written as two roles and as one', () => {
     const css = renderThemedScene(scene).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
     expect(css).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
-  });
-
-  it('keeps the plain renderer untouched', () => {
-    expect(renderSceneSvg(scene)).not.toContain('data-theme');
   });
 });

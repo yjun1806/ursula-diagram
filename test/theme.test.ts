@@ -247,6 +247,6 @@ describe('html page', () => {
     const { renderHtml } = await import('../src/html.ts');
     expect(renderHtml(FLOW, {})).toContain('--ursula-start-fill:#7447c8');
     expect(renderHtml(FLOW, {})).toContain('--ursula-line:#c4c1d0');
-    expect(renderHtml('sequenceDiagram\nA->>B: hi', {})).toContain('--ursula-line:#9ca3af');
+    expect(renderHtml('sequenceDiagram\nA->>B: hi', {})).toContain('--ursula-line:#c4c1d0');
   });
 });

@@ -1,9 +1,10 @@
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
+import { joinSpans } from '../text/terminal.ts';
 import { layoutIshikawa } from './layout.ts';
 import { parseIshikawa } from './parse.ts';
-import { joinSpans, layoutIshikawaText } from './text.ts';
+import { layoutIshikawaText } from './text.ts';
 
 registerFrontEnd({
   name: 'ishikawa',

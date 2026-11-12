@@ -1,23 +1,10 @@
-import type { FrontValue } from '../front-matter.ts';
+import { frontOf } from '../front/options.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutXychart } from './layout.ts';
 import { parseXychart } from './parse.ts';
 import { xychartTable } from './text.ts';
-
-interface FrontOptions {
-  heading?: string;
-  config?: Record<string, FrontValue>;
-}
-
-/** The title and settings a front matter handed to the front-end. */
-function frontOf(opts: object): FrontOptions {
-  const out: FrontOptions = {};
-  if ('heading' in opts && typeof opts.heading === 'string') out.heading = opts.heading;
-  if ('config' in opts && opts.config !== null && typeof opts.config === 'object') out.config = opts.config as Record<string, FrontValue>;
-  return out;
-}
 
 const read = (src: string, opts: object) => {
   const front = frontOf(opts);

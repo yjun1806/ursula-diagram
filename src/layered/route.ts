@@ -664,12 +664,32 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     return edgeNear(ruler, first + it.track * ruler.trackGap);
   };
   const bound = (it: Item, side: Side): number => (side === 'down' ? (bandStart[it.band] ?? 0) : (bandStart[it.band] ?? 0) + (bandSize[it.band] ?? 0));
+  // A box given from outside can make its layer thicker than the boxes beside it: those stand in the middle of the layer, as thick as they are.
+  const boxLayer = new Set<number>();
+  graph.nodes.forEach((n, i) => {
+    if (n.box !== undefined && i < l.realCount) boxLayer.add(l.nodes[i]?.layer ?? 0);
+  });
+  const own = (i: number): { off: number; ext: number } => {
+    const layer = l.nodes[i]?.layer ?? 0;
+    const full = thick[layer] ?? 0;
+    if (!boxLayer.has(layer) || i >= l.realCount) return { off: 0, ext: full };
+    const ext = Math.min(full, f.layerExt[i] ?? full);
+    return { off: Math.floor((full - ext) / 2 / ruler.nodeGrid + 1e-9) * ruler.nodeGrid, ext };
+  };
+  /** Where the line of a node meets its face on `side`; `fallback` when the node fills its layer. */
+  const faceAt = (n: number, side: Side, fallback: number): number => {
+    const layer = l.nodes[n]?.layer ?? 0;
+    if (!boxLayer.has(layer) || n >= l.realCount) return fallback;
+    const { off, ext } = own(n);
+    return (layerStart[layer] ?? 0) + off + (side === 'down' ? ext : 0);
+  };
 
   const nodes: LayoutNode[] = graph.nodes.map((n, i) => {
     const ln = l.nodes[i] as { layer: number; units: number };
     const o = nodeO(i);
-    const c = layerStart[ln.layer] ?? 0;
-    const [x, y, w, h] = td ? [c, o, thick[ln.layer] ?? 0, len(i)] : [o, c, len(i), thick[ln.layer] ?? 0];
+    const mine = own(i);
+    const c = (layerStart[ln.layer] ?? 0) + mine.off;
+    const [x, y, w, h] = td ? [c, o, mine.ext, len(i)] : [o, c, len(i), mine.ext];
     return withOutline({
       id: n.id,
       lane: n.lane,
@@ -711,13 +731,13 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
         const top = bandStart[it.band] ?? 0;
         const bottom = top + (bandSize[it.band] ?? 0);
         const from = xy.length;
-        put(it.xa, top);
+        put(it.xa, faceAt(it.a, 'down', top));
         if (it.track >= 0) {
           const y = trackY(it);
           put(it.xa, y);
           put(it.xb, y);
         }
-        put(it.xb, bottom);
+        put(it.xb, faceAt(it.b, 'up', bottom));
         if (!upperFirst) reversePoints(xy, from);
       }
     } else if (c.kind === 'flat') {
@@ -727,27 +747,34 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
         const layer = l.nodes[lo]?.layer ?? 0;
         const h = thick[layer] ?? 0;
         // A terminal box with two middle lines takes a lone edge on the upper one.
-        const at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
+        let at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
+        if (!ruler.uniform && boxLayer.has(layer)) {
+          // Both boxes meet the line: it runs through the part of the layer that both of them cover.
+          const [u, v] = [own(lo), own(hi)];
+          const from = Math.max(u.off, v.off);
+          const to = Math.min(u.off + u.ext, v.off + v.ext);
+          at = (layerStart[layer] ?? 0) + from + (to - from) * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5);
+        }
         put(nodeO(lo) + len(lo), at);
         put(nodeO(hi), at);
       } else if (first < end) {
         const it = items[first] as Item;
         const edge = bound(it, it.aSide);
         const y = trackY(it);
-        put(it.xa, edge);
+        put(it.xa, faceAt(it.a, it.aSide, edge));
         put(it.xa, y);
         put(it.xb, y);
-        put(it.xb, edge);
+        put(it.xb, faceAt(it.b, it.bSide, edge));
       }
       if (c.reversed) reversePoints(xy, 0);
     } else if (first < end) {
       const it = items[first] as Item;
       const edge = bound(it, 'up');
       const y = trackY(it);
-      put(it.xa, edge);
+      put(it.xa, faceAt(it.a, 'up', edge));
       put(it.xa, y);
       put(it.xb, y);
-      put(it.xb, edge);
+      put(it.xb, faceAt(it.b, 'up', edge));
     }
     edges.push({ from: e.from, to: e.to, style: e.style, ...endFields(e), points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });

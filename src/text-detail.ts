@@ -1,4 +1,5 @@
 import { cellWidth } from './metrics.ts';
+import { wrapWords } from './text/wrap.ts';
 import type { Graph } from './types.ts';
 
 /** How much of every box a terminal drawing keeps: all text, narrower description, or the title only. */
@@ -10,31 +11,7 @@ const DESCRIPTION_LINES = 3;
 const NARROWEST = 10;
 
 /** Breaks `text` into lines of at most `width` cells: at spaces, and inside a word only when the word is wider than a line. */
-export function wrapCells(text: string, width: number): string[] {
-  const out: string[] = [];
-  let cur = '';
-  const add = (word: string): void => {
-    const joined = cur === '' ? word : `${cur} ${word}`;
-    if (cellWidth(joined) <= width) {
-      cur = joined;
-      return;
-    }
-    if (cur !== '') {
-      out.push(cur);
-      cur = '';
-    }
-    for (const ch of word) {
-      if (cur !== '' && cellWidth(cur + ch) > width) {
-        out.push(cur);
-        cur = '';
-      }
-      cur += ch;
-    }
-  };
-  for (const word of text.split(/\s+/)) if (word !== '') add(word);
-  if (cur !== '') out.push(cur);
-  return out;
-}
+export const wrapCells = (text: string, width: number): string[] => wrapWords(text, width, cellWidth);
 
 /** Width of the widest line of text in any box: the inner width of a box at step 1. */
 export function innerWidth(graph: Graph): number {

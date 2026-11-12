@@ -1,5 +1,6 @@
 import { UrsulaError } from '../types.ts';
-import type { ArrowHead, BlockKind, MessageStmt, Participant, Sequence, Statement } from './model.ts';
+import { PARTICIPANT_KINDS } from './model.ts';
+import type { ArrowHead, BlockKind, MessageStmt, Participant, ParticipantKind, Sequence, Statement } from './model.ts';
 
 const BREAK = /<br\s*\/?>/gi;
 const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
@@ -15,7 +16,7 @@ const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
 const MESSAGE = /^(.+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
 const BLOCKS: ReadonlySet<string> = new Set(['loop', 'opt', 'alt', 'par', 'critical', 'break']);
 
-type Open = { kind: BlockKind; line: number } | { kind: 'ignored'; line: number };
+type Open = { kind: BlockKind; line: number } | { kind: 'ignored' | 'zone'; line: number };
 
 function textLines(text: string): string[] {
   return text
@@ -34,6 +35,61 @@ function stripComment(line: string): string {
   return at < 0 ? line : line.slice(0, at);
 }
 
+interface Declaration {
+  id: string;
+  label: string | undefined;
+  kind: ParticipantKind | undefined;
+}
+
+/** End of the `{...}` object that starts at `start`, skipping braces inside strings; -1 when it never closes. */
+function objectEnd(text: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * Reads what follows `participant` or `actor`: `id`, `id as label`, `id@{ "type": ..., "alias": ... }` and the
+ * combination of the last two. An `as` label wins over an `alias` inside the object.
+ */
+function readDeclaration(rest: string, line: number): Declaration {
+  const at = rest.indexOf('@{');
+  if (at < 0) {
+    const m = /^(.+?)(?:\s+as\s+(.+))?$/i.exec(rest);
+    return { id: (m?.[1] ?? '').trim(), label: m?.[2], kind: undefined };
+  }
+  const id = rest.slice(0, at).trim();
+  const end = objectEnd(rest, at + 1);
+  if (id === '') fail("'@{' needs a participant name before it", line);
+  if (end < 0) fail("missing '}' after '@{'", line);
+  let config: unknown;
+  try {
+    config = JSON.parse(rest.slice(at + 1, end + 1));
+  } catch {
+    return fail('the participant settings after the name are not valid JSON', line);
+  }
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) fail('the participant settings must be an object', line);
+  const { type, alias } = config as { type?: unknown; alias?: unknown };
+  let kind: ParticipantKind | undefined;
+  if (type !== undefined) {
+    const found = PARTICIPANT_KINDS.find((k) => k === type);
+    if (!found) fail(`unknown participant type '${String(type)}'; use ${PARTICIPANT_KINDS.join(', ')}`, line);
+    kind = found;
+  }
+  const tail = /^\s+as\s+(.+)$/i.exec(rest.slice(end + 1));
+  if (rest.slice(end + 1).trim() !== '' && !tail) fail("expected 'as <label>' after the participant settings", line);
+  return { id, label: tail?.[1] ?? (typeof alias === 'string' ? alias : undefined), kind };
+}
+
 /** Parses the supported Mermaid sequence diagram subset. */
 export function parseSequence(src: string): Sequence {
   const participants = new Map<string, Participant>();
@@ -45,13 +101,13 @@ export function parseSequence(src: string): Sequence {
   let headerSeen = false;
 
   const touch = (id: string): string => {
-    if (!participants.has(id)) participants.set(id, { id, lines: textLines(id), actor: false });
+    if (!participants.has(id)) participants.set(id, { id, lines: textLines(id), kind: 'participant' });
     return id;
   };
-  const declare = (id: string, label: string | undefined, actor: boolean): void => {
-    if (declared.has(id)) return;
-    declared.add(id);
-    participants.set(id, { id, lines: textLines(label ?? id), actor });
+  const declare = (d: Declaration, keyword: ParticipantKind): void => {
+    if (declared.has(d.id)) return;
+    declared.add(d.id);
+    participants.set(d.id, { id: d.id, lines: textLines(d.label ?? d.id), kind: d.kind ?? keyword });
   };
 
   const rows = src.split(/\r?\n/);
@@ -68,15 +124,14 @@ export function parseSequence(src: string): Sequence {
     const rest = s.slice(word.length).trim();
 
     if (word === 'participant' || word === 'actor') {
-      const m = /^(.+?)(?:\s+as\s+(.+))?$/i.exec(rest);
-      if (rest === '' || !m) fail(`'${word}' needs a name`, lineNo);
-      declare((m[1] ?? '').trim(), m[2], word === 'actor');
+      if (rest === '') fail(`'${word}' needs a name`, lineNo);
+      declare(readDeclaration(rest, lineNo), word);
       continue;
     }
     if (word === 'create') {
-      const m = /^(?:participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i.exec(rest);
+      const m = /^(participant|actor)\s+(.+)$/i.exec(rest);
       if (!m) fail("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
-      declare((m[1] ?? '').trim(), m[2], /^actor/i.test(rest));
+      declare(readDeclaration(m[2] ?? '', lineNo), (m[1] ?? '').toLowerCase() === 'actor' ? 'actor' : 'participant');
       continue;
     }
     if (word === 'destroy') {
@@ -119,7 +174,12 @@ export function parseSequence(src: string): Sequence {
       statements.push({ kind: 'open', block: word as BlockKind, lines: rest === '' ? [] : textLines(rest), line: lineNo });
       continue;
     }
-    if (word === 'rect' || word === 'box') {
+    if (word === 'rect') {
+      open.push({ kind: 'zone', line: lineNo });
+      statements.push({ kind: 'zoneOpen', line: lineNo });
+      continue;
+    }
+    if (word === 'box') {
       open.push({ kind: 'ignored', line: lineNo });
       continue;
     }
@@ -133,7 +193,8 @@ export function parseSequence(src: string): Sequence {
     if (s === 'end') {
       const top = open.pop();
       if (!top) fail("'end' without an open block", lineNo);
-      if (top.kind !== 'ignored') statements.push({ kind: 'close', line: lineNo });
+      if (top.kind === 'zone') statements.push({ kind: 'zoneClose', line: lineNo });
+      else if (top.kind !== 'ignored') statements.push({ kind: 'close', line: lineNo });
       continue;
     }
 
