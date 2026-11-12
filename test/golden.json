@@ -128,10 +128,10 @@
  "order-flow svg": "42ad10eb79932",
  "order-flow text80": "7bcb7279ef6b1",
  "order-flow text120": "14135dc1a7f5bc",
- "checkout-sequence svg": "1f4ebf683e9eb0",
+ "checkout-sequence svg": "116dd8ecf23039",
  "checkout-sequence text80": "5e341e0ecf860",
- "checkout-sequence text120": "a4f7ec194c693",
- "login-sequence svg": "f4e53aeafb8f5",
+ "checkout-sequence text120": "6508110ee21e3",
+ "login-sequence svg": "1afd5b3cafb319",
  "login-sequence text80": "84ae07fec6404",
- "login-sequence text120": "19119fdc0d73ad"
+ "login-sequence text120": "13f7709ed00f72"
 }
