@@ -162,7 +162,7 @@ interface Plan {
   home: string;
 }
 
-/** The sizes child boxes grow to: the widest of a column (x-spans that overlap, transitively) and the tallest of a row. Empty when nothing changes. */
+/** The sizes child boxes grow to: the widest of a column (centres on one x, transitively) and the tallest of a row (centres on one y). Empty when nothing changes. */
 function alignBoxes(layout: Layout, kids: Map<string, Block>): Map<string, { w: number; h: number }> {
   const boxes = layout.nodes.filter((n) => kids.has(n.id));
   const size = new Map(boxes.map((n) => [n.id, { w: (kids.get(n.id) as Block).size.w, h: (kids.get(n.id) as Block).size.h }] as const));
@@ -176,11 +176,11 @@ function alignBoxes(layout: Layout, kids: Map<string, Block>): Map<string, { w: 
     boxes.forEach((n, i) => out.set(find(i), [...(out.get(find(i)) ?? []), n]));
     return [...out.values()];
   };
-  for (const col of group((a, b) => a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS)) {
+  for (const col of group((a, b) => Math.abs(a.x + a.w / 2 - (b.x + b.w / 2)) < 1)) {
     const w = Math.max(...col.map((n) => (size.get(n.id) as { w: number }).w));
     for (const n of col) (size.get(n.id) as { w: number }).w = w;
   }
-  for (const row of group((a, b) => a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS)) {
+  for (const row of group((a, b) => Math.abs(a.y + a.h / 2 - (b.y + b.h / 2)) < 1)) {
     const h = Math.max(...row.map((n) => (size.get(n.id) as { h: number }).h));
     for (const n of row) (size.get(n.id) as { h: number }).h = h;
   }

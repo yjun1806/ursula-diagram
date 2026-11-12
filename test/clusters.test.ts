@@ -275,6 +275,11 @@ describe('clusters: subgraph direction, block ranks and sibling size', () => {
     expect(box('B1').w).toBe(box('B2').w);
     const wide = drawn(LIMITATION);
     const side = (id: string) => (wide.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
-    expect(side('subgraph1').w).toBe(side('subgraph2').w);
+    // Boxes that do not share a centre keep their own size.
+    expect(side('subgraph1').w).not.toBe(side('subgraph2').w);
+    const flow = drawn(FLOW);
+    const part = (id: string) => (flow.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
+    expect(part('one').h).toBe(part('three').h);
+    expect(part('two').w).toBe(part('three').w);
   });
 });
