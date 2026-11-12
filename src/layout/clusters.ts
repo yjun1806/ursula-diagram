@@ -233,7 +233,8 @@ function assemble(plan: Plan, block: Block, dx: number, dy: number, depth: numbe
       continue;
     }
     const box: Rect = { x: tidy(n.x + dx), y: tidy(n.y + dy), w: n.w, h: n.h };
-    out.clusters.push({ id: n.id, label: plan.tree.label.get(n.id) ?? n.id, ...box, depth });
+    const style = plan.graph.clusters?.find((c) => c.id === n.id)?.style;
+    out.clusters.push({ id: n.id, label: plan.tree.label.get(n.id) ?? n.id, ...box, depth, ...(style === undefined ? {} : { style }) });
     out.clusterRect.set(n.id, box);
     // The content stands in the middle of the room the box leaves it.
     const kx = Math.round(box.x + CLUSTER_PAD + (box.w - 2 * CLUSTER_PAD - kid.content.w) / 2 - kid.content.x);

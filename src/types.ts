@@ -105,6 +105,8 @@ export interface GraphCluster {
   direction?: Direction;
   /** Set when the cluster reads right to left (`RL`) or bottom to top (`BT`): it is laid out in `direction` and mirrored. */
   mirror?: 'RL' | 'BT';
+  /** `dashed`: drawn as a dashed outline without a fill; the boxes in it keep the face they have outside any cluster. */
+  style?: 'dashed';
 }
 
 export interface GraphEdge {
@@ -204,6 +206,8 @@ export interface LayoutCluster {
   w: number;
   h: number;
   depth: number;
+  /** As in `GraphCluster`. */
+  style?: 'dashed';
 }
 
 export interface LayoutEdge {

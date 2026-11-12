@@ -4,6 +4,7 @@ import { layout, render, UrsulaError } from '../src/index.ts';
 import { cellRuler, pixelRuler } from '../src/metrics.ts';
 import { c4Graph } from '../src/c4/graph.ts';
 import { parseC4 } from '../src/c4/parse.ts';
+import { recordHeight, recordWidth } from '../src/layout/records.ts';
 
 const EXAMPLES: string[] = [
   // 01-c4-diagrams
@@ -323,6 +324,84 @@ describe('c4 layout', () => {
       const laid = layout(c4Graph(parseC4(src), cellRuler()), cellRuler());
       expect(laid.nodes.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('c4 shapes, boundaries and sizes', () => {
+  const shapeOf = (src: string, id: string): string | undefined => c4Graph(parseC4(src), pixelRuler()).nodes.find((n) => n.id === id)?.shape;
+
+  it('draws a database as a cylinder, a person as a rounded box, and a queue and a system as boxes', () => {
+    const src = EXAMPLES[0] as string;
+    expect(shapeOf(src, 'SystemE')).toBe('cylinder');
+    expect(shapeOf(src, 'SystemD')).toBe('cylinder');
+    expect(shapeOf(src, 'customerA')).toBe('round');
+    expect(shapeOf(src, 'customerC')).toBe('round');
+    expect(shapeOf(src, 'SystemF')).toBe('rect');
+    expect(shapeOf(src, 'SystemAA')).toBe('rect');
+    expect(shapeOf(EXAMPLES[2] as string, 'database')).toBe('cylinder');
+    expect(shapeOf(EXAMPLES[3] as string, 'db')).toBe('cylinder');
+  });
+
+  it('keeps the kind in the tag of a cylinder', () => {
+    const node = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler()).nodes.find((n) => n.id === 'SystemE');
+    expect(node?.compartments?.[0]?.lines[0]).toBe('[External System Database]');
+  });
+
+  it('marks every boundary and deployment node as a dashed zone', () => {
+    for (const src of EXAMPLES) {
+      const clusters = c4Graph(parseC4(src), pixelRuler()).clusters ?? [];
+      for (const c of clusters) expect(c.style).toBe('dashed');
+    }
+  });
+
+  it('draws a dashed zone without a fill, and the boxes in it on the page face', () => {
+    for (const theme of THEMES) {
+      const svg = render(EXAMPLES[0] as string, { theme });
+      expect(svg.match(/class="ursula-zone ursula-zone--dashed"/g)).toHaveLength(4);
+      expect(svg).toMatch(/\.ursula-zone--dashed\{fill:none;stroke:[^;]+;stroke-width:[\d.]+;stroke-dasharray:[\d. ]+;stroke-linecap:round\}/);
+      expect(svg).not.toContain('class="ursula-node ursula-node--on-lane');
+    }
+  });
+
+  it('leaves the clusters of a flowchart as they were', () => {
+    const svg = render('flowchart TD\n  subgraph one[One]\n    a --> b\n  end');
+    expect(svg).toContain('class="ursula-zone"');
+    expect(svg).not.toContain('ursula-zone--dashed');
+    expect(svg).toContain('class="ursula-node ursula-node--on-lane');
+  });
+
+  it('puts a person above the element that sends it something, with the arrow still pointing at the person', () => {
+    const g = c4Graph(parseC4(EXAMPLES[2] as string), pixelRuler());
+    const e = g.edges.find((x) => x.label === 'Sends e-mails to');
+    expect(e).toMatchObject({ from: 'customer', to: 'email_system', startEnd: 'arrow', end: 'none' });
+    const laid = layout(g, pixelRuler());
+    const at = (id: string) => laid.nodes.find((n) => n.id === id) as { y: number; h: number };
+    expect(at('customer').y + at('customer').h).toBeLessThanOrEqual(at('email_system').y);
+  });
+
+  it('keeps a relation between two persons as written', () => {
+    const g = c4Graph(parseC4('C4Context\n  Person(a, "A")\n  Person(b, "B")\n  Rel(a, b, "Asks")'), pixelRuler());
+    expect(g.edges[0]).toMatchObject({ from: 'a', to: 'b', end: 'arrow' });
+  });
+
+  EXAMPLES.forEach((src, i) => {
+    it(`example ${i + 1}: every element asks for one box, at least as large as the largest element`, () => {
+      const ruler = pixelRuler();
+      const g = c4Graph(parseC4(src), ruler);
+      const box = g.nodes[0]?.box as { w: number; h: number };
+      for (const n of g.nodes) expect(n.box).toEqual(box);
+      for (const n of g.nodes) {
+        expect(box.w).toBeGreaterThanOrEqual(recordWidth(n.compartments ?? [], ruler));
+        expect(box.h).toBeGreaterThanOrEqual(recordHeight(n.compartments ?? [], ruler));
+      }
+    });
+
+    it(`example ${i + 1}: every element box is drawn with one height${i === 3 ? '' : ' and one width'}`, () => {
+      const laid = layout(c4Graph(parseC4(src), pixelRuler()), pixelRuler());
+      expect(new Set(laid.nodes.map((n) => n.h)).size).toBe(1);
+      // Example 4: the layered engine widens the boxes beside the boundary to its shared width, which counts the boundary's name.
+      if (i !== 3) expect(new Set(laid.nodes.map((n) => n.w)).size).toBe(1);
+    });
   });
 });
 

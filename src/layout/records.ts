@@ -16,6 +16,9 @@ export const COLUMN_GAP_CELLS = 2;
 /** Pixels: least width of a rounded box, so that a one-letter name is not drawn as a circle. */
 export const ROUND_MIN_W = 80;
 
+/** Pixels: height of each end cap of a cylinder (half the height of the ellipse that closes it). */
+export const CYLINDER_CAP = 6;
+
 /** Pixels: diameter of the start dot, and of the ring and the dot of the end mark. */
 export const START_DOT = 16;
 export const END_RING = 20;
@@ -129,14 +132,20 @@ interface Sizable extends WithCompartments {
   title: string;
   lines: string[];
   shape?: NodeShape | undefined;
+  box?: Body | undefined;
 }
 
 /**
  * The size a node asks of its slot, when it differs from the one every text box gets: compartments, the fixed
- * shapes, the ellipse. A node of an ordinary shape gets nothing here.
+ * shapes, the ellipse. A node of an ordinary shape gets nothing here. A box with compartments and a size given from
+ * outside (`box`) is at least that large.
  */
 export function ownSize(n: Sizable, td: boolean, ruler: Ruler): Body | undefined {
-  if (hasCompartments(n)) return { w: recordWidth(n.compartments, ruler), h: recordHeight(n.compartments, ruler) };
+  if (hasCompartments(n)) {
+    // A cylinder keeps its compartments between its two caps.
+    const caps = n.shape === 'cylinder' && ruler.terminal !== true ? 2 * CYLINDER_CAP : 0;
+    return { w: Math.max(recordWidth(n.compartments, ruler), n.box?.w ?? 0), h: Math.max(recordHeight(n.compartments, ruler) + caps, n.box?.h ?? 0) };
+  }
   if (ruler.terminal === true) return undefined;
   const fixed = fixedBody(n.shape, td, ruler);
   if (n.shape === 'actor') {
