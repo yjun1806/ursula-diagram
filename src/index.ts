@@ -8,6 +8,7 @@ import './journey/frontend.ts';
 import './gantt/frontend.ts';
 import './ishikawa/frontend.ts';
 import './cynefin/frontend.ts';
+import './git/frontend.ts';
 import './kanban/frontend.ts';
 import './mindmap/frontend.ts';
 import './quadrant/frontend.ts';
