@@ -13,15 +13,22 @@ function ticketBaseUrlOf(opts: object): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/** Wraps each ticket tag that carries a `data-href` (its pill and its text) in an SVG link to that address. */
+function linkTickets(svg: string): string {
+  return svg.replace(/(<rect [^>]*data-href="([^"]*)"[^>]*\/>)(\s*)(<text [^>]*data-href="\2"[^>]*>[^<]*<\/text>)/g, '<a href="$2">$1$3$4</a>');
+}
+
 registerFrontEnd({
   name: 'kanban',
   headers: ['kanban'],
   svg(src, opts) {
     const layout = layoutKanban(parseKanban(src, ticketBaseUrlOf(opts)), pixelRuler(), opts.theme);
-    return renderThemedScene(layout.scene, {
-      ...(opts.title === undefined ? {} : { title: opts.title }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
-    });
+    return linkTickets(
+      renderThemedScene(layout.scene, {
+        ...(opts.title === undefined ? {} : { title: opts.title }),
+        ...(opts.theme === undefined ? {} : { theme: opts.theme }),
+      }),
+    );
   },
   textLines(src, maxWidth, opts) {
     return layoutKanbanText(parseKanban(src, ticketBaseUrlOf(opts)), maxWidth).map(joinSpans);

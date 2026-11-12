@@ -11,7 +11,7 @@ export interface TreeItem {
   highlight: boolean;
   /** Every `:::name` class, in order. */
   classes: string[];
-  /** The `icon(...)` argument; icons are not drawn. */
+  /** The `icon(...)` argument; `none` or an empty argument hides the icon. */
   icon?: string;
   /** The text after `##`. */
   description?: string;
@@ -23,6 +23,15 @@ export interface TreeView {
   items: TreeItem[];
   /** Indent per level from `config.treeView.rowIndent`; set by the front-end, not by the parser. */
   rowIndent?: number;
+  /** Icon settings of `config.treeView`; set by the front-end, not by the parser. */
+  icons?: IconSettings;
+}
+
+/** `showIcons` with the `filenameIcons` and `extensionIcons` maps; a map value `none` hides the icon. */
+export interface IconSettings {
+  show: boolean;
+  filenames: Record<string, string>;
+  extensions: Record<string, string>;
 }
 
 const HEADERS = new Set(['treeView-beta', 'treeView']);

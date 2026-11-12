@@ -335,3 +335,52 @@ describe('tree view errors', () => {
     expect(lineOf('treeView-beta\n├── a/\n│   │   │   └── b')).toBe(3);
   });
 });
+
+describe('tree view icons', () => {
+  /** The icon drawn on each line, by source line number; lines without an icon are left out. */
+  const icons = (svg: string): Record<string, string> =>
+    Object.fromEntries([...svg.matchAll(/<path class="ursula-faint"[^>]*data-icon="(\w+)" data-line="(\d+)"/g)].map((m) => [m[2] ?? '', m[1] ?? '']));
+
+  it('draws the built-in folder and file icons when showIcons is set', () => {
+    expect(icons(render(example('06')))).toEqual({ '7': 'folder', '8': 'file', '9': 'file' });
+  });
+
+  it('draws no icon when showIcons is off and no item asks for one', () => {
+    expect(icons(render(example('01')))).toEqual({});
+  });
+
+  it('draws an icon an item asks for with icon() even when showIcons is off', () => {
+    expect(icons(render(example('08')))).toEqual({ '3': 'file' });
+  });
+
+  it('hides the icon of an item marked icon(none)', () => {
+    expect(icons(render(example('09')))).toEqual({ '7': 'folder', '9': 'file' });
+  });
+
+  it('hides the icon of a file whose extension maps to none', () => {
+    const drawn = icons(render(example('07')));
+    expect(Object.keys(drawn)).toHaveLength(5);
+    expect(drawn['18']).toBeUndefined();
+  });
+
+  it('starts the text of an item with an icon past the icon', () => {
+    const svg = render(example('06'));
+    expect(svg).toMatch(/<text class="ursula-name ursula-start" x="44"[^>]*>src\/</);
+  });
+});
+
+describe('tree view highlight', () => {
+  it('stops a guide 8 before the highlight behind a child', () => {
+    for (const n of ['02', '04', '10']) {
+      const { scene } = layoutTreeView(parseTreeView(body(n)), pixelRuler());
+      const marks = scene.items.filter((i) => i.kind === 'box' && i.role?.includes('active'));
+      for (const m of marks) {
+        if (m.kind !== 'box') continue;
+        const line = m.data?.['line'];
+        const guide = scene.items.find((i) => i.kind === 'path' && i.data?.['to'] === line);
+        const end = Number(/H(-?[\d.]+)$/.exec(guide?.kind === 'path' ? guide.d : '')?.[1]);
+        expect(m.x - end).toBeGreaterThanOrEqual(8);
+      }
+    }
+  });
+});

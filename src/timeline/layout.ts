@@ -23,10 +23,13 @@ const TITLE_Y = 40;
 const TITLE_SIZE_RATIO = 15 / 13;
 const DEFAULT_WIDTH_LIMIT = 1280;
 const TD_ROW_GAP = 24;
+const SERIES = 8;
 
 export interface TimelineLayoutOptions {
   /** Width at which a horizontal drawing folds into another row. */
   maxWidth?: number;
+  /** Colours each section, or each period when there is no section, with its own series; true when absent. */
+  multicolor?: boolean;
 }
 
 export interface PlacedBox {
@@ -65,6 +68,8 @@ export interface TimelineLayout {
 
 
 interface Col {
+  /** Series role of the period's dot and boxes; absent when the drawing is in one scheme. */
+  series?: string;
   label: string[];
   events: string[][];
   w: number;
@@ -85,11 +90,12 @@ function widest(lines: readonly string[], width: (s: string) => number): number 
   return Math.max(0, ...lines.map(width));
 }
 
-function boxItems(box: PlacedBox, inZone: boolean): SceneItem[] {
+function boxItems(box: PlacedBox, inZone: boolean, series: string | undefined): SceneItem[] {
   const cx = box.x + box.w / 2;
+  const role = series !== undefined ? ['box', `${series}--tint`] : inZone ? ['box', 'box--in-zone'] : ['box'];
   return [
-    { kind: 'box', style: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role: inZone ? ['box', 'box--in-zone'] : ['box'] },
-    ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + 24 + LINE * i, text, anchor: 'middle', role: ['name'] })),
+    { kind: 'box', style: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role },
+    ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + box.h / 2 + LINE * (i - (box.lines.length - 1) / 2), text, anchor: 'middle', role: ['name'] })),
   ];
 }
 
@@ -172,24 +178,47 @@ function balancedRows(groups: readonly Part[], limit: number): Part[][] {
   return best;
 }
 
+/** Every column takes the width of the widest one, and the n-th boxes of all columns the height of the tallest of them. */
 function columns(model: TimelineModel, width: (s: string) => number): Col[][] {
-  return model.groups.map((g) =>
+  const raw = model.groups.map((g) =>
     g.periods.map((p) => {
       const events = p.events.map((e) => wrapLines(e, TEXT_MAX, width));
       const label = wrapLines(p.label, TEXT_MAX, width);
       const text = Math.max(widest(label, width), ...events.map((e) => widest(e, width)));
-      return { label, events, w: Math.max(BOX_MIN, ceilTo(text + BOX_PAD)), heights: events.map((e) => boxHeight(e.length)) };
+      return { label, events, w: Math.max(BOX_MIN, ceilTo(text + BOX_PAD)) };
+    }),
+  );
+  const w = Math.max(BOX_MIN, ...raw.flat().map((c) => c.w));
+  const depth = Math.max(0, ...raw.flat().map((c) => c.events.length));
+  const heights = Array.from({ length: depth }, (_, k) => Math.max(0, ...raw.flat().map((c) => (c.events[k] === undefined ? 0 : boxHeight(c.events[k].length)))));
+  return raw.map((g) => g.map((c) => ({ label: c.label, events: c.events, w, heights: c.events.map((_, k) => heights[k] ?? 48) })));
+}
+
+/** The series of each period, by group and position: one per section when there are sections, else one per period. */
+function seriesOf(model: TimelineModel, multicolor: boolean): (string | undefined)[][] {
+  const bySection = model.groups.some((g) => g.name !== undefined);
+  let n = 0;
+  return model.groups.map((g, gi) =>
+    g.periods.map(() => {
+      if (!multicolor) return undefined;
+      const k = bySection ? gi : n++;
+      return `series-${(k % SERIES) + 1}`;
     }),
   );
 }
+
+const withSeries = (col: Col, series: string | undefined): Col => (series === undefined ? col : { ...col, series });
+
+const dotRole = (series: string | undefined): string[] => (series === undefined ? ['dot'] : ['dot', series]);
 
 function titleItems(title: string | undefined): SceneItem[] {
   return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'] }];
 }
 
-function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limit: number): TimelineLayout {
+function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limit: number, multicolor: boolean): TimelineLayout {
   const width = pixelWidth(ruler);
-  const cols = columns(model, width);
+  const series = seriesOf(model, multicolor);
+  const cols = columns(model, width).map((g, gi) => g.map((c, pi) => withSeries(c, series[gi]?.[pi])));
   const zones = model.groups.some((g) => g.name !== undefined);
   const nameLines = Math.max(1, ...cols.flat().map((c) => c.label.length));
   const sectionLines = Math.max(1, ...model.groups.map((g) => (g.name === undefined ? 0 : wrapLines(g.name, TEXT_MAX * 2, width).length)));
@@ -242,11 +271,11 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
           return box;
         });
         if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: cx, y: axis }, { x: cx, y: boxTop }], role: ['edge'] });
-        dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: ['dot'] });
+        dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: dotRole(col.series) });
         col.label.forEach((text, i) =>
           dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'] }),
         );
-        for (const b of boxes) contentItems.push(...boxItems(b, part.named));
+        for (const b of boxes) contentItems.push(...boxItems(b, part.named, col.series));
         periods.push({ label: col.label, dot: { x: cx, y: axis }, boxes, row: rowIndex });
       });
     });
@@ -270,18 +299,22 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
   };
 }
 
-function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): TimelineLayout {
+function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multicolor: boolean): TimelineLayout {
   const width = pixelWidth(ruler);
+  const series = seriesOf(model, multicolor);
   const zones = model.groups.some((g) => g.name !== undefined);
   const labels = model.groups.map((g) => g.periods.map((p) => wrapLines(p.label, TEXT_MAX, width)));
   const nameW = Math.max(0, ...labels.flat().map((l) => widest(l, width)));
   const axisX = ceilTo(MARGIN + (zones ? ZONE_PAD : 0) + nameW + NAME_RISE);
   const boxLeft = axisX + STEM;
 
+  const eventLines = model.groups.map((g) => g.periods.map((p) => p.events.map((e) => wrapLines(e, TEXT_MAX, width))));
+  // Every event box takes the width of the widest one.
+  const boxW = Math.max(BOX_MIN, ...eventLines.flat(2).map((l) => ceilTo(widest(l, width) + BOX_PAD)));
   const rowsOf = model.groups.map((g, gi) =>
     g.periods.map((p, pi) => {
-      const lines = p.events.map((e) => wrapLines(e, TEXT_MAX, width));
-      const ws = lines.map((l) => Math.max(BOX_MIN, ceilTo(widest(l, width) + BOX_PAD)));
+      const lines = eventLines[gi]?.[pi] ?? [];
+      const ws = lines.map(() => boxW);
       const h = Math.max(48, ...lines.map((l) => boxHeight(l.length)), LINE * (labels[gi]?.[pi]?.length ?? 1));
       return { lines, ws, h, boxH: Math.max(0, ...lines.map((l) => boxHeight(l.length))) };
     }),
@@ -313,7 +346,8 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): Timel
       const dotY = y + r.h / 2;
       const label = labels[gi]?.[pi] ?? [];
       label.forEach((text, i) => dotItems.push({ kind: 'text', x: axisX - NAME_RISE, y: dotY + LINE * (i - (label.length - 1) / 2), text, anchor: 'end', role: ['name'] }));
-      dotItems.push({ kind: 'circle', cx: axisX, cy: dotY, r: DOT_R, role: ['dot'] });
+      const tone = series[gi]?.[pi];
+      dotItems.push({ kind: 'circle', cx: axisX, cy: dotY, r: DOT_R, role: dotRole(tone) });
       let x = boxLeft;
       const boxes: PlacedBox[] = r.lines.map((lines, k) => {
         const w = r.ws[k] ?? BOX_MIN;
@@ -323,7 +357,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): Timel
         return box;
       });
       if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: axisX, y: dotY }, { x: boxLeft, y: dotY }], role: ['edge'] });
-      for (const b of boxes) contentItems.push(...boxItems(b, g.name !== undefined));
+      for (const b of boxes) contentItems.push(...boxItems(b, g.name !== undefined, tone));
       periods.push({ label, dot: { x: axisX, y: dotY }, boxes, row: 0 });
       lastRowBottom = y + r.h;
       y += r.h + TD_ROW_GAP;
@@ -352,5 +386,6 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme): Timel
 
 /** Places a timeline: periods on an axis as dots, events stacked below (or beside) them, sections as zones. */
 export function layoutTimeline(model: TimelineModel, ruler: Ruler, theme: Theme = 'solid', opts: TimelineLayoutOptions = {}): TimelineLayout {
-  return model.direction === 'TD' ? layoutVertical(model, ruler, theme) : layoutHorizontal(model, ruler, theme, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT);
+  const multicolor = opts.multicolor ?? true;
+  return model.direction === 'TD' ? layoutVertical(model, ruler, theme, multicolor) : layoutHorizontal(model, ruler, theme, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT, multicolor);
 }

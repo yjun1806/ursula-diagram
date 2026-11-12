@@ -204,10 +204,27 @@ describe('packet layout', () => {
     expect(names).toHaveLength(2);
   });
 
-  it('shortens a name that does not fit the box', () => {
+  it('widens every bit alike until a long name fits its box whole', () => {
+    const ruler = pixelRuler();
     const s3 = scene('packet\n0: "Longname"\n1-31: "R"');
-    const t = s3.items.find((i): i is SceneText => i.kind === 'text' && i.text.endsWith('…'));
-    expect(t).toBeDefined();
+    const box = s3.items.find((i): i is SceneBox => i.kind === 'box' && i.data?.bits === '0');
+    const rest = s3.items.find((i): i is SceneBox => i.kind === 'box' && i.data?.bits === '1-31');
+    const name = s3.items.find((i): i is SceneText => i.kind === 'text' && i.role?.includes('name') === true && i.data?.bits === '0');
+    expect(name?.text).toBe('Longname');
+    expect(s3.items.some((i) => i.kind === 'text' && i.text.includes('…'))).toBe(false);
+    expect(ruler.textWidth('Longname', 'line') * (13 / 12) + 4).toBeLessThanOrEqual(box?.w ?? 0);
+    const bit = (box?.w ?? 0) + 4;
+    expect(bit).toBeGreaterThan(36);
+    expect(rest?.w).toBe(31 * bit - 4);
+  });
+
+  it('breaks a name at a space into two lines before it widens the bits', () => {
+    const s4 = scene('packet\n0-2: "Traffic Class Value"\n3-31: "R"');
+    const lines = s4.items.filter((i): i is SceneText => i.kind === 'text' && i.role?.includes('name') === true && i.data?.bits === '0-2');
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => l.text).join(' ')).toBe('Traffic Class Value');
+    expect((lines[1]?.y ?? 0) - (lines[0]?.y ?? 0)).toBe(16);
+    expect(s4.width).toBe(1200);
   });
 
   it('draws the same coordinates in all three themes', () => {
