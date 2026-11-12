@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstWord } from '../src/registry.ts';
+import { firstWord, frontMatterTitle } from '../src/registry.ts';
 import { render } from '../src/index.ts';
 
 describe('firstWord', () => {
@@ -23,5 +23,11 @@ describe('firstWord', () => {
     expect(render('---\ntitle: x\n---\nflowchart TD\n a-->b')).toContain('<svg');
     expect(render('---\ntitle: x\n---\nsequenceDiagram\n A->>B: hi')).toContain('<svg');
     expect(() => render('---\ntitle: x\n---\nflowchart TD\n a-->')).toThrow(/line 5/);
+  });
+
+  it('reads the title of the front matter', () => {
+    expect(frontMatterTitle('---\ntitle: "Grades"\n---\nradar-beta')).toBe('Grades');
+    expect(frontMatterTitle("---\nconfig:\n  x: 1\ntitle: Plain\n---\npie")).toBe('Plain');
+    expect(frontMatterTitle('pie\n title: no')).toBeUndefined();
   });
 });

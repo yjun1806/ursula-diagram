@@ -2,6 +2,8 @@ import type { SvgOptions } from './render/svg.ts';
 import type { TextSpan } from './types.ts';
 
 export interface RenderOptions extends SvgOptions {
+  /** Title from a leading front-matter block (`title: ...`); a front-end draws it when the diagram text gives none. */
+  heading?: string;
   maxWidth?: number;
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
@@ -12,6 +14,8 @@ export interface RenderOptions extends SvgOptions {
 }
 
 export interface TextOptions {
+  /** Title from a leading front-matter block; see `RenderOptions.heading`. */
+  heading?: string;
   legend?: SvgOptions['legend'];
   maxHeight?: number;
   engine?: 'grid' | 'layered';
@@ -57,6 +61,20 @@ export function blankFrontMatter(src: string): string {
   return rows.map((r, i) => (i >= start && i <= end ? '' : r)).join('\n');
 }
 
+/** The `title:` of a leading front-matter block, unquoted; undefined when there is none. */
+export function frontMatterTitle(src: string): string | undefined {
+  const blanked = blankFrontMatter(src);
+  if (blanked === src) return undefined;
+  const rows = src.split(/\r?\n/);
+  const kept = blanked.split(/\r?\n/);
+  for (let i = 0; i < rows.length; i++) {
+    if (kept[i] === rows[i]) continue;
+    const m = /^title:\s*(.*)$/.exec(rows[i] ?? '');
+    if (m) return (m[1] ?? '').trim().replace(/^(["'])(.*)\1$/, '$2');
+  }
+  return undefined;
+}
+
 /** The first word of the source, past blank lines, `%%` comments and a leading `---` front-matter block. */
 export function firstWord(src: string): string {
   for (const row of blankFrontMatter(src).split(/\r?\n/)) {
@@ -73,11 +91,15 @@ export function selectFrontEnd(src: string): FrontEnd {
   const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
   if (!found) throw new Error('no front-end registered');
   const spans = found.textSpans;
+  const head = <T extends { heading?: string }>(s: string, o: T): T => {
+    const heading = o.heading ?? frontMatterTitle(s);
+    return heading === undefined ? o : { ...o, heading };
+  };
   return {
     ...found,
-    svg: (s, o) => found.svg(blankFrontMatter(s), o),
-    textLines: (s, w, o) => found.textLines(blankFrontMatter(s), w, o),
-    json: (s, m, o) => found.json(blankFrontMatter(s), m, o),
-    ...(spans ? { textSpans: (s: string, w: number | undefined, o: TextOptions) => spans.call(found, blankFrontMatter(s), w, o) } : {}),
+    svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
+    textLines: (s, w, o) => found.textLines(blankFrontMatter(s), w, head(s, o)),
+    json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
+    ...(spans ? { textSpans: (s: string, w: number | undefined, o: TextOptions) => spans.call(found, blankFrontMatter(s), w, head(s, o)) } : {}),
   };
 }
