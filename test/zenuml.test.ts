@@ -145,7 +145,7 @@ describe('zenuml parse', () => {
     expect(alt.sequence.statements[3]).toMatchObject({ lines: ['else'] });
     const tr = parseZenuml(TRY);
     expect(tr.sequence.statements.filter((s) => s.kind === 'branch').map((s) => (s.kind === 'branch' ? s.lines[0] : ''))).toEqual(['catch', 'finally']);
-    expect([...tr.tags.values()]).toEqual(['TRY']);
+    expect([...tr.tags.values()]).toEqual(['try']);
   });
 
   it('replies with the assigned variable', () => {
@@ -177,7 +177,7 @@ describe('zenuml layout', () => {
   const textItems = layout.scene.items.filter((i): i is SceneText => i.kind === 'text');
 
   it('writes the frame tag of an if and shifts the drawing under the title', () => {
-    expect(textItems.map((t) => t.text)).toEqual(expect.arrayContaining(['IF', 'Reply message']));
+    expect(textItems.map((t) => t.text)).toEqual(expect.arrayContaining(['if', 'Reply message']));
     const title = textItems.find((t) => t.text === 'Reply message');
     const head = layout.participants[0];
     expect(title?.y).toBeLessThan(head?.box.y ?? 0);
@@ -208,6 +208,47 @@ describe('zenuml layout', () => {
         expect(overlap, `${a.t} / ${b.t}`).toBe(false);
       }
     }
+  });
+
+  it('writes the condition right of the tag, without brackets', () => {
+    const tag = layout.scene.items.find((i) => i.kind === 'box' && i.role?.includes('tag'));
+    const cond = textItems.find((t) => t.text === 'condition');
+    expect(textItems.some((t) => t.text.includes('['))).toBe(false);
+    if (tag?.kind !== 'box' || cond === undefined) throw new Error('missing tag or condition');
+    expect(cond.x).toBe(tag.x + tag.w + 8);
+    expect(cond.y).toBe(tag.y + tag.h / 2);
+    const frame = layout.frames[0];
+    const first = layout.messages.find((m) => (m.y ?? 0) > (frame?.y ?? 0));
+    // The condition takes no row of its own: the first message inside sits as close as one without a condition.
+    const bare = layoutZenuml(parseZenuml(REPLY.replace('if(condition)', 'opt')), pixelRuler());
+    const bareFirst = bare.messages.find((m) => (m.y ?? 0) > (bare.frames[0]?.y ?? 0));
+    expect((first?.y ?? 0) - (frame?.y ?? 0)).toBe((bareFirst?.y ?? 0) - (bare.frames[0]?.y ?? 0));
+  });
+
+  it('names a frame by the keyword written in the text', () => {
+    const tagsOf = (src: string): string[] =>
+      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'text' && i.role?.includes('tag-text') ? [i.text] : []));
+    expect(tagsOf(LOOPS)).toEqual(['while', 'for']);
+    expect(tagsOf(ALT)).toEqual(['if']);
+    expect(tagsOf('zenuml\n  par {\n    A->B: hi\n  }')).toEqual(['par']);
+  });
+
+  it('draws an async message and a creation as solid lines; only replies are dashed', () => {
+    const dashedOf = (src: string): string[] =>
+      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--msg') ? [String(i.role.includes('edge--pending'))] : []));
+    expect(dashedOf(DEMO)).toEqual(['false', 'false', 'false']);
+    expect(dashedOf(CREATE)).toEqual(['false', 'false']);
+    expect(dashedOf('zenuml\n  @return\n  A->B: result')).toEqual(['true']);
+  });
+
+  it('fits a comment box to its text', () => {
+    const ruler = pixelRuler();
+    const note = layout.notes[0];
+    expect(note?.box.w).toBeLessThanOrEqual(Math.ceil((ruler.textWidth('return early', 'line') + 24) / 4) * 4 + 2);
+    const box = layout.scene.items.find((i) => i.kind === 'box' && i.style === 'note');
+    expect(box?.kind === 'box' ? box.w : 0).toBe(note?.box.w);
+    const text = textItems.find((t) => t.text === 'return early');
+    expect(text?.x).toBeCloseTo((note?.box.x ?? 0) + (note?.box.w ?? 0) / 2, 0);
   });
 
   it('moves absolute path data down', () => {

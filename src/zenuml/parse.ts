@@ -7,7 +7,7 @@ export interface ZenumlModel {
   sequence: Sequence;
   title?: string;
   accTitle?: string;
-  /** Label of a frame's tag by the statement index of its opening line; frames without an entry keep the engine's tag. */
+  /** Label of a frame's tag, the keyword as written, by the statement index of its opening line. */
   tags: Map<number, string>;
 }
 
@@ -218,8 +218,7 @@ export function parseZenuml(src: string, heading?: string): ZenumlModel {
       const cond = inner(frame[2]);
       flushComment([''], lineNo);
       const at = push({ kind: 'open', block, lines: cond === '' ? [] : [cond], line: lineNo });
-      if (word === 'if') tags.set(at, 'IF');
-      if (word === 'try') tags.set(at, 'TRY');
+      tags.set(at, frame[1] ?? word);
       stack.push({ kind: 'frame', family: word === 'if' ? 'if' : word === 'try' ? 'try' : 'plain', line: lineNo });
       continue;
     }
@@ -273,9 +272,10 @@ export function parseZenuml(src: string, heading?: string): ZenumlModel {
       rest = (arrow[2] ?? '').trim();
       const asyncM = /^([^\s:(){}]+)\s*(?::\s*(.*))?$/u.exec(rest);
       if (asyncM && !/[.(]/u.test(asyncM[1] ?? '')) {
+        // An async message keeps the solid line of a call; only a reply (`@return`, `@reply`) is dashed.
         const dashed = replyNext;
         replyNext = false;
-        message(sender, unquote(asyncM[1] ?? ''), (asyncM[2] ?? '').trim(), dashed ? { dashed: true, head: 'filled' } : { dashed: false, head: 'open' }, false, lineNo);
+        message(sender, unquote(asyncM[1] ?? ''), (asyncM[2] ?? '').trim(), { dashed, head: 'filled' }, false, lineNo);
         continue;
       }
     }
@@ -289,7 +289,7 @@ export function parseZenuml(src: string, heading?: string): ZenumlModel {
       if (target === '') fail("'new' needs a class name", lineNo);
       const from = sender ?? callerFor();
       const label = `${variable === undefined ? '' : `${variable} = `}new ${body}`;
-      message(from, target, label, { dashed: false, head: 'open' }, braced, lineNo);
+      message(from, target, label, { dashed: false, head: 'filled' }, braced, lineNo);
       if (braced) stack.push({ kind: 'call', owner: target, caller: from, variable: undefined, returned: false, lastReply: undefined, line: lineNo });
       continue;
     }

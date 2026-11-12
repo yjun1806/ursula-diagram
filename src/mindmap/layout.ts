@@ -11,9 +11,9 @@ const MARGIN = 24;
 /** Horizontal room a box keeps around its widest line, and its smallest width. */
 const PAD_X = 40;
 const MIN_W = 120;
-/** A line of a label is broken at a word once it is wider than this. */
-export const MAX_TEXT = 200;
-/** Labels inside a circle break earlier, so the circle does not grow wider than the text needs. */
+/** A line of a label is broken at a word once it has more characters than this. */
+export const MAX_CHARS = 20;
+/** Labels inside a circle break once wider than this, so the circle does not grow wider than the text needs. */
 const CIRCLE_TEXT = 120;
 const LINE = 20;
 /** Gap between neighbouring leaves, and between groups that belong to different parents. */
@@ -58,13 +58,13 @@ export interface MindmapLayout {
 
 const num = (v: number): string => String(Math.round(v * 100) / 100);
 
-/** Breaks one paragraph at spaces so no line is wider than `MAX_TEXT`; a single longer word stays whole. */
-function wrap(paragraph: string, ruler: Ruler, max: number): string[] {
+/** Breaks one paragraph at spaces so no line is too long by `tooLong`; a single longer word stays whole. */
+function wrap(paragraph: string, tooLong: (line: string) => boolean): string[] {
   const out: string[] = [];
   let line = '';
   for (const word of paragraph.split(' ')) {
     const next = line === '' ? word : `${line} ${word}`;
-    if (line !== '' && ruler.textWidth(next, 'title') > max) {
+    if (line !== '' && tooLong(next)) {
       out.push(line);
       line = word;
     } else {
@@ -89,11 +89,12 @@ interface Size {
 }
 
 function sizeOf(node: MindNode, isRoot: boolean, ruler: Ruler): Size {
-  const isCircle = (isRoot && node.shape === 'default') || node.shape === 'circle';
-  const lines = node.paragraphs.flatMap((p) => wrap(p, ruler, isCircle ? CIRCLE_TEXT : MAX_TEXT));
+  const isCircle = node.shape === 'circle';
+  const tooLong = isCircle ? (l: string) => ruler.textWidth(l, 'title') > CIRCLE_TEXT : (l: string) => [...l].length > MAX_CHARS;
+  const lines = node.paragraphs.flatMap((p) => wrap(p, tooLong));
   const textW = Math.max(...lines.map((l) => ruler.textWidth(l, 'title')));
   const baseH = heightOf(lines.length);
-  const shape: MindShape = isRoot && node.shape === 'default' ? 'circle' : node.shape;
+  const shape = node.shape;
   if (shape === 'circle') {
     const r = Math.max(isRoot ? ROOT_MIN_R : 24, ceilTo(Math.hypot(textW / 2, (lines.length * LINE) / 2) + 12));
     return { lines, w: 2 * r, h: 2 * r, fixedWidth: true };
@@ -165,23 +166,29 @@ function shift(t: Tree, dy: number): void {
   t.children.forEach((c) => shift(c, dy));
 }
 
-/** Splits the root's children into a right and a left half: each goes to the side with fewer leaves so far. */
+/**
+ * Splits the root's children into a right and a left half so that reading clockwise from the top of the left half
+ * follows the input: the first child sits top left, the next run fills the right half from the top, and the rest
+ * climbs the left half from the bottom. The run is the one that leaves the two halves with the closest leaf counts;
+ * on a tie the right half takes more. A single child goes to the right.
+ */
 function sides(children: MindNode[]): { right: MindNode[]; left: MindNode[] } {
   const leaves = (n: MindNode): number => (n.children.length === 0 ? 1 : n.children.reduce((s, c) => s + leaves(c), 0));
-  const right: MindNode[] = [];
-  const left: MindNode[] = [];
-  let r = 0;
-  let l = 0;
-  for (const c of children) {
-    if (r <= l) {
-      right.push(c);
-      r += leaves(c);
-    } else {
-      left.push(c);
-      l += leaves(c);
+  if (children.length <= 1) return { right: [...children], left: [] };
+  const counts = children.map(leaves);
+  const total = counts.reduce((a, b) => a + b, 0);
+  let best = 2;
+  let bestDiff = Infinity;
+  let right = 0;
+  for (let end = 2; end <= children.length; end++) {
+    right += counts[end - 1] ?? 0;
+    const diff = Math.abs(total - 2 * right);
+    if (diff <= bestDiff) {
+      best = end;
+      bestDiff = diff;
     }
   }
-  return { right, left };
+  return { right: children.slice(1, best), left: [children[0] as MindNode, ...children.slice(best).reverse()] };
 }
 
 const flatten = (t: Tree): Tree[] => [t, ...t.children.flatMap(flatten)];
@@ -365,8 +372,7 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
     const role = s === undefined ? ['box'] : ['box', `${s}--tint`];
     const x = p.x + dx;
     const y = p.y + dy;
-    const isRoot = i === 0;
-    const shape: MindShape = isRoot && p.node.shape === 'default' ? 'circle' : p.node.shape;
+    const shape = p.node.shape;
     const data = { label: p.lines.join(' '), depth: String(p.depth) };
     if (shape === 'circle') items.push({ kind: 'circle', cx: x + p.w / 2, cy: y + p.h / 2, r: p.w / 2, role, data });
     else if (shape === 'bang' || shape === 'cloud' || shape === 'hexagon') items.push({ kind: 'path', d: outline(shape, x, y, p.w, p.h), role, data });
