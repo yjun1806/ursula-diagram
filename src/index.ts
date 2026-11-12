@@ -12,6 +12,7 @@ import './radar/frontend.ts';
 import './sequence/frontend.ts';
 import './timeline/frontend.ts';
 import './treeview/frontend.ts';
+import './treemap/frontend.ts';
 import './xychart/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
