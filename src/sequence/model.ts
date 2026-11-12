@@ -1,7 +1,7 @@
 import type { Diagnostic, Scene } from '../types.ts';
 
 export type ArrowHead = 'filled' | 'open' | 'cross' | 'none';
-export type BlockKind = 'loop' | 'opt' | 'alt' | 'par';
+export type BlockKind = 'loop' | 'opt' | 'alt' | 'par' | 'critical' | 'break';
 /** How a message reads, derived from its arrow: `plain` is an arrow without a head. */
 export type MessageKind = 'call' | 'reply' | 'async' | 'failed' | 'plain';
 export type LegendKind = Exclude<MessageKind, 'plain'>;
@@ -60,7 +60,7 @@ export interface OpenStmt {
   line: number;
 }
 
-/** `else` of an `alt` or `and` of a `par`. */
+/** `else` of an `alt`, `option` of a `critical` or `and` of a `par`. */
 export interface BranchStmt {
   kind: 'branch';
   lines: string[];

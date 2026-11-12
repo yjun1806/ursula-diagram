@@ -13,7 +13,7 @@ const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
   ['->', false, 'none'],
 ];
 const MESSAGE = /^(.+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
-const BLOCKS: ReadonlySet<string> = new Set(['loop', 'opt', 'alt', 'par']);
+const BLOCKS: ReadonlySet<string> = new Set(['loop', 'opt', 'alt', 'par', 'critical', 'break']);
 
 type Open = { kind: BlockKind; line: number } | { kind: 'ignored'; line: number };
 
@@ -123,9 +123,9 @@ export function parseSequence(src: string): Sequence {
       open.push({ kind: 'ignored', line: lineNo });
       continue;
     }
-    if (word === 'else' || word === 'and') {
+    if (word === 'else' || word === 'and' || word === 'option') {
       const top = open[open.length - 1];
-      const wanted = word === 'else' ? 'alt' : 'par';
+      const wanted = word === 'else' ? 'alt' : word === 'option' ? 'critical' : 'par';
       if (top?.kind !== wanted) fail(`'${word}' outside '${wanted}'`, lineNo);
       statements.push({ kind: 'branch', lines: rest === '' ? [] : textLines(rest), line: lineNo });
       continue;
