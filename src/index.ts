@@ -6,6 +6,7 @@ import type { TextOptions } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './kanban/frontend.ts';
 import './quadrant/frontend.ts';
+import './pie/frontend.ts';
 import './sequence/frontend.ts';
 import './timeline/frontend.ts';
 import './treeview/frontend.ts';
