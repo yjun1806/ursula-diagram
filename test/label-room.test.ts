@@ -41,7 +41,9 @@ describe('labels on straight edges between neighbours', () => {
       const label = e.label;
       expect(label).toBeDefined();
       if (!label) continue;
-      const [a, z] = e.points as [{ x: number }, { x: number }];
+      const a = e.points[0];
+      const z = e.points[e.points.length - 1];
+      if (!a || !z) continue;
       const tail = label.x - a.x;
       const head = z.x - (label.x + label.w);
       const keep = e.style === 'dotted' ? 24 : 16;
