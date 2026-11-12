@@ -140,12 +140,12 @@ describe('stages drawing', () => {
     expect(x('b1')).toBe(x('b2'));
   });
 
-  it('spreads spare width over the gaps without making boxes wider, and stays inside the canvas', () => {
+  it('leaves spare width empty instead of spreading it over the gaps, and narrows the gaps when the canvas is short', () => {
     const l = layout(parse(chain), pixelRuler(), { maxWidth: 1280 });
+    const wide = layout(parse(chain), pixelRuler(), { maxWidth: 2400 });
     const narrow = layout(parse(chain), pixelRuler(), { maxWidth: 700 });
-    expect(l.width).toBeGreaterThanOrEqual(1200);
-    expect(l.width).toBeLessThanOrEqual(1280);
-    expect(narrow.width).toBeLessThan(l.width);
+    expect(wide.width).toBe(l.width);
+    expect(narrow.width).toBeLessThanOrEqual(l.width);
     expect(new Set(l.nodes.map((n) => n.w)).size).toBe(new Set(narrow.nodes.map((n) => n.w)).size);
     expect(geometryViolations(l)).toEqual([]);
   });
