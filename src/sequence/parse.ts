@@ -3,7 +3,19 @@ import { PARTICIPANT_KINDS } from './model.ts';
 import type { ArrowHead, BlockKind, MessageStmt, Participant, ParticipantGroup, ParticipantKind, Sequence, Statement } from './model.ts';
 
 const BREAK = /<br\s*\/?>/gi;
-const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
+type Operator = readonly [string, boolean, ArrowHead, Pick<MessageStmt, 'half' | 'reverse'>?];
+/** The half arrows: a solid and a dotted form of each, with the head as one stroke of an open head. */
+const HALF: ReadonlyArray<readonly [string, string, 'top' | 'bottom', boolean]> = [
+  ['-|\\', '--|\\', 'top', false],
+  ['-|/', '--|/', 'bottom', false],
+  ['/|-', '/|--', 'top', true],
+  ['\\|-', '\\|--', 'bottom', true],
+  ['-\\\\', '--\\\\', 'top', false],
+  ['-//', '--//', 'bottom', false],
+  ['//-', '//--', 'top', true],
+  ['\\\\-', '\\\\--', 'bottom', true],
+];
+const OPERATORS: ReadonlyArray<Operator> = [
   ['<<-->>', true, 'filled'],
   ['<<->>', false, 'filled'],
   ['-->>', true, 'filled'],
@@ -14,8 +26,20 @@ const OPERATORS: ReadonlyArray<readonly [string, boolean, ArrowHead]> = [
   ['-)', false, 'open'],
   ['-->', true, 'none'],
   ['->', false, 'none'],
+  ...HALF.flatMap(([solid, dotted, half, reverse]): Operator[] => {
+    const shape = reverse ? { half, reverse } : { half };
+    return [
+      [solid, false, 'open', shape],
+      [dotted, true, 'open', shape],
+    ];
+  }),
 ];
-const MESSAGE = /^(.+?)\s*(<<-->>|<<->>|-->>|->>|--x|-x|--\)|-\)|-->|->)\s*([+-]?)\s*(.+)$/u;
+/** Longer arrows are tried first, so that `/|--` is not read as `/|-` followed by a `-` mark. */
+const ARROW = OPERATORS.map(([o]) => o)
+  .sort((x, y) => y.length - x.length)
+  .map((o) => o.replace(/[\\|/()]/g, '\\$&'))
+  .join('|');
+const MESSAGE = new RegExp(`^(.+?)\\s*(${ARROW})\\s*([+-]?)\\s*(.+)$`, 'u');
 /** `()` written against the arrow: the message joins that lifeline at its centre. */
 const CENTRE = '()';
 /** Named character references the documentation shows, besides the numeric `#NNN;` form. */
@@ -278,6 +302,7 @@ export function parseSequence(src: string): Sequence {
       head: op[2],
       activate: mark === '+',
       deactivate: mark === '-',
+      ...op[3],
       line: lineNo,
     };
     if (op[0].startsWith('<<')) msg.both = true;

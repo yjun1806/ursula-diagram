@@ -512,12 +512,12 @@ function render(c: Ctx, gaps: number[]): Rendered {
         const last = k === rows - 1;
         if (first) {
           if (!act(m.a)) g.put(a, row, '├', tone);
-          g.put(a + 1, row, dash, tone);
+          g.put(a + 1, row, s.reverse ? headL : dash, tone);
           g.put(a + 2, row, dash, tone);
           g.put(a + T.selfReach, row, '┐', tone);
         } else if (last) {
           if (!act(m.a)) g.put(a, row, '┤', tone);
-          g.put(a + 1, row, headL === '' ? dash : headL, tone);
+          g.put(a + 1, row, headL === '' || s.reverse ? dash : headL, tone);
           g.put(a + 2, row, dash, tone);
           g.put(a + T.selfReach, row, '┘', tone);
         } else {
@@ -571,6 +571,11 @@ function render(c: Ctx, gaps: number[]): Rendered {
     for (const lx of xs) if (lx > left && lx < right) g.put(lx, row, '┼', tone);
     g.put(headX, row, (ltr ? headR : headL) || dash, tone);
     if (!ltr) for (let x = headX + 1; x < from; x++) g.put(x, row, dash, tone);
+    // A reversed half arrow carries its head at the sender's end, pointing at the sender.
+    if (s.reverse) {
+      g.put(headX, row, dash, tone);
+      g.put(ltr ? a + 1 : a - 1, row, ltr ? headL : headR, tone);
+    }
     if (inline && m.w > 0) {
       const dashes = right - left - 2;
       const block = m.w + 2 * T.labelSpace;

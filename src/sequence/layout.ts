@@ -108,6 +108,26 @@ function openHead(x: number, y: number, dir: number): SceneItem {
   };
 }
 
+/**
+ * The one stroke of a half head whose tip is at `x`, pointing in direction `dir`: the stroke of {@link openHead} that
+ * bends above the line (`top`, smaller y) or below it (`bottom`).
+ */
+function halfHead(x: number, y: number, dir: number, side: 'top' | 'bottom'): SceneItem {
+  return {
+    kind: 'line',
+    points: [
+      { x, y },
+      { x: x - dir * OPEN_HEAD_L, y: side === 'top' ? y - OPEN_HEAD_W : y + OPEN_HEAD_W },
+    ],
+    role: ['edge', 'edge--msg'],
+  };
+}
+
+/** The open head of a message, or its single stroke for a half arrow. */
+function openOrHalf(x: number, y: number, dir: number, half: MessageStmt['half']): SceneItem {
+  return half === undefined ? openHead(x, y, dir) : halfHead(x, y, dir, half);
+}
+
 /** Radius of the dot where a `()` message joins a lifeline. */
 const DOT_R = 4;
 /** Half size of the cross that ends a destroyed lifeline. */
@@ -528,6 +548,8 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const kindsUsed = new Set<MessageKind>();
   /** Whether the first message of each kind is dashed; the legend sample follows it. */
   const kindDash = new Map<MessageKind, boolean>();
+  /** The head of the first message of each kind, when it is a half arrow; the legend sample follows it. */
+  const kindHalf = new Map<MessageKind, Pick<MessageStmt, 'half' | 'reverse'>>();
   let messageIndex = 0;
   let frameIndex = 0;
   let cursor = headerBottom;
@@ -606,7 +628,10 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         const look = lookOf(s);
         const kind = kindOf(s);
         kindsUsed.add(kind);
-        if (!kindDash.has(kind)) kindDash.set(kind, look.dash);
+        if (!kindDash.has(kind)) {
+          kindDash.set(kind, look.dash);
+          if (s.half !== undefined) kindHalf.set(kind, { half: s.half, ...(s.reverse ? { reverse: true } : {}) });
+        }
         const gap = gapFor('message');
         const loopSpan = S.loopH + S.stroke;
         let lineY = cursor + gap + (self ? 1 : Math.max(1, nl)) * lhE + S.labelDrop;
@@ -647,13 +672,14 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             dash: look.dash,
             // The corner radius comes from the theme, except in the cell drawing, which has none.
             ...(S.loopR === 0 ? { radius: 0 } : {}),
-            arrow: look.arrow,
+            arrow: s.reverse ? 'none' : look.arrow,
             role: lineRoles(look),
             data,
           });
-          lineItems.push({ kind: 'circle', cx: e.right, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
+          // A reversed half arrow ends at its start, where the head takes the place of the ring.
+          if (!s.reverse) lineItems.push({ kind: 'circle', cx: e.right, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
           if (look.arrow === 'cross') lineItems.push(...crossMark(e.right, lineY + S.loopH));
-          if (look.arrow === 'open') lineItems.push(openHead(e.right, lineY + S.loopH, -1));
+          if (look.arrow === 'open') lineItems.push(openOrHalf(e.right, s.reverse ? lineY : lineY + S.loopH, -1, s.half));
           span(e.left, xv);
           let right = Math.max(lx1 + half, xv);
           if (nl > 0) {
@@ -685,13 +711,13 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             ],
             tone: look.tone,
             dash: look.dash,
-            arrow: look.arrow,
+            arrow: s.reverse ? 'none' : look.arrow,
             role: lineRoles(look, s.both),
             data,
           });
-          if (!s.centreFrom && !s.destroysFrom) lineItems.push({ kind: 'circle', cx: x1, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
+          if (!s.centreFrom && !s.destroysFrom && !s.reverse) lineItems.push({ kind: 'circle', cx: x1, cy: lineY, r: PORT_R, role: ['port', 'port--msg'] });
           if (look.arrow === 'cross' && !endsAtCross) lineItems.push(...crossMark(x2, lineY));
-          if (look.arrow === 'open') lineItems.push(openHead(x2, lineY, dir));
+          if (look.arrow === 'open') lineItems.push(s.reverse ? openOrHalf(x1, lineY, -dir, s.half) : openOrHalf(x2, lineY, dir, s.half));
           if (s.centreFrom) lineItems.push({ kind: 'circle', cx: lx1, cy: lineY, r: DOT_R, role: ['dot'], data });
           if (s.centreTo) lineItems.push({ kind: 'circle', cx: lx2, cy: lineY, r: DOT_R, role: ['dot'], data });
           const ends: Array<[boolean | undefined, number, number]> = [
@@ -1031,6 +1057,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
     let x = margin;
     legend.forEach((e, k) => {
       const look = { ...LEGEND_LOOKS[e.kind], dash: kindDash.get(e.kind) ?? LEGEND_LOOKS[e.kind].dash };
+      const shape = kindHalf.get(e.kind);
       const x2 = x + R.legendSample - S.stroke;
       sceneItems.push({
         kind: 'line',
@@ -1040,11 +1067,11 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
         ],
         tone: look.tone,
         dash: look.dash,
-        arrow: look.arrow,
+        arrow: shape?.reverse ? 'none' : look.arrow,
         role: lineRoles(look),
       });
       if (look.arrow === 'cross') sceneItems.push(...crossMark(x2 - S.failGap, rowY));
-      if (look.arrow === 'open') sceneItems.push(openHead(x2, rowY, 1));
+      if (look.arrow === 'open') sceneItems.push(shape?.reverse ? openOrHalf(x, rowY, -1, shape.half) : openOrHalf(x2, rowY, 1, shape?.half));
       sceneItems.push({
         kind: 'text',
         x: x + R.legendSample + R.legendCaptionGap,

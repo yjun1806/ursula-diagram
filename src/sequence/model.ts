@@ -42,6 +42,13 @@ export interface MessageStmt {
   number?: number;
   /** `<<->>`: a head at both ends. */
   both?: boolean;
+  /**
+   * Half arrows (`-|\`, `-|/`, `/|-`, ...): the open head keeps one of its two strokes, the one bent above (`top`) or
+   * below (`bottom`) the line on screen.
+   */
+  half?: 'top' | 'bottom';
+  /** The head sits at the sender's end of the line instead of the receiver's (`/|-`, `\|-`, `//-`, `\\-`). */
+  reverse?: boolean;
   /** `()` beside the sender or the receiver: the line joins that lifeline at a dot. */
   centreFrom?: boolean;
   centreTo?: boolean;
