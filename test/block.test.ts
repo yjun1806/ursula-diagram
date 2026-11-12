@@ -483,3 +483,68 @@ describe('block text', () => {
     expect(layout.blocks).toHaveLength(2);
   });
 });
+
+describe('block arrows, labels and lines around the blocks', () => {
+  type R = { x: number; y: number; w: number; h: number };
+  const apart = (a: R, b: R, by: number): boolean => a.x >= b.x + b.w + by || a.x + a.w + by <= b.x || a.y >= b.y + b.h + by || a.y + a.h + by <= b.y;
+  const leavesOf = (layout: ReturnType<typeof layoutOf>): R[] => layout.blocks.filter((b) => b.kind === 'node');
+
+  it('draws the block arrows of one axis equally thick, whatever the height of their row', () => {
+    const layout = layoutOf(example('27'));
+    const at = (id: string): R => layout.blocks.find((b) => b.id === id) as R;
+    expect(at('r2').h).toBe(at('right').h);
+    expect(new Set(['down', 'downAgain', 'r3'].map((id) => at(id).w)).size).toBe(1);
+  });
+
+  it('widens the gap a labelled link crosses so the chip stands clear of both blocks', () => {
+    for (const src of ['block\n  columns 3\n  a b c\n  a -- "second label" --> b', 'block\n  columns 1\n  a b\n  a -- "down" --> b']) {
+      const layout = layoutOf(src);
+      const chip = layout.links[0]?.chip as R;
+      for (const b of leavesOf(layout)) expect(apart(chip, b, 8)).toBe(true);
+      const [a, b] = leavesOf(layout) as [R, R];
+      expect(Math.max(b.x - (a.x + a.w), b.y - (a.y + a.h))).toBeGreaterThanOrEqual(80);
+    }
+  });
+
+  it('keeps the widened gap only where a chip stands', () => {
+    const layout = layoutOf('block\n  columns 3\n  a b c\n  a -- "second label" --> b');
+    const [, b, c] = leavesOf(layout) as [R, R, R];
+    expect(c.x - (b.x + b.w)).toBe(48);
+  });
+
+  it('takes a labelled line that goes around a block far enough out for its chip, and grows the drawing to hold it', () => {
+    const layout = layoutOf('block\n  columns 1\n  a b c\n  a -- "long label here" --> c');
+    const chip = layout.links[0]?.chip as R;
+    for (const b of leavesOf(layout)) expect(apart(chip, b, 8)).toBe(true);
+    expect(chip.x + chip.w + 24).toBeLessThanOrEqual(layout.width);
+  });
+
+  it('keeps a line that goes around the outer blocks 24 from them and 24 from the edge of the drawing', () => {
+    const layout = layoutOf('block\n  columns 3\n  a b c\n  a --> c');
+    const pts = layout.links[0]?.points ?? [];
+    const top = Math.min(...pts.map((p) => p.y));
+    const a = layout.blocks.find((b) => b.id === 'a') as R;
+    expect(top).toBeGreaterThanOrEqual(24);
+    expect(a.y - top).toBeGreaterThanOrEqual(24);
+  });
+
+  it('keeps a line off the border of a group it passes', () => {
+    const layout = layoutOf('block\n  columns 2\n  block:outer\n    columns 1\n    block:inner\n      x y\n    end\n    z\n  end\n  w\n  x --> w\n  inner --> z');
+    const inner = layout.blocks.find((b) => b.id === 'inner') as R;
+    for (const link of layout.links) {
+      for (let i = 0; i + 1 < link.points.length; i++) {
+        const p = link.points[i] as { x: number; y: number };
+        const q = link.points[i + 1] as { x: number; y: number };
+        if (p.y !== q.y) continue;
+        const along = Math.min(Math.max(p.x, q.x), inner.x + inner.w) - Math.max(Math.min(p.x, q.x), inner.x);
+        if (along > 0) for (const edge of [inner.y, inner.y + inner.h]) expect(Math.abs(p.y - edge)).toBeGreaterThanOrEqual(8);
+      }
+    }
+  });
+
+  it('keeps the box fill for a block in a white (second level) zone, so the block still shows', () => {
+    const scene = sceneOf('block\n  block\n    block\n      y\n    end\n  end');
+    const box = scene.items.find((i) => i.kind === 'box' && i.data?.block === 'y') as SceneBox;
+    expect(box.role).not.toContain('box--in-zone');
+  });
+});

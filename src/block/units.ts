@@ -87,7 +87,7 @@ export function unitsOf(ruler: Ruler, compact = false): Units {
     stub: 12,
     clear: 6,
     lane: 16,
-    around: 8,
+    around: 12,
     headGap: 3,
     chipHeight: 24,
     chipPad: 22,

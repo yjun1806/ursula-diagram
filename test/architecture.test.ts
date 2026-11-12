@@ -338,6 +338,48 @@ describe('architecture layout', () => {
     expect(l.edges[0]?.points[0]?.x).toBe((g?.x ?? 0) + (g?.w ?? 0));
   });
 
+  it('leaves and enters every box by the side the edge names, around the boxes in the way, without running on another line', () => {
+    const l = layoutArchitecture(
+      parseArchitecture(`architecture-beta
+  service a(server)[A]
+  service b(server)[B]
+  service c(server)[C]
+  a:R -- L:b
+  b:R -- L:c
+  a:B -- B:c`),
+      ruler,
+    );
+    const sides: Record<string, [{ x: number; y: number }, { x: number; y: number }]> = {
+      'a-b': [{ x: 1, y: 0 }, { x: 1, y: 0 }],
+      'b-c': [{ x: 1, y: 0 }, { x: 1, y: 0 }],
+      'a-c': [{ x: 0, y: 1 }, { x: 0, y: -1 }],
+    };
+    const dir = (p: { x: number; y: number }, q: { x: number; y: number }): { x: number; y: number } => ({ x: Math.sign(q.x - p.x), y: Math.sign(q.y - p.y) });
+    for (const e of l.edges) {
+      const [out, into] = sides[`${e.from}-${e.to}`] ?? [];
+      const p = e.points;
+      expect(dir(p[0] as never, p[1] as never)).toEqual(out);
+      expect(dir(p[p.length - 2] as never, p[p.length - 1] as never)).toEqual(into);
+      for (let i = 0; i + 1 < p.length; i++) {
+        const s = { a: p[i] as { x: number; y: number }, b: p[i + 1] as { x: number; y: number } };
+        for (const n of l.nodes.filter((x) => x.id !== e.from && x.id !== e.to)) {
+          const inside = Math.min(s.a.x, s.b.x) < n.x + n.w && Math.max(s.a.x, s.b.x) > n.x && Math.min(s.a.y, s.b.y) < n.y + n.h && Math.max(s.a.y, s.b.y) > n.y;
+          expect(inside).toBe(false);
+        }
+      }
+    }
+    const pieces = (e: { points: { x: number; y: number }[] }): Array<[{ x: number; y: number }, { x: number; y: number }]> => e.points.slice(1).map((q, i) => [e.points[i] as { x: number; y: number }, q]);
+    const [, bc, ac] = l.edges;
+    for (const [p, q] of pieces(ac as never)) {
+      for (const [r, t] of pieces(bc as never)) {
+        const flat = p.y === q.y && r.y === t.y && p.y === r.y;
+        const tall = p.x === q.x && r.x === t.x && p.x === r.x;
+        const shared = flat ? Math.min(Math.max(p.x, q.x), Math.max(r.x, t.x)) - Math.max(Math.min(p.x, q.x), Math.min(r.x, t.x)) : tall ? Math.min(Math.max(p.y, q.y), Math.max(r.y, t.y)) - Math.max(Math.min(p.y, q.y), Math.min(r.y, t.y)) : 0;
+        expect(shared).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
   it('draws the title above the drawing when the source has one', () => {
     const svg = render('architecture-beta\n  title Shop\n  service a(server)[A]');
     expect(svg).toContain('>Shop<');

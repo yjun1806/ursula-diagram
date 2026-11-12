@@ -23,6 +23,10 @@ const JUNCTION = 8;
 const ARROW_GAP = 3;
 const TITLE_BLOCK = 36;
 const LINE_STEP = 16;
+/** Straight run a line keeps where it leaves or enters a box before it may turn: half the gap between boxes. */
+const STUB = GAP / 2;
+/** Distance between two lines that go around the same box. */
+const LANE = 16;
 
 export interface ArchLayout {
   scene: Scene;
@@ -65,8 +69,8 @@ function port(rect: Rect, side: Side, along: Point): Point {
   }
 }
 
-/** A path of right angles from `a` out of side `sa` to `b` into side `sb`. */
-function route(a: Point, sa: Side, b: Point, sb: Side): Point[] {
+/** A path of right angles from `a` out of side `sa` to `b` into side `sb`, by the shortest rule. */
+function simpleRoute(a: Point, sa: Side, b: Point, sb: Side): Point[] {
   const va = sideVector(sa);
   const vb = sideVector(sb);
   const sameAxis = va.x !== 0 === (vb.x !== 0);
@@ -88,6 +92,98 @@ function route(a: Point, sa: Side, b: Point, sb: Side): Point[] {
   }
   const out = va.y > 0 ? Math.max(a.y, b.y) + ZONE_PAD : Math.min(a.y, b.y) - ZONE_PAD;
   return [a, { x: a.x, y: out }, { x: b.x, y: out }, b];
+}
+
+/** Drops points that do not turn the path. */
+function simplify(points: Point[]): Point[] {
+  const out: Point[] = [];
+  for (const p of points) {
+    const last = out[out.length - 1];
+    if (last !== undefined && last.x === p.x && last.y === p.y) continue;
+    const prev = out[out.length - 2];
+    if (last !== undefined && prev !== undefined && ((prev.x === last.x && last.x === p.x) || (prev.y === last.y && last.y === p.y))) out[out.length - 1] = p;
+    else out.push(p);
+  }
+  return out;
+}
+
+const dir = (a: Point, b: Point): Point => ({ x: Math.sign(b.x - a.x), y: Math.sign(b.y - a.y) });
+
+const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, w: r.w + 2 * by, h: r.h + 2 * by });
+
+const pieces = (pts: readonly Point[]): Array<[Point, Point]> => pts.slice(1).map((q, i) => [pts[i] as Point, q]);
+
+/**
+ * How badly two axis-parallel pieces of line run together: the length they share on one line, and a quarter of the
+ * length they run side by side closer than a lane.
+ */
+function collinear(a: Point, b: Point, c: Point, d: Point): number {
+  const weight = (gap: number): number => (gap === 0 ? 1 : gap < LANE ? 0.25 : 0);
+  if (a.y === b.y && c.y === d.y) return weight(Math.abs(a.y - c.y)) * Math.max(0, Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) - Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)));
+  if (a.x === b.x && c.x === d.x) return weight(Math.abs(a.x - c.x)) * Math.max(0, Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) - Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)));
+  return 0;
+}
+
+/** Whether an axis-parallel piece of line runs through the inside of `r`. */
+function cuts(a: Point, b: Point, r: Rect): boolean {
+  return Math.min(a.x, b.x) < r.x + r.w && Math.max(a.x, b.x) > r.x && Math.min(a.y, b.y) < r.y + r.h && Math.max(a.y, b.y) > r.y;
+}
+
+/**
+ * A path that leaves side `sa` of the box at `a` straight out and enters side `sb` of the box at `b` straight in,
+ * through no box on the way. The shortest rule comes first; when it doubles back or runs through a box, the line
+ * goes out a stub from each side and joins the stubs with the fewest turns that pass every box.
+ */
+function route(a: Point, sa: Side, b: Point, sb: Side, ends: Rect[], others: Rect[], used: readonly Point[][]): Point[] {
+  const va = sideVector(sa);
+  const vb = sideVector(sb);
+  const ok = (path: Point[]): boolean => {
+    const pts = simplify(path);
+    if (pts.length < 2) return false;
+    const first = dir(pts[0] as Point, pts[1] as Point);
+    const last = dir(pts[pts.length - 2] as Point, pts[pts.length - 1] as Point);
+    if (first.x !== va.x || first.y !== va.y || last.x !== -vb.x || last.y !== -vb.y) return false;
+    for (let i = 0; i + 2 < pts.length; i++) {
+      const d0 = dir(pts[i] as Point, pts[i + 1] as Point);
+      const d1 = dir(pts[i + 1] as Point, pts[i + 2] as Point);
+      if (d0.x === -d1.x && d0.y === -d1.y) return false;
+    }
+    return pts.slice(1).every((q, i) => {
+      const p = pts[i] as Point;
+      const inner = i > 0 && i < pts.length - 2;
+      return !others.some((r) => cuts(p, q, grow(r, inner ? LANE : 0))) && !(inner && ends.some((r) => cuts(p, q, grow(r, LANE))));
+    });
+  };
+  const plain = simpleRoute(a, sa, b, sb);
+  const overlap = (path: Point[]): number => {
+    let n = 0;
+    for (const [p, q] of pieces(path)) for (const line of used) for (const [r, t] of pieces(line)) n += collinear(p, q, r, t);
+    return n;
+  };
+  if (ok(plain) && overlap(plain) === 0) return simplify(plain);
+  const boxes = [...ends, ...others];
+  const lanes = [0, LANE, 2 * LANE];
+  const tries: Point[][] = [];
+  // A stub a little shorter or longer than half the gap lets a second line pass the gap beside the first.
+  for (const sa1 of [STUB, STUB - LANE / 2, STUB + LANE / 2]) {
+    for (const sb1 of [STUB, STUB - LANE / 2, STUB + LANE / 2]) {
+      const a1 = { x: a.x + va.x * sa1, y: a.y + va.y * sa1 };
+      const b1 = { x: b.x + vb.x * sb1, y: b.y + vb.y * sb1 };
+      const xs = [roundTo((a1.x + b1.x) / 2, 2), a1.x, b1.x, ...boxes.flatMap((r) => lanes.flatMap((k) => [r.x - STUB - k, r.x + r.w + STUB + k]))];
+      const ys = [roundTo((a1.y + b1.y) / 2, 2), a1.y, b1.y, ...boxes.flatMap((r) => lanes.flatMap((k) => [r.y - STUB - k, r.y + r.h + STUB + k]))];
+      tries.push(
+        [a, a1, { x: a1.x, y: b1.y }, b1, b],
+        [a, a1, { x: b1.x, y: a1.y }, b1, b],
+        ...xs.map((x) => [a, a1, { x, y: a1.y }, { x, y: b1.y }, b1, b]),
+        ...ys.map((y) => [a, a1, { x: a1.x, y }, { x: b1.x, y }, b1, b]),
+      );
+    }
+  }
+  const turns = (pts: Point[]): number => simplify(pts).length - 2;
+  const length = (pts: Point[]): number => pts.slice(1).reduce((n, q, i) => n + Math.abs(q.x - (pts[i] as Point).x) + Math.abs(q.y - (pts[i] as Point).y), 0);
+  const cost = (pts: Point[]): number => turns(pts) * 100 + length(pts) + overlap(pts) * 20;
+  const best = [plain, ...tries].filter(ok).sort((p, q) => cost(p) - cost(q))[0];
+  return simplify(best ?? plain);
 }
 
 /** Moves the end of a path `by` back along its last piece, so an arrowhead stops short of the box it points at. */
@@ -233,12 +329,18 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Th
     const parent = asGroup ? nodeById.get(id)?.parent : undefined;
     return (parent === undefined ? undefined : groupRects.get(parent)) ?? own;
   };
+  const drawn: Point[][] = [];
   const placedEdges: PlacedEdge[] = model.edges.map((e: ArchEdge) => {
     const ra = rects.get(e.from) ?? { x: 0, y: 0, w: 0, h: 0 };
     const rb = rects.get(e.to) ?? { x: 0, y: 0, w: 0, h: 0 };
     const a = port(endpoint(e.from, e.fromGroup), e.fromSide, centre(ra));
     const b = port(endpoint(e.to, e.toGroup), e.toSide, centre(rb));
-    let points = route(a, e.fromSide, b, e.toSide);
+    const ends = [endpoint(e.from, e.fromGroup), endpoint(e.to, e.toGroup)];
+    const others = [...rects].filter(([id]) => id !== e.from && id !== e.to && !id.startsWith('ghost:')).map(([, r]) => r);
+    // Lines that meet at one port of one box may share their last piece; any other overlap is avoided.
+    const meets = (line: Point[]): boolean => [line[0], line[line.length - 1]].some((p) => p !== undefined && ((p.x === a.x && p.y === a.y) || (p.x === b.x && p.y === b.y)));
+    let points = route(a, e.fromSide, b, e.toSide, ends, others, drawn.filter((l) => !meets(l)));
+    drawn.push(points);
     if (e.endArrow) points = pullBack(points, ARROW_GAP, true);
     if (e.startArrow) points = pullBack(points, ARROW_GAP, false);
     return { from: e.from, to: e.to, points };
