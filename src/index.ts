@@ -8,6 +8,7 @@ import './kanban/frontend.ts';
 import './quadrant/frontend.ts';
 import './sequence/frontend.ts';
 import './timeline/frontend.ts';
+import './treeview/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
 
