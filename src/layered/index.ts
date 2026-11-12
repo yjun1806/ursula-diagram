@@ -132,6 +132,15 @@ function leftToRight(ladder: Ladder, layers: number[][]): void {
 }
 
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
+  const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
+  const degreeOf = graph.nodes.map(() => 0);
+  for (const e of graph.edges) {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a === undefined || b === undefined || a === b) continue;
+    degreeOf[a] = (degreeOf[a] ?? 0) + 1;
+    degreeOf[b] = (degreeOf[b] ?? 0) + 1;
+  }
   const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
   const rows = given ?? (stage ? assignByStage(graph, first, stage) : first);
@@ -142,7 +151,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     const plan = planFlat(ladder, layers, ruler);
     growForPorts(ladder, plan, unit, gap, portStep(unit, ruler));
     const need = portDemand(ladder, plan);
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1 });
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart });
     return {
       ladder,
       layers,

@@ -53,6 +53,8 @@ function direction(
   downward: boolean,
   leftward: boolean,
   centredLink: (upper: number, lower: number) => boolean = () => false,
+  weight: (upper: number, lower: number) => number = () => 1,
+  degreeOf: (node: number) => number = () => 0,
 ): number[] {
   const count = layers.length;
   const seq = Array.from({ length: count }, (_, i) => (downward ? i : count - 1 - i));
@@ -67,17 +69,39 @@ function direction(
   const rel = new Array<number>(l.nodes.length).fill(0);
   for (let s = 1; s < count; s++) {
     let reach = -1;
+    let last: { u: number; v: number; tail: number; reachBefore: number } | undefined;
     for (const v of rowsT[seq[s] as number] ?? []) {
       const prev = (downward ? view.up[v] : view.down[v]) ?? [];
       if (prev.length === 0) continue;
       const ns = [...prev].sort((a, b) => (pos[a] ?? 0) - (pos[b] ?? 0));
       const d = ns.length;
-      const medians = d % 2 === 1 ? [(d - 1) / 2] : [d / 2 - 1, d / 2];
+      let medians = d % 2 === 1 ? [(d - 1) / 2] : [d / 2 - 1, d / 2];
+      // The partner to align with is the one of the heaviest edge; the middle one when the edges weigh the same.
+      const weights = ns.map((u) => (downward ? weight(u, v) : weight(v, u)));
+      const top = Math.max(...weights);
+      if (weights.some((w) => w !== top)) {
+        const heavy = weights.flatMap((w, i) => (w === top ? [i] : []));
+        heavy.sort((a, b) => Math.abs(a - (d - 1) / 2) - Math.abs(b - (d - 1) / 2) || a - b);
+        medians = [heavy[0] as number];
+      }
       for (const m of medians) {
         if (aligned[v] !== v) break;
         const u = ns[m] as number;
         const key = downward ? `${u}|${v}` : `${v}|${u}`;
-        if (marked.has(key) || reach >= (pos[u] ?? 0)) continue;
+        if (marked.has(key)) continue;
+        if (reach >= (pos[u] ?? 0)) {
+          // Two alignments cross: the one of the heavier nodes stays.
+          if (!last || degreeOf(u) + degreeOf(v) <= degreeOf(last.u) + degreeOf(last.v)) continue;
+          aligned[last.u] = last.tail;
+          root[last.v] = last.v;
+          aligned[last.v] = last.v;
+          pred[last.v] = -1;
+          rel[last.v] = 0;
+          reach = last.reachBefore;
+          last = undefined;
+          if (reach >= (pos[u] ?? 0)) continue;
+        }
+        last = { u, v, tail: aligned[u] as number, reachBefore: reach };
         aligned[u] = v;
         pred[v] = u;
         const [upper, lower] = downward ? [u, v] : [v, u];
@@ -154,6 +178,10 @@ export interface AlignOptions {
   lines?: number;
   /** Nodes of the main flow: when two arrangements are equally straight, the one that keeps more edges at them straight wins. */
   main?: ReadonlySet<number>;
+  /** Edges in and out of a real node: of two alignments that cannot both stand, the one of the heavier node is kept. */
+  degree?: (node: number) => number;
+  /** Stages: a node with three or more partners in the next layer or the one before stands in the middle of them. */
+  hubs?: boolean;
   /** Real nodes whose side (`down` toward the next layer, `up` toward the previous) has this one edge only: the edge is at the centre. */
   single?: (node: number, side: 'up' | 'down') => boolean;
   /** Units a dummy at the end of a layer needs beyond its own slot to stay inside the limit (0 or 1). */
@@ -219,11 +247,23 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
   const reachOf = (n: number): number => (real(n) ? unitsOf(n) : 1 + (opts.dummyShift ?? 1));
   const endOf = (st: number[]): number => Math.max(0, ...l.nodes.map((n) => (st[n.idx] ?? 0) + reachOf(n.idx)));
 
+  // A piece weighs 3 when a box holds it alone on its side (it is meant to be straight), else 1, and 2 more on the main flow.
+  const mainFlow = opts.main ?? new Set<number>();
+  const onMain = (ci: number): boolean => {
+    const nodes = l.chains[ci]?.nodes ?? [];
+    return mainFlow.has(nodes[0] ?? -1) || mainFlow.has(nodes[nodes.length - 1] ?? -1);
+  };
+  const weights = new Map<string, number>();
+  for (const [a, b, ci] of all) {
+    const w = (opts.single?.(a, 'down') === true || opts.single?.(b, 'up') === true ? 3 : 1) + (onMain(ci) ? 2 : 0);
+    weights.set(`${a}|${b}`, Math.max(weights.get(`${a}|${b}`) ?? 0, w));
+  }
+  const pieceWeight = (upper: number, lower: number): number => weights.get(`${upper}|${lower}`) ?? 1;
   // 1. The best of the four directions.
   const candidates: number[][] = [];
   for (const downward of [true, false]) {
     for (const leftward of [true, false]) {
-      const raw = direction(l, layers, view, marked, sep, downward, leftward, (upper, lower) => opts.single?.(upper, 'down') === true || opts.single?.(lower, 'up') === true);
+      const raw = direction(l, layers, view, marked, sep, downward, leftward, (upper, lower) => opts.single?.(upper, 'down') === true || opts.single?.(lower, 'up') === true, pieceWeight, (n) => opts.degree?.(n) ?? 0);
       const low = Math.min(...raw);
       candidates.push(raw.map((x) => x - low));
     }
@@ -234,10 +274,9 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     return main.has(nodes[0] ?? -1) || main.has(nodes[nodes.length - 1] ?? -1);
   };
   const score = (st: number[]): number[] => {
-    const straight = countStraight(st);
-    const anchored = all.filter(([a, b, ci]) => touchesMain(ci) && straightAt(a, st[a] ?? 0, b, st[b] ?? 0)).length;
+    const straight = all.reduce((sum, [a, b]) => (straightAt(a, st[a] ?? 0, b, st[b] ?? 0) ? sum + pieceWeight(a, b) : sum), 0);
     const off = all.reduce((sum, [a, b]) => (straightAt(a, st[a] ?? 0, b, st[b] ?? 0) ? sum : sum + Math.abs(centre(a, st[a] ?? 0) - centre(b, st[b] ?? 0))), 0);
-    return [-straight, -anchored, Math.max(0, endOf(st) - limit), off];
+    return [-straight, Math.max(0, endOf(st) - limit), off];
   };
   let start = candidates[0] as number[];
   let best = score(start);
@@ -390,6 +429,27 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     }
     const lowest = Math.min(...start);
     if (lowest < 0) for (let i = 0; i < start.length; i++) start[i] = (start[i] ?? 0) - lowest;
+  }
+  // Stages: a node with three or more partners in one adjacent layer stands in the middle of them: level with the middle
+  // partner when there is an odd number, between the two middle ones when even.
+  if (opts.hubs) {
+    for (const n of l.nodes) {
+      if (!real(n.idx)) continue;
+      const partners = (view.down[n.idx] ?? []).length >= 3 ? (view.down[n.idx] as number[]) : (view.up[n.idx] ?? []).length >= 3 ? (view.up[n.idx] as number[]) : [];
+      if (partners.length < 3) continue;
+      const centres = partners.map((m) => centre(m, start[m] ?? 0)).sort((x, y) => x - y);
+      const d = centres.length;
+      const target = d % 2 === 1 ? (centres[(d - 1) / 2] as number) : ((centres[d / 2 - 1] as number) + (centres[d / 2] as number)) / 2;
+      const row = layers[n.layer] ?? [];
+      const k = row.indexOf(n.idx);
+      const before = k > 0 ? row[k - 1] : undefined;
+      const after = k + 1 < row.length ? row[k + 1] : undefined;
+      const low = before === undefined ? 0 : (start[before] ?? 0) + sep(before, n.idx);
+      const high = after === undefined ? Infinity : (start[after] ?? 0) - sep(n.idx, after);
+      const wanted = Math.round(target - unitsOf(n.idx) / 2);
+      const at = Math.min(Math.max(wanted, low), high);
+      if (low <= high && at !== start[n.idx]) start[n.idx] = at;
+    }
   }
   // Moves may leave the whole drawing a unit or more from the edge.
   const low = Math.min(...start);

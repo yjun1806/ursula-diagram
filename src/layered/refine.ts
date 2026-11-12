@@ -75,6 +75,16 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     inLane[a]?.push(b);
     inLane[b]?.push(a);
   }
+  // Targets are looked at heaviest node first: the one with the most edges in and out (the earlier one when equal).
+  const degree = graph.nodes.map(() => 0);
+  for (const e of graph.edges) {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a === undefined || b === undefined || a === b) continue;
+    degree[a] = (degree[a] ?? 0) + 1;
+    degree[b] = (degree[b] ?? 0) + 1;
+  }
+  const heavier = (x: number, y: number): number => (degree[y] ?? 0) - (degree[x] ?? 0) || x - y;
   const component = (start: number): number[] => {
     const seen = new Set([start]);
     const queue = [start];
@@ -178,7 +188,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     }
     let changed = false;
     const tried = new Set<string>();
-    for (const n of [...targets].sort((x, y) => x - y)) {
+    for (const n of [...targets].sort(heavier)) {
       const layer = current.ladder.nodes[n]?.layer ?? 0;
       const row = current.layers[layer] ?? [];
       const k = row.indexOf(n);
@@ -230,7 +240,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     }
     // Then a node may slide to the start of a node it is joined to, when the cells between its neighbours are free.
     if (!changed) {
-      for (const n of [...targets].sort((x, y) => x - y)) {
+      for (const n of [...targets].sort(heavier)) {
         const layer = current.ladder.nodes[n]?.layer ?? 0;
         const row = current.layers[layer] ?? [];
         const k = row.indexOf(n);
@@ -263,7 +273,7 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     }
     // Only when no swap or move helps may a lane open one more row (up to two rows).
     if (!changed) {
-      for (const n of [...targets].sort((x, y) => x - y)) {
+      for (const n of [...targets].sort(heavier)) {
         if (n >= current.ladder.realCount) continue;
         const comp = component(n);
         const rows = current.rows;

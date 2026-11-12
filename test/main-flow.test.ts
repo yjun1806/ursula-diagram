@@ -120,7 +120,8 @@ describe('score', () => {
     expect(cost(drawing(row, one)) - cost(drawing(row, [first, cd]))).toBe(WEIGHTS.back);
     const chain = [first, edge('d', 'c', [[300, 10], [240, 10]]), edge('c', 'b', [[200, 10], [140, 10]])];
     const forward = [first, cd, edge('b', 'c', [[140, 10], [200, 10]])];
-    expect(cost(drawing(row, chain)) - cost(drawing(row, forward))).toBe(2 * (WEIGHTS.back + WEIGHTS.backChain));
+    // The edge c -> b enters b, which takes in two more edges than it sends out: it counts once more.
+    expect(cost(drawing(row, chain)) - cost(drawing(row, forward))).toBe(2 * (WEIGHTS.back + WEIGHTS.backChain) + WEIGHTS.heavyBack);
     expect([WEIGHTS.back, WEIGHTS.backChain]).toEqual([2, 2]);
   });
 

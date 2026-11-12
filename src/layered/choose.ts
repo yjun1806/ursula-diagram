@@ -84,7 +84,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 } as const;
 
 const properCross = (a: Seg, b: Seg): boolean => {
   const ah = Math.abs(a.ay - a.by) < EPS;
@@ -213,6 +213,14 @@ export function score(l: Layout): number[] {
     if (upward) folded++;
     for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
+  // An edge against the reading direction that leaves a node that sends out two more edges than it takes in, or enters
+  // one that takes in two more than it sends out, counts once more.
+  const balance = new Map<string, number>();
+  for (const e of l.edges) {
+    balance.set(e.from, (balance.get(e.from) ?? 0) + 1);
+    balance.set(e.to, (balance.get(e.to) ?? 0) - 1);
+  }
+  const heavyAgainst = against.filter(([from, to]) => (balance.get(from) ?? 0) >= 2 || (balance.get(to) ?? 0) <= -2).length;
   // Edges against the reading direction that touch one another form a stream running backwards.
   const parent = new Map<string, string>();
   const find = (x: string): string => {
@@ -240,6 +248,7 @@ export function score(l: Layout): number[] {
     tightCost +
     WEIGHTS.upward * folded +
     WEIGHTS.back * against.length +
+    WEIGHTS.heavyBack * heavyAgainst +
     WEIGHTS.backChain * chained +
     WEIGHTS.far * farness(l) +
     WEIGHTS.start * startMissed(l) +
