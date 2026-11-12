@@ -1,7 +1,10 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
 import type { LegendKind } from '../sequence/model.ts';
-import { diamondPoints, hexagonPoints, parallelogramPoints, trimToOutline } from './shapes.ts';
+import { diamondPoints, hexagonPoints, parallelogramPoints, reachRoundedCorner, roundedPolygonPath, trimToOutline } from './shapes.ts';
+import { arrowFit, flowMarker, flowRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
+import type { Theme, ThemeSpec } from './theme.ts';
+import { UrsulaError } from '../types.ts';
 import type { EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
 
 export interface NodeHookResult {
@@ -18,12 +21,19 @@ export interface SvgOptions {
   title?: string;
   /** Re-captions the legend of the layout, or removes it with `false`. Flowcharts read the edge styles, sequence diagrams the message kinds. */
   legend?: false | Partial<Record<EdgeStyle | LegendKind, string>>;
+  /** Look of a flowchart: filled boxes (`solid`, the default), outlined boxes (`outline`) or cards with a shadow (`card`). */
+  theme?: Theme;
 }
 
 const TITLE_LINE = 18;
 const BODY_LINE = 16;
 const CORNER_RADIUS = 8;
-const NODE_RADIUS = 6;
+/** Radius of the rounded corners of a diamond, at most; sharp corners get less. */
+const DIAMOND_RADIUS = 12;
+/** Height of an edge label, and the room between its text and its sides. */
+const CHIP_HEIGHT = 24;
+const CHIP_PAD = 10;
+const HALO = 3;
 /** Height of the end caps of a cylinder, and the inset of the bars of a subroutine. */
 const CAP = 6;
 const BAR = 8;
@@ -47,34 +57,21 @@ export const FONT_STACK =
 
 const FONT = FONT_STACK;
 
-/** Rules are written once with $name placeholders and expanded per colour scheme. */
-const RULES: readonly string[] = [
-  `.ursula{background:$bg;font-family:${FONT};font-size:12px}`,
-  '.ursula-lane{fill:$zone;stroke:$hair;stroke-width:1}',
-  '.ursula-lane--tint{fill:$lane}',
-  '.ursula-lane-label{fill:$muted;font-size:12px;font-weight:600}',
-  '.ursula-node-box{fill:$surface;stroke:$border;stroke-width:1}',
-  '.ursula-node-title{fill:$fg;font-size:13px;font-weight:600}',
-  '.ursula-node-line{fill:$muted;font-size:12px;font-weight:400}',
-  '.ursula-edge{fill:none;stroke:$line;stroke-width:1.2}',
-  '.ursula-edge--thick{stroke:$accent}',
-  '.ursula-edge--dotted{stroke-dasharray:5 4}',
-  '.ursula-arrow{fill:$line}',
-  '.ursula-arrow--accent{fill:$accent}',
-  '.ursula-edge-label-bg{fill:$surface}',
-  '.ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}',
-  '.ursula-edge-label--thick{fill:$accent}',
-  '.ursula-legend-rule{stroke:$hair;stroke-width:1}',
-  '.ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}',
-];
+/** First rule of every drawing: the root element. */
+const ROOT_RULE = `.ursula{background:$bg;font-family:${FONT};font-size:12px}`;
 
-function expand(rule: string, mode: 0 | 1): string {
-  return rule.replace(/\$([a-z]+)/g, (_, name: string) => `var(--ursula-${name},${TOKENS[name]?.[mode] ?? 'inherit'})`);
+type Lookup = (name: string, mode: 0 | 1) => string;
+
+const sceneVar: Lookup = (name, mode) => `var(--ursula-${name},${TOKENS[name]?.[mode] ?? 'inherit'})`;
+
+/** Rules are written once with $name placeholders and expanded per colour scheme. */
+function expand(rule: string, mode: 0 | 1, lookup: Lookup): string {
+  return rule.replace(/\$([a-z][a-z-]*)/g, (_, name: string) => lookup(name, mode));
 }
 
-function styleSheet(rules: readonly string[] = RULES): string {
-  const light = rules.map((r) => expand(r, 0)).join('\n');
-  const dark = rules.map((r) => expand(r, 1)).join('\n');
+function styleSheet(rules: readonly string[], lookup: Lookup): string {
+  const light = rules.map((r) => expand(r, 0, lookup)).join('\n');
+  const dark = rules.map((r) => expand(r, 1, lookup)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
 }
 
@@ -92,26 +89,36 @@ export function num(v: number): string {
   return String(r === 0 ? 0 : r);
 }
 
-export function pathData(points: Point[], radius = CORNER_RADIUS): string {
+/**
+ * The path through `points` with its bends rounded by `radius`. The last point is moved back along the last piece by
+ * `endTrim` (the length an arrowhead takes), and the bend before it is made smaller when the piece is too short to
+ * keep that much straight.
+ */
+export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0): string {
   const first = points[0];
   if (!first) return '';
   let d = `M${num(first.x)} ${num(first.y)}`;
+  let consumed = 0;
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
     const cur = points[i];
     const next = points[i + 1];
     if (!prev || !cur) continue;
+    const lenIn = Math.hypot(cur.x - prev.x, cur.y - prev.y);
     if (!next) {
-      d += ` L${num(cur.x)} ${num(cur.y)}`;
+      const cut = lenIn === 0 ? 0 : Math.min(endTrim, Math.max(0, lenIn - consumed - 1));
+      d += ` L${num(cur.x - ((cur.x - prev.x) / (lenIn || 1)) * cut)} ${num(cur.y - ((cur.y - prev.y) / (lenIn || 1)) * cut)}`;
       continue;
     }
-    const lenIn = Math.hypot(cur.x - prev.x, cur.y - prev.y);
     const lenOut = Math.hypot(next.x - cur.x, next.y - cur.y);
-    const r = Math.min(radius, lenIn / 2, lenOut / 2);
+    const room = i + 1 === points.length - 1 ? Math.max(0, lenOut - endTrim) : lenOut;
+    const r = Math.min(radius, lenIn / 2, lenOut / 2, room);
     if (r <= 0) {
       d += ` L${num(cur.x)} ${num(cur.y)}`;
+      consumed = 0;
       continue;
     }
+    consumed = r;
     const inX = (cur.x - prev.x) / lenIn;
     const inY = (cur.y - prev.y) / lenIn;
     const outX = (next.x - cur.x) / lenOut;
@@ -123,12 +130,34 @@ export function pathData(points: Point[], radius = CORNER_RADIUS): string {
   return d;
 }
 
-function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean): string {
+type Role = 'start' | 'decision';
+
+/** What a drawing needs to know about its theme while it draws. */
+interface Paint {
+  spec: ThemeSpec;
+  /** Role of a node: a diamond decides, a node nothing leads to starts; the others have none. */
+  roles: Map<string, Role>;
+  /** Nodes that stand in a lane drawn with a tint. */
+  tinted: Set<string>;
+}
+
+const shadowAttr = (spec: ThemeSpec): string => (spec.shadow ? ' filter="url(#ursula-shadow)"' : '');
+
+function rolesOf(layout: Layout): Map<string, Role> {
+  const led = new Set(layout.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const roles = new Map<string, Role>();
+  for (const n of layout.nodes) if (n.shape === 'diamond') roles.set(n.id, 'decision');
+  const starts = layout.nodes.filter((n) => !led.has(n.id));
+  for (const n of starts.length > 0 ? starts : layout.nodes.slice(0, 1)) if (!roles.has(n.id)) roles.set(n.id, 'start');
+  return roles;
+}
+
+function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeSpec): string {
   if (lane.label === '') return '';
   const box = lane.labelBox;
   return (
     `<g class="ursula-lane-group" data-lane="${escapeXml(lane.id)}">` +
-    `<rect class="ursula-lane${tint ? ' ursula-lane--tint' : ''}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="8"/>` +
+    `<rect class="ursula-lane${tint ? ' ursula-lane--tint' : ''}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
     `<text class="ursula-lane-label" x="${num(centred ? box.x + box.w / 2 : box.x)}" y="${num(box.y + box.h / 2)}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(lane.label)}</text>` +
     '</g>'
   );
@@ -143,27 +172,41 @@ function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[
   const out = [...pts];
   if (from) out[0] = trimToOutline(from, pts[0] as Point, pts[1] as Point);
   if (to) out[pts.length - 1] = trimToOutline(to, pts[pts.length - 1] as Point, pts[pts.length - 2] as Point);
+  // A diamond is drawn with rounded corners; an end on a corner continues to the rounded end.
+  if (from?.outline) out[0] = reachRoundedCorner(diamondPoints(from.outline), DIAMOND_RADIUS, out[0] as Point, out[1] as Point);
+  if (to?.outline) out[pts.length - 1] = reachRoundedCorner(diamondPoints(to.outline), DIAMOND_RADIUS, out[pts.length - 1] as Point, out[pts.length - 2] as Point);
   return out;
 }
 
-function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>): string {
-  const marker = markerId(edge.style);
+function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint): string {
+  const branch = paint.roles.get(edge.from) === 'decision' && edge.style !== 'thick';
+  const marker = markerId(edge.style === 'thick' || branch ? 'thick' : edge.style);
   return (
-    `<path class="ursula-edge ursula-edge--${edge.style}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(trimmedPoints(edge, nodes))}" marker-end="url(#${marker})"/>`
+    `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
+    `d="${pathData(trimmedPoints(edge, nodes), paint.spec.bend, arrowFit(paint.spec).trim)}" marker-end="url(#${marker})"/>`
   );
 }
 
-function labelSvg(edge: LayoutEdge): string {
+function labelSvg(edge: LayoutEdge, paint: Paint): string {
   const l = edge.label;
   if (!l) return '';
+  const lines = l.lines ?? [l.text];
+  const ruler = pixelRuler();
+  const w = Math.max(0, ...lines.map((line) => ruler.textWidth(line, 'edge'))) + 2 * CHIP_PAD;
+  const h = CHIP_HEIGHT + (lines.length - 1) * BODY_LINE;
+  const cx = l.x + l.w / 2;
+  const cy = l.y + l.h / 2;
+  const chip = (cls: string, grow: number, extra: string): string =>
+    `<rect class="${cls}" x="${num(cx - w / 2 - grow)}" y="${num(cy - h / 2 - grow)}" width="${num(w + 2 * grow)}" height="${num(h + 2 * grow)}" rx="${num(CHIP_HEIGHT / 2 + grow)}"${extra}/>`;
+  const emphasis = edge.style === 'thick' ? ' ursula-edge-label--thick' : paint.roles.get(edge.from) === 'decision' ? ' ursula-edge-label--branch' : '';
   return (
     `<g class="ursula-edge-label-group" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` +
-    `<rect class="ursula-edge-label-bg" x="${num(l.x)}" y="${num(l.y)}" width="${num(l.w)}" height="${num(l.h)}" rx="3"/>` +
-    (l.lines ?? [l.text])
+    (paint.spec.chipHalo ? chip('ursula-edge-label-halo', HALO, '') : '') +
+    chip('ursula-edge-label-bg', 0, shadowAttr(paint.spec)) +
+    lines
       .map(
         (line, i, all) =>
-          `<text class="ursula-edge-label${edge.style === 'thick' ? ' ursula-edge-label--thick' : ''}" x="${num(l.x + l.w / 2)}" y="${num(l.y + l.h / 2 + (i - (all.length - 1) / 2) * BODY_LINE)}" text-anchor="middle" dominant-baseline="central">${escapeXml(line)}</text>`,
+          `<text class="ursula-edge-label${emphasis}" x="${num(cx)}" y="${num(cy + (i - (all.length - 1) / 2) * BODY_LINE)}" text-anchor="middle" dominant-baseline="central">${escapeXml(line)}</text>`,
       )
       .join('') +
     '</g>'
@@ -172,53 +215,58 @@ function labelSvg(edge: LayoutEdge): string {
 
 const points = (pts: Point[]): string => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(' ');
 
-function boxSvg(node: LayoutNode, rx: number): string {
-  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"/>`;
+function boxSvg(node: LayoutNode, rx: number, extra = ''): string {
+  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"${extra}/>`;
 }
 
 /** The outline of a node inside its box. */
-function shapeSvg(node: LayoutNode): string {
+function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
   const { x, y, w, h } = node;
   const cx = x + w / 2;
   const cy = y + h / 2;
+  const radius = spec.boxRadius;
+  const shadow = shadowAttr(spec);
   switch (node.shape) {
     case 'round':
-      return boxSvg(node, Math.min(14, node.h / 2 - 4));
+      return boxSvg(node, Math.min(radius + 8, h / 2), shadow);
     case 'stadium':
-      return boxSvg(node, h / 2);
+      return boxSvg(node, h / 2, shadow);
     case 'circle':
-      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>`;
+      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"${shadow}/>`;
     case 'hexagon':
-      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"/>`;
+      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"${shadow}/>`;
     case 'parallelogram':
-      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"/>`;
+      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"${shadow}/>`;
     case 'subroutine':
       return (
-        boxSvg(node, NODE_RADIUS) +
-        [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join('')
+        boxSvg(node, BAR, shadow) +
+        [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box ursula-node-box--lined" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join('')
       );
     case 'cylinder': {
       const arc = `A${num(w / 2)} ${CAP} 0 0`;
       const top = y + CAP;
       const bottom = y + h - CAP;
       return (
-        `<path class="ursula-node-box" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` +
-        `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`
+        `<path class="ursula-node-box ursula-node-box--lined" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` +
+        `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"${shadow}/>`
       );
     }
     case 'diamond':
-      return node.outline ? `<polygon class="ursula-node-box" points="${points(diamondPoints(node.outline))}"/>` : boxSvg(node, NODE_RADIUS);
+      return node.outline
+        ? `<path class="ursula-node-box" d="${roundedPolygonPath(diamondPoints(node.outline), DIAMOND_RADIUS)}"${shadow}/>`
+        : boxSvg(node, radius, shadow);
     case 'rect':
-      return boxSvg(node, NODE_RADIUS);
+      return boxSvg(node, radius, shadow);
   }
 }
 
-function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
+function nodeSvg(node: LayoutNode, hook: NodeHook | undefined, paint: Paint): string {
   const extra = hook?.(node) ?? {};
   const attrs = Object.entries(extra.attrs ?? {})
     .map(([k, v]) => ` ${k.replace(/[^A-Za-z0-9:_-]/g, '')}="${escapeXml(v)}"`)
     .join('');
-  const className = ['ursula-node', extra.className ?? ''].filter((c) => c !== '').join(' ');
+  const role = paint.roles.get(node.id);
+  const className = ['ursula-node', role === undefined && paint.tinted.has(node.id) ? 'ursula-node--on-lane' : '', extra.className ?? ''].filter((c) => c !== '').join(' ');
   const block = TITLE_LINE + node.lines.length * BODY_LINE;
   let y = node.y + (node.h - block) / 2 + (node.shape === 'cylinder' ? CAP / 2 : 0);
   const cx = node.x + node.w / 2;
@@ -233,8 +281,8 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
     y += BODY_LINE;
   }
   return (
-    `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}>` +
-    shapeSvg(node) +
+    `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}${role === undefined ? '' : ` data-role="${role}"`}>` +
+    shapeSvg(node, paint.spec) +
     texts.join('') +
     (extra.extra ?? '') +
     '</g>'
@@ -249,13 +297,14 @@ function markerId(style: string): string {
   return style === 'thick' ? 'ursula-arrow-accent' : 'ursula-arrow';
 }
 
-function legendSvg(legend: Legend, margin: number): string {
+function legendSvg(legend: Legend, margin: number, spec: ThemeSpec): string {
   const parts = [
     `<line class="ursula-legend-rule" x1="${num(margin)}" y1="${num(legend.y)}" x2="${num(legend.w - margin)}" y2="${num(legend.y)}"/>`,
   ];
   for (const item of legend.items) {
+    const sample = pathData([{ x: item.x, y: item.y }, { x: item.x + item.sampleW, y: item.y }], 0, arrowFit(spec).trim);
     parts.push(
-      `<path class="ursula-edge ursula-edge--${item.style}" d="M${num(item.x)} ${num(item.y)} L${num(item.x + item.sampleW)} ${num(item.y)}" marker-end="url(#${markerId(item.style)})"/>` +
+      `<path class="ursula-edge ursula-edge--${item.style}" d="${sample}" marker-end="url(#${markerId(item.style)})"/>` +
         `<text class="ursula-legend-text" x="${num(item.captionX)}" y="${num(item.y)}" dominant-baseline="central">${escapeXml(item.caption)}</text>`,
     );
   }
@@ -263,31 +312,39 @@ function legendSvg(legend: Legend, margin: number): string {
 }
 
 export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
+  const theme = opts.theme ?? 'solid';
+  const spec = THEME_SPECS[theme];
+  if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${Object.keys(THEME_SPECS).join(', ')}.`, 'theme');
   const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);
   const w = num(layout.width);
   const h = num(layout.height);
   const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
   const byId = new Map(layout.nodes.map((n) => [n.id, n] as const));
   const labelled = layout.lanes.filter((l) => l.label !== '');
+  const tinted = (lane: LayoutLane): boolean => labelled.length < 2 || lane === labelled[0];
+  const paint: Paint = {
+    spec,
+    roles: rolesOf(layout),
+    tinted: new Set(labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id))),
+  };
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
+  const lookup: Lookup = (name, mode) => tokenVar(spec, name, mode);
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet()}</style>`,
-    `<defs>${MARKER('ursula-arrow', 'ursula-arrow')}${MARKER('ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}</defs>`,
-    ...layout.lanes.map((lane) =>
-      laneSvg(lane, labelled.length < 2 || lane === labelled[0], layout.laneAxis === 'along' && layout.direction === 'LR'),
-    ),
-    ...layout.edges.map((e) => edgeSvg(e, byId)),
-    ...layout.nodes.map((n) => nodeSvg(n, opts.node)),
-    ...layout.edges.map(labelSvg),
-    ...(layout.legend ? [legendSvg(layout.legend, margin)] : []),
+    `<style>${styleSheet(flowRules(spec, FONT), lookup)}</style>`,
+    `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
+    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && layout.direction === 'LR', spec)),
+    ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
+    ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
+    ...layout.edges.map((e) => labelSvg(e, paint)),
+    ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),
     '</svg>',
   ].join('');
 }
 
 const SCENE_RULES: readonly string[] = [
-  RULES[0] ?? '',
+  ROOT_RULE,
   '.ursula-box{stroke-width:1}',
   '.ursula-box--box{fill:$surface;stroke:$fg;stroke-opacity:.7}',
   '.ursula-box--actor{fill:$lane;stroke:$fg;stroke-opacity:.7}',
@@ -399,7 +456,7 @@ export function renderSceneSvg(scene: Scene, opts: Pick<SvgOptions, 'title'> = {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
-    `<style>${styleSheet(SCENE_RULES)}</style>`,
+    `<style>${styleSheet(SCENE_RULES, sceneVar)}</style>`,
     ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
     ...scene.items.map(sceneItemSvg),
     '</svg>',

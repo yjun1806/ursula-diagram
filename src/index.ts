@@ -17,6 +17,8 @@ export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
+export { THEMES } from './render/theme.ts';
+export type { Theme } from './render/theme.ts';
 export { renderTextLayout, renderTextScene, spansToAnsi } from './render/text.ts';
 export { renderSceneSvg } from './render/svg.ts';
 export { registerFrontEnd, selectFrontEnd } from './registry.ts';

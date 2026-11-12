@@ -205,3 +205,18 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
   }
   return bad;
 }
+
+/** How far the line of an edge stops short of the tip of its arrowhead in the default theme. */
+export const ARROW_TRIM = 9;
+
+/** The tip of the arrowhead of an edge drawn with path data `d`: the end of the line plus the length the line stops short. */
+export function tipOf(d: string): Point {
+  const ends = (d.match(/[MLA][^MLA]*/g) ?? []).map((c) => {
+    const n = c.slice(1).match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+    return { x: n[n.length - 2] ?? 0, y: n[n.length - 1] ?? 0 };
+  });
+  const last = ends[ends.length - 1] as Point;
+  const prev = ends[ends.length - 2] as Point;
+  const len = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
+  return { x: last.x + ((last.x - prev.x) / len) * ARROW_TRIM, y: last.y + ((last.y - prev.y) / len) * ARROW_TRIM };
+}

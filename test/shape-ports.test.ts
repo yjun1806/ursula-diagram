@@ -3,6 +3,7 @@ import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import type { Layout, LayoutNode, Point } from '../src/index.ts';
 import { faceOffsets, portOffsets, sideCapacity } from '../src/layered/ports.ts';
 import type { Face } from '../src/layered/ports.ts';
+import { tipOf } from './helpers.ts';
 import type { NodeShape } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
 
@@ -85,10 +86,12 @@ function svgPath(svg: string, from: string, to: string): Point[] {
   const nums = (m[1] as string).match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
   const out: Point[] = [];
   for (let i = 0; i + 1 < nums.length; i += 2) out.push({ x: nums[i] as number, y: nums[i + 1] as number });
+  out[out.length - 1] = tipOf(m[1] as string);
   return out;
 }
 
-const near = (p: Point, q: Point): boolean => Math.abs(p.x - q.x) <= 0.5 && Math.abs(p.y - q.y) <= 0.5;
+/** The line ends stop at the rounded corners, at most 8 in from the corner. */
+const near = (p: Point, q: Point): boolean => Math.hypot(p.x - q.x, p.y - q.y) <= 8.5;
 
 describe('edge ends on a diamond with four edges', () => {
   const src = 'flowchart TD\nsubgraph s0\nt[Top] --> d{Check}\nend\nsubgraph s1\na[Alpha]\nend\nsubgraph s2\nb[Beta]\nend\nsubgraph s3\nc[Gamma]\nend\nd --> a\nd --> b\nd --> c';

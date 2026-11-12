@@ -148,3 +148,81 @@ function fitToDiamond(outline: NonNullable<LayoutNode['outline']>, end: Point, n
   if (t === undefined || len + t < ARROW - EPS) return end;
   return { x: end.x + d.x * t, y: end.y + d.y * t };
 }
+
+const tidy = (v: number): string => String(Math.round(v * 100) / 100 || 0);
+
+/** How far the rounded end of a corner is from the corner: the most a corner may be pulled in by its rounding. */
+const MOST_PULLED_IN = 8;
+
+interface Corner {
+  from: Point;
+  to: Point;
+  r: number;
+  sweep: 0 | 1;
+  /** Distance from the corner of the polygon to the nearest point of the arc. */
+  retreat: number;
+  /** Unit vector from the corner into the polygon, along the bisector. */
+  inward: Point;
+}
+
+/**
+ * The rounding of every corner of a convex polygon. The radius is `radius` at most, and small enough that the arc
+ * ends no more than 8 from its corner. An arc never starts farther from its corner than a third of the shorter of
+ * the two sides that meet there; where that would be exceeded the radius is made smaller.
+ */
+function roundCorners(points: Point[], radius: number): Corner[] {
+  const n = points.length;
+  return points.map((c, i) => {
+    const p = points[(i + n - 1) % n] as Point;
+    const q = points[(i + 1) % n] as Point;
+    const lenIn = Math.hypot(c.x - p.x, c.y - p.y);
+    const lenOut = Math.hypot(q.x - c.x, q.y - c.y);
+    const u = { x: (p.x - c.x) / lenIn, y: (p.y - c.y) / lenIn };
+    const v = { x: (q.x - c.x) / lenOut, y: (q.y - c.y) / lenOut };
+    const half = Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))) / 2;
+    const pull = 1 / Math.sin(half) - 1;
+    const wanted = pull <= 0 ? radius : Math.min(radius, MOST_PULLED_IN / pull);
+    const reach = Math.min(wanted / Math.tan(half), Math.min(lenIn, lenOut) / 3);
+    const r = reach * Math.tan(half);
+    const cross = -u.x * v.y + u.y * v.x;
+    const bx = u.x + v.x;
+    const by = u.y + v.y;
+    const bl = Math.hypot(bx, by) || 1;
+    return {
+      from: { x: c.x + u.x * reach, y: c.y + u.y * reach },
+      to: { x: c.x + v.x * reach, y: c.y + v.y * reach },
+      r,
+      sweep: cross > 0 ? 1 : 0,
+      retreat: r * pull,
+      inward: { x: bx / bl, y: by / bl },
+    };
+  });
+}
+
+/** The closed path of a convex polygon with rounded corners; see `roundCorners` for the radii. */
+export function roundedPolygonPath(points: Point[], radius: number): string {
+  if (points.length < 3) return '';
+  const corners = roundCorners(points, radius);
+  const at = (q: Point): string => `${tidy(q.x)} ${tidy(q.y)}`;
+  const arc = (k: Corner): string => `A${tidy(k.r)} ${tidy(k.r)} 0 0 ${k.sweep} ${at(k.to)}`;
+  const first = corners[0] as Corner;
+  return `M${at(first.to)}${corners.slice(1).map((k) => ` L${at(k.from)} ${arc(k)}`).join('')} L${at(first.from)} ${arc(first)}Z`;
+}
+
+/**
+ * Moves a line end that sits on a corner of the polygon in to the rounded end of that corner, along the way the line
+ * runs. Ends that are not on a corner stay where they are.
+ */
+export function reachRoundedCorner(points: Point[], radius: number, end: Point, next: Point): Point {
+  const corners = roundCorners(points, radius);
+  const i = points.findIndex((c) => Math.hypot(c.x - end.x, c.y - end.y) < 1);
+  const corner = corners[i];
+  if (!corner || corner.retreat <= 0) return end;
+  const len = Math.hypot(end.x - next.x, end.y - next.y);
+  if (len < EPS) return end;
+  const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
+  const along = d.x * corner.inward.x + d.y * corner.inward.y;
+  if (along < EPS) return end;
+  const t = corner.retreat / along;
+  return { x: end.x + d.x * t, y: end.y + d.y * t };
+}

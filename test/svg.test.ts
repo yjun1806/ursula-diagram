@@ -38,8 +38,8 @@ describe('svg', () => {
 
   it('marks accent colour on thick edges and their labels', () => {
     const svg = render('flowchart LR\nA ==>|go| B\nA -->|plain| C');
-    expect(svg).toContain('.ursula-edge--thick{stroke:var(--ursula-accent,#2563eb)}');
-    expect(svg).toContain('.ursula-edge-label--thick{fill:var(--ursula-accent,#2563eb)}');
+    expect(svg).toContain('.ursula-edge--thick{stroke:var(--ursula-accent,#7447c8)}');
+    expect(svg).toContain('.ursula-edge-label--thick{fill:var(--ursula-accent,#7447c8)}');
     expect(svg).toMatch(/<path class="ursula-edge ursula-edge--thick" data-style="thick"[^>]*marker-end="url\(#ursula-arrow-accent\)"/);
     expect(svg).toMatch(/<text class="ursula-edge-label ursula-edge-label--thick"[^>]*>go</);
     expect(svg).toMatch(/<text class="ursula-edge-label" [^>]*>plain</);

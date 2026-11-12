@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layout, parse, pixelRuler, render, UrsulaError } from '../src/index.ts';
 import type { NodeShape } from '../src/index.ts';
+import { tipOf } from './helpers.ts';
 
 const CASES: Array<[string, NodeShape]> = [
   ['a[x]', 'rect'],
@@ -79,15 +80,16 @@ describe('node shapes in the drawing', () => {
   it('draw each shape with its own element', () => {
     const svg = (decl: string): string => render(`flowchart LR\n${decl}`);
     const polygons = (s: string): string[] => [...s.matchAll(/<polygon[^>]*points="([^"]*)"/g)].map((m) => m[1] ?? '');
-    expect(svg('a(x)')).toContain('rx="14"');
+    const roundH = layout(parse('flowchart LR\na(x)'), pixelRuler()).nodes[0]?.h ?? 0;
+    expect(svg('a(x)')).toContain(`rx="${Math.min(26, roundH / 2)}"`);
     expect(svg('a(x)')).not.toContain('<ellipse');
     expect(svg('a([x])')).toMatch(/<rect class="ursula-node-box"[^>]*rx="(\d+(\.\d+)?)"/);
     expect(svg('a((x))')).toContain('<ellipse');
     expect(polygons(svg('a{{x}}'))[0]?.split(' ')).toHaveLength(6);
     expect(polygons(svg('a[/x/]'))[0]?.split(' ')).toHaveLength(4);
-    expect(svg('a[[x]]').match(/<line class="ursula-node-box"/g)).toHaveLength(2);
-    expect(svg('a[(x)]')).toMatch(/<path class="ursula-node-box" d="M[^"]*A[^"]*A[^"]*V/);
-    expect(polygons(svg('a{x}'))[0]?.split(' ')).toHaveLength(4);
+    expect(svg('a[[x]]').match(/<line class="ursula-node-box ursula-node-box--lined"/g)).toHaveLength(2);
+    expect(svg('a[(x)]')).toMatch(/<path class="ursula-node-box ursula-node-box--lined" d="M[^"]*A[^"]*A[^"]*V/);
+    expect(svg('a{x}')).toMatch(/<path class="ursula-node-box" d="M[^"]*(A[^"]*){4}Z"/);
   });
 
   it('give a stadium a corner radius of half its height', () => {
@@ -106,9 +108,7 @@ describe('node shapes in the drawing', () => {
     const cy = c.y + c.h / 2;
     let checked = 0;
     for (const m of svg.matchAll(/data-to="c" d="([^"]*)"/g)) {
-      const nums = (m[1] ?? '').match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
-      const x = nums[nums.length - 2] ?? 0;
-      const y = nums[nums.length - 1] ?? 0;
+      const { x, y } = tipOf(m[1] ?? '');
       if (Math.abs(x - cx) < 1) continue;
       const v = ((x - cx) / (c.w / 2)) ** 2 + ((y - cy) / (c.h / 2)) ** 2;
       expect(Math.abs(v - 1)).toBeLessThan(0.01);
