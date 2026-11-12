@@ -79,7 +79,7 @@ describe('node shapes in the drawing', () => {
   it('draw each shape with its own element', () => {
     const svg = (decl: string): string => render(`flowchart LR\n${decl}`);
     const polygons = (s: string): string[] => [...s.matchAll(/<polygon[^>]*points="([^"]*)"/g)].map((m) => m[1] ?? '');
-    expect(svg('a(x)')).toContain('rx="12"');
+    expect(svg('a(x)')).toContain('rx="14"');
     expect(svg('a(x)')).not.toContain('<ellipse');
     expect(svg('a([x])')).toMatch(/<rect class="ursula-node-box"[^>]*rx="(\d+(\.\d+)?)"/);
     expect(svg('a((x))')).toContain('<ellipse');

@@ -88,24 +88,22 @@ describe('edge ends on a diamond', () => {
     expect(Math.abs(out.y - (o.y + o.h))).toBeLessThan(0.5);
   });
 
-  it('lie on the slanted sides when two edges end on one side', () => {
+  it('share the corner and are reported when no other side has room for a second end', () => {
     const { l, svg } = drawn('flowchart TD\na[Start] --> d{Approved?}\nb[Other] --> d\nd --> c[X]\nd --> e[Y]');
     const o = node(l, 'd').outline as NonNullable<LayoutNode['outline']>;
-    const cx = o.x + o.w / 2;
-    const cy = o.y + o.h / 2;
-    const onSide = (p: Point): number => Math.abs(p.x - cx) / (o.w / 2) + Math.abs(p.y - cy) / (o.h / 2);
-    const ends = [last(svgPath(svg, 'b', 'd')), first(svgPath(svg, 'd', 'e'))];
-    for (const p of ends) expect(Math.abs(onSide(p) - 1)).toBeLessThan(0.02);
-    // The two ends are on the same side of the box, one off the middle, so at least one is not at a corner.
-    expect(ends.some((p) => Math.abs(p.y - cy) > 1)).toBe(true);
-    const found = l.diagnostics.filter((d) => d.kind === 'diamond-side');
+    const corner = { x: o.x + o.w, y: o.y + o.h / 2 };
+    for (const p of [last(svgPath(svg, 'b', 'd')), first(svgPath(svg, 'd', 'e'))]) {
+      expect(Math.abs(p.x - corner.x)).toBeLessThan(0.5);
+      expect(Math.abs(p.y - corner.y)).toBeLessThan(0.5);
+    }
+    const found = l.diagnostics.filter((d) => d.kind === 'shared-port');
     expect(found).toHaveLength(1);
     expect(found[0]?.nodes).toEqual(['d']);
   });
 
   it('leave no diagnostic when every side has one edge', () => {
     const { l } = drawn('flowchart LR\na[Start] --> d{Approved?} --> b[Done]');
-    expect(l.diagnostics.filter((d) => d.kind === 'diamond-side')).toEqual([]);
+    expect(l.diagnostics.filter((d) => d.kind === 'shared-port')).toEqual([]);
   });
 });
 

@@ -183,7 +183,7 @@ function shapeSvg(node: LayoutNode): string {
   const cy = y + h / 2;
   switch (node.shape) {
     case 'round':
-      return boxSvg(node, NODE_RADIUS * 2);
+      return boxSvg(node, Math.min(14, node.h / 2 - 4));
     case 'stadium':
       return boxSvg(node, h / 2);
     case 'circle':

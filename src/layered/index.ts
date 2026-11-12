@@ -10,7 +10,7 @@ import { buildLadder } from './dummies.ts';
 import type { Ladder, Placed } from './model.ts';
 import type { Rows } from './rows.ts';
 import { orderLayers } from './order.ts';
-import { boxLength, CORNER_CLEAR, growForPorts, LINE_PITCH, planFlat, portDemand, portRoom, portStep } from './ports.ts';
+import { boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
@@ -144,6 +144,11 @@ function leftToRight(ladder: Ladder, layers: number[][]): void {
   }
 }
 
+/** Thickness of the boxes along the layer axis of a drawing that has a stadium, whose straight stretch depends on it; 0 otherwise. */
+function stadiumThickness(graph: Graph, ruler: Ruler, td: boolean): number {
+  return ruler.uniform || td || !graph.nodes.some((n) => n.shape === 'stadium') ? 0 : measureNodes(graph.nodes, graph.lanes, ruler, td).contentH;
+}
+
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const degreeOf = graph.nodes.map(() => 0);
@@ -154,6 +159,8 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     degreeOf[a] = (degreeOf[a] ?? 0) + 1;
     degreeOf[b] = (degreeOf[b] ?? 0) + 1;
   }
+  const shapes = graph.nodes.map((n) => n.shape);
+  const across = stadiumThickness(graph, ruler, td);
   const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
   const rows = given ?? (stage ? assignByStage(graph, first, stage) : first);
@@ -162,7 +169,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     leftToRight(ladder, layers);
     for (const node of ladder.nodes) if (node.idx < ladder.realCount) node.units = units[node.idx] ?? 2;
     const plan = planFlat(ladder, layers, ruler);
-    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true);
+    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across);
     const need = portDemand(ladder, plan);
     const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart });
     return {
@@ -410,7 +417,8 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
       const u = frameFor(graph, r, undefined).unit;
       // Wider gaps coarsen the port lattice: stop when a box would lose a port an edge needs.
       const need = portDemand(placed.ladder, placed.plan);
-      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && portRoom(boxLength(n.units, u, gap), portStep(u, r), r.uniform === true) < Math.max(need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
+      const across = stadiumThickness(graph, r, td);
+      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && lacksRoom(graph.nodes[n.idx]?.shape, td, boxLength(n.units, u, gap), portStep(u, r), across, r.uniform === true, need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
       const wider = draw(r);
       if (total(wider) > room) break;
       const now = tightPasses(wider);

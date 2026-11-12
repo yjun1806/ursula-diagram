@@ -54,7 +54,7 @@ export function diamondSides(l: Pick<Layout, 'nodes' | 'edges'>): Diagnostic[] {
     const crowded = (Object.entries(count) as Array<[string, number]>).filter(([, c]) => c >= 2);
     if (crowded.length === 0) continue;
     out.push({
-      kind: 'diamond-side',
+      kind: 'shared-port',
       nodes: [n.id],
       message: `${crowded.map(([side, c]) => `${c} edges end on the ${side}`).join(' and ')} of the diamond ${n.id}; they meet its slanted sides.`,
     });

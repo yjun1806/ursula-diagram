@@ -16,16 +16,16 @@ interface Box {
   l1: number;
 }
 
-interface Seg {
+export interface Seg {
   ax: number;
   ay: number;
   bx: number;
   by: number;
 }
 
-const segs = (points: Point[]): Seg[] => points.slice(1).map((q, i) => ({ ax: (points[i] as Point).x, ay: (points[i] as Point).y, bx: q.x, by: q.y }));
+export const segs = (points: Point[]): Seg[] => points.slice(1).map((q, i) => ({ ax: (points[i] as Point).x, ay: (points[i] as Point).y, bx: q.x, by: q.y }));
 
-function overlap(s: Seg, t: Seg): boolean {
+export function overlap(s: Seg, t: Seg): boolean {
   const sh = Math.abs(s.ay - s.by) < EPS;
   const th = Math.abs(t.ay - t.by) < EPS;
   if (sh !== th) return false;
@@ -33,7 +33,7 @@ function overlap(s: Seg, t: Seg): boolean {
   return Math.abs(s.ax - t.ax) < EPS && Math.min(Math.max(s.ay, s.by), Math.max(t.ay, t.by)) - Math.max(Math.min(s.ay, s.by), Math.min(t.ay, t.by)) > EPS;
 }
 
-const hits = (s: Seg, r: { x: number; y: number; w: number; h: number }): boolean =>
+export const hits = (s: Seg, r: { x: number; y: number; w: number; h: number }): boolean =>
   Math.min(s.ax, s.bx) < r.x + r.w - EPS && Math.max(s.ax, s.bx) > r.x + EPS && Math.min(s.ay, s.by) < r.y + r.h - EPS && Math.max(s.ay, s.by) > r.y + EPS;
 
 function properCross(a: Seg, b: Seg): boolean {

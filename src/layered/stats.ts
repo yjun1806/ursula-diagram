@@ -1,3 +1,5 @@
+import type { LayoutEdge } from '../types.ts';
+
 /** Counters for tests and measuring: how many drawings the engine made. Not part of any output. */
 export const stats = {
   /** Layouts routed to the end (every call of `route`). */
@@ -6,6 +8,8 @@ export const stats = {
   placements: 0,
   /** Chosen drawings made with three slot units for a box a little wider than the common width instead of whole pairs. */
   compact: 0,
+  /** Edges whose ends the vertex step moved, and how many ends of each. */
+  moved: new WeakMap<LayoutEdge, number>(),
   reset(): void {
     this.draws = 0;
     this.placements = 0;

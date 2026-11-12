@@ -69,8 +69,12 @@ function splitStatements(line: string): string[] {
   return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
+/** An icon word such as `fa:fa-car` or `fab:fa-name`, with the one space that follows it. */
+const ICON_WORD = /(?<![\w-])fa[bsr]?:fa-[\w-]+ ?/g;
+
 function splitLabel(raw: string, fallback: string): { title: string; lines: string[] } {
   const parts = raw
+    .replace(ICON_WORD, '')
     .split(/<br\s*\/?>/i)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);

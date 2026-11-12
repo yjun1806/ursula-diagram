@@ -1,7 +1,7 @@
 import type { Ruler } from '../metrics.ts';
-import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, Point } from '../types.ts';
+import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../types.ts';
 import { crossings } from '../layout/check.ts';
-import { diamondSides, withOutline } from '../layout/diamond.ts';
+import { withOutline } from '../layout/diamond.ts';
 import type { LabelSize, Rect, Segment } from '../layout/labels.ts';
 import { labelSize, placeLabel } from '../layout/labels.ts';
 import { useElbows } from './elbows.ts';
@@ -10,9 +10,10 @@ import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import type { FlatPlan } from './ports.ts';
 import { stats } from './stats.ts';
+import { settleVertices } from './vertex.ts';
 import { offCentreEnds } from './centre.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
-import { boxLength, CORNER_CLEAR, LINE_PITCH, portStep, sideFractions, sideOffsets } from './ports.ts';
+import { boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -212,6 +213,11 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   }
   const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift[n] ?? 0));
   const step = portStep(unit, ruler);
+  const shapeOf = (n: number): NodeShape | undefined => f.graph.nodes[n]?.shape;
+  const acrossOf = (n: number): number => f.layerExt[n] ?? 0;
+  /** A port off the lattice may stand at `x` on `side` of box `n` only where the shape of the box has room for it. */
+  const reaches = (n: number, side: Side, x: number): boolean =>
+    Math.abs(x - (nodeO(n) + len(n) / 2)) <= faceReach(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), ruler.uniform === true) + EPS;
 
   const items: Item[] = [];
   for (const [ci, c] of l.chains.entries()) {
@@ -253,7 +259,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     const near = custom[key(n, side)];
     const origin = nodeO(n);
     const out: number[] = [];
-    for (const o of sideOffsets(len(n), step, sideCount[key(n, side)] ?? 0, ruler.uniform === true)) {
+    for (const o of faceOffsets(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), step, sideCount[key(n, side)] ?? 0, ruler.uniform === true)) {
       const x = origin + o;
       if (set?.includes(rk(x))) continue;
       if (near?.some((c) => Math.abs(c - x) < PORT_APART - EPS)) continue;
@@ -286,7 +292,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     else {
       const c = centre(one);
       const near = (taken[key(many, manySide)] ?? []).some((t) => Math.abs(t / 1000 - c) < PORT_APART - EPS);
-      x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near ? c : undefined;
+      x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near && reaches(many, manySide, c) ? c : undefined;
       if (x !== undefined) (custom[key(many, manySide)] ??= []).push(x);
     }
     if (x === undefined) continue;
@@ -313,6 +319,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
           (x) =>
             x >= nodeO(n) + CORNER_CLEAR - EPS &&
             x <= nodeO(n) + len(n) - CORNER_CLEAR + EPS &&
+            reaches(n, side, x) &&
             !(taken[key(n, side)] ?? []).some((t) => Math.abs(t / 1000 - x) < PORT_APART - EPS),
         );
       if (!clear(a, 'down') || !clear(b, 'up')) continue;
@@ -746,6 +753,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 
   if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });
 
+  const vertices = settleVertices(edges, nodes, ruler, portStep(f.unit, ruler));
+
   // Labels. A terminal label never starts before the first cell.
   const obstacles: Rect[] = ruler.uniform ? [...rects, td ? { x: -1000, y: -1000, w: 3000, h: 1000 } : { x: -1000, y: -1000, w: 1000, h: 3000 }] : rects;
   const diagnostics: Diagnostic[] = [];
@@ -811,7 +820,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
 
   if (!ruler.uniform) diagnostics.push(...tightLabels(edges), ...offCentreEnds({ nodes, edges }));
-  diagnostics.push(...crossings(edges), ...diamondSides({ nodes, edges }));
+  diagnostics.push(...crossings(edges), ...vertices.diagnostics);
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));
   const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);

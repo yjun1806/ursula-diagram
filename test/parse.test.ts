@@ -95,4 +95,14 @@ describe('parse', () => {
     expect(failure('A --> B')).toMatchObject({ line: 1 });
     expect(failure('')).toMatchObject({ code: 'syntax' });
   });
+
+  it('drops icon words from a node label', () => {
+    const g = parse('flowchart LR\na[fa:fa-car Car]\nb["fab:fa-name Two<br/>fas:fa-x-y Line"]\nc[far:fa-flag]\nd[Plain fa:fa-flag]');
+    expect(g.nodes.map((n) => [n.id, n.title, n.lines])).toEqual([
+      ['a', 'Car', []],
+      ['b', 'Two', ['Line']],
+      ['c', 'c', []],
+      ['d', 'Plain', []],
+    ]);
+  });
 });
