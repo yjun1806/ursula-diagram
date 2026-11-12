@@ -95,6 +95,9 @@ interface Block {
   hint: number;
   /** A block of one node that no edge touches at all. */
   single: boolean;
+  /** The connected piece the block was cut from (its smallest node), and the first rank of the block inside it. */
+  comp: number;
+  firstRank: number;
 }
 
 interface Slot {
@@ -150,7 +153,8 @@ function fill(blocks: Block[], cap: number, make: (nodes: number[], rankOf: Map<
   const out = [...blocks];
   for (const small of [...blocks].filter((b) => b.height === 1).sort((x, y) => x.width - y.width)) {
     for (const host of out) {
-      if (host === small || host.height < 2 || !out.includes(small)) continue;
+      // Blocks cut from one flow keep their order; only unrelated blocks share free cells.
+      if (host === small || host.height < 2 || !out.includes(small) || host.comp === small.comp) continue;
       const ranks = [...new Set(host.nodes.map((n) => host.rankOf.get(n) ?? 0))].sort((x, y) => x - y);
       const colWidth = new Map(ranks.map((r) => [r, Math.max(...host.nodes.filter((n) => host.rankOf.get(n) === r).map(units))] as const));
       const used = new Set(host.nodes.map((n) => `${host.rowOf.get(n)}|${host.rankOf.get(n)}`));
@@ -177,6 +181,8 @@ function fill(blocks: Block[], cap: number, make: (nodes: number[], rankOf: Map<
         rowOf.set(n, placed.row);
       }
       const merged = make([...host.nodes, ...small.nodes], rankOf, rowOf);
+      merged.comp = host.comp;
+      merged.firstRank = host.firstRank;
       out.splice(out.indexOf(host), 1, merged);
       out.splice(out.indexOf(small), 1);
       break;
@@ -207,6 +213,74 @@ function pack(blocks: Block[], cap: number): Shelf[] {
     return { rows, slots: slotsFor(s.blocks, rows, false), lean: s.blocks.reduce((n, b) => n + b.up - b.down, 0) };
   });
   return made.sort((x, y) => y.lean - x.lean).map(({ rows, slots }) => ({ rows, slots }));
+}
+
+/**
+ * A flow folded into several rows reads from the top row to the bottom row: of two blocks cut from one piece, the
+ * earlier ranks lie higher. The block that holds the head of the lane's main flow opens the first row.
+ */
+function readDownward(shelves: Shelf[], head: number | undefined): Shelf[] {
+  const out = shelves.map((sh) => ({ ...sh, slots: sh.slots.map((sl) => ({ ...sl, items: sl.items.map((it) => ({ ...it })) })) }));
+  const place = (b: Block): { shelf: number; slot: number; item: number } | undefined => {
+    for (const [s, sh] of out.entries()) for (const [k, sl] of sh.slots.entries()) for (const [i, it] of sl.items.entries()) if (it.block === b) return { shelf: s, slot: k, item: i };
+    return undefined;
+  };
+  const all = out.flatMap((sh) => sh.slots.flatMap((sl) => sl.items.map((it) => it.block)));
+  const rowKey = (b: Block): number => {
+    const at = place(b);
+    if (!at) return 0;
+    return at.shelf * 1000 + (out[at.shelf]?.slots[at.slot]?.items[at.item]?.offset ?? 0);
+  };
+  for (let round = 0; round < 40; round++) {
+    let moved = false;
+    for (const x of all) {
+      for (const y of all) {
+        if (x === y || x.comp !== y.comp || x.firstRank >= y.firstRank || rowKey(x) <= rowKey(y)) continue;
+        const a = place(x);
+        const b = place(y);
+        if (!a || !b) continue;
+        if (a.shelf !== b.shelf) {
+          const [first, second] = [Math.min(a.shelf, b.shelf), Math.max(a.shelf, b.shelf)];
+          [out[first], out[second]] = [out[second] as Shelf, out[first] as Shelf];
+          moved = true;
+        } else if (a.slot === b.slot) {
+          const slot = out[a.shelf]?.slots[a.slot];
+          const rows = out[a.shelf]?.rows ?? 1;
+          if (!slot) continue;
+          const [ia, ib] = [slot.items[a.item], slot.items[b.item]];
+          if (!ia || !ib) continue;
+          [ia.block, ib.block] = [ib.block, ia.block];
+          slot.items.forEach((it, i) => {
+            it.offset = i === 0 ? 0 : rows - it.block.height;
+          });
+          moved = true;
+        }
+        if (moved) break;
+      }
+      if (moved) break;
+    }
+    if (!moved) break;
+  }
+  const headBlock = head === undefined ? undefined : all.find((b) => b.nodes.includes(head));
+  const at = headBlock ? place(headBlock) : undefined;
+  if (headBlock && at) {
+    const [shelf] = out.splice(at.shelf, 1);
+    if (shelf) {
+      const [slot] = shelf.slots.splice(at.slot, 1);
+      if (slot) {
+        const [item] = slot.items.splice(at.item, 1);
+        if (item) {
+          slot.items.unshift({ block: item.block, offset: 0 });
+          slot.items.forEach((it, i) => {
+            it.offset = i === 0 ? 0 : shelf.rows - it.block.height;
+          });
+          shelf.slots.unshift(slot);
+        }
+      }
+      out.unshift(shelf);
+    }
+  }
+  return out;
 }
 
 /**
@@ -307,6 +381,8 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         anchor,
         hint: list.length > 0 ? mean(list.map((p) => p.other)) : mean(nodes),
         single: nodes.length === 1 && comp.length === 1 && list.length === 0,
+        comp: Math.min(...comp),
+        firstRank: Math.min(...nodes.map((n) => rankOf.get(n) ?? 0)),
       };
     };
     for (const nodes of comps.values()) {
@@ -335,7 +411,8 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         const rowLean = (r: number): [number, number] => lean(edgesOut(nodes.filter((n) => rowOf.get(n) === r)));
         const [up0, down0] = rowLean(0);
         const [upLast, downLast] = rowLean(height - 1);
-        if (down0 > up0 && upLast > downLast) for (const v of nodes) rowOf.set(v, height - 1 - (rowOf.get(v) ?? 0));
+        // Branches stay below the flow they leave: an edge inside a lane never runs up.
+        void up0; void down0; void upLast; void downLast;
       }
       // A block wider than a row is cut between ranks.
       const widthOfRanks = (rs: number[]): number => rs.reduce((s, r) => s + Math.max(...nodes.filter((n) => rankOf.get(n) === r).map((n) => units[n] ?? 2)), 0);
@@ -357,9 +434,12 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     const room = Math.max(widest, cap - less);
     const lone = apart ? blocks.filter((b) => b.single) : [];
     // Nodes without edges in their lane may wait one place further along the band instead of filling the same row.
-    const shelves = lone.length > 0 && lone.length < blocks.length
+    const packed = lone.length > 0 && lone.length < blocks.length
       ? [...pack(fill(blocks.filter((b) => !b.single), room, makeBlock, (n) => units[n] ?? 2), room), ...pack(lone, room)]
       : pack(fill(blocks, room, makeBlock, (n) => units[n] ?? 2), room);
+    const textStart = index.get(graph.edges[0]?.from ?? '');
+    const head = textStart !== undefined && laneOf[textStart] === lane ? textStart : flow.length > 1 ? flow[0] : undefined;
+    const shelves = readDownward(packed, head);
     const keys: Array<[number, number, number]> = [];
     shelves.forEach((shelf, s) => {
       for (const slot of shelf.slots) {
@@ -422,7 +502,9 @@ export function assignByStage(graph: Graph, base: Rows, stage: number[]): Rows {
       const s = stage[v] ?? 0;
       const free = (r: number): boolean => !taken.has(`${r}|${s}`);
       const lead = [...(leads[v] ?? [])].sort((x, y) => (stage[y] ?? 0) - (stage[x] ?? 0) || x - y)[0];
-      const order = Array.from({ length: count }, (_, r) => r);
+      // An edge inside a lane never runs up: a node stands on or below every node that leads to it.
+      const lowest = Math.max(0, ...(leads[v] ?? []).map((p) => rowOf.get(p) ?? 0));
+      const order = Array.from({ length: count }, (_, r) => r).filter((r) => r >= lowest);
       if ((lean[v] ?? 0) > 0) order.reverse();
       const wanted = main.has(v) ? [0] : [...(lead === undefined ? [] : [rowOf.get(lead) ?? 0]), ...order];
       let row = wanted.find(free);

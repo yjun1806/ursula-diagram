@@ -49,6 +49,8 @@ export interface Ruler {
   grid: number;
   /** The medium is a terminal: the layered engine draws it with its own rules (no spare-width spreading, per-drawing box width). */
   terminal?: boolean;
+  /** Terminal stages: cells between two neighbouring pass-through lines of a gap (1 when they may stand on adjacent lines). */
+  linePitch?: number;
   /** Set by the layered engine on the ruler it derives for a terminal: every box has the width of the widest. */
   uniform?: boolean;
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */

@@ -72,7 +72,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 6 } as const;
 
 const properCross = (a: Seg, b: Seg): boolean => {
   const ah = Math.abs(a.ay - a.by) < EPS;
@@ -182,7 +182,10 @@ export function startMissed(l: Layout): number {
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
   const axis = l.direction === 'TD' ? 'y' : 'x';
+  const across = l.direction === 'TD' ? 'x' : 'y';
+  const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
   let bends = 0;
+  let folded = 0;
   let length = 0;
   const against: Array<[string, string]> = [];
   for (const e of l.edges) {
@@ -190,7 +193,12 @@ export function score(l: Layout): number[] {
     bends += (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * turns;
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
+    // Against the reading direction along the axis, or, inside one lane, from a lower row up to a higher one.
+    const from = byId.get(e.from);
+    const to = byId.get(e.to);
+    const upward = l.composition !== 'stages' && l.direction !== 'TD' && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
+    if (upward) folded++;
     for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
   // Edges against the reading direction that touch one another form a stream running backwards.
@@ -213,6 +221,7 @@ export function score(l: Layout): number[] {
     WEIGHTS.crossingMain * crossMain +
     WEIGHTS.crossing * crossOther +
     WEIGHTS.extraRow * extra +
+    WEIGHTS.upward * folded +
     WEIGHTS.back * against.length +
     WEIGHTS.backChain * chained +
     WEIGHTS.far * farness(l) +

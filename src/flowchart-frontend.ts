@@ -7,7 +7,7 @@ import { renderSvg } from './render/svg.ts';
 import { renderTextLayout } from './render/text.ts';
 import { cellWidth } from './metrics.ts';
 import type { Detail } from './text-detail.ts';
-import { descriptionList, narrowDescriptions, titlesOnly } from './text-detail.ts';
+import { descriptionList, innerWidth, innerWidths, titlesOnly, wrapGraph } from './text-detail.ts';
 import type { Graph, Layout } from './types.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
@@ -23,7 +23,7 @@ function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?
   };
 }
 
-/** The step a terminal drawing was made with: 1 all text, 2 narrower descriptions, 3 titles only, 4 titles only with the flow folded. */
+/** The step a terminal drawing was made with: 1 all text, 2 text wrapped narrower, 3 titles only, 4 titles only with the flow folded. */
 export type TextStep = 1 | 2 | 3 | 4;
 
 interface TextOptionsIn {
@@ -34,42 +34,85 @@ interface TextOptionsIn {
   detail?: Detail;
 }
 
-/** Draws a flowchart for a terminal: the fullest step whose drawing fits `maxWidth`; reports the layout and the step used. */
-export function drawText(src: string, maxWidth: number | undefined, opts: TextOptionsIn): { lines: string[]; layout: Layout; step: TextStep } {
+interface Attempt {
+  graph: Graph;
+  /** Inner width of the boxes (the widest text line). */
+  w: number;
+  list: boolean;
+}
+
+/**
+ * Draws a flowchart for a terminal. Steps 1 to 3 are tried in turn, each with box widths from wide to narrow, and the
+ * fullest one whose drawing fits `maxWidth` is used; step 4 folds the flow. Trying is done with quick drawings; the
+ * setting that fits is then drawn once with candidates and refinement. Reports the layout, the step and the inner width.
+ */
+export function drawText(src: string, maxWidth: number | undefined, opts: TextOptionsIn): { lines: string[]; layout: Layout; step: TextStep; w: number } {
   const { legend, maxHeight, engine, composition, detail = 'auto' } = opts;
   const full = parse(src);
-  // Each step is drawn to the end; the first whose drawing fits the width is used. Narrower steps show less text.
-  const steps = {
-    full: { graph: full, list: false, number: 1 as const },
-    narrow: { graph: narrowDescriptions(full), list: false, number: 2 as const },
-    title: { graph: titlesOnly(full), list: true, number: 3 as const },
+  const inner = innerWidth(full);
+  const widths = innerWidths(full);
+  const stepAttempts = {
+    full: [{ graph: full, w: inner, list: false }] as Attempt[],
+    narrow: widths.flatMap((w) => { const g = wrapGraph(full, w, true); return g ? [{ graph: g, w, list: false }] : []; }),
+    title: widths.flatMap((w) => { const g = wrapGraph(full, w, false); return g ? [{ graph: g, w, list: true }] : []; }),
   };
+  if (stepAttempts.title.length === 0) stepAttempts.title.push({ graph: titlesOnly(full), w: inner, list: true });
+  const numberOf = { full: 1, narrow: 2, title: 3 } as const;
   const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
-  const finish = (step: (typeof steps)[keyof typeof steps], fold: boolean, as: Composition | undefined = composition): { lines: string[]; layout: Layout; step: TextStep } => {
-    const laid = layout(step.graph, cellRuler(), {
+  const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition): { lines: string[]; layout: Layout } => {
+    const laid = layout(a.graph, cellRuler(), {
       ...layoutOptions({ legend, engine, composition: as }),
       ...(maxHeight === undefined ? {} : { maxHeight }),
       ...(maxWidth === undefined ? {} : { maxWidth }),
       fold,
+      ...(quick ? { quick: true, refine: false } : {}),
     });
     const drawn = renderTextLayout(laid);
-    const list = step.list && maxWidth !== undefined ? descriptionList(full, maxWidth) : [];
-    return { lines: list.length === 0 ? drawn : [...drawn, '', ...list], layout: laid, step: fold && maxWidth !== undefined ? 4 : step.number };
+    const list = a.list && maxWidth !== undefined ? descriptionList(full, maxWidth) : [];
+    return { lines: list.length === 0 ? drawn : [...drawn, '', ...list], layout: laid };
   };
-  if (maxWidth === undefined) return finish(steps[detail === 'auto' ? 'full' : detail], true);
-  // Steps 1 to 3 move blocks to other rows but cut no path; the fold of step 4 is the last resort.
-  for (const name of detail === 'auto' ? (['full', 'narrow', 'title'] as const) : ([detail] as const)) {
-    const got = finish(steps[name], false);
-    if (widest(got.lines) <= maxWidth) return got;
+  const result = (a: Attempt, step: TextStep, drawn: { lines: string[]; layout: Layout }): { lines: string[]; layout: Layout; step: TextStep; w: number } => ({ ...drawn, step, w: innerWidth(a.graph) });
+  const names = detail === 'auto' ? (['full', 'narrow', 'title'] as const) : ([detail] as const);
+  if (maxWidth === undefined) {
+    const a = stepAttempts[names[0]][0] as Attempt;
+    return result(a, numberOf[names[0]], draw(a, true, false));
   }
-  const narrowest = steps[detail === 'auto' ? 'title' : detail];
-  const folded = finish(narrowest, true);
+  // The widest setting of a step that fits: fitting grows as the boxes narrow, so a bisection finds it.
+  for (const name of names) {
+    const list = stepAttempts[name];
+    let lo = 0;
+    let hi = list.length - 1;
+    let found: { a: Attempt; quick: { lines: string[]; layout: Layout } } | undefined;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const a = list[mid] as Attempt;
+      const quick = draw(a, false, true);
+      if (widest(quick.lines) <= maxWidth) {
+        found = { a, quick };
+        hi = mid - 1;
+      } else lo = mid + 1;
+    }
+    if (!found) continue;
+    const heavy = draw(found.a, false, false);
+    return result(found.a, numberOf[name], widest(heavy.lines) <= maxWidth ? heavy : found.quick);
+  }
+  // Fold the flow at the narrowest boxes of the last step.
+  const narrowest = (stepAttempts[names[names.length - 1] as keyof typeof stepAttempts].at(-1)) as Attempt;
+  let drawn = draw(narrowest, true, true);
+  if (widest(drawn.lines) <= maxWidth) {
+    const heavy = draw(narrowest, true, false);
+    if (widest(heavy.lines) <= maxWidth) drawn = heavy;
+  }
   // Stages are columns and cannot fold; when they stay too wide the same graph is drawn as lanes.
-  if (widest(folded.lines) > maxWidth && folded.layout.composition === 'stages' && composition === undefined) {
-    const lanes = finish(narrowest, true, 'lanes');
-    if (widest(lanes.lines) < widest(folded.lines)) return lanes;
+  if (widest(drawn.lines) > maxWidth && drawn.layout.composition === 'stages' && composition === undefined) {
+    let lanes = draw(narrowest, true, true, 'lanes');
+    if (widest(lanes.lines) <= maxWidth) {
+      const heavy = draw(narrowest, true, false, 'lanes');
+      if (widest(heavy.lines) <= maxWidth) lanes = heavy;
+    }
+    if (widest(lanes.lines) < widest(drawn.lines)) drawn = lanes;
   }
-  return folded;
+  return result(narrowest, 4, drawn);
 }
 
 registerFrontEnd({

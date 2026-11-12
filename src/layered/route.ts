@@ -185,7 +185,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       if (real(n) || shift.has(n)) continue;
       const group = [n];
       while (!real(row[k + group.length] ?? 0) && row[k + group.length] !== undefined && start[row[k + group.length] as number] === start[n]) group.push(row[k + group.length] as number);
-      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * (ruler.uniform ? LINE_PITCH : ruler.trackGap))));
+      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * (ruler.uniform ? (ruler.linePitch ?? LINE_PITCH) : ruler.trackGap))));
     }
   }
   const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift.get(n) ?? 0));

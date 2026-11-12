@@ -4,7 +4,10 @@ import type { Graph } from './types.ts';
 /** How much of every box a terminal drawing keeps: all text, narrower description, or the title only. */
 export type Detail = 'auto' | 'full' | 'narrow' | 'title';
 
+const TITLE_LINES = 2;
 const DESCRIPTION_LINES = 3;
+/** Narrowest text width of a box the steps try. */
+const NARROWEST = 10;
 
 /** Breaks `text` into lines of at most `width` cells: at spaces, and inside a word only when the word is wider than a line. */
 export function wrapCells(text: string, width: number): string[] {
@@ -33,26 +36,31 @@ export function wrapCells(text: string, width: number): string[] {
   return out;
 }
 
-/** Description lines rewrapped to `width` cells, at most three; a longer text ends its third line with an ellipsis. */
-function rewrap(lines: string[], width: number): string[] {
-  const wrapped = wrapCells(lines.join(' '), width);
-  if (wrapped.length <= DESCRIPTION_LINES) return wrapped;
-  const kept = wrapped.slice(0, DESCRIPTION_LINES);
-  let last = kept[DESCRIPTION_LINES - 1] ?? '';
-  while (last !== '' && cellWidth(last) + 1 > width) last = last.slice(0, -1);
-  kept[DESCRIPTION_LINES - 1] = `${last}…`;
-  return kept;
+/** Width of the widest line of text in any box: the inner width of a box at step 1. */
+export function innerWidth(graph: Graph): number {
+  return Math.max(0, ...graph.nodes.flatMap((n) => [n.title, ...n.lines].map(cellWidth)));
 }
 
-/** Step 2: boxes as wide as the longest title, descriptions rewrapped to that width. */
-export function narrowDescriptions(graph: Graph): Graph {
-  const width = Math.max(1, ...graph.nodes.map((n) => cellWidth(n.title)));
-  return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, lines: rewrap(n.lines, width) })) };
+/** Inner widths the narrower steps try, widest first: two cells less than step 1, then two less each time, down to ten. */
+export function innerWidths(graph: Graph): number[] {
+  const out: number[] = [];
+  for (let w = innerWidth(graph) - 2; w >= NARROWEST; w -= 2) out.push(w);
+  return out;
 }
 
-/** Step 3: titles only. */
-export function titlesOnly(graph: Graph): Graph {
-  return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, lines: [] })) };
+/**
+ * Every title (at most two lines) and, when `describe`, every description (at most three) rewrapped to `width`
+ * cells; undefined when one of them needs more lines. Nothing is cut.
+ */
+export function wrapGraph(graph: Graph, width: number, describe: boolean): Graph | undefined {
+  const nodes = [];
+  for (const n of graph.nodes) {
+    const title = wrapCells(n.title, width);
+    const description = describe ? wrapCells(n.lines.join(' '), width) : [];
+    if (title.length > TITLE_LINES || description.length > DESCRIPTION_LINES) return undefined;
+    nodes.push({ ...n, title: title[0] ?? '', lines: [...title.slice(1), ...description] });
+  }
+  return { ...graph, nodes };
 }
 
 /** The descriptions step 3 leaves out, as `title: description` lines that fit `width` cells. */
@@ -62,4 +70,9 @@ export function descriptionList(graph: Graph, width: number): string[] {
     const wrapped = wrapCells(`${n.title}: ${n.lines.join(' ')}`, Math.max(3, width - 2));
     return wrapped.map((line, i) => (i === 0 ? line : `  ${line}`));
   });
+}
+
+/** Titles only, unwrapped: the fallback when no width lets every title fit in two lines. */
+export function titlesOnly(graph: Graph): Graph {
+  return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, lines: [] })) };
 }

@@ -136,7 +136,7 @@ describe('score', () => {
     expect(WEIGHTS.far).toBe(1);
   });
 
-  it('prices each place before the start node at two', () => {
+  it('prices each place before the start node at the start weight', () => {
     expect(cost(drawing(row, [cd])) - cost(drawing(row, [first]))).toBe(2 * WEIGHTS.start);
     expect(WEIGHTS.start).toBe(2);
   });

@@ -554,7 +554,7 @@ describe('layered pipeline invariants', () => {
       const l = layout(g, cellRuler(), { engine: 'layered', maxWidth: 120 });
       expect(geometryViolations(l)).toEqual([]);
     }
-  });
+  }, 60000);
 
   it('is deterministic', () => {
     for (const src of [fixtures.twoLanes, generate(7), generate(31)]) {

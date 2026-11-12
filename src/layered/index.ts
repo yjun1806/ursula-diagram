@@ -32,6 +32,8 @@ export interface LayeredOptions {
   questions?: boolean;
   /** Try small changes on the chosen drawing and keep those that measure better (on by default). */
   refine?: boolean;
+  /** Draw the first candidate only and refine nothing: the quick drawing that tells whether a setting fits. */
+  quick?: boolean;
   /** Cut paths and give up alignment when a drawing is still too wide after blocks moved to other rows (on by default). */
   fold?: boolean;
   /** Terminal only: the gap between neighbouring boxes in cells (3 holds one pass-through line, each further line adds 2); tried in turn when absent. */
@@ -86,7 +88,7 @@ function terminalRuler(r: Ruler, gap = 3): Ruler {
 
 /** Pass-through lines that fit side by side in one gap, each a track gap apart and clear of both boxes by half of that. */
 export function gapLines(ruler: Ruler, gap: number): number {
-  if (ruler.uniform) return Math.max(1, Math.floor((gap - 1) / LINE_PITCH));
+  if (ruler.uniform) return ruler.linePitch === 1 ? Math.max(1, gap) : Math.max(1, Math.floor((gap - 1) / LINE_PITCH));
   const fit = Math.floor(gap / ruler.trackGap + 1e-9);
   if (ruler.trackGap >= 2 * ruler.edgeGrid) return Math.max(1, fit);
   // On a coarse grid the lines sit on whole cells around the middle of the gap, so an odd count keeps them symmetric.
@@ -170,7 +172,7 @@ function paramsFor(graph: Graph, ruler: Ruler, limit: number | undefined, bounde
   const fixed = 2 * margin + frame.gutter + 2 * ruler.lanePad;
   const capacityUnits = bounded && limit !== undefined ? Math.max(2, Math.floor((limit - fixed + ruler.rankGap) / unit + 1e-9)) : Infinity;
   // The last line of a layer may sit in the gap after the last box, half a gap beyond it, plus its side offset.
-  const sideOffset = ((gapLines(ruler, ruler.rankGap) - 1) / 2) * (ruler.uniform ? LINE_PITCH : ruler.trackGap);
+  const sideOffset = ((gapLines(ruler, ruler.rankGap) - 1) / 2) * (ruler.uniform ? (ruler.linePitch ?? LINE_PITCH) : ruler.trackGap);
   const dummyEnd = bounded && limit !== undefined ? Math.floor((limit - fixed + ruler.rankGap / 2 - sideOffset) / unit + 1e-9) : Infinity;
   const dummyShift = Number.isFinite(dummyEnd) ? Math.min(1, Math.max(0, capacityUnits - dummyEnd)) : 0;
   return { frame, common, baseUnits, unit, capacityUnits, dummyShift };
@@ -194,7 +196,14 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   // Every way to fit is drawn and scored: bends and crossings, and a heavy price for each added row.
   const price = (p: Placed): number => {
     const l = route(frame, p.ladder, p.layers, p.start, p.plan);
-    return l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0) + 6 * l.diagnostics.filter((d) => d.kind === 'crossing').length + 2 * p.layers.length;
+    // An edge inside a lane that runs from a lower row up to a higher one reads against the folded flow.
+    const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
+    const upward = l.edges.filter((e) => {
+      const a = byId.get(e.from);
+      const b = byId.get(e.to);
+      return a !== undefined && b !== undefined && a !== b && a.lane === b.lane && !td && b.y < a.y - 0.5;
+    }).length;
+    return l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0) + 6 * l.diagnostics.filter((d) => d.kind === 'crossing').length + 2 * p.layers.length + 6 * upward;
   };
   // Remedies in a fixed order, each tried only when the one before is not enough: blocks move whole to other rows
   // (free cells, stacking, shelves), then paths are cut, then alignment gives way. Variants of one step are scored.
@@ -243,8 +252,10 @@ interface Prep {
 }
 
 function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant): Prep {
-  const base = layeredRuler(given, opts.gap);
   const td = graph.direction === 'TD';
+  const tuned = layeredRuler(given, opts.gap);
+  // Terminal stages stack boxes in a column: the lines that cross the gap between them stand on adjacent rows.
+  const base = tuned.uniform && td && apart ? { ...tuned, linePitch: 1 } : tuned;
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
   const bounded = limit !== undefined && Number.isFinite(limit);
   let solved = solve(graph, base, limit, bounded, true, apart, variant);
@@ -352,6 +363,17 @@ function withQuestions(source: Graph, drawn: Layout, given: Ruler, opts: Layered
 /** Gaps a terminal drawing is tried with: one pass-through line per gap, then two, then three. */
 const TERMINAL_GAPS = [3, 5, 7];
 
+/** Stages of a left-to-right text: columns of stacked boxes, whose gap is one row (or two, when the box height is even) and grows by two. */
+function stagesTall(source: Graph, opts: LayeredOptions): boolean {
+  return source.direction === 'LR' && planZones(source, opts.composition ?? 'auto').composition === 'stages';
+}
+
+function stackGaps(source: Graph): number[] {
+  const height = Math.max(0, ...source.nodes.map((n) => 3 + n.lines.length));
+  const first = height % 2 === 1 ? 1 : 2;
+  return [first, first + 2, first + 4];
+}
+
 export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions = {}): Layout {
   if (!given.terminal || opts.gap !== undefined) return withQuestions(source, layoutAt(source, given, opts), given, opts);
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
@@ -359,13 +381,16 @@ export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions 
   const limit = opts.maxWidth;
   const fits = (d: Layout): boolean => limit !== undefined && Number.isFinite(limit) && d.width <= limit;
   let best: { drawn: Layout; gap: number } | undefined;
-  for (const gap of TERMINAL_GAPS) {
-    const drawn = layoutAt(source, given, { ...opts, gap });
+  const gaps = stagesTall(source, opts) ? stackGaps(source) : TERMINAL_GAPS;
+  for (const gap of gaps) {
+    // The gap is chosen on quick drawings; the full drawing is made once, with that gap.
+    const drawn = layoutAt(source, given, { ...opts, gap, quick: true, refine: false });
     if (best === undefined || drawn.width < best.drawn.width) best = { drawn, gap };
     if (fits(best.drawn)) break;
   }
   const chosen = best as { drawn: Layout; gap: number };
-  return withQuestions(source, chosen.drawn, given, { ...opts, gap: chosen.gap });
+  const final = opts.quick ? chosen.drawn : layoutAt(source, given, { ...opts, gap: chosen.gap });
+  return withQuestions(source, final, given, { ...opts, gap: chosen.gap });
 }
 
 /** Places given rows at the smallest rank gap, for changes that need more room; undefined when the gap cannot shrink. */
@@ -379,11 +404,11 @@ function tightPlacer(p: Prep): ((rows: Rows) => Placed) | undefined {
 
 /** Lanes: every candidate is drawn to the end and measured, the best is refined by small changes. */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
-  const preps = CANDIDATES.map((v) => prepare(graph, given, opts, false, v));
+  const preps = (opts.quick ? CANDIDATES.slice(0, 1) : CANDIDATES).map((v) => prepare(graph, given, opts, false, v));
   // Drawings with and without one-bend edges both compete.
-  const shapes = opts.elbows === false ? [false] : [true, false];
+  const shapes = opts.elbows === false ? [false] : opts.quick ? [true] : [true, false];
   const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));
-  if (opts.refine === false) return pickBest(drawn);
+  if (opts.refine === false || opts.quick) return pickBest(drawn);
   // Every candidate is also refined by small changes; the best of all finished drawings is kept.
   const refined = [false, true].flatMap((crossingsFirst) =>
     preps.flatMap((p) => {
