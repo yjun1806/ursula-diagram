@@ -161,29 +161,32 @@ describe('boxes in text', () => {
 describe('a subgraph of a flowchart', () => {
   const body = '\n  subgraph one [First]\n    a[Start] --> b[Check]\n  end\n  subgraph two [Second]\n    c[Finish]\n  end\n  b --> c';
 
-  it('is a box in a flowchart and in a graph, however plain', () => {
+  it('is a band of one layout in a flowchart and in a graph when it is plain, marked as a part of the flow', () => {
     for (const header of ['flowchart LR', 'flowchart TD', 'graph LR', 'graph']) {
       const g = parse(`${header}${body}`);
-      expect(g.clusters?.map((c) => c.id), header).toEqual(['one', 'two']);
-      expect(g.lanes).toHaveLength(1);
+      expect(g.clusters, header).toBeUndefined();
+      expect(g.lanes.map((l) => l.id), header).toEqual(['one', 'two']);
+      expect(g.zones, header).toBe('groups');
     }
   });
 
-  it('is a band only under swimlane-beta', () => {
+  it('is a band of an owner under swimlane-beta', () => {
     const g = parse(`swimlane-beta LR${body}`);
     expect(g.clusters).toBeUndefined();
     expect(g.lanes.map((l) => l.id)).toEqual(['one', 'two']);
+    expect(g.zones).toBeUndefined();
   });
 
   it('keeps a left to right flow left to right', () => {
     const l = drawn('flowchart LR\n  subgraph one\n    a --> b\n  end\n  subgraph two\n    c --> d\n  end\n  b --> c');
-    const box = (id: string): LayoutCluster => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
-    expect(box('one').x + box('one').w).toBeLessThanOrEqual(box('two').x);
+    const band = (id: string): { x: number; w: number } => l.lanes.find((c) => c.id === id) as { x: number; w: number };
+    expect(l.composition).toBe('stages');
+    expect(band('one').x + band('one').w).toBeLessThanOrEqual(band('two').x);
   });
 });
 
 describe('a line that goes into a box', () => {
-  const src = 'flowchart LR\n  Client --> Create\n  subgraph Core\n    Create --> Read\n    Create --> Update\n    Create --> Delete\n  end';
+  const src = 'flowchart LR\n  Client --> Create\n  subgraph Core\n    direction LR\n    Create --> Read\n    Create --> Update\n    Create --> Delete\n  end';
   const l = drawn(src);
   const node = (id: string): { x: number; y: number; w: number; h: number } => l.nodes.find((n) => n.id === id) as { x: number; y: number; w: number; h: number };
 

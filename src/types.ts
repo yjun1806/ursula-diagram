@@ -140,6 +140,11 @@ export interface Graph {
   /** Statements that were read and left out of the drawing (classes and styles, edge animations). */
   ignored?: string[];
   lanes: Lane[];
+  /**
+   * `groups` when the lanes are the subgraphs of a flowchart: they are parts of the flow, not owners, so an automatic
+   * composition lays them one after another along the reading direction in the order they are written.
+   */
+  zones?: 'groups';
   /** Clusters drawn as boxes. The `from` and `to` of an edge may name one; a node names its innermost one in `cluster`. */
   clusters?: GraphCluster[];
   nodes: GraphNode[];

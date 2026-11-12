@@ -611,12 +611,10 @@ export function parse(src: string): Graph {
 }
 
 /**
- * Whether the subgraphs are drawn as boxes. In a `flowchart` or `graph` every subgraph is a box. In a `swimlane-beta`
- * they are boxes only when some subgraph holds another, has a direction of its own, or is the end of an edge;
- * otherwise they are bands (lanes).
+ * Whether the subgraphs are drawn as cluster boxes laid out one by one: only when some subgraph holds another, has a
+ * direction of its own, or is the end of an edge. Otherwise they are bands (lanes) of one layout.
  */
 function needsBoxes(st: State): boolean {
-  if (!st.swimlane) return st.lanes.length > 0;
   const ids = new Set(st.lanes.map((l) => l.id));
   return [...st.groups.values()].some((g) => g.parent !== undefined || g.direction !== undefined) || st.edges.some((e) => ids.has(e.from) || ids.has(e.to));
 }
@@ -681,6 +679,7 @@ function finish(st: State): Graph {
     ...(st.mirror === undefined ? {} : { mirror: st.mirror }),
     ...(st.ignored.length === 0 ? {} : { ignored: st.ignored }),
     lanes,
+    ...(!st.swimlane && explicit.length > 0 ? { zones: 'groups' as const } : {}),
     nodes: nodes.map((n) => ({
       id: n.id,
       title: n.title,
