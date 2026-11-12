@@ -27,6 +27,7 @@ import './treemap/frontend.ts';
 import './venn/frontend.ts';
 import './c4/frontend.ts';
 import './xychart/frontend.ts';
+import './zenuml/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
 
