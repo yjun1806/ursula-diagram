@@ -6,7 +6,8 @@ export type EdgeStyle = 'normal' | 'thick' | 'dotted';
 /**
  * What sits at an end of a line: an arrowhead, a dot, a cross, or nothing; or one of the marks of a record diagram.
  * `triangle-open`, `diamond-filled`, `diamond-open` and `arrow-open` are relation marks (inheritance, composition,
- * aggregation, dependency); `one`, `zero-one`, `many`, `one-many` and `zero-many` are the crow's-foot counts.
+ * aggregation, dependency); `one`, `zero-one`, `many`, `one-many` and `zero-many` are the crow's-foot counts;
+ * `circle-plus` is a ring with a cross (containment); `lollipop` is a ring at the end of a short stub (see `GraphEdge`).
  */
 export type EdgeEnd =
   | 'arrow'
@@ -21,7 +22,9 @@ export type EdgeEnd =
   | 'zero-one'
   | 'many'
   | 'one-many'
-  | 'zero-many';
+  | 'zero-many'
+  | 'circle-plus'
+  | 'lollipop';
 
 export interface Lane {
   id: string;
@@ -57,6 +60,22 @@ export interface Compartment {
   align?: 'center' | 'left';
   /** `title`: bold; `tag`: small and muted; `body`: regular. The head is a title, the others are bodies. */
   emphasis?: 'title' | 'tag' | 'body';
+  /** Look of each line, by index, when the lines of one band differ (a `tag` line over a `title`); a line without an entry takes `emphasis`. */
+  lineEmphasis?: Array<'title' | 'tag' | 'body'>;
+  /**
+   * Cells of each line, by index: when present, the lines of the band are split into columns that line up (a column is as
+   * wide as its widest cell, with 16 between columns; a column with no text is left out). `lines` keeps the cells joined
+   * for the readers that draw lines only.
+   */
+  columns?: string[][];
+  /** Look of each column of `columns`, by index (a key column in the small muted type); a column without an entry takes the look of its line. */
+  columnEmphasis?: Array<'title' | 'tag' | 'body'>;
+}
+
+/** A note that stands beside the node it belongs to; the layout puts it on the same layer, in the neighbouring place on `side` (`over`: above it). */
+export interface Attachment {
+  to: string;
+  side: 'left' | 'right' | 'over';
 }
 
 export interface GraphNode {
@@ -73,6 +92,8 @@ export interface GraphNode {
   shapeAsked?: string;
   /** A box divided by rules; when present it is drawn instead of `title` and `lines`. */
   compartments?: Compartment[];
+  /** Set on a note: it is not laid out with the others but stands beside `attach.to` once the rest is placed. */
+  attach?: Attachment;
 }
 
 /** A group of nodes drawn as a box around them; clusters nest through `parent`. */
@@ -95,7 +116,12 @@ export interface GraphEdge {
   id?: string;
   /** What sits at the start of the line; absent when nothing does. */
   startEnd?: EdgeEnd;
-  /** What sits at the end of the line; absent in a graph that was not read from text, where an arrowhead is drawn. */
+  /**
+   * What sits at the end of the line; absent in a graph that was not read from text, where an arrowhead is drawn.
+   * `lollipop` is not a line between two boxes: the edge leaves `from` as a short stub that ends in a ring, `to` equals
+   * `from`, and `endLabel` names the interface beside the ring. The layout leaves it out of the arrangement and draws
+   * the stub on a free side of `from` afterwards.
+   */
   end?: EdgeEnd;
   /** Laid out but not drawn (`A ~~~ B`). */
   invisible?: true;
@@ -201,7 +227,7 @@ export interface LayoutEdge {
   endLabel?: EndLabel;
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'attach-overlap' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {

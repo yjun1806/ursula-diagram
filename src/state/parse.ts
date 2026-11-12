@@ -270,10 +270,12 @@ export function parseState(src: string): StateParsed {
     const cluster = parentOf(id);
     finished.push({ id, title: titleOf(id), lines: [], shape: 'round', lane: LANE, ...(cluster === undefined ? {} : { cluster }) });
   }
+  const boxes = new Set(finished.map((n) => n.id));
   for (const n of notes) {
-    finished.push({ id: n.id, title: '', lines: n.lines, shape: 'note', lane: LANE, ...(n.cluster === undefined ? {} : { cluster: n.cluster }) });
-    // The note stands before its target on the left and after it on the right.
-    edges.push(n.side === 'left' ? { from: n.id, to: n.target, style: 'dotted', end: 'none' } : { from: n.target, to: n.id, style: 'dotted', end: 'none' });
+    // A note stands beside its state, on the side it names. A note on a composite state that is drawn as a box around others has no box to stand beside, so it is joined by a line.
+    const beside = boxes.has(n.target);
+    finished.push({ id: n.id, title: '', lines: n.lines, shape: 'note', lane: LANE, ...(n.cluster === undefined ? {} : { cluster: n.cluster }), ...(beside ? { attach: { to: n.target, side: n.side } } : {}) });
+    if (!beside) edges.push(n.side === 'left' ? { from: n.id, to: n.target, style: 'dotted', end: 'none' } : { from: n.target, to: n.id, style: 'dotted', end: 'none' });
   }
   const liveClusters = [...clusters.values()]
     .filter((c) => alive.has(c.id))

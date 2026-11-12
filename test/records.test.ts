@@ -427,3 +427,200 @@ describe('a mirrored drawing', () => {
     expect(start.x + start.w).toBeLessThanOrEqual(first.x + EPS);
   });
 });
+
+describe('shapes of the lines of a band', () => {
+  const tagged: Compartment[] = [{ lines: ['«interface»', 'Payment'], lineEmphasis: ['tag', 'title'], align: 'center' }, { lines: ['+pay()'] }];
+  const lone = (): Graph => graphOf('LR', [{ ...box('P', 'Payment'), compartments: tagged }], []);
+
+  it('draws each line in its own look: the tag small and muted, the name bold', () => {
+    const svg = renderSvg(layout(lone(), px), { legend: false });
+    expect(svg).toMatch(/<text class="ursula-cell-tag"[^>]*>«interface»<\/text>/);
+    expect(svg).toMatch(/<text class="ursula-cell-title"[^>]*>Payment<\/text>/);
+    expect(svg).toMatch(/<text class="ursula-cell-body"[^>]*>\+pay\(\)<\/text>/);
+  });
+
+  it('measures a title line in the bold face and a tag line in the plain one', () => {
+    const name = 'WWWWWWWWWWWWWWWWWWWW';
+    const asTitle = recordWidth([{ lines: [name], lineEmphasis: ['title'] }], px);
+    const asTag = recordWidth([{ lines: [name], lineEmphasis: ['tag'] }], px);
+    expect(asTitle).toBeGreaterThan(asTag);
+  });
+
+  it('gives the head a line for the tag on top of the lines of the name', () => {
+    expect(compartmentHeights(tagged, px)).toEqual([60, 36]);
+  });
+});
+
+describe('bands with columns', () => {
+  const rows = [['int', 'id', 'PK', ''], ['string', 'name', '', '"label"']];
+  const band: Compartment = { lines: ['int  id  PK', 'string  name  "label"'], columns: rows };
+  const entity = (): Graph => graphOf('LR', [{ ...box('E', 'E'), compartments: [{ lines: ['E'] }, band] }], []);
+
+  it('is as wide as its columns (the widest cell of each) and 16 between them', () => {
+    const w = (s: string): number => px.textWidth(s, 'line');
+    const text = w('string') + w('name') + w('PK') + w('"label"') + 3 * 16;
+    expect(recordWidth([{ lines: ['E'] }, band], px)).toBe(Math.max(120, Math.ceil((text + 32) / 4 - 1e-9) * 4));
+  });
+
+  it('leaves a column with no text out, with its gap', () => {
+    const noKeys: Compartment = { lines: ['int  id', 'string  name'], columns: [['int', 'id', ''], ['string', 'name', '']] };
+    const w = (s: string): number => px.textWidth(s, 'line');
+    expect(recordWidth([{ lines: ['E'] }, noKeys], px)).toBe(Math.max(120, Math.ceil((w('string') + w('name') + 16 + 32) / 4 - 1e-9) * 4));
+  });
+
+  it('lines the cells of a column up at one x, in every row', () => {
+    const l = layout(entity(), px);
+    const svg = renderSvg(l, { legend: false });
+    const xOf = (text: string): number => Number(new RegExp(`<text class="ursula-cell-body" x="([\\d.]+)"[^>]*>${text}</text>`).exec(svg)?.[1]);
+    const n = nodeOf(l, 'E');
+    expect(xOf('int')).toBe(n.x + 16);
+    expect(xOf('int')).toBe(Math.min(xOf('int'), xOf('string')));
+    expect(xOf('id') - xOf('int')).toBe(px.textWidth('string', 'line') + 16);
+    expect(xOf('name')).toBe(xOf('id'));
+  });
+
+  it('lines the cells up in the text drawing as well', () => {
+    const lines = renderTextLayout(layout(entity(), cells, { maxWidth: 100 }));
+    const row = (text: string): string => lines.find((x) => x.includes(text)) as string;
+    expect(row('int').indexOf('id')).toBe(row('string').indexOf('name'));
+  });
+});
+
+describe('the end with a circle and a plus', () => {
+  it('stops the line 12 short of a ring of 12 across, in each theme', () => {
+    for (const theme of THEMES) {
+      const l = layout(pair('circle-plus', 'none'), px);
+      const svg = renderSvg(l, { theme, legend: false });
+      expect(svg).toContain('<marker id="ursula-end-circle-plus"');
+      expect(svg).toContain('<circle class="ursula-end-hollow" cx="6" cy="0" r="6"/>');
+      expect(svg).toContain('M6 -6V6M0 0H12');
+      const first = (l.edges[0] as LayoutEdge).points[0] as Point;
+      expect(Math.hypot(first.x - head(pathsOf(svg)[0] as string).x, first.y - head(pathsOf(svg)[0] as string).y)).toBeCloseTo(12, 5);
+    }
+  });
+
+  it('is written ⊕ in the text drawing', () => {
+    expect(markGlyphs('circle-plus', 'right')).toEqual(['⊕']);
+    expect(renderTextLayout(layout(pair('circle-plus', 'none'), cells, { maxWidth: 60 })).join('\n')).toContain('⊕');
+  });
+});
+
+describe('the interface on a stub', () => {
+  const stubbed = (extra: Partial<Parameters<typeof link>[3]> = {}): Graph =>
+    graphOf('TD', [box('A', 'A', ['+x']), box('B', 'B', ['+y'])], [link('A', 'B', 'arrow'), { from: 'B', to: 'B', style: 'normal', end: 'lollipop', endLabel: 'Runnable', ...extra }]);
+
+  it('is no box: the nodes are the same as without it', () => {
+    expect(layout(stubbed(), px).nodes.map((n) => n.id)).toEqual(['A', 'B']);
+  });
+
+  it('is a line of 24 and a ring of 12 from a face of its class, with the name beside the ring', () => {
+    const l = layout(stubbed(), px);
+    const stub = l.edges.find((e) => e.end === 'lollipop') as LayoutEdge;
+    const [a, b] = stub.points as [Point, Point];
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBe(36);
+    const n = nodeOf(l, 'B');
+    const onFace = [Math.abs(a.y - n.y), Math.abs(a.y - n.y - n.h), Math.abs(a.x - n.x), Math.abs(a.x - n.x - n.w)].some((d) => d < EPS);
+    expect(onFace).toBe(true);
+    expect((stub.endLabel as NonNullable<LayoutEdge['endLabel']>).text).toBe('Runnable');
+    const svg = renderSvg(l, { legend: false });
+    expect(svg).toContain('marker-end="url(#ursula-end-lollipop)"');
+    expect(svg).toContain('>Runnable</text>');
+  });
+
+  it('keeps clear of boxes and of the other lines, and inside the drawing', () => {
+    const l = layout(stubbed(), px);
+    const stub = l.edges.find((e) => e.end === 'lollipop') as LayoutEdge;
+    expect(l.diagnostics.map((d) => d.kind)).not.toContain('attach-overlap');
+    const text = stub.endLabel as NonNullable<LayoutEdge['endLabel']>;
+    for (const n of l.nodes) expect(rectsOverlap(text, n)).toBe(false);
+    for (const p of stub.points) expect(p.x >= 0 && p.y >= 0 && p.x <= l.width && p.y <= l.height).toBe(true);
+    expect(text.x >= 0 && text.y >= 0 && text.x + text.w <= l.width && text.y + text.h <= l.height).toBe(true);
+  });
+
+  it('puts two stubs of one class on different places', () => {
+    const g = stubbed();
+    const l = layout({ ...g, edges: [...g.edges, { from: 'B', to: 'B', style: 'normal', end: 'lollipop', endLabel: 'Closeable' }] }, px);
+    const stubs = l.edges.filter((e) => e.end === 'lollipop');
+    expect(stubs).toHaveLength(2);
+    expect(JSON.stringify((stubs[0] as LayoutEdge).points)).not.toBe(JSON.stringify((stubs[1] as LayoutEdge).points));
+    expect(rectsOverlap((stubs[0] as LayoutEdge).endLabel as NonNullable<LayoutEdge['endLabel']>, (stubs[1] as LayoutEdge).endLabel as NonNullable<LayoutEdge['endLabel']>)).toBe(false);
+  });
+
+  it('is written as a ring and its name in the text drawing', () => {
+    const text = renderTextLayout(layout(stubbed(), cells, { maxWidth: 80 })).join('\n');
+    expect(text).toContain('○');
+    expect(text).toContain('Runnable');
+  });
+});
+
+describe('notes that stand beside their node', () => {
+  const noted = (side: 'left' | 'right' | 'over'): Graph => ({
+    ...graphOf(side === 'over' ? 'LR' : 'TD', [shaped('a', 'rect', 'Alpha'), shaped('b', 'rect', 'Beta'), { ...shaped('n', 'note'), title: '', lines: ['A note'], attach: { to: 'b', side } }], [link('a', 'b', 'arrow')]),
+  });
+
+  it('puts the note on the side the node asked for, in line with its node, with the dotted line between', () => {
+    for (const side of ['left', 'right'] as const) {
+      const l = layout(noted(side), px);
+      const n = nodeOf(l, 'n');
+      const b = nodeOf(l, 'b');
+      expect(n.y + n.h / 2).toBeCloseTo(b.y + b.h / 2, 5);
+      if (side === 'left') expect(n.x + n.w).toBeLessThan(b.x);
+      else expect(n.x).toBeGreaterThan(b.x + b.w);
+      const line = l.edges.find((e) => e.style === 'dotted') as LayoutEdge;
+      expect(line.points).toHaveLength(2);
+      expect(l.diagnostics.map((d) => d.kind)).not.toContain('attach-overlap');
+      expect(geometryViolations(l)).toEqual([]);
+    }
+  });
+
+  it('puts a note over its node above it, centred', () => {
+    const l = layout(noted('over'), px);
+    const n = nodeOf(l, 'n');
+    const b = nodeOf(l, 'b');
+    expect(n.y + n.h).toBeLessThan(b.y);
+    expect(n.x + n.w / 2).toBeCloseTo(b.x + b.w / 2, 5);
+  });
+
+  it('keeps every box inside the drawing, and apart', () => {
+    for (const side of ['left', 'right', 'over'] as const) {
+      const l = layout(noted(side), px);
+      for (const n of l.nodes) expect(n.x >= 0 && n.y >= 0 && n.x + n.w <= l.width + EPS && n.y + n.h <= l.height + EPS).toBe(true);
+      for (const [i, n] of l.nodes.entries()) for (const o of l.nodes.slice(i + 1)) expect(rectsOverlap(n, o)).toBe(false);
+    }
+  });
+
+  it('slides a note away from its node when the place beside it is taken', () => {
+    const g = noted('right');
+    const crowded = { ...g, nodes: [...g.nodes, { ...shaped('n2', 'note'), title: '', lines: ['Second'], attach: { to: 'b', side: 'right' as const } }] };
+    const l = layout(crowded, px);
+    expect(rectsOverlap(nodeOf(l, 'n'), nodeOf(l, 'n2'))).toBe(false);
+  });
+});
+
+describe('a rounded box', () => {
+  it('is at least 80 wide, so that a one-letter name is not a circle', () => {
+    const l = layout(graphOf('TD', [shaped('a', 'round', 'A'), shaped('b', 'round', 'B')], [link('a', 'b', 'arrow')]), px);
+    for (const id of ['a', 'b']) expect(nodeOf(l, id).w).toBeGreaterThanOrEqual(80);
+  });
+});
+
+describe('the rules between bands on a white face', () => {
+  it('are hairlines in a box that stands in a zone, not a white gap', () => {
+    const svg = renderSvg(layout(inheritance(), px), { theme: 'solid', legend: false });
+    expect(svg).toContain('.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#ecebf1);stroke-width:1}');
+    expect(svg).toContain('.ursula-rule{fill:none;stroke:var(--ursula-zone,#ffffff);stroke-width:2}');
+  });
+});
+
+describe('the small texts at the ends of a line in the text drawing', () => {
+  it('stand beside their own end: the first at the start box, the last at the end box', () => {
+    const g = graphOf('TD', [shaped('a', 'rect', 'Alpha'), shaped('b', 'rect', 'Beta')], [link('a', 'b', 'arrow', { startLabel: 'S', endLabel: 'E' })]);
+    const rows = renderTextLayout(layout(g, cells, { maxWidth: 40 }));
+    const at = (t: string): number => rows.findIndex((r) => r.includes(t) && !r.includes('Alpha') && !r.includes('Beta'));
+    const alpha = rows.findIndex((r) => r.includes('Alpha'));
+    const beta = rows.findIndex((r) => r.includes('Beta'));
+    expect(at('S')).toBeGreaterThan(alpha);
+    expect(at('S')).toBeLessThan(at('E'));
+    expect(at('E')).toBeLessThan(beta);
+  });
+});

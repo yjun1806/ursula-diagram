@@ -93,9 +93,14 @@ export function placeEndLabels(edges: LayoutEdge[], texts: ReadonlyArray<EndText
             ? side.y > 0
               ? far(at.y, 1) + around
               : at.y - around - h
-            : u.y > 0
-              ? far(at.y, 1) + along
-              : at.y - along - h;
+            : cells
+              ? // A terminal line is a few cells long: the text stands beside the cell of its own end, then slides inward.
+                u.y > 0
+                ? at.y + k * PUSH_CELLS
+                : at.y - k * PUSH_CELLS - (h - 1)
+              : u.y > 0
+                ? at.y + along
+                : at.y - along - h;
           candidates.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, w, h });
         }
       }

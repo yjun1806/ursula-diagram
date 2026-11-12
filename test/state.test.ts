@@ -297,7 +297,7 @@ describe('state diagram: reading', () => {
     expect(graph.nodes.find((n) => n.id === 'CapsLockOff')?.cluster).toBe(regions[1]?.id);
   });
 
-  it('reads fork, join and choice shapes, and notes with a dotted line', () => {
+  it('reads fork, join and choice shapes, and notes that stand beside their state', () => {
     const f = parseState(FORK).graph;
     expect(f.nodes.find((n) => n.id === 'fork_state')?.shape).toBe('bar');
     expect(f.nodes.find((n) => n.id === 'if_state')?.shape).toBe('diamond');
@@ -305,7 +305,8 @@ describe('state diagram: reading', () => {
     const n = parseState(NOTES).graph;
     const notes = n.nodes.filter((x) => x.shape === 'note');
     expect(notes.map((x) => x.lines)).toEqual([['Important information! You can write', 'notes.'], ['This is the note to the left.']]);
-    expect(n.edges.filter((e) => e.style === 'dotted' && e.end === 'none')).toHaveLength(2);
+    expect(notes.map((x) => x.attach)).toEqual([{ to: 'State1', side: 'right' }, { to: 'State2', side: 'left' }]);
+    expect(n.edges.filter((e) => e.style === 'dotted')).toHaveLength(0);
   });
 
   it('reads direction, a quoted name, styles and ::: classes', () => {

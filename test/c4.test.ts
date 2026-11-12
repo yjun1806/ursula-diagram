@@ -284,10 +284,12 @@ describe('c4 reading', () => {
     expect(node?.kind).toContain('Google Chrome');
   });
 
-  it('builds a box with tag, name and body for each element', () => {
+  it('builds a box with a head holding the tag over the name, and a body, for each element', () => {
     const g = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler());
     const node = g.nodes.find((n) => n.id === 'SystemE');
-    expect(node?.compartments?.map((c) => c.lines[0])).toEqual(['[External System Database]', 'Mainframe Banking System', expect.any(String)]);
+    expect(node?.compartments?.map((c) => c.lines[0])).toEqual(['[External System Database]', expect.any(String)]);
+    expect(node?.compartments?.[0]?.lines).toEqual(['[External System Database]', 'Mainframe Banking System']);
+    expect(node?.compartments?.[0]?.lineEmphasis).toEqual(['tag', 'title']);
     expect(g.clusters?.find((c) => c.id === 'b0')?.label).toBe('BankBoundary0 · Enterprise_Boundary');
   });
 

@@ -10,6 +10,11 @@ export const COMPARTMENT_SIDE = 32;
 export const COMPARTMENT_MIN_W = 120;
 /** Pixels: distance from the left edge of a box to the text of a left-aligned compartment. */
 export const COMPARTMENT_INSET = 16;
+/** Distance between two columns of a band: in pixels, and in terminal cells. */
+export const COLUMN_GAP = 16;
+export const COLUMN_GAP_CELLS = 2;
+/** Pixels: least width of a rounded box, so that a one-letter name is not drawn as a circle. */
+export const ROUND_MIN_W = 80;
 
 /** Pixels: diameter of the start dot, and of the ring and the dot of the end mark. */
 export const START_DOT = 16;
@@ -42,11 +47,40 @@ interface WithCompartments {
 
 export const hasCompartments = (n: WithCompartments): n is { compartments: readonly Compartment[] } => (n.compartments?.length ?? 0) > 0;
 
-const isHead = (c: Compartment, i: number): boolean => (c.emphasis ?? (i === 0 ? 'title' : 'body')) === 'title';
+/** How a line of a band is drawn: its own entry, else the band's, else the head is a title and the others are bodies. */
+export const lineEmphasis = (c: Compartment, line: number, band: number): 'title' | 'tag' | 'body' => c.lineEmphasis?.[line] ?? c.emphasis ?? (band === 0 ? 'title' : 'body');
 
-/** Width of the text of a compartment's widest line, in the ruler's unit. */
+/** Width of the text of one cell or line, in the ruler's unit. */
+const cellWidth = (text: string, emphasis: 'title' | 'tag' | 'body', ruler: Ruler): number => ruler.textWidth(text, emphasis === 'title' ? 'title' : 'line');
+
+/**
+ * The width of each column of a band that has `columns`: the widest cell of the column, and 0 for a column with no text.
+ * A band without `columns` has none.
+ */
+export function columnWidths(c: Compartment, ruler: Ruler): number[] {
+  const rows = c.columns ?? [];
+  const count = Math.max(0, ...rows.map((r) => r.length));
+  return Array.from({ length: count }, (_, k) => Math.max(0, ...rows.map((r, i) => (r[k] === undefined || r[k] === '' ? 0 : cellWidth(r[k] as string, lineEmphasis(c, i, 1), ruler)))));
+}
+
+/** Where each column of a band starts, from the left edge of its text; a column with no text takes no room and no gap. */
+export function columnStarts(c: Compartment, ruler: Ruler): number[] {
+  const gap = ruler.terminal === true ? COLUMN_GAP_CELLS : COLUMN_GAP;
+  let at = 0;
+  return columnWidths(c, ruler).map((w) => {
+    const start = at;
+    if (w > 0) at += w + gap;
+    return start;
+  });
+}
+
+/** Width of the text of a band: its columns side by side, or its widest line. */
 function widest(c: Compartment, i: number, ruler: Ruler): number {
-  return Math.max(0, ...c.lines.map((line) => ruler.textWidth(line, isHead(c, i) ? 'title' : 'line')));
+  if (c.columns !== undefined) {
+    const widths = columnWidths(c, ruler).filter((w) => w > 0);
+    return widths.reduce((a, b) => a + b, 0) + Math.max(0, widths.length - 1) * (ruler.terminal === true ? COLUMN_GAP_CELLS : COLUMN_GAP);
+  }
+  return Math.max(0, ...c.lines.map((line, k) => cellWidth(line, lineEmphasis(c, k, i), ruler)));
 }
 
 /** Height of every compartment of a box; a terminal box gives each at least one row. */

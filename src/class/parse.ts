@@ -30,8 +30,8 @@ const NOTE = /^note\s+"(.*)"\s*$/u;
 const DIRECTION = /^direction\s+(LR|RL|TB|TD|BT)\s*$/u;
 const IGNORED = /^(click|link|callback|style|classDef|cssClass)(\s|$)/u;
 
-const START_ENDS: Readonly<Record<string, EdgeEnd>> = { '<|': 'triangle-open', '*': 'diamond-filled', o: 'diamond-open', '<': 'arrow-open', '()': 'circle' };
-const FINISH_ENDS: Readonly<Record<string, EdgeEnd>> = { '|>': 'triangle-open', '*': 'diamond-filled', o: 'diamond-open', '>': 'arrow-open', '()': 'circle' };
+const START_ENDS: Readonly<Record<string, EdgeEnd>> = { '<|': 'triangle-open', '*': 'diamond-filled', o: 'diamond-open', '<': 'arrow-open' };
+const FINISH_ENDS: Readonly<Record<string, EdgeEnd>> = { '|>': 'triangle-open', '*': 'diamond-filled', o: 'diamond-open', '>': 'arrow-open' };
 
 const isWord = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}_]/u.test(ch);
 
@@ -94,7 +94,12 @@ interface Frame {
 }
 
 const compartmentsOf = (c: ClassDraft, hideEmpty: boolean): Compartment[] => {
-  const head: Compartment = { lines: [...c.annotations.map((a) => `«${a}»`), c.title], align: 'center', emphasis: 'title' };
+  const head: Compartment = {
+    lines: [...c.annotations.map((a) => `«${a}»`), c.title],
+    lineEmphasis: [...c.annotations.map((): 'tag' => 'tag'), 'title'],
+    align: 'center',
+    emphasis: 'title',
+  };
   const body = (lines: string[]): Compartment => ({ lines, align: 'left', emphasis: 'body' });
   const parts = [c.attributes, c.methods].filter((lines) => !hideEmpty || lines.length > 0).map(body);
   return [head, ...parts];
@@ -109,6 +114,7 @@ export function parseClass(src: string, config: ClassConfig = DEFAULT_CLASS_CONF
   const clusters = new Map<string, GraphCluster>();
   const notes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
+  const stubs: GraphEdge[] = [];
   const ignored: string[] = [];
   const stack: Frame[] = [];
   const accessibility = createAccessibilityReader();
@@ -233,15 +239,25 @@ export function parseClass(src: string, config: ClassConfig = DEFAULT_CLASS_CONF
     const rel = RELATION.exec(text);
     if (rel) {
       const [, left, fromCount, mark, toCount, right, label] = rel;
+      const m = /^(<\||\*|o|<|\(\))?(--|\.\.)(\|>|\*|o|>|\(\))?$/u.exec(mark as string);
+      const style = m?.[2] === '..' ? 'dotted' : 'normal';
+      // A name next to `()` is an interface: it is drawn as a ring on a short stub of the other class, not as a box of its own.
+      const ringLeft = m?.[1] === '()';
+      const ringRight = m?.[3] === '()';
+      if (ringLeft || ringRight) {
+        const interfaceName = (name: string): string => classes.get(idOf(name))?.title ?? genericsOf(unquote(name));
+        if (ringLeft) stubs.push({ from: classOf(right as string).id, to: classOf(right as string).id, style, end: 'lollipop', endLabel: interfaceName(left as string) });
+        if (ringRight) stubs.push({ from: classOf(left as string).id, to: classOf(left as string).id, style, end: 'lollipop', endLabel: interfaceName(right as string) });
+        return;
+      }
       const from = classOf(left as string);
       const to = classOf(right as string);
-      const m = /^(<\||\*|o|<|\(\))?(--|\.\.)(\|>|\*|o|>|\(\))?$/u.exec(mark as string);
       const startEnd = m?.[1] === undefined ? undefined : START_ENDS[m[1]];
       const end = m?.[3] === undefined ? 'none' : (FINISH_ENDS[m[3]] ?? 'none');
       edges.push({
         from: from.id,
         to: to.id,
-        style: m?.[2] === '..' ? 'dotted' : 'normal',
+        style,
         end,
         ...(startEnd === undefined ? {} : { startEnd }),
         ...(label === undefined || label.trim() === '' ? {} : { label: genericsOf(label.trim()) }),
@@ -278,6 +294,6 @@ export function parseClass(src: string, config: ClassConfig = DEFAULT_CLASS_CONF
     lanes: [{ id: LANE, label: '' }],
     ...(clusters.size === 0 ? {} : { clusters: [...clusters.values()] }),
     nodes: [...nodes, ...notes],
-    edges,
+    edges: [...edges, ...stubs],
   };
 }

@@ -1,6 +1,6 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, compartmentHeights, END_CORE, hasCompartments, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, compartmentHeights, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
 import { arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
@@ -212,7 +212,7 @@ const accented = (edge: LayoutEdge, paint: Paint): boolean => edge.style === 'th
 const MARK = 12;
 
 /** The marks of relation lines. */
-const MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many']);
+const MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
 
 /** Id of the marker that ends a line in `end`, or undefined when nothing sits there. */
 function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | undefined {
@@ -263,6 +263,10 @@ function markBody(end: EdgeEnd, accent: boolean): string {
       return stroke(`M0 0H12${foot}M1 -5V5`);
     case 'zero-many':
       return stroke(`M0 0H12${foot}`) + ring(1.5);
+    case 'circle-plus':
+      return `<circle class="${cls('hollow')}" cx="6" cy="0" r="6"/>` + stroke('M6 -6V6M0 0H12');
+    case 'lollipop':
+      return `<circle class="${cls('hollow')}" cx="6" cy="0" r="6"/>`;
     default:
       return '';
   }
@@ -477,21 +481,30 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
 /** The rules and texts of a box divided into compartments; the last compartment takes the room the box has left over. */
 function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   const cells = node.compartments ?? [];
-  const heights = compartmentHeights(cells, pixelRuler());
+  const ruler = pixelRuler();
+  const heights = compartmentHeights(cells, ruler);
   const spare = Math.max(0, node.h - heights.reduce((a, b) => a + b, 0));
   heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
   const parts = [boxSvg(node, spec.boxRadius, shadowAttr(spec))];
   let top = node.y;
   cells.forEach((cell, i) => {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
-    const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center';
-    const emphasis = cell.emphasis ?? (i === 0 ? 'title' : 'body');
+    const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center' && cell.columns === undefined;
     const first = top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
+    const starts = cell.columns === undefined ? [] : columnStarts(cell, ruler);
     cell.lines.forEach((line, k) => {
-      const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
-      parts.push(
-        `<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${num(first + k * COMPARTMENT_LINE)}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(line)}</text>`,
-      );
+      const emphasis = lineEmphasis(cell, k, i);
+      const y = num(first + k * COMPARTMENT_LINE);
+      const row = cell.columns?.[k];
+      if (row === undefined) {
+        const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
+        parts.push(`<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${y}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(line)}</text>`);
+        return;
+      }
+      row.forEach((text, c) => {
+        if (text === '') return;
+        parts.push(`<text class="ursula-cell-${cell.columnEmphasis?.[c] ?? emphasis}" x="${num(node.x + COMPARTMENT_INSET + (starts[c] ?? 0))}" y="${y}" dominant-baseline="central">${escapeXml(text)}</text>`);
+      });
     });
     top += heights[i] ?? 0;
   });
