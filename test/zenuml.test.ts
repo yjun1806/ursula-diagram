@@ -234,8 +234,10 @@ describe('zenuml layout', () => {
   });
 
   it('draws an async message and a creation as solid lines; only replies are dashed', () => {
+    const heads = layoutZenuml(parseZenuml('zenuml\n  A->B: hi\n  A.call()'), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && i.arrow !== undefined ? [i.arrow] : []));
+    expect(heads).toEqual(['open', 'filled']);
     const dashedOf = (src: string): string[] =>
-      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--msg') ? [String(i.role.includes('edge--pending'))] : []));
+      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--msg') && i.arrow !== undefined ? [String(i.role.includes('edge--pending'))] : []));
     expect(dashedOf(DEMO)).toEqual(['false', 'false', 'false']);
     expect(dashedOf(CREATE)).toEqual(['false', 'false']);
     expect(dashedOf('zenuml\n  @return\n  A->B: result')).toEqual(['true']);

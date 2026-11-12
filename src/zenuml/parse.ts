@@ -272,10 +272,10 @@ export function parseZenuml(src: string, heading?: string): ZenumlModel {
       rest = (arrow[2] ?? '').trim();
       const asyncM = /^([^\s:(){}]+)\s*(?::\s*(.*))?$/u.exec(rest);
       if (asyncM && !/[.(]/u.test(asyncM[1] ?? '')) {
-        // An async message keeps the solid line of a call; only a reply (`@return`, `@reply`) is dashed.
+        // An async message is a solid line with an open head; only a reply (`@return`, `@reply`) is dashed with a filled head.
         const dashed = replyNext;
         replyNext = false;
-        message(sender, unquote(asyncM[1] ?? ''), (asyncM[2] ?? '').trim(), { dashed, head: 'filled' }, false, lineNo);
+        message(sender, unquote(asyncM[1] ?? ''), (asyncM[2] ?? '').trim(), { dashed, head: dashed ? 'filled' : 'open' }, false, lineNo);
         continue;
       }
     }
