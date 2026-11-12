@@ -6,6 +6,7 @@ import type { TextOptions } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './journey/frontend.ts';
 import './gantt/frontend.ts';
+import './eventmodeling/frontend.ts';
 import './ishikawa/frontend.ts';
 import './cynefin/frontend.ts';
 import './git/frontend.ts';
