@@ -1,3 +1,5 @@
+import type { Theme } from './render/theme.ts';
+
 export type Direction = 'LR' | 'TD';
 export type EdgeStyle = 'normal' | 'thick' | 'dotted';
 
@@ -181,6 +183,10 @@ export interface SceneBox {
   h: number;
   /** Label tab on the top-left corner of a frame. */
   tab?: { text: string; w: number; h: number };
+  /** Corner radius; when absent the themed renderer takes it from the role and the theme. */
+  radius?: number;
+  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  role?: string[];
   data?: Record<string, string>;
 }
 
@@ -193,14 +199,19 @@ export interface SceneText {
   anchor?: 'start' | 'middle' | 'end';
   font?: 'title' | 'body' | 'label' | 'num' | 'caption';
   tone?: SceneTone;
+  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  role?: string[];
   data?: Record<string, string>;
 }
 
 export interface SceneLine {
   kind: 'line';
   points: Point[];
-  /** `message` (default) is drawn in the tone; `life` and `divider` are faint dashed guides; `rule` is a thin separator. */
-  role?: 'message' | 'life' | 'divider' | 'rule';
+  /**
+   * A name (`message` by default is drawn in the tone; `life` and `divider` are faint dashed guides; `rule` is a thin
+   * separator) for the plain renderer, or a list of roles for the themed renderer.
+   */
+  role?: 'message' | 'life' | 'divider' | 'rule' | string[];
   tone?: SceneTone;
   dash?: boolean;
   /** Corner radius of the bends. */
@@ -209,7 +220,24 @@ export interface SceneLine {
   data?: Record<string, string>;
 }
 
-export type SceneItem = SceneBox | SceneText | SceneLine;
+/** Free-form path (arc, band, polygon, curve); `d` is SVG path data. */
+export interface ScenePath {
+  kind: 'path';
+  d: string;
+  role: string[];
+  data?: Record<string, string>;
+}
+
+export interface SceneCircle {
+  kind: 'circle';
+  cx: number;
+  cy: number;
+  r: number;
+  role: string[];
+  data?: Record<string, string>;
+}
+
+export type SceneItem = SceneBox | SceneText | SceneLine | ScenePath | SceneCircle;
 
 /** Drawing as a list of generic primitives; later items paint over earlier ones. */
 export interface Scene {
@@ -217,6 +245,8 @@ export interface Scene {
   height: number;
   title: string;
   items: SceneItem[];
+  /** Look of the themed renderer; defaults to `solid`. */
+  theme?: Theme;
 }
 
 /** How a run of terminal text is meant to look; the host decides how to draw each tone. */

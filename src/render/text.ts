@@ -378,7 +378,7 @@ export function renderTextScene(scene: Scene): string[] {
   for (const item of scene.items) {
     if (item.kind === 'box') sceneBox(c, item);
     else if (item.kind === 'line') sceneLine(c, item);
-    else sceneText(c, item);
+    else if (item.kind === 'text') sceneText(c, item);
   }
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();

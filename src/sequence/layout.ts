@@ -636,6 +636,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   }
   const sceneItems: SceneItem[] = items.map((it): SceneItem => {
     if (it.kind === 'line') return { ...it, points: it.points.map((p) => ({ x: p.x + dx, y: p.y })) };
+    if (it.kind === 'path' || it.kind === 'circle') return it;
     return { ...it, x: it.x + dx };
   });
   let height = bottom + margin;

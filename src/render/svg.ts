@@ -402,6 +402,7 @@ function markerKey(item: SceneLine): string | undefined {
 }
 
 function sceneItemSvg(item: SceneItem): string {
+  if (item.kind === 'path' || item.kind === 'circle') return '';
   if (item.kind === 'box') {
     const rx = BOX_RADIUS[item.style] ?? 2;
     const geometry = `x="${num(item.x)}" y="${num(item.y)}" width="${num(item.w)}" height="${num(item.h)}" rx="${rx}"`;
@@ -428,7 +429,7 @@ function sceneItemSvg(item: SceneItem): string {
       `${dataAttrs(item.data)}>${escapeXml(item.text)}</text>`
     );
   }
-  const role = item.role ?? 'message';
+  const role = typeof item.role === 'string' ? item.role : 'message';
   const cls = [
     'ursula-line',
     role === 'message' ? `ursula-line--${item.tone ?? 'soft'}` : `ursula-line--${role}`,
