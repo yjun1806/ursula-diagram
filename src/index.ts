@@ -20,6 +20,7 @@ import './timeline/frontend.ts';
 import './treeview/frontend.ts';
 import './treemap/frontend.ts';
 import './venn/frontend.ts';
+import './wardley/frontend.ts';
 import './xychart/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
