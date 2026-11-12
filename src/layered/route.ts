@@ -197,16 +197,16 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const margin = marginOf(ruler);
   const origin = margin + f.gutter + ruler.lanePad;
   // A drawing never starts further than its margin from the edge, whatever the placement before it left.
-  const first = Math.min(...start);
   const real = (n: number): boolean => n < l.realCount;
   const slot = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const len = (n: number): number => {
     const own = real(n) ? f.bodyLen?.[n] : undefined;
     return own === undefined ? slot(n) : bodyLength(own, slot(n));
   };
-  // A box of a cluster stands at the start of its slots, so that what its size leaves over is at the far end.
+  // A box of a cluster stands in the middle of its slots like any body, but the room its size leaves over before the first box is not drawn.
   const boxed = (n: number): boolean => real(n) && f.graph.nodes[n]?.box !== undefined;
-  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit + (boxed(n) ? 0 : (slot(n) - len(n)) / 2);
+  const first = Math.min(...start.map((v, n) => v + (boxed(n) ? (slot(n) - len(n)) / 2 / unit : 0)));
+  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit + (slot(n) - len(n)) / 2;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
   const shift = new Float64Array(l.nodes.length);
   const shifted = new Uint8Array(l.nodes.length);
