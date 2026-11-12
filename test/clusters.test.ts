@@ -269,12 +269,12 @@ describe('clusters: subgraph direction, block ranks and sibling size', () => {
     expect(box('three').y).toBeLessThan(box('one').y);
   });
 
-  it('gives the boxes of one parent the same size across the flow', () => {
+  it('gives boxes in one column the same width and boxes in one row the same height', () => {
     const l = drawn(DIRECTIONS);
     const box = (id: string) => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
     expect(box('B1').w).toBe(box('B2').w);
     const wide = drawn(LIMITATION);
     const side = (id: string) => (wide.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
-    expect(side('subgraph1').h).toBe(side('subgraph2').h);
+    expect(side('subgraph1').w).toBe(side('subgraph2').w);
   });
 });
