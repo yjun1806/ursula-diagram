@@ -40,6 +40,16 @@ export interface MessageStmt {
   deactivate: boolean;
   /** Sequence number when `autonumber` is on. */
   number?: number;
+  /** `<<->>`: a head at both ends. */
+  both?: boolean;
+  /** `()` beside the sender or the receiver: the line joins that lifeline at a dot. */
+  centreFrom?: boolean;
+  centreTo?: boolean;
+  /** The receiver appears with this message (`create` before it). */
+  creates?: boolean;
+  /** The lifeline of the sender or the receiver ends with this message (`destroy` before it). */
+  destroysFrom?: boolean;
+  destroysTo?: boolean;
   line: number;
 }
 
@@ -85,9 +95,16 @@ export interface ZoneStmt {
 
 export type Statement = MessageStmt | NoteStmt | ActivationStmt | OpenStmt | BranchStmt | CloseStmt | ZoneStmt;
 
+/** `box` ... `end`: participants drawn inside one labelled band. The colour of the source is not kept. */
+export interface ParticipantGroup {
+  label: string;
+  members: string[];
+}
+
 export interface Sequence {
   participants: Participant[];
   statements: Statement[];
+  groups?: ParticipantGroup[];
 }
 
 export interface Box {
