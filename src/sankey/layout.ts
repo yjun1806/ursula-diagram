@@ -4,6 +4,7 @@ import { ceilTo, floorTo, round2 } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { shrinkToFit } from '../text/fit.ts';
 import type { Scene, SceneItem } from '../types.ts';
+import { nearestSeries } from './colors.ts';
 import { valueText } from './model.ts';
 import type { Sankey } from './model.ts';
 
@@ -21,7 +22,9 @@ const SERIES = 8;
 const TITLE_H = 18;
 const TITLE_GAP = 16;
 const TITLE_SIZE = 15;
-const SWEEPS = 3;
+const SWEEPS = 8;
+/** Rounds of swapping neighbours in a column while that removes crossings. */
+const SWAP_ROUNDS = 6;
 const MAX_STEP = 1200;
 /** Two boxes that only touch, within float noise, do not overlap. */
 const TOUCH = -0.01;
@@ -94,6 +97,49 @@ function stackY(order: number[][], height: number[], pad: number, plotTop: numbe
   return y;
 }
 
+interface Centreline {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  weight: number;
+}
+
+/** Height of a band's centre line at `x`: the curve leaves and enters level, with both control points at the middle x. */
+function centreAt(c: Centreline, x: number): number {
+  const mx = (c.x0 + c.x1) / 2;
+  let lo = 0;
+  let hi = 1;
+  for (let k = 0; k < 30; k++) {
+    const t = (lo + hi) / 2;
+    const u = 1 - t;
+    const xt = c.x0 * u * u * u + 3 * mx * u * t + c.x1 * t * t * t;
+    if (xt < x) lo = t;
+    else hi = t;
+  }
+  const t = (lo + hi) / 2;
+  const u = 1 - t;
+  return c.y0 * (u * u * u + 3 * u * u * t) + c.y1 * (3 * u * t * t + t * t * t);
+}
+
+/** Sum over every pair of bands that swap their up-down order inside their common span, weighted by the thinner band. */
+export function crossingWeight(lines: Centreline[]): number {
+  let total = 0;
+  for (let a = 0; a < lines.length; a++) {
+    const p = lines[a] as Centreline;
+    for (let b = a + 1; b < lines.length; b++) {
+      const q = lines[b] as Centreline;
+      const lo = Math.max(p.x0, q.x0);
+      const hi = Math.min(p.x1, q.x1);
+      if (hi - lo < 1e-6) continue;
+      const before = centreAt(p, lo) - centreAt(q, lo);
+      const after = centreAt(p, hi) - centreAt(q, hi);
+      if (before * after < -1e-9) total += Math.min(p.weight, q.weight);
+    }
+  }
+  return total;
+}
+
 /**
  * Lays a sankey out. Nodes sit in columns by depth; the height of a node follows the larger of what flows in and out,
  * and the order inside a column is settled by sweeping the value-weighted mean position of each node's neighbours.
@@ -128,13 +174,42 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const titleBlock = map.title === undefined ? 0 : TITLE_H + TITLE_GAP;
   const plotTop = MARGIN + titleBlock + (columns >= 3 ? LABEL_H : 0);
 
-  // Sweep the columns by the mean position of their neighbours: forward, backward, forward.
+  // Centre lines of every band for an order, one unit of x per column; the bands stack at a node in the order of the other end.
+  const linesOf = (ord: number[][]): Centreline[] => {
+    const y = stackY(ord, height, pad, plotTop, plotH);
+    const mid = (i: number): number => (y[i] ?? 0) + (height[i] ?? 0) / 2;
+    const outAt = new Array<number>(map.links.length).fill(0);
+    const inAt = new Array<number>(map.links.length).fill(0);
+    for (let i = 0; i < count; i++) {
+      let o = 0;
+      for (const k of linkIds.filter((k) => map.links[k]?.source === i).sort((a, b) => mid(map.links[a]?.target ?? 0) - mid(map.links[b]?.target ?? 0) || a - b)) {
+        outAt[k] = o;
+        o += (map.links[k]?.value ?? 0) * scale;
+      }
+      let n = 0;
+      for (const k of linkIds.filter((k) => map.links[k]?.target === i).sort((a, b) => mid(map.links[a]?.source ?? 0) - mid(map.links[b]?.source ?? 0) || a - b)) {
+        inAt[k] = n;
+        n += (map.links[k]?.value ?? 0) * scale;
+      }
+    }
+    return map.links.map((l, k) => {
+      const t = l.value * scale;
+      return { x0: column[l.source] ?? 0, x1: column[l.target] ?? 0, y0: (y[l.source] ?? 0) + (outAt[k] ?? 0) + t / 2, y1: (y[l.target] ?? 0) + (inAt[k] ?? 0) + t / 2, weight: t };
+    });
+  };
+  const linkIds = map.links.map((_, k) => k);
+  const cost = (ord: number[][]): number => crossingWeight(linesOf(ord));
+
+  // Sweep the columns by the value-weighted mean position of their neighbours, forward and backward, and keep the order
+  // that crosses least; then swap neighbours inside a column while a swap removes crossings.
   const neighbours = map.nodes.map(() => [] as Array<{ other: number; value: number }>);
   for (const l of map.links) {
     neighbours[l.source]?.push({ other: l.target, value: l.value });
     neighbours[l.target]?.push({ other: l.source, value: l.value });
   }
-  for (let s = 0; s < SWEEPS; s++) {
+  let best = order;
+  let bestCost = cost(order);
+  for (let s = 0; s < SWEEPS && bestCost > 0; s++) {
     const forward = s % 2 === 0;
     const cols = forward ? Array.from({ length: columns - 1 }, (_, k) => k + 1) : Array.from({ length: columns - 1 }, (_, k) => columns - 2 - k);
     for (const c of cols) {
@@ -153,6 +228,29 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
       });
       order = order.map((col, k) => (k === c ? sorted : col));
     }
+    const now = cost(order);
+    if (now < bestCost - 1e-9) {
+      best = order;
+      bestCost = now;
+    }
+  }
+  order = best;
+  for (let round = 0; round < SWAP_ROUNDS && bestCost > 0; round++) {
+    let improved = false;
+    for (let c = 0; c < columns; c++) {
+      for (let at = 0; at + 1 < (order[c]?.length ?? 0); at++) {
+        const col = [...(order[c] ?? [])];
+        [col[at], col[at + 1]] = [col[at + 1] as number, col[at] as number];
+        const trial = order.map((old, k) => (k === c ? col : old));
+        const now = cost(trial);
+        if (now < bestCost - 1e-9) {
+          order = trial;
+          bestCost = now;
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
   }
   const top = stackY(order, height, pad, plotTop, plotH);
 
@@ -168,6 +266,11 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const widest = (c: number): number => Math.max(0, ...(order[c] ?? []).map(labelW));
   const left = ceilTo(MARGIN + widest(0) + LABEL_GAP);
   const rightRoom = nodeW + LABEL_GAP + widest(columns - 1) + MARGIN;
+
+  const seriesOf = (i: number, name: string): number => {
+    const asked = map.nodeColors?.[name];
+    return asked === undefined ? (i % SERIES) + 1 : nearestSeries(asked);
+  };
 
   const build = (step: number) => {
     const width = ceilTo(left + (columns - 1) * step + rightRoom);
@@ -208,7 +311,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
         valueX = start + nW + VALUE_GAP;
         box = { x0: start, x1: start + w, y0: y - LABEL_H, y1: y };
       }
-      return { name: nd.name, value: value[i] ?? 0, valueText: hasValue ? s.text : valueText(value[i] ?? 0), column: c, series: (i % SERIES) + 1, x, y, w: nodeW, h, label: { side, nameX, valueX, y: cy, nameAnchor, box } };
+      return { name: nd.name, value: value[i] ?? 0, valueText: hasValue ? s.text : valueText(value[i] ?? 0), column: c, series: seriesOf(i, nd.name), x, y, w: nodeW, h, label: { side, nameX, valueX, y: cy, nameAnchor, box } };
     });
     return { width, placed };
   };

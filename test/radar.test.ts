@@ -1,7 +1,7 @@
 // Examples adapted from the Mermaid documentation (MIT).
 import { describe, expect, it } from 'vitest';
 import { pixelRuler, render, renderText, UrsulaError } from '../src/index.ts';
-import { layoutRadar, radarScale } from '../src/radar/layout.ts';
+import { layoutRadar, radarScale, segmentHitsBox } from '../src/radar/layout.ts';
 import type { RadarLayout } from '../src/radar/layout.ts';
 import { parseRadar } from '../src/radar/parse.ts';
 
@@ -40,6 +40,8 @@ config:
   theme: base
   themeVariables:
     cScale0: "#FF0000"
+    cScale1: "#00FF00"
+    cScale2: "#0000FF"
     radar:
       curveOpacity: 0
 ---
@@ -67,6 +69,35 @@ function body(src: string): string {
 function layoutOf(src: string): RadarLayout {
   return layoutRadar(parseRadar(body(src), 'Grades'), pixelRuler());
 }
+
+describe('radar theme variables and shared values', () => {
+  it('draws the curves as outlines in the palette colours nearest to cScale when curveOpacity is 0', () => {
+    const svg = render(themed);
+    const roles = [...svg.matchAll(/class="(ursula-series-\d--\w+)"[^>]*data-series="(c\d)"/gu)].filter((m) => !m[1]?.endsWith('--dot')).map((m) => `${m[2]} ${m[1]}`);
+    expect(roles).toEqual(['c1 ursula-series-6--line', 'c2 ursula-series-5--line', 'c3 ursula-series-1--line']);
+    expect(render(grades)).toContain('ursula-series-1--overlap');
+  });
+
+  for (const [name, src] of examples) {
+    it(`keeps every curve edge out of the texts in example ${name}`, () => {
+      const l = layoutOf(src);
+      for (const series of l.series) {
+        series.points.forEach((p, i) => {
+          const q = series.points[(i + 1) % series.points.length] ?? p;
+          for (const b of l.textBoxes) expect(segmentHitsBox(p, q, b), `${series.id} edge ${i} crosses "${b.text}"`).toBe(false);
+        });
+      }
+    });
+  }
+
+  it('writes one label where curves meet at the same value on an axis', () => {
+    const svg = render(restaurants);
+    const labels = (axis: string): string[] => [...svg.matchAll(new RegExp(`data-axis="${axis}" data-series="([^"]*)" data-value="([^"]*)"`, 'gu'))].map((m) => `${m[2]}:${m[1]}`);
+    expect(labels('service')).toEqual(['4:b', '3:a c', '2:d']);
+    expect(labels('food')).toEqual(['4:a', '3:b', '2:c d']);
+    expect(labels('price')).toEqual(['4:c d', '3:b', '2:a']);
+  });
+});
 
 describe('radar rendering', () => {
   for (const [name, src] of examples) {

@@ -5,7 +5,8 @@ import { render, renderText, UrsulaError } from '../src/index.ts';
 import { layoutRailroad } from '../src/railroad/layout.ts';
 import { parseRailroad } from '../src/railroad/parse.ts';
 import type { Node } from '../src/railroad/model.ts';
-import type { SceneBox, SceneText } from '../src/types.ts';
+import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
+import type { Scene, SceneBox, SceneText } from '../src/types.ts';
 import { EXAMPLES } from './railroad-examples.ts';
 
 const THEMES = ['solid', 'outline', 'card'] as const;
@@ -116,26 +117,26 @@ describe('railroad layout', () => {
     };
   };
 
-  it('makes a token as wide as its text plus 32 on the 4 grid, 48 at least, 32 high', () => {
+  it('makes a token as wide as its text plus 32 on the 8 grid, 48 at least, 32 high', () => {
     const { boxes: b } = boxes('railroad-ebnf-beta\nr = "+" expression ;');
     const tokens = b.filter((x) => x.role?.includes('token'));
     expect(tokens).toHaveLength(2);
     for (const t of tokens) {
       expect(t.h).toBe(32);
-      expect(t.w % 4).toBe(0);
+      expect(t.w % 8).toBe(0);
       expect(t.w).toBeGreaterThanOrEqual(48);
     }
     expect(tokens[0]?.w).toBe(48);
     const wide = tokens[1] as SceneBox;
     const textW = ruler.textWidth('expression', 'line');
     expect(wide.w).toBeGreaterThanOrEqual(textW + 32);
-    expect(wide.w).toBeLessThan(textW + 32 + 4);
+    expect(wide.w).toBeLessThan(textW + 32 + 8);
   });
 
-  it('puts the tokens of a sequence 16 apart', () => {
+  it('puts the tokens of a sequence 24 apart', () => {
     const t = boxes('railroad-ebnf-beta\nr = a b c ;').boxes.filter((x) => x.role?.includes('token'));
     expect(t).toHaveLength(3);
-    for (let i = 1; i < 3; i++) expect((t[i] as SceneBox).x - ((t[i - 1] as SceneBox).x + (t[i - 1] as SceneBox).w)).toBe(16);
+    for (let i = 1; i < 3; i++) expect((t[i] as SceneBox).x - ((t[i - 1] as SceneBox).x + (t[i - 1] as SceneBox).w)).toBe(24);
   });
 
   it('stacks the branches of a choice 8 apart and centres them', () => {
@@ -158,6 +159,73 @@ describe('railroad layout', () => {
     const once = layoutRailroad(parseRailroad('railroad-ebnf-beta\nr = a+ ;'), ruler).scene;
     const onceYs = once.items.flatMap((i) => (i.kind === 'line' ? i.points.map((p) => p.y) : []));
     expect(Math.min(...onceYs)).toBe((once.items.find((i): i is SceneBox => i.kind === 'box') as SceneBox).y + 16);
+  });
+
+  type Seg = { line: number; x0: number; y0: number; x1: number; y1: number; arrow: boolean };
+  const segments = (scene: Scene): Seg[] =>
+    scene.items.flatMap((item, line) => {
+      if (item.kind !== 'line') return [];
+      const arrow = Array.isArray(item.role) && item.role.includes('edge--arrow');
+      return item.points.slice(1).map((p, i) => {
+        const q = item.points[i] as { x: number; y: number };
+        return { line, x0: Math.min(p.x, q.x), y0: Math.min(p.y, q.y), x1: Math.max(p.x, q.x), y1: Math.max(p.y, q.y), arrow };
+      });
+    });
+
+  it('never continues one rail straight through the axis into another', () => {
+    for (const name of [...names, 'skip-loop']) {
+      const src = name === 'skip-loop' ? 'railroad-ebnf-beta\nr = ( a | b )* c* ;' : sourceOf(name);
+      const vs = segments(layoutRailroad(parseRailroad(src), ruler).scene).filter((s) => s.x0 === s.x1 && s.y1 > s.y0);
+      for (const a of vs) {
+        for (const b of vs) {
+          if (a.line === b.line || a.x0 !== b.x0) continue;
+          expect(a.y1 === b.y0, `${name}: rails meet end to end at x ${a.x0}, y ${a.y1}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps every rail and arrowhead out of the tokens and every arrowhead clear of other rails', () => {
+    for (const theme of THEMES) {
+      for (const name of names) {
+        const { scene } = layoutRailroad(parseRailroad(sourceOf(name)), ruler, theme);
+        const boxesIn = scene.items.filter((i): i is SceneBox => i.kind === 'box');
+        const segs = segments(scene);
+        const len = SCENE_THEME_SPECS[theme].arrow.length;
+        for (const s of segs) {
+          for (const b of boxesIn) {
+            const inside = s.x0 < b.x + b.w - 1 && s.x1 > b.x + 1 && s.y0 < b.y + b.h - 1 && s.y1 > b.y + 1;
+            expect(inside, `${theme} ${name}: a rail passes through a box at ${b.x},${b.y}`).toBe(false);
+          }
+        }
+        for (const item of scene.items) {
+          if (item.kind !== 'line' || !Array.isArray(item.role) || !item.role.includes('edge--arrow')) continue;
+          const tip = item.points[item.points.length - 1] as { x: number; y: number };
+          const head = { x0: tip.x, x1: tip.x + len, y0: tip.y - len / 2, y1: tip.y + len / 2 };
+          for (const b of boxesIn) expect(head.x0 < b.x + b.w && head.x1 > b.x && head.y0 < b.y + b.h && head.y1 > b.y, `${theme} ${name}: arrowhead on a box`).toBe(false);
+          for (const s of segs) {
+            if (s.y0 === s.y1) continue;
+            expect(s.x0 > head.x0 && s.x0 < head.x1 && s.y0 < head.y1 && s.y1 > head.y0, `${theme} ${name}: a rail crosses an arrowhead`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('numbers the branches of an ordered choice from the top, left of each token and over its rail', () => {
+    const { boxes: b, texts } = boxes('railroad-peg-beta\nr <- "a" / "bb" / c ;');
+    const tokens = b.filter((x) => x.role?.includes('token'));
+    const numbers = texts.filter((t) => /^\d+$/u.test(t.text));
+    expect(numbers.map((t) => t.text)).toEqual(['1', '2', '3']);
+    numbers.forEach((n, i) => {
+      const token = tokens[i] as SceneBox;
+      expect(n.x).toBeLessThan(token.x);
+      expect(n.y).toBeLessThan(token.y + token.h / 2);
+      expect(n.y).toBeGreaterThan(token.y);
+    });
+    expect(new Set(numbers.map((n) => n.x)).size).toBe(1);
+    expect(boxes('railroad-ebnf-beta\nr = "a" | "b" ;').texts.some((t) => /^\d+$/u.test(t.text))).toBe(false);
+    expect(boxes('railroad-abnf-beta\nr = "a" / "b" ;').texts.some((t) => /^\d+$/u.test(t.text))).toBe(false);
   });
 
   it('writes a count chip on a counted repeat and none on a plain loop', () => {
