@@ -15,6 +15,7 @@ import './kanban/frontend.ts';
 import './mindmap/frontend.ts';
 import './quadrant/frontend.ts';
 import './railroad/frontend.ts';
+import './block/frontend.ts';
 import './pie/frontend.ts';
 import './packet/frontend.ts';
 import './radar/frontend.ts';
