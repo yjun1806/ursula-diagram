@@ -667,15 +667,25 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   };
   const bound = (it: Item, side: Side): number => (side === 'down' ? (bandStart[it.band] ?? 0) : (bandStart[it.band] ?? 0) + (bandSize[it.band] ?? 0));
   // A box given from outside can make its layer thicker than the boxes beside it: those stand in the middle of the layer, as thick as they are.
+  // Boxes divided into compartments are not stretched to the thickest box of their layer either: every box of such a layer is as thick as it is
+  // and stands against the face the flow comes from, so that the heads of the boxes read as one line.
   const boxLayer = new Set<number>();
+  const flush = new Set<number>();
   graph.nodes.forEach((n, i) => {
-    if (n.box !== undefined && i < l.realCount) boxLayer.add(l.nodes[i]?.layer ?? 0);
+    if (i >= l.realCount) return;
+    const layer = l.nodes[i]?.layer ?? 0;
+    if (n.box !== undefined) boxLayer.add(layer);
+    if (n.compartments !== undefined && !ruler.uniform) {
+      boxLayer.add(layer);
+      flush.add(layer);
+    }
   });
   const own = (i: number): { off: number; ext: number } => {
     const layer = l.nodes[i]?.layer ?? 0;
     const full = thick[layer] ?? 0;
     if (!boxLayer.has(layer) || i >= l.realCount) return { off: 0, ext: full };
     const ext = Math.min(full, f.layerExt[i] ?? full);
+    if (flush.has(layer)) return { off: 0, ext };
     return { off: Math.floor((full - ext) / 2 / ruler.nodeGrid + 1e-9) * ruler.nodeGrid, ext };
   };
   /** Where the line of a node meets its face on `side`; `fallback` when the node fills its layer. */

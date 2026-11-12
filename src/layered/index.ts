@@ -23,6 +23,7 @@ import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
 import { planZones, unzoned } from './composition.ts';
+import { packPieces, piecesOf } from './shelves.ts';
 import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
@@ -53,6 +54,8 @@ export interface LayeredOptions {
   maxWidth?: number;
   maxHeight?: number;
   legend?: LegendOption;
+  /** The graph is one level of a drawing with clusters: edges outside it join its boxes, so it is neither shelved in pieces nor drawn as stages (off by default). */
+  nested?: boolean;
 }
 
 const RETRIES = 10;
@@ -450,13 +453,31 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
     }
     drawn = best;
   }
-  const diagnostics: Diagnostic[] = [...drawn.diagnostics];
-  if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) {
-    diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${opts.maxWidth}.` });
-  } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth * DEFAULT_ROOM) {
-    diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
-  }
+  const diagnostics: Diagnostic[] = [...drawn.diagnostics, ...overflowOf(drawn, opts, ruler, td)];
   return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit, ...(ruler.uniform ? {} : { gap: usedGap, gapDefault: base.rankGap }) }, ruler, opts.legend);
+}
+
+/** The note that a drawing is wider than the limit the caller gave, or than the default canvas by more than the room a wish may take. */
+function overflowOf(drawn: Layout, opts: LayeredOptions, ruler: Ruler, td: boolean): Diagnostic[] {
+  if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) return [{ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${opts.maxWidth}.` }];
+  if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth * DEFAULT_ROOM) return [{ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` }];
+  return [];
+}
+
+/**
+ * The pieces of a drawing without zones that no edge joins are drawn one by one and stand side by side across the
+ * reading direction in the order of the text, on further shelves when they would pass the limit.
+ */
+function layoutPieces(source: Graph, given: Ruler, opts: LayeredOptions): Layout | undefined {
+  if (opts.nested === true || !unzoned(source) || given.terminal || (source.clusters?.length ?? 0) > 0) return undefined;
+  const pieces = piecesOf(source);
+  if (pieces.length < 2) return undefined;
+  const td = source.direction === 'TD';
+  const parts = pieces.map((p) => ({ ...p, drawn: layoutAt(p.graph, given, { ...opts, legend: false }) }));
+  const limit = td ? (opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM) : (opts.maxHeight ?? Infinity);
+  const packed = packPieces(parts, td, limit);
+  const diagnostics = [...packed.diagnostics, ...overflowOf(packed, opts, given, td)];
+  return withLegend({ ...packed, diagnostics }, given, opts.legend);
 }
 
 /**
@@ -464,6 +485,8 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
  * reading direction, so that the bands cross the reading direction; the result is then labelled with the real one.
  */
 function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  const packed = layoutPieces(source, given, opts);
+  if (packed) return packed;
   const plan = planZones(source, opts.composition ?? 'auto');
   const stages = plan.composition === 'stages';
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
@@ -473,7 +496,7 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Without zones the `spread` drawing replaces the usual one only when `spreadWins`.
   const spread = unzoned(source) && !given.terminal && opts.quality === 'best' && opts.quick !== true ? drawSpread(source, given, opts) : undefined;
   const room = { width: opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM, height: opts.maxHeight ?? Infinity };
-  return spread !== undefined && spreadWins(spread, drawn, room) ? spread : drawn;
+  return spread !== undefined && spreadWins(spread, drawn, room, opts.nested !== true) ? spread : drawn;
 }
 
 /**

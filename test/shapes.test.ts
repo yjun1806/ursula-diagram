@@ -59,7 +59,9 @@ describe('node shapes in the drawing', () => {
     const mixed = layout(parse(MIXED), pixelRuler());
     const box = (l: typeof plain) => l.nodes.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
     expect(box(mixed)).toEqual(box(plain));
-    expect(mixed.edges.map((e) => e.points)).toEqual(plain.edges.map((e) => e.points));
+    // A line meets the face of the shape it ends on, so its path may differ; the edges themselves and their count of crossings do not.
+    expect(mixed.edges.map((e) => `${e.from}>${e.to}`)).toEqual(plain.edges.map((e) => `${e.from}>${e.to}`));
+    expect(mixed.diagnostics.filter((d) => d.kind === 'crossing')).toEqual(plain.diagnostics.filter((d) => d.kind === 'crossing'));
   });
 
   it('draw each shape with its own element', () => {

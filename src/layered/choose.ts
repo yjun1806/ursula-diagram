@@ -1,4 +1,4 @@
-import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
+import type { Diagnostic, Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { Fold } from './rows.ts';
 import { unzoned } from './composition.ts';
 import { directionsOf, mixedSideEnds, sideOfPoint } from './sides.ts';
@@ -414,13 +414,24 @@ const crossingsRecorded = (l: Layout): number => l.diagnostics.filter((d) => d.k
 const sharedPorts = (l: Layout): number => l.diagnostics.filter((d) => d.kind === 'shared-port').length;
 
 /**
- * Whether the `spread` drawing replaces the usual one: it has no more bends, no more crossings and no more shared
- * ports, at least one of the three fewer, and it fits `room` (width and height); when the usual drawing is already
- * wider or taller than `room`, the spread one is no wider and no taller than it.
+ * Whether the `spread` drawing replaces the usual one. It does when the usual drawing folds the flow onto further rows
+ * (a branch below its parent) though the spread one, which stands every box in its stage, needs no fold and fits
+ * `room` without more violations. Otherwise it needs no more bends, no more crossings and no more shared ports, at
+ * least one of the three fewer, and it fits `room` (width and height); when the usual drawing is already wider or
+ * taller than `room`, the spread one is no wider and no taller than it. `unfolding` false leaves out the first way.
  */
-export function spreadWins(spread: Layout, usual: Layout, room: { width: number; height: number } = { width: Infinity, height: Infinity }): boolean {
+export function spreadWins(spread: Layout, usual: Layout, room: { width: number; height: number } = { width: Infinity, height: Infinity }, unfolding = true): boolean {
+  const fits = (axis: 'width' | 'height'): boolean => spread[axis] <= Math.max(room[axis], usual[axis] > room[axis] ? usual[axis] : 0);
+  const folded = (l: Layout): number => l.nodes.filter((n) => n.row > 0).length;
+  const folds = (l: Layout): boolean => folded(l) > 0;
+  // Every box the usual drawing pushes to a further row is worth `extraRow` of cost to the spread drawing.
+  const affordable = (score(spread)[1] ?? 0) <= (score(usual)[1] ?? 0) + WEIGHTS.extraRow * folded(usual);
+  // The spread drawing is laid out turned a quarter, so a shape whose body depends on the reading direction would stand the wrong way.
+  const turns = spread.nodes.some((n) => n.shape === 'bar' || n.shape === 'ellipse');
+  const noted = (l: Layout, kind: Diagnostic['kind']): number => l.diagnostics.filter((d) => d.kind === kind).length;
+  const cleaner = (['crossing', 'mixed-side', 'shared-port', 'label-overlap'] as const).every((k) => noted(spread, k) <= noted(usual, k));
+  if (unfolding && folds(usual) && !folds(spread) && !turns && cleaner && affordable && spread.width <= room.width && spread.height <= room.height && violations(spread) <= violations(usual)) return true;
   const [b, c, s] = [bendsOf(spread) - bendsOf(usual), crossingsRecorded(spread) - crossingsRecorded(usual), sharedPorts(spread) - sharedPorts(usual)];
   if (b > 0 || c > 0 || s > 0 || (b === 0 && c === 0 && s === 0)) return false;
-  const fits = (axis: 'width' | 'height'): boolean => spread[axis] <= Math.max(room[axis], usual[axis] > room[axis] ? usual[axis] : 0);
   return fits('width') && fits('height');
 }
