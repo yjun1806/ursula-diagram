@@ -236,7 +236,58 @@ export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, s
     }
   }
   order = best;
-  return { layers: order, crossings: bestCost };
+  // A pass-through line between two ends of a flat edge can stand before or behind the whole flat flow instead.
+  order.forEach((_, i) => setPositions(order, pos, i));
+  for (let round = 0; round < 3; round++) {
+    let moved = false;
+    for (let i = 0; i < count; i++) {
+      for (const f of l.flat) {
+        if ((l.nodes[f.lo]?.layer ?? -1) !== i) continue;
+        const row = order[i] as number[];
+        const p = pos[f.lo] ?? 0;
+        const q = pos[f.hi] ?? 0;
+        for (const d of row.slice(Math.min(p, q) + 1, Math.max(p, q))) {
+          if (d < l.realCount) continue;
+          const current = total();
+          const keep = [...row];
+          // The ends of the whole flow of flat edges that holds this one.
+          let from = Math.min(p, q);
+          let to = Math.max(p, q);
+          for (let grew = true; grew; ) {
+            grew = false;
+            for (const g of l.flat) {
+              if ((l.nodes[g.lo]?.layer ?? -1) !== i) continue;
+              const a = pos[g.lo] ?? 0;
+              const b = pos[g.hi] ?? 0;
+              if (Math.max(a, b) >= from && Math.min(a, b) <= to && (Math.min(a, b) < from || Math.max(a, b) > to)) {
+                from = Math.min(from, a, b);
+                to = Math.max(to, a, b);
+                grew = true;
+              }
+            }
+          }
+          let done = false;
+          for (const at of [from, to]) {
+            const next = keep.filter((n) => n !== d);
+            next.splice(at === from ? from : to - (keep.indexOf(d) < to ? 1 : 0) + 1, 0, d);
+            order[i] = next;
+            setPositions(order, pos, i);
+            if (total() <= current && !(Math.min(p, q) < (pos[d] ?? 0) && (pos[d] ?? 0) < Math.max(p, q))) {
+              done = true;
+              moved = true;
+              break;
+            }
+          }
+          if (!done) {
+            order[i] = keep;
+            setPositions(order, pos, i);
+          } else break;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return { layers: order, crossings: total() };
 }
 
 export { adjacency };

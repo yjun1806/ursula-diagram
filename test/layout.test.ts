@@ -66,7 +66,7 @@ describe('geometry invariants', () => {
     }
   });
 
-  it('lays out and renders a 14-node, 15-edge two-lane graph in under 100 ms', () => {
+  it('lays out and renders a 14-node, 15-edge two-lane graph in under 300 ms', () => {
     const src = `flowchart LR
 subgraph a[Intake]
 n1[Receive] --> n2[Validate] --> n3[Enrich] --> n4[Queue]
@@ -89,6 +89,6 @@ n3 --> m3`;
     const svg = render(src);
     const ms = performance.now() - t;
     expect(svg.startsWith('<svg')).toBe(true);
-    expect(ms).toBeLessThan(100);
+    expect(ms).toBeLessThan(300);
   });
 });

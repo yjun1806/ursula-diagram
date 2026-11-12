@@ -22,7 +22,7 @@ import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
 import type { Variant } from './choose.ts';
-import { CANDIDATES, pickBest } from './choose.ts';
+import { CANDIDATES, FOLDED, pickBest } from './choose.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
@@ -131,7 +131,7 @@ function leftToRight(ladder: Ladder, layers: number[][]): void {
 }
 
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
-  const first = given ?? assignLayers(graph, units, capacity, reduction, apart);
+  const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
   const rows = given ?? (stage ? assignByStage(graph, first, stage) : first);
   const finish = (ladder: Ladder, layers: number[][]): Placed => {
@@ -213,9 +213,9 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
   let placed = run();
   // A plain placement counts only when no lane needed more rows than it has at unlimited width.
-  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane.length) };
+  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane.length) };
   // Rows first: a lane may use its own rows or two, and the main flow is kept whole.
-  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart).layerLane, graph.lanes.length) : [];
+  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane, graph.lanes.length) : [];
   const allowed = (p: Placed): boolean =>
     !(allow.intact && p.rows.mainCut) && (!allow.rows || rowsPerLane(p.ladder.layerLane, graph.lanes.length).every((n, lane) => n <= Math.max(unlimitedRows[lane] ?? 0, 2)));
   const overLanes = (): Set<number> => {
@@ -481,10 +481,22 @@ function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   const candidates = opts.quick ? CANDIDATES.slice(0, 1) : terminal ? TERMINAL_CANDIDATES : CANDIDATES;
   // Pixels draw every candidate with rows first (the default gap kept, a second row in every lane) and the first two
   // also in the order that closes gaps first; the terminal keeps the order of gaps first.
-  const entries: Array<{ v: Variant; order: Order }> = terminal || opts.quick
+  // The candidates forced and free are also drawn with the flows of a lane folded by the head, and by head and tail.
+  const entries: Array<{ v: Variant; order: Order }> = opts.quick
     ? candidates.map((v) => ({ v, order: 'gap' as Order }))
-    : [...candidates.map((v) => ({ v, order: 'rows' as Order })), ...candidates.filter((v) => v.name === 'forced' || v.name === 'free').map((v) => ({ v, order: 'gap' as Order }))];
-  const preps = entries.map((e) => prepare(graph, given, opts, false, e.v, e.order));
+    : terminal
+      ? [...candidates.map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.slice(0, 2).map((v) => ({ v, order: 'gap' as Order }))]
+      : [...candidates.map((v) => ({ v, order: 'rows' as Order })), ...candidates.filter((v) => v.name === 'forced' || v.name === 'free').map((v) => ({ v, order: 'gap' as Order })), ...FOLDED.map((v) => ({ v, order: 'rows' as Order }))];
+  // Candidates that came to the same placement draw and refine to the same drawing: the first of them stands for all.
+  const seen = new Set<string>();
+  const preps = entries
+    .map((e) => prepare(graph, given, opts, false, e.v, e.order))
+    .filter((p) => {
+      const key = `${p.placed.ruler.rankGap}|${p.placed.layers.map((r) => r.join('.')).join('/')}|${p.placed.start.join(',')}|${p.placed.loose}|${p.variant.free}|${p.variant.start}|${p.variant.stage}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   // Drawings with and without one-bend edges both compete.
   const shapes = opts.elbows === false ? [false] : opts.quick ? [true] : [true, false];
   const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));

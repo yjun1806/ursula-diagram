@@ -1,4 +1,5 @@
 import type { Layout, LayoutEdge } from '../types.ts';
+import type { Fold } from './rows.ts';
 
 /**
  * One way to draw the same graph. Candidates are drawn to the end and the finished drawings are measured, so a
@@ -14,15 +15,25 @@ export interface Variant {
   stage: boolean;
   /** The node the text starts from is held first in its layer. */
   start: boolean;
+  /** How flows inside a lane are laid over rows. */
+  fold: Fold;
 }
 
 export const CANDIDATES: readonly Variant[] = [
-  { name: 'forced', free: false, loose: false, stage: false, start: true },
-  { name: 'free', free: true, loose: false, stage: false, start: true },
-  { name: 'stage', free: false, loose: false, stage: true, start: true },
-  { name: 'loose', free: true, loose: true, stage: false, start: true },
-  { name: 'forced-unheld', free: false, loose: false, stage: false, start: false },
-  { name: 'free-unheld', free: true, loose: false, stage: false, start: false },
+  { name: 'forced', free: false, loose: false, stage: false, start: true, fold: 'flat' },
+  { name: 'free', free: true, loose: false, stage: false, start: true, fold: 'flat' },
+  { name: 'stage', free: false, loose: false, stage: true, start: true, fold: 'flat' },
+  { name: 'loose', free: true, loose: true, stage: false, start: true, fold: 'flat' },
+  { name: 'forced-unheld', free: false, loose: false, stage: false, start: false, fold: 'flat' },
+  { name: 'free-unheld', free: true, loose: false, stage: false, start: false, fold: 'flat' },
+];
+
+/** The two candidates drawn again with the flow of a lane folded by its head, and by its head and tail. */
+export const FOLDED: readonly Variant[] = [
+  { name: 'forced-head', free: false, loose: false, stage: false, start: true, fold: 'head' },
+  { name: 'forced-head-tail', free: false, loose: false, stage: false, start: true, fold: 'headTail' },
+  { name: 'free-head', free: true, loose: false, stage: false, start: true, fold: 'head' },
+  { name: 'free-head-tail', free: true, loose: false, stage: false, start: true, fold: 'headTail' },
 ];
 
 const EPS = 1e-6;

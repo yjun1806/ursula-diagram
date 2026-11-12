@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
+import { score } from '../src/layered/choose.ts';
 import { useElbows } from '../src/layered/elbows.ts';
 import type { LayoutEdge, LayoutNode } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
@@ -58,8 +59,8 @@ describe('one-bend edges', () => {
     const off = layout(g, pixelRuler(), { composition: 'lanes', elbows: false });
     expect(off.edges.some((e) => e.elbow)).toBe(false);
     expect(geometryViolations(on)).toEqual([]);
-    const bends = (l: typeof on): number => l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0);
-    expect(bends(on)).toBeLessThanOrEqual(bends(off));
+    // With elbows allowed the drawing is never worse by the score (a bend may be traded for a row).
+    expect(score(on)[1]).toBeLessThanOrEqual(score(off)[1] as number);
   });
 });
 

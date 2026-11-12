@@ -1,5 +1,13 @@
 import type { Graph } from '../types.ts';
 
+/**
+ * How a flow inside a lane is laid over rows. 'flat': on one row, branches below. 'head': the node that takes the flow in
+ * from a lane above (the entry) stands on the first row and the rest of the flow on the row below, the node after the
+ * entry in the same column. 'headTail': also the last node of the flow, when it leaves for a lane below, stands under
+ * the node before it.
+ */
+export type Fold = 'flat' | 'head' | 'headTail';
+
 export interface Rows {
   /** Layer of every graph node. */
   layer: number[];
@@ -97,6 +105,8 @@ interface Block {
   hint: number;
   /** A block of one node that no edge touches at all. */
   single: boolean;
+  /** The entry of the block stands on the first row and the rest of the flow below it (fold by the head). */
+  folded: boolean;
   /** The connected piece the block was cut from (its smallest node), and the first rank of the block inside it. */
   comp: number;
   firstRank: number;
@@ -290,7 +300,7 @@ function readDownward(shelves: Shelf[], head: number | undefined): Shelf[] {
  * small block (main path on its first row, branches on rows below); blocks stand side by side, anchored toward
  * the lanes they talk to, and only when a row would be too full do they stack or move to another shelf of rows.
  */
-export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0, apart = false): Rows {
+export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0, apart = false, fold: Fold = 'flat'): Rows {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const laneOf = graph.nodes.map((n) => Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane)));
   const layer = new Array<number>(graph.nodes.length).fill(0);
@@ -310,6 +320,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
   let nextLayer = 0;
   let main: number[] = [];
   const cutPieces: number[][] = [];
+  const foldedComps = new Set<number>();
   const shorter = (a: number[], b: number[]): boolean => {
     if (a.length !== b.length) return a.length < b.length;
     const pa = a.reduce((n, v) => n + (partners[v]?.length ?? 0), 0);
@@ -384,6 +395,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         anchor,
         hint: list.length > 0 ? mean(list.map((p) => p.other)) : mean(nodes),
         single: nodes.length === 1 && comp.length === 1 && list.length === 0,
+        folded: false,
         comp: Math.min(...comp),
         firstRank: Math.min(...nodes.map((n) => rankOf.get(n) ?? 0)),
       };
@@ -409,7 +421,35 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         }
         take(v, row);
       }
+      let foldedBlock = false;
+      if (fold !== 'flat') {
+        // The entry: it takes edges from another lane, none from its own, and sends exactly one into its own lane.
+        const crossIn = (n: number): number[] => (partners[n] ?? []).filter((o) => graph.edges.some((e) => e.to === graph.nodes[n]?.id && index.get(e.from) === o));
+        const entry = nodes.find((n) => (pred.get(n) ?? []).length === 0 && (succ.get(n) ?? []).length === 1 && crossIn(n).length > 0);
+        if (entry !== undefined && nodes.length > 1 && crossIn(entry).every((o) => (laneOf[o] ?? 0) < lane) && nodes.every((n) => n === entry || (rankOf.get(n) ?? 0) >= 1)) {
+          // The rest of the flow moves a row down and a column back, so that its first node stands under the entry.
+          for (const v of nodes) {
+            if (v === entry) continue;
+            rowOf.set(v, (rowOf.get(v) ?? 0) + 1);
+            rankOf.set(v, (rankOf.get(v) ?? 0) - 1);
+          }
+          foldedBlock = true;
+        }
+        if (fold === 'headTail') {
+          for (const t of nodes) {
+            if ((succ.get(t) ?? []).length > 0 || (pred.get(t) ?? []).length !== 1) continue;
+            const goesDown = graph.edges.some((e) => index.get(e.from) === t && (laneOf[index.get(e.to) ?? 0] ?? 0) > lane);
+            const before = (pred.get(t) ?? [])[0] as number;
+            const row = (rowOf.get(before) ?? 0) + 1;
+            const column = rankOf.get(before) ?? 0;
+            if (!goesDown || nodes.some((n) => n !== t && rowOf.get(n) === row && rankOf.get(n) === column)) continue;
+            rowOf.set(t, row);
+            rankOf.set(t, column);
+          }
+        }
+      }
       const height = Math.max(...[...rowOf.values()]) + 1;
+      if (foldedBlock) foldedComps.add(Math.min(...nodes));
       if (height > 1) {
         const rowLean = (r: number): [number, number] => lean(edgesOut(nodes.filter((n) => rowOf.get(n) === r)));
         const [up0, down0] = rowLean(0);
@@ -439,6 +479,10 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       if (groups > 1) cutPieces.push(nodes);
     }
 
+    // Folded by the head: the lane has a first row beside the lane the flow comes from, and the rest of its flows stand on the row inside;
+    // nodes without edges inside the lane stay on the first row.
+    for (const b of blocks) b.folded = foldedComps.has(b.comp);
+    if (blocks.some((b) => b.folded)) for (const b of blocks) b.anchor = b.folded || b.single || b.cross === 0 ? 'top' : 'bottom';
     const widest = Math.max(...blocks.map((b) => b.width));
     const room = Math.max(widest, cap - less);
     const lone = apart ? blocks.filter((b) => b.single) : [];
