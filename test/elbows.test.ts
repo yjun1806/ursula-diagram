@@ -5,7 +5,7 @@ import { useElbows } from '../src/layered/elbows.ts';
 import type { LayoutEdge, LayoutNode } from '../src/types.ts';
 import { geometryViolations } from './helpers.ts';
 
-const node = (id: string, x: number, y: number, w = 40, h = 40): LayoutNode => ({ id, lane: 'l', rank: 0, span: 1, row: 0, x, y, w, h, title: id, lines: [] });
+const node = (id: string, x: number, y: number, w = 40, h = 40): LayoutNode => ({ id, lane: 'l', rank: 0, span: 1, row: 0, x, y, w, h, title: id, lines: [], shape: 'rect' });
 const jog = (): LayoutEdge => ({ from: 'u', to: 'v', style: 'normal', points: [{ x: 20, y: 40 }, { x: 20, y: 70 }, { x: 220, y: 70 }, { x: 220, y: 100 }] });
 const u = node('u', 0, 0);
 const v = node('v', 200, 100);

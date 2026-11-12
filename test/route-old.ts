@@ -567,6 +567,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       h: tidy(h),
       title: n.title,
       lines: n.lines,
+      shape: n.shape,
     };
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));

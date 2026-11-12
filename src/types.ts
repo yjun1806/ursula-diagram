@@ -6,10 +6,13 @@ export interface Lane {
   label: string;
 }
 
+export type NodeShape = 'rect' | 'round' | 'stadium' | 'circle' | 'diamond' | 'hexagon' | 'cylinder' | 'parallelogram' | 'subroutine';
+
 export interface GraphNode {
   id: string;
   title: string;
   lines: string[];
+  shape: NodeShape;
   lane: string;
 }
 
@@ -58,6 +61,7 @@ export interface LayoutNode {
   h: number;
   title: string;
   lines: string[];
+  shape: NodeShape;
 }
 
 export interface LayoutEdge {

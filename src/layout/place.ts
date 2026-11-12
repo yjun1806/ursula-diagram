@@ -1,4 +1,4 @@
-import type { Graph } from '../types.ts';
+import type { Graph, NodeShape } from '../types.ts';
 import type { Ruler } from '../metrics.ts';
 
 /**
@@ -26,6 +26,7 @@ export interface Slot {
   nc: number;
   title: string;
   lines: string[];
+  shape: NodeShape;
 }
 
 export interface LaneInfo {
@@ -110,6 +111,7 @@ export function buildTopology(
       nc: 0,
       title: n.title,
       lines: n.lines,
+      shape: n.shape,
     };
   });
   const ranks = slots.length === 0 ? 0 : Math.max(...slots.map((s) => s.rank + s.span));

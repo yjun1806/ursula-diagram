@@ -1,10 +1,11 @@
-import type { EdgeStyle, Graph, GraphEdge, Lane } from './types.ts';
+import type { EdgeStyle, Graph, GraphEdge, Lane, NodeShape } from './types.ts';
 import { UrsulaError } from './types.ts';
 
 interface NodeDraft {
   id: string;
   title: string;
   lines: string[];
+  shape: NodeShape;
   lane: string | null;
 }
 
@@ -86,31 +87,39 @@ function skipSpaces(c: Cursor): void {
   while (c.i < c.s.length && /\s/.test(c.s[c.i] ?? '')) c.i++;
 }
 
-const SHAPES: ReadonlyArray<readonly [string, string]> = [
-  ['((', '))'],
-  ['[', ']'],
-  ['(', ')'],
-  ['{', '}'],
+/** Opening token, closing token and shape; longer opening tokens come first. */
+const SHAPES: ReadonlyArray<readonly [string, string, NodeShape]> = [
+  ['((', '))', 'circle'],
+  ['([', '])', 'stadium'],
+  ['(', ')', 'round'],
+  ['[[', ']]', 'subroutine'],
+  ['[(', ')]', 'cylinder'],
+  ['[/', '/]', 'parallelogram'],
+  ['[', ']', 'rect'],
+  ['{{', '}}', 'hexagon'],
+  ['{', '}', 'diamond'],
 ];
 
-const BAD_SHAPE_STARTS: Record<string, string> = { '[': '[(/\\', '(': '([', '((': '(', '{': '{' };
+/** Openings that are recognised only to be refused. */
+const UNSUPPORTED_OPENS = ['(((', '[\\', '>', '@{'];
 
-function readNode(c: Cursor, line: number): { id: string; label: string | null } {
+function readNode(c: Cursor, line: number): { id: string; label: string | null; shape: NodeShape } {
   skipSpaces(c);
   ID.lastIndex = c.i;
   const m = ID.exec(c.s);
   if (!m) throw new UrsulaError(`expected a node id near '${c.s.slice(c.i, c.i + 12)}'`, 'syntax', line);
   const id = m[0];
   c.i += id.length;
-  const shape = SHAPES.find(([open]) => c.s.startsWith(open, c.i));
+  const refused = UNSUPPORTED_OPENS.find((open) => c.s.startsWith(open, c.i));
+  if (refused) throw new UrsulaError(`unsupported node shape '${refused}'`, 'unsupported', line);
+  const found = SHAPES.find(([open]) => c.s.startsWith(open, c.i));
   let label: string | null = null;
-  if (shape) {
-    const [open, close] = shape;
+  let shape: NodeShape = 'rect';
+  if (found) {
+    const [open, close, kind] = found;
+    shape = kind;
     c.i += open.length;
     const next = c.s[c.i] ?? '';
-    if (next !== '' && BAD_SHAPE_STARTS[open]?.includes(next)) {
-      throw new UrsulaError(`unsupported node shape '${open}${next}'`, 'unsupported', line);
-    }
     if (next === '"') {
       const end = c.s.indexOf('"', c.i + 1);
       if (end < 0) throw new UrsulaError('unterminated quoted label', 'syntax', line);
@@ -121,6 +130,8 @@ function readNode(c: Cursor, line: number): { id: string; label: string | null }
       c.i += close.length;
     } else {
       const end = c.s.indexOf(close, c.i);
+      const slanted = open === '[/' ? c.s.indexOf('\\]', c.i) : -1;
+      if (slanted >= 0 && (end < 0 || slanted < end)) throw new UrsulaError(`unsupported node shape '${open}'`, 'unsupported', line);
       if (end < 0) throw new UrsulaError(`missing '${close}'`, 'syntax', line);
       label = c.s.slice(c.i, end);
       c.i = end + close.length;
@@ -131,7 +142,7 @@ function readNode(c: Cursor, line: number): { id: string; label: string | null }
   if (c.s[c.i] === '&') throw new UrsulaError("'&' node lists are not supported", 'unsupported', line);
   if (c.s.startsWith(':::', c.i)) throw new UrsulaError("':::' class shorthand is not supported", 'unsupported', line);
   c.i = save;
-  return { id, label };
+  return { id, label, shape };
 }
 
 function readEdge(c: Cursor, line: number): { style: EdgeStyle; label?: string } | null {
@@ -167,7 +178,7 @@ function readEdge(c: Cursor, line: number): { style: EdgeStyle; label?: string }
   return cleaned ? { style, label: cleaned } : { style };
 }
 
-function touchNode(st: State, id: string, label: string | null): void {
+function touchNode(st: State, id: string, label: string | null, shape: NodeShape): void {
   const prior = st.nodes.get(id);
   const lane = st.openLane;
   const text = label === null ? null : splitLabel(label, id);
@@ -177,13 +188,14 @@ function touchNode(st: State, id: string, label: string | null): void {
       id,
       title: text?.title ?? id,
       lines: text?.lines ?? [],
+      shape: text ? shape : 'rect',
       lane: lane ?? IMPLICIT_LANE,
     });
     return;
   }
   const next: NodeDraft = {
     ...prior,
-    ...(text ? { title: text.title, lines: text.lines } : {}),
+    ...(text ? { title: text.title, lines: text.lines, shape } : {}),
     // Membership inside a subgraph wins over earlier loose use.
     lane: lane !== null && prior.lane === IMPLICIT_LANE ? lane : prior.lane,
   };
@@ -219,12 +231,12 @@ function parseSubgraph(rest: string, line: number, st: State): void {
 function parseChain(stmt: string, line: number, st: State): void {
   const c: Cursor = { s: stmt, i: 0 };
   let prev = readNode(c, line);
-  touchNode(st, prev.id, prev.label);
+  touchNode(st, prev.id, prev.label, prev.shape);
   for (;;) {
     const edge = readEdge(c, line);
     if (!edge) break;
     const next = readNode(c, line);
-    touchNode(st, next.id, next.label);
+    touchNode(st, next.id, next.label, next.shape);
     st.edges.push({
       from: prev.id,
       to: next.id,
@@ -315,7 +327,7 @@ function finish(st: State): Graph {
   return {
     direction: st.direction,
     lanes,
-    nodes: nodes.map((n) => ({ id: n.id, title: n.title, lines: n.lines, lane: n.lane ?? IMPLICIT_LANE })),
+    nodes: nodes.map((n) => ({ id: n.id, title: n.title, lines: n.lines, shape: n.shape, lane: n.lane ?? IMPLICIT_LANE })),
     edges: st.edges,
   };
 }

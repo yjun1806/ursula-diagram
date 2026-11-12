@@ -1,6 +1,7 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
 import type { LegendKind } from '../sequence/model.ts';
+import { hexagonPoints, parallelogramPoints, trimToOutline } from './shapes.ts';
 import type { EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
 
 export interface NodeHookResult {
@@ -22,6 +23,10 @@ export interface SvgOptions {
 const TITLE_LINE = 18;
 const BODY_LINE = 16;
 const CORNER_RADIUS = 8;
+const NODE_RADIUS = 6;
+/** Height of the end caps of a cylinder, and the inset of the bars of a subroutine. */
+const CAP = 6;
+const BAR = 8;
 
 /** Colour variables (`--ursula-<name>`) with their light and dark values; the values are the fallbacks written into the drawing. */
 export const TOKENS: Record<string, readonly [string, string]> = {
@@ -129,11 +134,23 @@ function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean): string {
   );
 }
 
-function edgeSvg(edge: LayoutEdge): string {
+/** The edge with both ends moved onto the outline of shapes that do not fill their box. */
+function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[] {
+  const pts = edge.points;
+  if (pts.length < 2) return pts;
+  const from = nodes.get(edge.from);
+  const to = nodes.get(edge.to);
+  const out = [...pts];
+  if (from) out[0] = trimToOutline(from, pts[0] as Point, pts[1] as Point);
+  if (to) out[pts.length - 1] = trimToOutline(to, pts[pts.length - 1] as Point, pts[pts.length - 2] as Point);
+  return out;
+}
+
+function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>): string {
   const marker = markerId(edge.style);
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(edge.points)}" marker-end="url(#${marker})"/>`
+    `d="${pathData(trimmedPoints(edge, nodes))}" marker-end="url(#${marker})"/>`
   );
 }
 
@@ -153,6 +170,49 @@ function labelSvg(edge: LayoutEdge): string {
   );
 }
 
+const points = (pts: Point[]): string => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(' ');
+
+function boxSvg(node: LayoutNode, rx: number): string {
+  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"/>`;
+}
+
+/** The outline of a node inside its box. */
+function shapeSvg(node: LayoutNode): string {
+  const { x, y, w, h } = node;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  switch (node.shape) {
+    case 'round':
+      return boxSvg(node, NODE_RADIUS * 2);
+    case 'stadium':
+      return boxSvg(node, h / 2);
+    case 'circle':
+      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>`;
+    case 'hexagon':
+      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"/>`;
+    case 'parallelogram':
+      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"/>`;
+    case 'subroutine':
+      return (
+        boxSvg(node, NODE_RADIUS) +
+        [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join('')
+      );
+    case 'cylinder': {
+      const arc = `A${num(w / 2)} ${CAP} 0 0`;
+      const top = y + CAP;
+      const bottom = y + h - CAP;
+      return (
+        `<path class="ursula-node-box" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` +
+        `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`
+      );
+    }
+    // A diamond is drawn as a plain box until it has a size rule of its own.
+    case 'diamond':
+    case 'rect':
+      return boxSvg(node, NODE_RADIUS);
+  }
+}
+
 function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
   const extra = hook?.(node) ?? {};
   const attrs = Object.entries(extra.attrs ?? {})
@@ -160,7 +220,7 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
     .join('');
   const className = ['ursula-node', extra.className ?? ''].filter((c) => c !== '').join(' ');
   const block = TITLE_LINE + node.lines.length * BODY_LINE;
-  let y = node.y + (node.h - block) / 2;
+  let y = node.y + (node.h - block) / 2 + (node.shape === 'cylinder' ? CAP / 2 : 0);
   const cx = node.x + node.w / 2;
   const texts = [
     `<text class="ursula-node-title" x="${num(cx)}" y="${num(y + TITLE_LINE / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>`,
@@ -174,7 +234,7 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined): string {
   }
   return (
     `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}>` +
-    `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="6"/>` +
+    shapeSvg(node) +
     texts.join('') +
     (extra.extra ?? '') +
     '</g>'
@@ -207,6 +267,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const w = num(layout.width);
   const h = num(layout.height);
   const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
+  const byId = new Map(layout.nodes.map((n) => [n.id, n] as const));
   const labelled = layout.lanes.filter((l) => l.label !== '');
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
   return [
@@ -217,7 +278,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...layout.lanes.map((lane) =>
       laneSvg(lane, labelled.length < 2 || lane === labelled[0], layout.laneAxis === 'along' && layout.direction === 'LR'),
     ),
-    ...layout.edges.map(edgeSvg),
+    ...layout.edges.map((e) => edgeSvg(e, byId)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node)),
     ...layout.edges.map(labelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin)] : []),

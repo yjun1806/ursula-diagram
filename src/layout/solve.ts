@@ -267,6 +267,7 @@ function build(
       h: tidy(h),
       title: s.title,
       lines: s.lines,
+      shape: s.shape,
     };
   });
   const nodeRects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));

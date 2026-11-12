@@ -61,7 +61,7 @@ describe('a box with two partners in the next zone', () => {
 });
 
 describe('the bends of a mirror pair', () => {
-  const box = (id: string, x: number, y: number, h: number) => ({ id, lane: 'l', rank: 0, span: 1, row: 0, x, y, w: 40, h, title: id, lines: [] as string[] });
+  const box = (id: string, x: number, y: number, h: number) => ({ id, lane: 'l', rank: 0, span: 1, row: 0, x, y, w: 40, h, title: id, lines: [] as string[], shape: 'rect' as const });
   const edge = (from: string, to: string, points: Array<[number, number]>, main = false) => ({ from, to, style: 'normal' as const, points: points.map(([x, y]) => ({ x, y })), ...(main ? { main: true as const } : {}) });
   const nodes = [box('s', 0, 100, 40), box('t', 100, 0, 20), box('u', 100, 200, 20)];
   const drawing = (edges: ReturnType<typeof edge>[]): Layout => ({ width: 1000, height: 1000, direction: 'LR', laneAxis: 'across', lanes: [], nodes, edges, diagnostics: [] });

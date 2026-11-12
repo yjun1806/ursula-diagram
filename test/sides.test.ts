@@ -3,7 +3,7 @@ import { layout, parse, pixelRuler, cellRuler } from '../src/index.ts';
 import { designatedSide, directionsOf, mixedSideEnds } from '../src/layered/sides.ts';
 import type { LayoutNode } from '../src/types.ts';
 
-const box = (id: string, lane: string, x: number, y: number): LayoutNode => ({ id, lane, rank: 0, span: 1, row: 0, x, y, w: 40, h: 40, title: id, lines: [] });
+const box = (id: string, lane: string, x: number, y: number): LayoutNode => ({ id, lane, rank: 0, span: 1, row: 0, x, y, w: 40, h: 40, title: id, lines: [], shape: 'rect' });
 const order = new Map([['a', 0], ['b', 1]]);
 
 describe('the side an edge is meant to use', () => {

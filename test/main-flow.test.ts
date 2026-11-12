@@ -80,7 +80,7 @@ describe('candidates', () => {
 });
 
 describe('score', () => {
-  const box = (id: string, lane: string, row: number, x: number, y = row * 100) => ({ id, lane, rank: 0, span: 1, row, x, y, w: 40, h: 20, title: id, lines: [] as string[] });
+  const box = (id: string, lane: string, row: number, x: number, y = row * 100) => ({ id, lane, rank: 0, span: 1, row, x, y, w: 40, h: 20, title: id, lines: [] as string[], shape: 'rect' as const });
   const edge = (from: string, to: string, points: Array<[number, number]>, main = false) => ({ from, to, style: 'normal' as const, points: points.map(([x, y]) => ({ x, y })), ...(main ? { main: true as const } : {}) });
   const drawing = (nodes: ReturnType<typeof box>[], edges: ReturnType<typeof edge>[], pitch?: number): Layout => ({
     width: 1000,
