@@ -66,13 +66,28 @@ export interface LayoutEdge {
   label?: { text: string; x: number; y: number; w: number; h: number };
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'question';
+
+/** What a drawing looks like, as far as a question compares drawings. */
+export interface DrawingFacts {
+  composition: 'lanes' | 'stages';
+  bends: number;
+  crossings: number;
+  /** Edges that run against the reading direction. */
+  back: number;
+  cost: number;
+}
 
 export interface Diagnostic {
   kind: DiagnosticKind;
   nodes: string[];
   message: string;
   suggestion?: string;
+  /** Questions only: what to ask, where, and what drawing the answer would give. */
+  code?: 'split-lane' | 'isolated-nodes';
+  lane?: string;
+  before?: DrawingFacts;
+  after?: DrawingFacts;
 }
 
 export interface LegendItem {

@@ -10,6 +10,7 @@ import type { TextSpan } from './types.ts';
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
 export { layoutLayered, layeredRuler } from './layered/index.ts';
+export { checkLines } from './layered/questions.ts';
 export type { LayoutOptions, LegendOption } from './layout/index.ts';
 export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
@@ -31,7 +32,7 @@ export type * from './types.ts';
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions'> = {},
 ): { lines: string[] } | { error: string } {
   try {
     let lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
@@ -56,7 +57,7 @@ export function renderText(
 export function renderTextSpans(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions'> = {},
 ): { lines: TextSpan[][] } | { error: string } {
   try {
     const frontEnd = selectFrontEnd(src);

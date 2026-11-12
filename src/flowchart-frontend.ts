@@ -8,10 +8,11 @@ import { renderTextLayout } from './render/text.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition } {
+function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean } {
   return {
     ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.composition === undefined ? {} : { composition: opts.composition }),
+    ...(opts.questions === undefined ? {} : { questions: opts.questions }),
     ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
     ...(opts.legend === undefined ? {} : { legend: opts.legend }),
   };

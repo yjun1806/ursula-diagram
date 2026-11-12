@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
+import { checkLines, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
+import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages]\n');
+  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions]\n');
   process.exit(2);
 }
 
@@ -12,6 +13,7 @@ let format = 'svg';
 let width: number | undefined;
 let legend = true;
 let color = false;
+let questions = true;
 let engine: 'grid' | 'layered' | undefined;
 let composition: 'auto' | 'lanes' | 'stages' | undefined;
 for (let i = 0; i < args.length; i++) {
@@ -20,6 +22,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--width') width = Number(args[++i] ?? usage());
   else if (a === '--no-legend') legend = false;
   else if (a === '--color') color = true;
+  else if (a === '--no-questions') questions = false;
   else if (a === '--composition') {
     const v = args[++i];
     if (v !== 'auto' && v !== 'lanes' && v !== 'stages') usage();
@@ -32,13 +35,16 @@ for (let i = 0; i < args.length; i++) {
   else if (a !== undefined && !a.startsWith('--') && file === undefined) file = a;
   else usage();
 }
-if (!['svg', 'text', 'json'].includes(format) || (width !== undefined && !Number.isFinite(width))) usage();
+if (!['svg', 'text', 'json', 'check'].includes(format) || (width !== undefined && !Number.isFinite(width))) usage();
 
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }) };
-  if (format === 'text') {
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }) };
+  if (format === 'check') {
+    const laid = frontEnd.json(src, 'svg', opts) as Layout;
+    process.stdout.write(`${('edges' in laid && 'diagnostics' in laid ? checkLines(laid) : ['no checks for this kind of diagram']).join('\n')}\n`);
+  } else if (format === 'text') {
     const rows =
       color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
     process.stdout.write(`${rows.join('\n')}\n`);

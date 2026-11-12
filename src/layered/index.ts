@@ -19,12 +19,15 @@ import type { Composition } from './composition.ts';
 import { planZones } from './composition.ts';
 import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
+import { questionsFor } from './questions.ts';
 import type { Variant } from './choose.ts';
 import { CANDIDATES, pickBest } from './choose.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
   composition?: 'auto' | Composition;
+  /** Add questions (kind 'question') about the structure to the diagnostics (on by default). */
+  questions?: boolean;
   /** Try small changes on the chosen drawing and keep those that measure better (on by default). */
   refine?: boolean;
   maxWidth?: number;
@@ -313,7 +316,10 @@ export function layoutLayered(source: Graph, given: Ruler, opts: LayeredOptions 
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
   const graph: Graph = { ...source, lanes, direction: stages ? (source.direction === 'LR' ? 'TD' : 'LR') : source.direction };
   const laid = stages ? finalize(prepare(graph, given, opts, true, CANDIDATES[0] as Variant)) : drawLanes(graph, given, opts);
-  return { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
+  const drawn: Layout = { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
+  if (opts.questions === false) return drawn;
+  const asked = questionsFor(source, drawn, (g) => layoutLayered(g, given, { ...opts, questions: false }));
+  return asked.length === 0 ? drawn : { ...drawn, diagnostics: [...drawn.diagnostics, ...asked] };
 }
 
 /** Places given rows at the smallest rank gap, for changes that need more room; undefined when the gap cannot shrink. */

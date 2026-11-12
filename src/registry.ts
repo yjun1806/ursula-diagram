@@ -5,6 +5,7 @@ export interface RenderOptions extends SvgOptions {
   maxWidth?: number;
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
+  questions?: boolean;
 }
 
 export interface TextOptions {
@@ -12,6 +13,7 @@ export interface TextOptions {
   maxHeight?: number;
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
+  questions?: boolean;
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */
