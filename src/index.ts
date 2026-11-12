@@ -4,6 +4,7 @@ import { cellWidth } from './metrics.ts';
 import { selectFrontEnd } from './registry.ts';
 import type { TextOptions } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
+import './er/frontend.ts';
 import './journey/frontend.ts';
 import './gantt/frontend.ts';
 import './ishikawa/frontend.ts';
