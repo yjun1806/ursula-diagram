@@ -165,8 +165,36 @@ describe('mindmap layout', () => {
     expect(byText('Origins')?.h).toBe(48);
     expect(byText('On effectiveness and features')?.h).toBe(68);
     expect(lay.nodes.every((n) => [48, 68, 84].includes(n.h) || n.node.shape === 'circle')).toBe(true);
-    const long = lay.nodes.find((n) => n.lines.length === 2 && n.node.paragraphs[0]?.startsWith('British'));
-    expect(long?.lines.length).toBe(2);
+    const long = lay.nodes.find((n) => n.node.paragraphs[0]?.startsWith('British'));
+    expect(long?.lines).toEqual(['British popular', 'psychology author', 'Tony Buzan']);
+    expect(long?.h).toBe(84);
+    expect(byText('On Automatic creation')?.lines).toEqual(['On Automatic', 'creation']);
+  });
+
+  it('puts the first big branch top left, then the right half, then the rest of the left half going up', () => {
+    const top = lay.nodes.filter((n) => n.depth === 1);
+    const left = top.filter((n) => n.side === -1).sort((a, b) => a.y - b.y).map((n) => n.lines.join(' '));
+    const right = top.filter((n) => n.side === 1).map((n) => n.lines.join(' '));
+    expect(left).toEqual(['Origins', 'Tools']);
+    expect(right).toEqual(['Research']);
+    const five = layoutMindmap(parseMindmap('mindmap\n  R\n    A\n    B\n    C\n    D\n    E\n'), pixelRuler());
+    const l5 = five.nodes.filter((n) => n.side === -1).sort((a, b) => a.y - b.y).map((n) => n.lines[0]);
+    const r5 = five.nodes.filter((n) => n.side === 1).sort((a, b) => a.y - b.y).map((n) => n.lines[0]);
+    expect(r5).toEqual(['B', 'C', 'D']);
+    expect(l5).toEqual(['A', 'E']);
+  });
+
+  it('keeps a single big branch on the right', () => {
+    const one = layoutMindmap(parseMindmap('mindmap\nRoot\n    A\n      B\n'), pixelRuler());
+    expect(one.nodes[1]?.side).toBe(1);
+  });
+
+  it('draws a root without delimiters as the default box, and a root in (( )) as a circle', () => {
+    const plain = layoutMindmap(parseMindmap('mindmap\n    I am the default shape\n'), pixelRuler());
+    expect(plain.scene.items.some((i) => i.kind === 'circle')).toBe(false);
+    expect(plain.scene.items.some((i) => i.kind === 'box')).toBe(true);
+    const round = layoutMindmap(parseMindmap('mindmap\n    id((I am a circle))\n'), pixelRuler());
+    expect(round.scene.items.some((i) => i.kind === 'circle')).toBe(true);
   });
 
   it('overlaps no two boxes and no two texts', () => {
@@ -202,12 +230,12 @@ describe('mindmap layout', () => {
     }
   });
 
-  it('breaks a long label at words, never wider than 200', () => {
+  it('breaks a long label at words, never longer than 20 characters', () => {
     const ruler = pixelRuler();
     const l = layoutMindmap(parseMindmap('mindmap\n  R\n    ' + 'word '.repeat(30).trim() + '\n'), ruler);
     const node = l.nodes[1];
     expect((node?.lines.length ?? 0) > 1).toBe(true);
-    for (const line of node?.lines ?? []) expect(ruler.textWidth(line, 'title')).toBeLessThanOrEqual(200);
+    for (const line of node?.lines ?? []) expect([...line].length).toBeLessThanOrEqual(20);
   });
 
   it('draws the front-matter title above the map and colours by depth when asked', () => {
