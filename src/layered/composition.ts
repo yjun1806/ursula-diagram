@@ -65,3 +65,6 @@ export function planZones(graph: Graph, requested: 'auto' | Composition = 'auto'
     : [...active];
   return { composition: 'stages', order: [...order, ...aside] };
 }
+
+/** Whether the drawing has no zones: every node stands in the one unnamed zone the parser makes for nodes outside any subgraph. */
+export const unzoned = (graph: { lanes: ReadonlyArray<{ label: string }> }): boolean => graph.lanes.length === 1 && graph.lanes[0]?.label === '';

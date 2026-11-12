@@ -1,5 +1,6 @@
 import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { Fold } from './rows.ts';
+import { unzoned } from './composition.ts';
 import { directionsOf, mixedSideEnds, sideOfPoint } from './sides.ts';
 
 /**
@@ -369,7 +370,8 @@ export function score(l: Layout): number[] {
   const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
   // Pixels: the second row of a lane is cheap, the third and further ones cost as before; a gap closed below the default and a label that shows too little line cost as well.
   const pixels = l.gapDefault !== undefined;
-  const rowCost = pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
+  // Without zones the rows of the one implicit zone are the places side by side of a stage: they cost nothing.
+  const rowCost = pixels && unzoned(l) ? 0 : pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
   const tightCost = pixels ? WEIGHTS.tight * (l.gap !== undefined && l.gap < (l.gapDefault ?? 0) ? 1 : 0) + WEIGHTS.labelTight * l.diagnostics.filter((d) => d.kind === 'label-tight').length + WEIGHTS.offCentre * l.diagnostics.filter((d) => d.kind === 'off-centre').length : 0;
   const [crossMain, crossOther] = crossingsFrom(l, g);
   const cost =
@@ -405,4 +407,20 @@ export function pickBest(drawings: Layout[]): Layout {
     }
   }
   return best;
+}
+
+const bendsOf = (l: Layout): number => l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0);
+const crossingsRecorded = (l: Layout): number => l.diagnostics.filter((d) => d.kind === 'crossing').length;
+const sharedPorts = (l: Layout): number => l.diagnostics.filter((d) => d.kind === 'shared-port').length;
+
+/**
+ * Whether the `spread` drawing replaces the usual one: it has no more bends, no more crossings and no more shared
+ * ports, at least one of the three fewer, and it fits `room` (width and height); when the usual drawing is already
+ * wider or taller than `room`, the spread one is no wider and no taller than it.
+ */
+export function spreadWins(spread: Layout, usual: Layout, room: { width: number; height: number } = { width: Infinity, height: Infinity }): boolean {
+  const [b, c, s] = [bendsOf(spread) - bendsOf(usual), crossingsRecorded(spread) - crossingsRecorded(usual), sharedPorts(spread) - sharedPorts(usual)];
+  if (b > 0 || c > 0 || s > 0 || (b === 0 && c === 0 && s === 0)) return false;
+  const fits = (axis: 'width' | 'height'): boolean => spread[axis] <= Math.max(room[axis], usual[axis] > room[axis] ? usual[axis] : 0);
+  return fits('width') && fits('height');
 }

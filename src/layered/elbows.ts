@@ -36,7 +36,7 @@ export function overlap(s: Seg, t: Seg): boolean {
 export const hits = (s: Seg, r: { x: number; y: number; w: number; h: number }): boolean =>
   Math.min(s.ax, s.bx) < r.x + r.w - EPS && Math.max(s.ax, s.bx) > r.x + EPS && Math.min(s.ay, s.by) < r.y + r.h - EPS && Math.max(s.ay, s.by) > r.y + EPS;
 
-function properCross(a: Seg, b: Seg): boolean {
+export function properCross(a: Seg, b: Seg): boolean {
   const ah = Math.abs(a.ay - a.by) < EPS;
   const bh = Math.abs(b.ay - b.by) < EPS;
   if (ah === bh) return false;

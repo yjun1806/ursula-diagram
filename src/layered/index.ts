@@ -19,12 +19,12 @@ import type { Frame } from './route.ts';
 import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
-import { planZones } from './composition.ts';
+import { planZones, unzoned } from './composition.ts';
 import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
 import type { Variant } from './choose.ts';
-import { CANDIDATES, FOLDED, pickBest, score } from './choose.ts';
+import { CANDIDATES, FOLDED, pickBest, score, spreadWins } from './choose.ts';
 import { directionsOf, mixedSideEnds } from './sides.ts';
 import { stats } from './stats.ts';
 
@@ -171,7 +171,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     const plan = planFlat(ladder, layers, ruler);
     growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across);
     const need = portDemand(ladder, plan);
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart });
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
     return {
       ladder,
       layers,
@@ -465,10 +465,41 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
   const graph: Graph = { ...source, lanes, direction: stages ? (source.direction === 'LR' ? 'TD' : 'LR') : source.direction };
   const laid = stages ? finalize(prepare(graph, given, opts, true, CANDIDATES[0] as Variant)) : drawLanes(graph, given, opts);
-  const drawn: Layout = { ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition };
-  // Edges that look the same way at a node should leave by the same side of it.
+  const drawn = withMixedSides({ ...laid, direction: source.direction, laneAxis: stages ? 'along' : 'across', composition: plan.composition });
+  // Without zones the `spread` drawing replaces the usual one only when `spreadWins`.
+  const spread = unzoned(source) && !given.terminal && opts.quality === 'best' && opts.quick !== true ? drawSpread(source, given, opts) : undefined;
+  const room = { width: opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM, height: opts.maxHeight ?? Infinity };
+  return spread !== undefined && spreadWins(spread, drawn, room) ? spread : drawn;
+}
+
+/** Edges that look the same way at a node should leave by the same side of it. */
+function withMixedSides(drawn: Layout): Layout {
   const mixed = mixedSideEnds(drawn, directionsOf(drawn));
   return mixed.length === 0 ? drawn : { ...drawn, diagnostics: [...drawn.diagnostics, ...mixed] };
+}
+
+/**
+ * The `spread` drawing of a graph without zones: every box stands in the stage of its longest path, and the boxes of
+ * one stage stand side by side across the reading direction, in the order of the text; a box with several partners in
+ * the next stage stands in the middle of them. It is drawn as stages, one zone without a name per stage, and then
+ * given back its one unnamed zone. Nothing when the flow has a single stage.
+ */
+function drawSpread(source: Graph, given: Ruler, opts: LayeredOptions): Layout | undefined {
+  const rows = assignLayers(source, source.nodes.map(() => 2), Infinity, 0, false, 'flat');
+  const stage = stageOf(source, rows);
+  const order = [...new Set(stage)].sort((a, b) => a - b);
+  if (order.length < 2) return undefined;
+  const home = source.lanes[0] as Graph['lanes'][number];
+  const lanes = order.map((s) => ({ id: `${home.id}${s}`, label: '' }));
+  const nodes = source.nodes.map((n, i) => ({ ...n, lane: (lanes[order.indexOf(stage[i] ?? 0)] as Graph['lanes'][number]).id }));
+  const graph: Graph = { ...source, lanes, nodes, direction: source.direction === 'LR' ? 'TD' : 'LR' };
+  // The zones are not drawn, so the stages keep the gap of two neighbours instead of the gap of two zones.
+  const ruler: Ruler = { ...given, laneGap: given.rankGap - 2 * given.lanePad };
+  const laid = withMixedSides({ ...finalize(prepare(graph, ruler, opts, true, CANDIDATES[0] as Variant)), direction: source.direction, laneAxis: 'along', composition: 'stages' });
+  const box = laid.lanes.reduce((b, l) => ({ x0: Math.min(b.x0, l.x), y0: Math.min(b.y0, l.y), x1: Math.max(b.x1, l.x + l.w), y1: Math.max(b.y1, l.y + l.h) }), { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  const whole = { id: home.id, label: '', x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0, labelBox: { x: box.x0, y: box.y0, w: 0, h: 0 } };
+  const homeOf = new Map(source.nodes.map((n) => [n.id, n.lane] as const));
+  return { ...laid, lanes: [whole], nodes: laid.nodes.map((n) => ({ ...n, lane: homeOf.get(n.id) ?? n.lane })) };
 }
 
 function withQuestions(source: Graph, drawn: Layout, given: Ruler, opts: LayeredOptions): Layout {
