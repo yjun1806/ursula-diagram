@@ -85,6 +85,9 @@ function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
   return { steps: Math.max(1, Math.round(unit / step)), ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit }), reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit };
 }
 
+/** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
+const COMMON_WITHIN = 1.15;
+
 /**
  * The ruler this engine measures with: boxes and gaps snap to half the node grid (when that is a whole number
  * of at least two edge grid steps), so a smaller gap really buys another column; gaps may shrink to half the default.
@@ -92,8 +95,8 @@ function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
 export function layeredRuler(r: Ruler, gap?: number): Ruler {
   if (r.terminal) return terminalRuler(r, gap);
   const half = r.nodeGrid / 2;
-  if (!Number.isInteger(half) || half < 2 * r.edgeGrid) return r;
-  return { ...r, nodeGrid: half, rankGapMin: Math.max(half, Math.floor(r.rankGap / 2 / half) * half) };
+  if (!Number.isInteger(half) || half < 2 * r.edgeGrid) return { ...r, commonWithin: COMMON_WITHIN };
+  return { ...r, commonWithin: COMMON_WITHIN, nodeGrid: half, rankGapMin: Math.max(half, Math.floor(r.rankGap / 2 / half) * half) };
 }
 
 /**

@@ -36,6 +36,8 @@ export interface Ruler {
   snap(v: number): number;
   /** Grid every box coordinate and size, gap, lane padding and lane rectangle is a multiple of. */
   nodeGrid: number;
+  /** When set, the common box width is the widest that is no more than this many times the middle width, instead of the width three quarters of the boxes fit. */
+  commonWithin?: number;
   /** Finer grid every edge bend, track offset and label position is a multiple of. Attachment points on a side are exempt. */
   edgeGrid: number;
   /**

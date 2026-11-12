@@ -168,8 +168,14 @@ export function measureNodes(
   });
   const w = content.map((c) => snapW(c.w));
   const sorted = [...w].sort((a, b) => a - b);
-  // A terminal drawing has one box width: the widest.
-  const pick = ruler.uniform ? (sorted[sorted.length - 1] ?? 0) : (sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0);
+  // The common width: the widest box in a terminal drawing; with `commonWithin`, the widest that is not an outlier; otherwise the width three quarters of the boxes fit. Wider boxes take two places.
+  const middle = sorted[Math.floor((sorted.length - 1) / 2)] ?? 0;
+  const within = ruler.commonWithin;
+  const pick = ruler.uniform
+    ? (sorted[sorted.length - 1] ?? 0)
+    : within !== undefined
+      ? (sorted.filter((v) => v <= within * middle).pop() ?? 0)
+      : (sorted[Math.max(0, Math.ceil(0.75 * sorted.length) - 1)] ?? 0);
   // Half of the column pitch is the slot unit; it has to be a whole number of node grid steps.
   // Boxes half a step apart still have to overlap, so a box is wider than a gap.
   const fit = (v: number, minimum = ruler.nodeGrid): number => {

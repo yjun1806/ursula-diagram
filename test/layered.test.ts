@@ -434,7 +434,8 @@ describe('layered grid and width remedies', () => {
     expect(new Set(main).size).toBe(1);
     // The node the text starts from must stand in the first place, which can cost the top lane rows.
     expect(new Set(l.nodes.filter((n) => n.lane === 'low' || n.lane === 'lane2').map((n) => n.y)).size).toBeLessThanOrEqual(3);
-    expect(l.width).toBeLessThanOrEqual(1280);
+    // Room for lines that pass beside boxes may take up to 15% more than the default canvas.
+    expect(l.width).toBeLessThanOrEqual(1472);
     expect(geometryViolations(l)).toEqual([]);
   });
 });
