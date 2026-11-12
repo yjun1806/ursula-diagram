@@ -29,12 +29,18 @@ export interface RouteContext {
   clear: number;
   lane: number;
   around: number;
+  /** How many lanes past the first one a line that goes around the blocks may move out; 2 when absent. */
+  farthest?: number;
+  /** Extra cost of a route, for what only the caller can judge (whether a label finds room on it). */
+  score?: (pts: Point[]) => number;
   /** Unit of the medium (4 in pixels is not required; lines run on even coordinates in pixels, whole cells in text). */
   step: number;
 }
 
 interface Candidate {
   pts: Point[];
+  /** An end leaves or enters a face away from its middle. */
+  off: boolean;
   /** Direction the line leaves the first block in, and direction the face of the last block looks. */
   exit: Point;
   enter: Point;
@@ -52,6 +58,29 @@ const faces = (r: Rect): Face[] => [
   { p: { x: r.x + Math.floor(r.w / 2), y: r.y + r.h }, d: { x: 0, y: 1 } },
   { p: { x: r.x, y: r.y + Math.floor(r.h / 2) }, d: { x: -1, y: 0 } },
 ];
+
+/**
+ * The middles of the faces, then the points of a long face that line up with a gap between other blocks, so a line
+ * can reach a tall or wide block through that gap. Off-middle points come with `off` set.
+ */
+function facesAlong(r: Rect, ctx: RouteContext): Array<Face & { off?: boolean }> {
+  const out: Array<Face & { off?: boolean }> = faces(r);
+  const keep = 2 * ctx.stub;
+  for (const y of ctx.channelsY) {
+    if (y < r.y + keep || y > r.y + r.h - keep || y === r.y + Math.floor(r.h / 2)) continue;
+    out.push({ p: { x: r.x + r.w, y }, d: { x: 1, y: 0 }, off: true }, { p: { x: r.x, y }, d: { x: -1, y: 0 }, off: true });
+  }
+  for (const x of ctx.channelsX) {
+    if (x < r.x + keep || x > r.x + r.w - keep || x === r.x + Math.floor(r.w / 2)) continue;
+    out.push({ p: { x, y: r.y }, d: { x: 0, y: -1 }, off: true }, { p: { x, y: r.y + r.h }, d: { x: 0, y: 1 }, off: true });
+  }
+  return out;
+}
+
+/** Cost of reaching a face away from its middle; a route there must save more than this. */
+const OFF_MIDDLE = 700;
+/** Cost of running on a piece of line another link already uses. */
+const SHARED = 3000;
 
 const flat = (d: Point): boolean => d.y === 0;
 const near = (a: number, b: number): boolean => Math.abs(a - b) < 1e-6;
@@ -120,11 +149,11 @@ function reading(from: Rect, to: Rect): Point | undefined {
 function candidates(from: Rect, to: Rect, ctx: RouteContext): Candidate[] {
   const out: Candidate[] = [];
   const bounds = ctx.bounds;
-  for (const fa of faces(from)) {
-    for (const fb of faces(to)) {
+  for (const fa of facesAlong(from, ctx)) {
+    for (const fb of facesAlong(to, ctx)) {
       const pa = fa.p;
       const pb = fb.p;
-      const push = (pts: Point[]): number => out.push({ pts, exit: fa.d, enter: fb.d });
+      const push = (pts: Point[]): number => out.push({ pts, exit: fa.d, enter: fb.d, off: fa.off === true || fb.off === true });
       if (flat(fa.d) && flat(fb.d)) {
         if (fa.d.x === -fb.d.x) {
           if ((pb.x - pa.x) * fa.d.x < 2 * ctx.stub) continue;
@@ -132,7 +161,7 @@ function candidates(from: Rect, to: Rect, ctx: RouteContext): Candidate[] {
           else for (const m of middles(pa.x, pb.x, ctx, ctx.channelsX)) push([pa, { x: m, y: pa.y }, { x: m, y: pb.y }, pb]);
         } else {
           const beyond = fa.d.x > 0 ? Math.max(pa.x, pb.x) : Math.min(pa.x, pb.x);
-          for (const k of [0, 1, 2]) {
+          for (let k = 0; k <= (ctx.farthest ?? 2); k++) {
             const m = beyond + fa.d.x * (ctx.stub + ctx.around + k * ctx.lane);
             if (m >= bounds.x && m <= bounds.x + bounds.w) push([pa, { x: m, y: pa.y }, { x: m, y: pb.y }, pb]);
           }
@@ -144,7 +173,7 @@ function candidates(from: Rect, to: Rect, ctx: RouteContext): Candidate[] {
           else for (const m of middles(pa.y, pb.y, ctx, ctx.channelsY)) push([pa, { x: pa.x, y: m }, { x: pb.x, y: m }, pb]);
         } else {
           const beyond = fa.d.y > 0 ? Math.max(pa.y, pb.y) : Math.min(pa.y, pb.y);
-          for (const k of [0, 1, 2]) {
+          for (let k = 0; k <= (ctx.farthest ?? 2); k++) {
             const m = beyond + fa.d.y * (ctx.stub + ctx.around + k * ctx.lane);
             if (m >= bounds.y && m <= bounds.y + bounds.h) push([pa, { x: pa.x, y: m }, { x: pb.x, y: m }, pb]);
           }
@@ -172,8 +201,8 @@ const length = (pts: readonly Point[]): number => pts.reduce((s, p, i) => (i ===
 export function route(from: Rect, to: Rect, ids: { from: string; to: string }, ctx: RouteContext): Point[] {
   let best: { pts: Point[]; cost: number } | undefined;
   const wanted = reading(from, to);
-  for (const { pts, exit, enter } of candidates(from, to, ctx)) {
-    let cost = (pts.length - 2) * 200 + length(pts);
+  for (const { pts, exit, enter, off } of candidates(from, to, ctx)) {
+    let cost = (pts.length - 2) * 200 + length(pts) + (off ? OFF_MIDDLE : 0) + (ctx.score?.(pts) ?? 0);
     if (wanted !== undefined) cost += (same(exit, wanted) ? 0 : 300) + (same(enter, { x: -wanted.x, y: -wanted.y }) ? 0 : 300);
     // A line that leaves a face and comes back to a face that looks the same way doubles back around the blocks.
     const first = pts[1] as Point;
@@ -194,7 +223,7 @@ export function route(from: Rect, to: Rect, ids: { from: string; to: string }, c
       if (blocked) break;
       for (const u of ctx.used) {
         if (u.from === ids.from || u.to === ids.to) continue;
-        cost += shared(a, b, u.a, u.b) > 0 ? 3000 : 0;
+        cost += shared(a, b, u.a, u.b) > 0 ? SHARED : 0;
         if (crosses(a, b, u.a, u.b)) cost += 40;
       }
     }
