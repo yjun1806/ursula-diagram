@@ -7,6 +7,7 @@ import type { SvgOptions } from './render/svg.ts';
 import './journey/frontend.ts';
 import './gantt/frontend.ts';
 import './kanban/frontend.ts';
+import './mindmap/frontend.ts';
 import './quadrant/frontend.ts';
 import './pie/frontend.ts';
 import './packet/frontend.ts';
