@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { pixelRuler } from '../src/metrics.ts';
 import { render, renderText, UrsulaError } from '../src/index.ts';
 import { selectFrontEnd } from '../src/registry.ts';
-import { makeFormatter } from '../src/treemap/format.ts';
+import { makeFormatter } from '../src/chart/format.ts';
 import { layoutTreemap } from '../src/treemap/layout.ts';
 import { parseTreemap } from '../src/treemap/parse.ts';
 import type { SceneBox, SceneText } from '../src/types.ts';

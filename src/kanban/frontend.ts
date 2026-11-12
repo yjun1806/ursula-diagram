@@ -1,15 +1,15 @@
+import { configSection } from '../front/options.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
+import { joinSpans } from '../text/terminal.ts';
 import { layoutKanban } from './layout.ts';
 import { parseKanban } from './parse.ts';
-import { joinSpans, layoutKanbanText } from './text.ts';
+import { layoutKanbanText } from './text.ts';
 
 /** The `kanban.ticketBaseUrl` setting of the options' `config`; a value that is not a string is ignored. */
 function ticketBaseUrlOf(opts: object): string | undefined {
-  const config = 'config' in opts ? opts.config : undefined;
-  const section = typeof config === 'object' && config !== null && 'kanban' in config ? config.kanban : undefined;
-  const value = typeof section === 'object' && section !== null && 'ticketBaseUrl' in section ? section.ticketBaseUrl : undefined;
+  const value = configSection('config' in opts ? opts.config : undefined, 'kanban')?.['ticketBaseUrl'];
   return typeof value === 'string' ? value : undefined;
 }
 

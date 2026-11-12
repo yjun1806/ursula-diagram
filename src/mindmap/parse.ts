@@ -1,3 +1,4 @@
+import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 import type { MindNode, MindShape, Mindmap } from './model.ts';
 
@@ -68,35 +69,22 @@ interface Open {
 export function parseMindmap(src: string): Mindmap {
   const rows = src.split(/\r?\n/);
   let root: MindNode | undefined;
-  let accTitle: string | undefined;
   let headerSeen = false;
-  let inDescription = false;
+  const acc = createAccessibilityReader();
   const stack: Open[] = [];
 
   for (let n = 0; n < rows.length; n++) {
     const lineNo = n + 1;
     const raw = rows[n] ?? '';
     const s = raw.trim();
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '' || s.startsWith('%%')) continue;
     if (!headerSeen) {
       if (s !== 'mindmap') fail('A mindmap starts with "mindmap".', lineNo, 'header');
       headerSeen = true;
       continue;
     }
-    const acc = /^accTitle\s*:\s*(.*)$/u.exec(s);
-    if (acc !== null) {
-      accTitle = (acc[1] ?? '').trim();
-      continue;
-    }
-    if (/^accDescr\s*:/u.test(s)) continue;
-    if (/^accDescr\s*\{/u.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
     // Icon and class lines belong to the node above them and draw nothing.
     if (s.startsWith('::icon(') || s.startsWith(':::')) continue;
 
@@ -129,5 +117,5 @@ export function parseMindmap(src: string): Mindmap {
 
   if (!headerSeen) fail('A mindmap starts with "mindmap".', 1, 'header');
   if (root === undefined) fail('A mindmap needs a root node.', rows.length, 'empty');
-  return { root, ...(accTitle === undefined ? {} : { accTitle }) };
+  return { root, ...(acc.title === undefined ? {} : { accTitle: acc.title }) };
 }

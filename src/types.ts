@@ -3,8 +3,25 @@ import type { Theme } from './render/theme.ts';
 export type Direction = 'LR' | 'TD';
 export type EdgeStyle = 'normal' | 'thick' | 'dotted';
 
-/** What sits at an end of a line: an arrowhead, a dot, a cross, or nothing. */
-export type EdgeEnd = 'arrow' | 'circle' | 'cross' | 'none';
+/**
+ * What sits at an end of a line: an arrowhead, a dot, a cross, or nothing; or one of the marks of a record diagram.
+ * `triangle-open`, `diamond-filled`, `diamond-open` and `arrow-open` are relation marks (inheritance, composition,
+ * aggregation, dependency); `one`, `zero-one`, `many`, `one-many` and `zero-many` are the crow's-foot counts.
+ */
+export type EdgeEnd =
+  | 'arrow'
+  | 'circle'
+  | 'cross'
+  | 'none'
+  | 'triangle-open'
+  | 'diamond-filled'
+  | 'diamond-open'
+  | 'arrow-open'
+  | 'one'
+  | 'zero-one'
+  | 'many'
+  | 'one-many'
+  | 'zero-many';
 
 export interface Lane {
   id: string;
@@ -25,7 +42,22 @@ export type NodeShape =
   | 'lean-l'
   | 'trap-b'
   | 'trap-t'
-  | 'dbl-circle';
+  | 'dbl-circle'
+  | 'start-dot'
+  | 'end-dot'
+  | 'bar'
+  | 'note'
+  | 'ellipse'
+  | 'actor';
+
+/** One band of a box that is divided by rules (a class, an entity): the first one is the head. */
+export interface Compartment {
+  lines: string[];
+  /** Text alignment; the head centres, the other compartments start at the left. */
+  align?: 'center' | 'left';
+  /** `title`: bold; `tag`: small and muted; `body`: regular. The head is a title, the others are bodies. */
+  emphasis?: 'title' | 'tag' | 'body';
+}
 
 export interface GraphNode {
   id: string;
@@ -39,6 +71,8 @@ export interface GraphNode {
   box?: { w: number; h: number };
   /** The shape name the source asked for when it is not drawn yet (the node is drawn as a rectangle). */
   shapeAsked?: string;
+  /** A box divided by rules; when present it is drawn instead of `title` and `lines`. */
+  compartments?: Compartment[];
 }
 
 /** A group of nodes drawn as a box around them; clusters nest through `parent`. */
@@ -67,6 +101,9 @@ export interface GraphEdge {
   invisible?: true;
   /** Length asked for by a longer line (`--->` is 2); absent for the shortest. */
   minLength?: number;
+  /** Small texts beside the start and the end of the line (a multiplicity such as `1..*`). */
+  startLabel?: string;
+  endLabel?: string;
 }
 
 export interface Graph {
@@ -117,8 +154,19 @@ export interface LayoutNode {
   shape: NodeShape;
   /** Diamonds in pixel media: the outline, centred in the box and reaching past its top and bottom. */
   outline?: { x: number; y: number; w: number; h: number };
+  /** Bands of a box divided by rules; drawn instead of `title` and `lines`. */
+  compartments?: Compartment[];
   /** The innermost cluster box the node stands in. */
   cluster?: string;
+}
+
+/** A small text beside an end of a line. */
+export interface EndLabel {
+  text: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 /** A cluster drawn as a box around its nodes and inner clusters; `depth` is 1 for a box that stands in no other. */
@@ -148,6 +196,9 @@ export interface LayoutEdge {
   main?: true;
   /** `lines` is present when the label is wrapped onto two lines; `text` is then the whole text. */
   label?: { text: string; x: number; y: number; w: number; h: number; lines?: string[] };
+  /** Small texts beside the start and the end of the line. */
+  startLabel?: EndLabel;
+  endLabel?: EndLabel;
 }
 
 export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';

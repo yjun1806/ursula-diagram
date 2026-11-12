@@ -1,19 +1,8 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, padEnd, padStart } from '../text/terminal.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
 
-function cut(text: string, width: number): string {
-  if (cellWidth(text) <= width) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(out + ch) > width - 1) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
-const padEnd = (text: string, width: number): string => text + ' '.repeat(Math.max(0, width - cellWidth(text)));
-const padStart = (text: string, width: number): string => ' '.repeat(Math.max(0, width - cellWidth(text))) + text;
 
 /** The values as a table: the title, then one row per point with its name, x, y and quadrant name. */
 export function quadrantTextLines(chart: QuadrantChart, maxWidth: number | undefined): string[] {

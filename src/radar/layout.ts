@@ -1,8 +1,12 @@
+import { trimmedNumber } from '../chart/format.ts';
+import { ceilTo, FLOAT_NOISE } from '../chart/grid.ts';
+import { anchoredBox, boxesOverlap } from '../chart/label-place.ts';
+import type { Box, TextAnchor } from '../chart/label-place.ts';
 import { niceTicks } from '../chart/ticks.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
 import { num } from '../render/svg.ts';
+import type { Theme } from '../render/theme.ts';
 import { UrsulaError } from '../types.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Radar } from './model.ts';
@@ -16,14 +20,7 @@ const NAME_GAP = 16;
 const SWATCH = 12;
 const LEGEND_GAP = 24;
 
-type Anchor = 'start' | 'middle' | 'end';
-
-interface Box {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
+type Anchor = TextAnchor;
 
 interface Label {
   x: number;
@@ -55,14 +52,8 @@ export interface RadarLayout {
   textBoxes: Array<{ text: string } & Box>;
 }
 
-const ceilTo = (v: number, step: number): number => Math.ceil(v / step - 1e-9) * step;
 
-function boxOf(l: Label): Box {
-  const x0 = l.anchor === 'start' ? l.x : l.anchor === 'end' ? l.x - l.w : l.x - l.w / 2;
-  return { x0, y0: l.y - TEXT_H / 2, x1: x0 + l.w, y1: l.y + TEXT_H / 2 };
-}
-
-const overlaps = (a: Box, b: Box, pad = 1): boolean => a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
+const boxOf = (l: Label): Box => anchoredBox(l.x, l.y, l.w, l.anchor, TEXT_H);
 
 function inside(p: Point, poly: Point[]): boolean {
   let hit = false;
@@ -75,9 +66,7 @@ function inside(p: Point, poly: Point[]): boolean {
   return hit;
 }
 
-function tickText(v: number): string {
-  return String(Number(v.toFixed(2)));
-}
+const tickText = (v: number): string => trimmedNumber(v, 2);
 
 /** Rings and the value at the outer end of the axes. */
 export function radarScale(model: Radar): { min: number; max: number; rings: number[] } {
@@ -114,7 +103,7 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
   // Coordinates here are relative to the centre.
   const polygons = model.curves.map((c) => c.values.map((v, i) => at(i, radiusOf(v))));
   const placed: Box[] = [];
-  const free = (b: Box): boolean => placed.every((p) => !overlaps(b, p));
+  const free = (b: Box): boolean => placed.every((p) => !boxesOverlap(b, p, 1));
 
   const names: Label[] = model.axes.map((a, i) => {
     const d = dirOf(i);
@@ -194,7 +183,7 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
   const titleW = model.title === undefined ? 0 : (ruler.textWidth(model.title, 'title') * 15) / 13;
   const legendOn = model.showLegend && model.curves.length > 0;
   let width = ceilTo(2 * (Math.max(-minX, maxX) + MARGIN), 8);
-  width = Math.max(width, ceilTo(titleW + 2 * MARGIN, 8));
+  width = Math.max(width, ceilTo(titleW + 2 * MARGIN, 8, FLOAT_NOISE));
   const itemW = model.curves.map((c) => SWATCH + 8 + textW(c.label, 12));
   const rowsOf = (avail: number): number[][] => {
     const out: number[][] = [[]];
@@ -217,11 +206,11 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'):
 
   const titleY = 52;
   const cx = width / 2;
-  const cy = ceilTo((model.title === undefined ? MARGIN : titleY + 10 + 12) - minY, 4);
+  const cy = ceilTo((model.title === undefined ? MARGIN : titleY + 10 + 12) - minY, 4, FLOAT_NOISE);
   const contentBottom = cy + maxY;
-  const legendTop = ceilTo(contentBottom + 16, 4);
+  const legendTop = ceilTo(contentBottom + 16, 4, FLOAT_NOISE);
   const legendBottom = legendTop + (legendRows.length > 0 ? legendRows.length * 24 - 8 : 0);
-  const height = ceilTo((legendRows.length > 0 ? legendBottom : contentBottom) + MARGIN, 4);
+  const height = ceilTo((legendRows.length > 0 ? legendBottom : contentBottom) + MARGIN, 4, FLOAT_NOISE);
 
   const items: SceneItem[] = [];
   const P = (p: Point): Point => ({ x: cx + p.x, y: cy + p.y });

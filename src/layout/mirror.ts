@@ -22,6 +22,8 @@ export function mirrorLayout(layout: Layout, how: 'RL' | 'BT', base: { width: nu
     ...edge,
     points: edge.points.map(flipPoint),
     ...(edge.label ? { label: flipBox(edge.label) } : {}),
+    ...(edge.startLabel ? { startLabel: flipBox(edge.startLabel) } : {}),
+    ...(edge.endLabel ? { endLabel: flipBox(edge.endLabel) } : {}),
   }));
   return { ...layout, direction: how, lanes, nodes, edges };
 }

@@ -1,4 +1,5 @@
 import { arcPath } from '../chart/arc.ts';
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Pie } from './model.ts';
@@ -72,10 +73,6 @@ interface Draft {
 
 const lo = (d: Draft): number => (d.anchor === 'start' ? d.x : d.anchor === 'end' ? d.x - d.w : d.x - d.w / 2);
 const hi = (d: Draft): number => lo(d) + d.w;
-
-function snap4Up(v: number): number {
-  return Math.ceil(v / 4) * 4;
-}
 
 /** Moves labels apart until neighbouring boxes are `LABEL_GAP` apart; keeps their order. */
 function separate(drafts: Draft[]): void {
@@ -170,11 +167,11 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   const bodyW = maxX - minX;
   const innerW = Math.max(bodyW, titleW);
   const bodyLeft = MARGIN + (innerW - bodyW) / 2;
-  const cx = snap4Up(bodyLeft - minX);
+  const cx = ceilTo(bodyLeft - minX);
   const top = MARGIN + (pie.title === undefined ? 0 : TITLE_LINE + TITLE_GAP);
-  const cy = snap4Up(top - minY);
-  const width = snap4Up(Math.max(cx + maxX, MARGIN + titleW) + MARGIN);
-  const height = snap4Up(cy + maxY + MARGIN);
+  const cy = ceilTo(top - minY);
+  const width = ceilTo(Math.max(cx + maxX, MARGIN + titleW) + MARGIN);
+  const height = ceilTo(cy + maxY + MARGIN);
 
   const items: SceneItem[] = [
     { kind: 'box', style: 'frame', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },

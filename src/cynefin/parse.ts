@@ -1,3 +1,4 @@
+import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 import { DOMAINS } from './model.ts';
 import type { Cynefin, CynefinTransition, Domain } from './model.ts';
@@ -36,19 +37,15 @@ export function parseCynefin(src: string, heading?: string): Cynefin {
   const items: Cynefin['items'] = { complex: [], complicated: [], chaotic: [], clear: [], confusion: [] };
   const transitions: CynefinTransition[] = [];
   let title: string | undefined;
-  let accTitle: string | undefined;
   let bodyTitle = false;
   let headerSeen = false;
-  let inDescription = false;
+  const acc = createAccessibilityReader({ emptyTitle: 'keep' });
   let current: Domain | undefined;
 
   for (let n = 0; n < rows.length; n++) {
     const lineNo = n + 1;
     const s = (rows[n] ?? '').trim();
-    if (inDescription) {
-      if (s.includes('}')) inDescription = false;
-      continue;
-    }
+    if (acc.insideBlock(s)) continue;
     if (s === '' || s.startsWith('%%')) continue;
 
     if (!headerSeen) {
@@ -66,17 +63,7 @@ export function parseCynefin(src: string, heading?: string): Cynefin {
       }
       continue;
     }
-    const acc = /^accTitle\s*:\s*(.*)$/u.exec(s);
-    if (acc !== null) {
-      const text = (acc[1] ?? '').trim();
-      if (text !== '') accTitle = text;
-      continue;
-    }
-    if (/^accDescr\s*:/u.test(s)) continue;
-    if (/^accDescr\s*\{/u.test(s)) {
-      if (!s.includes('}')) inDescription = true;
-      continue;
-    }
+    if (acc.read(s)) continue;
 
     const item = ITEM.exec(s);
     if (item !== null) {
@@ -111,5 +98,5 @@ export function parseCynefin(src: string, heading?: string): Cynefin {
 
   if (!headerSeen) fail('A Cynefin diagram starts with "cynefin-beta".', 1, 'header');
   if (!bodyTitle && heading !== undefined && heading !== '') title = heading;
-  return { ...(title === undefined ? {} : { title }), ...(accTitle === undefined ? {} : { accTitle }), items, transitions };
+  return { ...(title === undefined ? {} : { title }), ...(acc.title === undefined ? {} : { accTitle: acc.title }), items, transitions };
 }

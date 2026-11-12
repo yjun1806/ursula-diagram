@@ -1,4 +1,5 @@
-import { cellWidth, cellWidthOf } from '../metrics.ts';
+import { cellWidth } from '../metrics.ts';
+import { cut } from '../text/terminal.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import { parentsOf } from './layout.ts';
 import type { TreeItem, TreeView } from './parse.ts';
@@ -20,20 +21,6 @@ function hasLaterSibling(items: readonly TreeItem[], i: number): boolean {
   return false;
 }
 
-/** Cuts `text` to at most `width` cells, ending in an ellipsis when something is cut. */
-function clip(text: string, width: number): string {
-  if (cellWidth(text) <= width) return text;
-  let out = '';
-  let used = 0;
-  for (const ch of text) {
-    const w = cellWidthOf(ch.codePointAt(0) ?? 0);
-    if (used + w > width - 1) break;
-    out += ch;
-    used += w;
-  }
-  return `${out}…`;
-}
-
 /** Draws the tree as `tree` does: `├── `, `└── ` and `│   ` lead each item; a lone top-level item stands bare above its branches. */
 export function layoutTreeViewText(tree: TreeView, maxWidth?: number): TextSpan[][] {
   const { items } = tree;
@@ -51,8 +38,8 @@ export function layoutTreeViewText(tree: TreeView, maxWidth?: number): TextSpan[
     if (maxWidth !== undefined) {
       const room = maxWidth - cellWidth(lead);
       if (cellWidth(label) + cellWidth(note) > room) note = '';
-      label = clip(label, Math.max(1, room));
-      if (note !== '') note = clip(note, Math.max(0, room - cellWidth(label)));
+      label = cut(label, Math.max(1, room));
+      if (note !== '') note = cut(note, Math.max(0, room - cellWidth(label)));
     }
     const spans: TextSpan[] = [{ text: lead, tone: 'dim' }, { text: label, tone }];
     if (note !== '') spans.push({ text: note, tone: 'dim' });

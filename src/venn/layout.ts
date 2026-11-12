@@ -1,3 +1,4 @@
+import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Venn } from './model.ts';
@@ -59,7 +60,6 @@ interface Pt {
   y: number;
 }
 
-const snap4Up = (v: number): number => Math.ceil(v / 4) * 4;
 
 /** Area of the lens where two circles of radii `r1`, `r2` at distance `d` overlap. */
 export function lensArea(r1: number, r2: number, d: number): number {
@@ -429,11 +429,11 @@ export function layoutVenn(venn: Venn, ruler: Ruler): VennLayout {
   const titleW = venn.title === undefined ? 0 : (ruler.textWidth(venn.title, 'title') * TITLE_SIZE) / 13;
   const bodyW = maxX - minX;
   const innerW = Math.max(bodyW, titleW);
-  const ox = snap4Up(MARGIN + (innerW - bodyW) / 2 - minX);
+  const ox = ceilTo(MARGIN + (innerW - bodyW) / 2 - minX);
   const top = MARGIN + (venn.title === undefined ? 0 : TITLE_BLOCK);
-  const oy = snap4Up(top - minY);
-  const width = snap4Up(Math.max(ox + maxX, MARGIN + titleW) + MARGIN);
-  const height = snap4Up(oy + maxY + MARGIN);
+  const oy = ceilTo(top - minY);
+  const width = ceilTo(Math.max(ox + maxX, MARGIN + titleW) + MARGIN);
+  const height = ceilTo(oy + maxY + MARGIN);
 
   const items: SceneItem[] = [
     { kind: 'box', style: 'frame', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },

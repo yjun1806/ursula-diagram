@@ -8,11 +8,16 @@ export type LegendKind = Exclude<MessageKind, 'plain'>;
 /** `false` removes the legend; an object renames the captions of the kinds. */
 export type SequenceLegendOption = false | Partial<Record<LegendKind, string>>;
 
+/** How a participant is drawn: a box, or one of the symbols of the Mermaid `@{ "type": ... }` notation. */
+export type ParticipantKind = 'participant' | 'actor' | 'boundary' | 'control' | 'entity' | 'database' | 'collections' | 'queue';
+
+export const PARTICIPANT_KINDS: readonly ParticipantKind[] = ['participant', 'actor', 'boundary', 'control', 'entity', 'database', 'collections', 'queue'];
+
 export interface Participant {
   id: string;
   /** Label lines (`<br/>` splits lines). */
   lines: string[];
-  actor: boolean;
+  kind: ParticipantKind;
 }
 
 export function kindOf(m: { head: ArrowHead; dashed: boolean }): MessageKind {

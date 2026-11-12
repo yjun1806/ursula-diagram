@@ -57,7 +57,7 @@ const SLANT_LOSS = 24;
 /** Share of its length around the middle of a face of a circle in which ports may stand. */
 const CIRCLE_REACH = 0.35;
 
-/** The shape whose ports a shape follows: a slanted or notched shape takes those of a parallelogram, a double circle those of a circle. */
+/** The shape whose ports a shape follows: a slanted or notched shape takes those of a parallelogram, a double circle and an ellipse those of a circle, a dot, a bar and an actor those of a diamond. */
 export function portShape(shape: NodeShape | undefined): NodeShape | undefined {
   switch (shape) {
     case 'asym':
@@ -66,7 +66,14 @@ export function portShape(shape: NodeShape | undefined): NodeShape | undefined {
     case 'trap-t':
       return 'parallelogram';
     case 'dbl-circle':
+    case 'ellipse':
       return 'circle';
+    // These stand small inside their slot: their faces take the middle port only.
+    case 'start-dot':
+    case 'end-dot':
+    case 'bar':
+    case 'actor':
+      return 'diamond';
     default:
       return shape;
   }

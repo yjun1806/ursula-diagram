@@ -1,4 +1,5 @@
 import { cellWidth } from '../metrics.ts';
+import { span } from '../text/terminal.ts';
 import { UrsulaError } from '../types.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import type { Kanban, KanbanCard } from './model.ts';
@@ -11,7 +12,6 @@ const MIN_INNER = 4;
 
 type Row = TextSpan[];
 
-const span = (text: string, tone: TextTone = 'normal'): TextSpan => ({ text, tone });
 const rowWidth = (row: Row): number => row.reduce((n, s) => n + cellWidth(s.text), 0);
 const pad = (row: Row, width: number): Row => {
   const gap = width - rowWidth(row);
@@ -107,5 +107,3 @@ function trimEnd(row: Row): Row {
     }
   }
 }
-
-export const joinSpans = (row: Row): string => row.map((s) => s.text).join('');

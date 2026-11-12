@@ -15,6 +15,9 @@ import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
 import { refineLabels } from './label-spot.ts';
+import { crossings } from '../layout/check.ts';
+import { offCentreEnds } from './centre.ts';
+import { settleMixedSides } from './vertex.ts';
 import type { Frame } from './route.ts';
 import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
@@ -203,7 +206,7 @@ function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact
   const m = measureNodes(graph.nodes, graph.lanes, ruler, td);
   // A box given from outside is as long as its size needs along the reading direction and as thick as it is across.
   const baseUnits = graph.nodes.map((n, i) => (td ? (n.box === undefined ? 2 : unitsOf(m.h[i] ?? 0, m.contentH, m.unit, ruler.rankGap, compact)) : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
-  const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? m.contentH : Math.max(m.contentH, m.h[i] ?? 0)));
+  const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? (m.h[i] ?? m.contentH) : Math.max(m.contentH, m.h[i] ?? 0)));
   const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
 }
@@ -473,6 +476,23 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   return spread !== undefined && spreadWins(spread, drawn, room) ? spread : drawn;
 }
 
+/**
+ * Pixel drawings, once the drawing is chosen: an end that comes into a face edges leave from is drawn again on a free
+ * face (`settleMixedSides`). The candidates compete without this step. Returns the drawing, the ruler and the edges
+ * drawn again, whose labels are placed again; the crossings, off-centre ends and mixed sides are counted again.
+ */
+function settledSides(drawn: Layout, ruler: Ruler): [Layout, Ruler, ReadonlySet<number>] {
+  const none: ReadonlySet<number> = new Set();
+  if (ruler.uniform || drawn.pitch === undefined) return [drawn, ruler, none];
+  const edges = drawn.edges.map((e) => ({ ...e, points: e.points.map((p) => ({ ...p })) }));
+  if (settleMixedSides(edges, drawn.nodes, ruler, portStep(drawn.pitch / 2, ruler)).moved === 0) return [drawn, ruler, none];
+  const redrawn = new Set(edges.flatMap((e, i) => (JSON.stringify(e.points) === JSON.stringify(drawn.edges[i]?.points) ? [] : [i])));
+  const base = { ...drawn, edges };
+  const kept = drawn.diagnostics.filter((d) => d.kind !== 'crossing' && d.kind !== 'off-centre' && d.kind !== 'mixed-side');
+  const diagnostics = [...kept, ...crossings(edges), ...offCentreEnds(base), ...mixedSideEnds(base, directionsOf(base))];
+  return [{ ...base, diagnostics }, ruler, redrawn];
+}
+
 /** Edges that look the same way at a node should leave by the same side of it. */
 function withMixedSides(drawn: Layout): Layout {
   const mixed = mixedSideEnds(drawn, directionsOf(drawn));
@@ -525,7 +545,7 @@ function stackGaps(source: Graph): number[] {
 
 export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptions = {}): Layout {
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
-  if (!given.terminal || opts.gap !== undefined) return withQuestions(source, given.terminal ? layoutAt(source, given, opts) : refineLabels(layoutAt(source, given, opts), given), given, opts);
+  if (!given.terminal || opts.gap !== undefined) return withQuestions(source, given.terminal ? layoutAt(source, given, opts) : refineLabels(...settledSides(layoutAt(source, given, opts), given)), given, opts);
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
   const limit = opts.maxWidth;

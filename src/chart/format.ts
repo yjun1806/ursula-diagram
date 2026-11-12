@@ -33,3 +33,8 @@ export function makeFormatter(spec: string): ValueFormatter {
     return `${negative ? '-' : ''}${dollar && !percent ? '$' : ''}${num}${percent ? '%' : ''}`;
   };
 }
+
+/** A number as text with no float noise and no trailing zeros: `digits` decimals at most. */
+export function trimmedNumber(v: number, digits: number): string {
+  return String(Number(v.toFixed(digits)));
+}

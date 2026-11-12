@@ -1,18 +1,7 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, padEnd, padStart } from '../text/terminal.ts';
 import type { Radar } from './model.ts';
 
-function fit(text: string, width: number): string {
-  if (cellWidth(text) <= width) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(out + ch) > width - 1) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
-const padEnd = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - cellWidth(s)));
-const padStart = (s: string, w: number): string => ' '.repeat(Math.max(0, w - cellWidth(s))) + s;
 
 /** Values as a table: a row per axis, a column per curve. */
 export function radarTextLines(model: Radar, maxWidth: number | undefined): string[] {
@@ -34,10 +23,10 @@ export function radarTextLines(model: Radar, maxWidth: number | undefined): stri
     }
   }
   const lines: string[] = [];
-  if (model.title !== undefined) lines.push(maxWidth === undefined ? model.title : fit(model.title, maxWidth));
-  if (cols.length > 0) lines.push(padEnd('', labelW) + cols.map((c, j) => `  ${padStart(fit(c.head, colW[j] ?? 0), colW[j] ?? 0)}`).join(''));
+  if (model.title !== undefined) lines.push(maxWidth === undefined ? model.title : cut(model.title, maxWidth));
+  if (cols.length > 0) lines.push(padEnd('', labelW) + cols.map((c, j) => `  ${padStart(cut(c.head, colW[j] ?? 0), colW[j] ?? 0)}`).join(''));
   labels.forEach((l, i) => {
-    lines.push(padEnd(fit(l, labelW), labelW) + cols.map((c, j) => `  ${padStart(c.cells[i] ?? '', colW[j] ?? 0)}`).join(''));
+    lines.push(padEnd(cut(l, labelW), labelW) + cols.map((c, j) => `  ${padStart(c.cells[i] ?? '', colW[j] ?? 0)}`).join(''));
   });
   return lines.map((l) => l.trimEnd());
 }

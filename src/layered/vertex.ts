@@ -86,20 +86,8 @@ export interface Settled {
   diagnostics: Diagnostic[];
 }
 
-/**
- * Pixel drawings: a face of a box that has only its middle for a port (the four faces of a diamond, the left and
- * right faces of a stadium, a hexagon and a parallelogram) takes one edge end. Of the ends that meet on such a face
- * the one that stays is a straight line or else the one whose other box lies nearest the middle of the face; it
- * is put at the middle. The others move to a side face of the node and are drawn again from there, with at least
- * LEG pixels out of the face and square into the face of the box at the other end. Every free face is tried; of all
- * the paths that hold, the one that crosses the fewest other lines wins, then the one with fewest bends, then the
- * shortest, then the face met first. An end that finds no free face or no path keeps the middle of its face with
- * the end that stays, and a `shared-port` diagnostic says so.
- * The edges are changed in place.
- */
-export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number): Settled {
-  const diagnostics: Diagnostic[] = [];
-  if (ruler.uniform) return { moved: 0, diagnostics };
+/** The tools both vertex steps share: the ends of a node, a path drawn again, the best free face for an end. `moved` counts the ends drawn again. */
+function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number) {
   const byId = new Map(nodes.map((n) => [n.id, n] as const));
   const clear = ruler.trackGap / 2;
   const grid = ruler.edgeGrid;
@@ -165,44 +153,72 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
     return out;
   };
 
-  /** Every sound path with 0 to 3 bends from the face point `c` of `end.node` to the other end of the edge; the ones near the two ends, or the whole drawing when none of those is sound. */
-  const waysFor = (end: End, face: Face, c: Point): Way[] => {
+  /** Every sound path with 0 to 3 bends from the face point `c` of `end.node` to the other end of the edge; the ones near the two ends, or the whole drawing when none of those is sound. A path that crosses more lines than `limit` or than a path found before it is counted with a number above that, not exactly. Paths with more bends than one that crosses no line are left out. */
+  const waysFor = (end: End, face: Face, c: Point, limit = Infinity): Way[] => {
+    let cap = limit;
     const pts = end.edge.points;
     const q = end.first ? (pts[pts.length - 1] as Point) : (pts[0] as Point);
     const qFace = faceAt(end.other, q);
     if (!qFace) return [];
     const n = NORMAL[face];
     const m = NORMAL[qFace];
-    const others = edges.filter((e) => e !== end.edge).map((e) => segs(e.points));
+    const levels: Seg[] = [];
+    const uprights: Seg[] = [];
+    for (const e of edges) if (e !== end.edge) for (const t of segs(e.points)) (Math.abs(t.ay - t.by) < EPS ? levels : uprights).push(t);
+    const level = (s: Seg): boolean => Math.abs(s.ay - s.by) < EPS;
     const walls = nodes.map((b) => (b === end.node || b === end.other ? b : { ...b, x: b.x - clear, y: b.y - clear, w: b.w + 2 * clear, h: b.h + 2 * clear }));
+    const run = (s: Seg): number => Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
     const sound = (path: Point[]): boolean => {
+      const p0 = path[0] as Point;
+      const p1 = path[1] as Point;
+      const pe = path[path.length - 1] as Point;
+      const pd = path[path.length - 2] as Point;
+      if (Math.abs(p1.x - p0.x) + Math.abs(p1.y - p0.y) < LEG - EPS || (p1.x - p0.x) * n.x + (p1.y - p0.y) * n.y <= 0) return false;
+      if (Math.abs(pe.x - pd.x) + Math.abs(pe.y - pd.y) < LEG - EPS || (pe.x - pd.x) * m.x + (pe.y - pd.y) * m.y >= 0) return false;
       const mine = segs(path);
-      const first = mine[0] as Seg;
-      const last = mine[mine.length - 1] as Seg;
-      const run = (s: Seg): number => Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
-      if (run(first) < LEG - EPS || (first.bx - first.ax) * n.x + (first.by - first.ay) * n.y <= 0) return false;
-      if (run(last) < LEG - EPS || (last.bx - last.ax) * m.x + (last.by - last.ay) * m.y >= 0) return false;
-      if (mine.some((s) => run(s) < grid - EPS)) return false;
-      if (mine.some((s) => walls.some((b) => hits(s, b)))) return false;
-      if (others.some((o) => o.some((t) => mine.some((s) => overlap(s, t))))) return false;
+      for (const s of mine) {
+        if (run(s) < grid - EPS) return false;
+        for (const b of walls) if (hits(s, b)) return false;
+      }
+      for (const s of mine) for (const t of level(s) ? levels : uprights) if (overlap(s, t)) return false;
       for (let i = 0; i < mine.length; i++) for (let j = i + 2; j < mine.length; j++) if (overlap(mine[i] as Seg, mine[j] as Seg)) return false;
       return true;
     };
-    const length = (path: Point[]): number => segs(path).reduce((sum, s) => sum + Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay), 0);
+    const length = (path: Point[]): number => segs(path).reduce((sum, s) => sum + run(s), 0);
     const crossings = (path: Point[]): number => {
-      const mine = segs(path);
-      return others.reduce((sum, o) => sum + o.reduce((k, t) => k + mine.filter((s) => properCross(s, t)).length, 0), 0);
+      let count = 0;
+      for (const s of segs(path)) {
+        for (const t of level(s) ? uprights : levels) if (properCross(s, t)) count++;
+        if (count > cap) return count;
+      }
+      return count;
     };
     for (const near of [true, false]) {
       const xs = lines('x', c, n, q, m, near);
       const ys = lines('y', c, n, q, m, near);
       const found: Way[] = [];
+      // The first and the last line of a three-bend path depend on one coordinate each: those that fail alone are not paired.
+      const leg = (from: Point, to: Point, normal: Point, sign: 1 | -1): boolean => {
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const run = Math.abs(dx) + Math.abs(dy);
+        if (run < LEG - EPS || run < grid - EPS || (dx * normal.x + dy * normal.y) * sign <= 0) return false;
+        const s: Seg = { ax: from.x, ay: from.y, bx: to.x, by: to.y };
+        return !walls.some((b) => hits(s, b));
+      };
+      const starts = n.y === 0 ? xs.filter((a) => leg(c, { x: a, y: c.y }, n, 1)) : ys.filter((a) => leg(c, { x: c.x, y: a }, n, 1));
+      const stops = n.y === 0 ? ys.filter((b) => leg({ x: q.x, y: b }, q, m, -1)) : xs.filter((b) => leg({ x: b, y: q.y }, q, m, -1));
       for (let bends = 0; bends <= 3; bends++) {
-        for (const path of shapes(bends, c, n, q, m, xs, ys)) {
+        const [pxs, pys] = bends < 3 ? [xs, ys] : n.y === 0 ? [starts, stops] : [stops, starts];
+        for (const path of shapes(bends, c, n, q, m, pxs, pys)) {
           if (!sound(path)) continue;
           const tidied = path.map((p) => ({ x: tidy(p.x), y: tidy(p.y) }));
-          found.push({ path: tidied, crossings: crossings(tidied), bends, length: length(path) });
+          const crossed = crossings(tidied);
+          cap = Math.min(cap, crossed);
+          found.push({ path: tidied, crossings: crossed, bends, length: length(path) });
         }
+        // A path with more bends never beats one that crosses nothing.
+        if (found.some((w) => w.crossings === 0)) break;
       }
       if (found.length > 0) return found;
     }
@@ -253,18 +269,36 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
   };
 
   /** Of the paths from every free face of an end, the one that crosses the fewest lines, then bends least, then is shortest; the face met first wins a tie. */
-  const bestWay = (end: End): Point[] | undefined => {
+  const bestWay = (end: End, limit = Infinity): Way | undefined => {
     let best: Way | undefined;
     for (const face of targets(end)) {
       const c = freePort(end.node, face, end);
       if (!c) continue;
-      for (const way of waysFor(end, face, c)) {
+      for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity))) {
         if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && way.length < best.length - EPS)))) best = way;
       }
     }
-    return best?.path;
+    return best;
   };
 
+  return { endsOf, redraw, apply, bestWay, moved: (): number => moved };
+}
+
+/**
+ * Pixel drawings: a face of a box that has only its middle for a port (the four faces of a diamond, the left and
+ * right faces of a stadium, a hexagon and a parallelogram) takes one edge end. Of the ends that meet on such a face
+ * the one that stays is a straight line or else the one whose other box lies nearest the middle of the face; it
+ * is put at the middle. The others move to a side face of the node and are drawn again from there, with at least
+ * LEG pixels out of the face and square into the face of the box at the other end. Every free face is tried; of all
+ * the paths that hold, the one that crosses the fewest other lines wins, then the one with fewest bends, then the
+ * shortest, then the face met first. An end that finds no free face or no path keeps the middle of its face with
+ * the end that stays, and a `shared-port` diagnostic says so.
+ * The edges are changed in place.
+ */
+export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number): Settled {
+  const diagnostics: Diagnostic[] = [];
+  if (ruler.uniform) return { moved: 0, diagnostics };
+  const { endsOf, redraw, apply, bestWay, moved } = kit(edges, nodes, ruler, step);
   for (const node of nodes) {
     const kind = portShape(node.shape);
     if (!(kind === 'diamond' || kind === 'stadium' || kind === 'hexagon' || kind === 'parallelogram')) continue;
@@ -282,7 +316,7 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
       let stuck = false;
       for (const end of rest) {
         const way = bestWay(end);
-        if (way) apply(end, way);
+        if (way) apply(end, way.path);
         else stuck = true;
       }
       if (stuck) {
@@ -294,5 +328,36 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
       diagnostics.push({ kind: 'shared-port', nodes: [node.id], message: `Edge ends meet at the ${sharedFaces.join(' and ')} of the ${node.shape} ${node.id}: its sides have room for one end each.` });
     }
   }
-  return { moved, diagnostics };
+  return { moved: moved(), diagnostics };
+}
+
+/**
+ * Pixel drawings: a face of a box that takes the start of one edge and the end of another is a mixed face. Each
+ * incoming end on it, in the order of the edges, is drawn again from a face of the node that holds no end or only
+ * incoming ends, with the same search as settleVertices (the face is free when its shape has a port left). Of all
+ * the paths that hold the one that crosses the fewest other lines wins, then the one with fewest bends, then the
+ * shortest. An end stays where it is when the best path crosses more lines than the path it has, has more than 2
+ * bends beyond it, or when no path holds. The edges are changed in place.
+ */
+export function settleMixedSides(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number): Settled {
+  if (ruler.uniform) return { moved: 0, diagnostics: [] };
+  const { endsOf, apply, bestWay, moved } = kit(edges, nodes, ruler, step);
+  const crossing = (edge: LayoutEdge): number => {
+    const mine = segs(edge.points);
+    return edges.reduce((sum, e) => (e === edge ? sum : sum + segs(e.points).reduce((k, t) => k + mine.filter((s) => properCross(s, t)).length, 0)), 0);
+  };
+  for (const node of nodes) {
+    for (const face of FACES) {
+      const onFace = (): End[] => endsOf(node).filter((e) => e.face === face && e.edge.from !== e.edge.to);
+      for (const end of onFace().filter((e) => !e.first).sort((a, b) => a.index - b.index)) {
+        if (!onFace().some((e) => e.first)) break;
+        const had = crossing(end.edge);
+        const way = bestWay(end, had);
+        if (!way) continue;
+        if (way.crossings > had || way.bends > Math.max(0, end.edge.points.length - 2) + 2) continue;
+        apply(end, way.path);
+      }
+    }
+  }
+  return { moved: moved(), diagnostics: [] };
 }

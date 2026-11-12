@@ -1,4 +1,5 @@
 import { cellWidth } from '../metrics.ts';
+import { cut, padEnd, span } from '../text/terminal.ts';
 import { UrsulaError } from '../types.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import type { Gantt, GanttTask } from './model.ts';
@@ -18,20 +19,7 @@ const CELLS_MS = [
   7300 * DAY, 18_250 * DAY, 36_500 * DAY, 365_000 * DAY, 3_650_000 * DAY,
 ];
 
-const span = (text: string, tone: TextTone = 'normal'): TextSpan => ({ text, tone });
 
-/** Cuts `text` to at most `limit` cells, ending with an ellipsis when something was left off. */
-function fit(text: string, limit: number): string {
-  if (cellWidth(text) <= limit) return text;
-  let out = '';
-  for (const ch of text) {
-    if (cellWidth(out + ch) > limit - 1) break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-
-const padTo = (text: string, width: number): string => text + ' '.repeat(Math.max(0, width - cellWidth(text)));
 
 function statusOf(t: GanttTask): string {
   return [t.durationText, ...(t.done ? ['done'] : []), ...(t.active ? ['active'] : []), ...(t.milestone ? ['milestone'] : []), ...(t.crit ? ['crit'] : [])].join(' ');
@@ -115,10 +103,10 @@ export function layoutGanttText(model: Gantt, maxWidth: number | undefined): Row
       col += w;
     }
   };
-  const lead = (text: string, tone: TextTone = 'normal'): Row => [span(padTo(fit(text, nameW), nameW) + ' ', tone)];
+  const lead = (text: string, tone: TextTone = 'normal'): Row => [span(padEnd(cut(text, nameW), nameW) + ' ', tone)];
   const rows: Row[] = [];
 
-  if (model.title !== undefined) rows.push([span(fit(model.title, width), 'bold')]);
+  if (model.title !== undefined) rows.push([span(cut(model.title, width), 'bold')]);
   if (plan.twoRow) {
     const cells = blank(columns + rightW);
     for (const tick of plan.ticks) if (tick.month !== undefined) put(cells, Math.floor(cellOf(tick.t)), tick.month, 'dim');
@@ -141,7 +129,7 @@ export function layoutGanttText(model: Gantt, maxWidth: number | undefined): Row
     const t = task(ti);
     if (named && t.section !== section) {
       section = t.section;
-      rows.push([span(padTo(fit(model.sections[section] ?? '', nameW), nameW) + ' ', 'bold')]);
+      rows.push([span(padEnd(cut(model.sections[section] ?? '', nameW), nameW) + ' ', 'bold')]);
     }
     const cells = blank(columns + (showRight ? rightW : 0));
     for (const v of verts) if (v.col < columns) cells[v.col] = { ch: '┊', tone: 'dim' };
@@ -173,5 +161,3 @@ export function layoutGanttText(model: Gantt, maxWidth: number | undefined): Row
 
   return rows.map(trimEnd);
 }
-
-export const joinSpans = (row: Row): string => row.map((s) => s.text).join('');
