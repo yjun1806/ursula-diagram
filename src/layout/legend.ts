@@ -20,7 +20,7 @@ export function withLegend(layout: Layout, ruler: Ruler, option: LegendOption | 
   const { legend: previous, ...rest } = layout;
   const bare: Layout = previous ? { ...rest, width: previous.base.width, height: previous.base.height } : rest;
   if (option === false) return bare;
-  const used = ORDER.filter((s) => bare.edges.some((e) => e.style === s));
+  const used = ORDER.filter((s) => bare.edges.some((e) => e.style === s && !e.invisible));
   if (used.length < 2) return bare;
 
   const x0 = Math.min(...bare.lanes.map((l) => l.x), ...bare.nodes.map((n) => n.x), bare.width);

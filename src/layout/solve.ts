@@ -282,7 +282,7 @@ function build(
     const abs = paths.get(plan.index);
     if (!abs) continue;
     const raw = abs.map(phys);
-    edges.push({ from: plan.from, to: plan.to, style: plan.style, points: simplify(raw) });
+    edges.push({ from: plan.from, to: plan.to, style: plan.style, ...plan.ends, points: simplify(raw) });
     drawn.push(plans.indexOf(plan));
     raws.push({ plan, raw });
   }

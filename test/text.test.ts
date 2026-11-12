@@ -67,7 +67,7 @@ describe('renderText', () => {
   });
 
   it('returns an error for unparseable input', () => {
-    const r = renderText('flowchart LR\nA --x B', 80);
+    const r = renderText('flowchart LR\nA ~~ B', 80);
     expect(r).toEqual({ error: expect.stringContaining('line 2') });
   });
 

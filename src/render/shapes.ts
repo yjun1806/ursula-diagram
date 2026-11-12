@@ -43,6 +43,50 @@ export function parallelogramPoints(b: Box): Point[] {
   ];
 }
 
+/** A parallelogram leaning the other way: the top is shifted left. */
+export function leanLeftPoints(b: Box): Point[] {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x + SLANT, y: b.y + b.h },
+  ];
+}
+
+/** A trapezoid that is wider at the bottom. */
+export function trapBottomPoints(b: Box): Point[] {
+  return [
+    { x: b.x + SLANT, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h },
+  ];
+}
+
+/** A trapezoid that is wider at the top. */
+export function trapTopPoints(b: Box): Point[] {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y + b.h },
+    { x: b.x + SLANT, y: b.y + b.h },
+  ];
+}
+
+/** A rectangle whose left side has a V-shaped notch reaching a quarter of the height in. */
+export function asymPoints(b: Box): Point[] {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h },
+    { x: b.x + b.h / 4, y: b.y + b.h / 2 },
+  ];
+}
+
+/** Gap between the two circles of a double circle. */
+export const RING_GAP = 4;
+
 /** Parameter `t` where the ray `p + t*d` enters the convex polygon, or undefined when it misses it. */
 function enterPolygon(poly: Point[], p: Point, d: Point): number | undefined {
   const mx = poly.reduce((s, q) => s + q.x, 0) / poly.length;
@@ -69,6 +113,32 @@ function enterPolygon(poly: Point[], p: Point, d: Point): number | undefined {
     }
   }
   return tin <= tout && tout >= 0 ? tin : undefined;
+}
+
+/** Parameter `t` where the ray `p + t*d` first enters a polygon that need not be convex, or undefined when it never does. */
+function enterSimplePolygon(poly: Point[], p: Point, d: Point): number | undefined {
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i] as Point;
+    const b = poly[(i + 1) % poly.length] as Point;
+    area += a.x * b.y - b.x * a.y;
+  }
+  let best: number | undefined;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i] as Point;
+    const b = poly[(i + 1) % poly.length] as Point;
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const [nx, ny] = area > 0 ? [ey, -ex] : [-ey, ex];
+    if (nx * d.x + ny * d.y >= -EPS) continue;
+    const denom = d.x * ey - d.y * ex;
+    if (Math.abs(denom) < EPS) continue;
+    const t = ((a.x - p.x) * ey - (a.y - p.y) * ex) / denom;
+    const u = ((a.x - p.x) * d.y - (a.y - p.y) * d.x) / denom;
+    if (u < -EPS || u > 1 + EPS || t < -EPS) continue;
+    if (best === undefined || t < best) best = t;
+  }
+  return best;
 }
 
 /** Parameter `t` where the ray enters the axis-aligned ellipse, or undefined when it misses it. */
@@ -99,11 +169,20 @@ function entry(b: Box, p: Point, d: Point): number | undefined {
   const cy = b.y + b.h / 2;
   switch (b.shape) {
     case 'circle':
+    case 'dbl-circle':
       return enterEllipse(cx, cy, b.w / 2, b.h / 2, p, d);
     case 'hexagon':
       return enterPolygon(hexagonPoints(b), p, d);
     case 'parallelogram':
       return enterPolygon(parallelogramPoints(b), p, d);
+    case 'lean-l':
+      return enterPolygon(leanLeftPoints(b), p, d);
+    case 'trap-b':
+      return enterPolygon(trapBottomPoints(b), p, d);
+    case 'trap-t':
+      return enterPolygon(trapTopPoints(b), p, d);
+    case 'asym':
+      return enterSimplePolygon(asymPoints(b), p, d);
     case 'stadium': {
       const r = b.h / 2;
       const middle = [

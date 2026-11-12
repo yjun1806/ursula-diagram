@@ -57,6 +57,21 @@ const SLANT_LOSS = 24;
 /** Share of its length around the middle of a face of a circle in which ports may stand. */
 const CIRCLE_REACH = 0.35;
 
+/** The shape whose ports a shape follows: a slanted or notched shape takes those of a parallelogram, a double circle those of a circle. */
+export function portShape(shape: NodeShape | undefined): NodeShape | undefined {
+  switch (shape) {
+    case 'asym':
+    case 'lean-l':
+    case 'trap-b':
+    case 'trap-t':
+      return 'parallelogram';
+    case 'dbl-circle':
+      return 'circle';
+    default:
+      return shape;
+  }
+}
+
 /**
  * How far from the middle of a face (of `length`, on a box `across` thick) a port may stand: Infinity where the
  * whole lattice serves, 0 where the middle is the only port. Terminal drawings draw every shape as a box.
@@ -64,7 +79,7 @@ const CIRCLE_REACH = 0.35;
 export function faceReach(shape: NodeShape | undefined, face: Face, length: number, across: number, terminal: boolean): number {
   if (terminal) return Infinity;
   const ends = face === 'left' || face === 'right';
-  switch (shape) {
+  switch (portShape(shape)) {
     case 'diamond':
       return 0;
     case 'circle':
@@ -80,8 +95,10 @@ export function faceReach(shape: NodeShape | undefined, face: Face, length: numb
 }
 
 /** True for a face whose only port is its middle. */
-export const centreOnly = (shape: NodeShape | undefined, face: Face): boolean =>
-  shape === 'diamond' || ((shape === 'stadium' || shape === 'hexagon' || shape === 'parallelogram') && (face === 'left' || face === 'right'));
+export const centreOnly = (shape: NodeShape | undefined, face: Face): boolean => {
+  const kind = portShape(shape);
+  return kind === 'diamond' || ((kind === 'stadium' || kind === 'hexagon' || kind === 'parallelogram') && (face === 'left' || face === 'right'));
+};
 
 const within = (offsets: number[], length: number, reach: number): number[] => offsets.filter((o) => Math.abs(o - length / 2) <= reach + 1e-6);
 

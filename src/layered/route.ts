@@ -1,4 +1,5 @@
 import type { Ruler } from '../metrics.ts';
+import { endFields } from '../edge-ends.ts';
 import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../types.ts';
 import { crossings } from '../layout/check.ts';
 import { withOutline } from '../layout/diamond.ts';
@@ -748,7 +749,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       put(it.xb, y);
       put(it.xb, edge);
     }
-    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
+    edges.push({ from: e.from, to: e.to, style: e.style, ...endFields(e), points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });
 
   if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });

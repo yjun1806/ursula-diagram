@@ -1,6 +1,6 @@
 import type { Ruler } from '../metrics.ts';
 import { pixelRuler } from '../metrics.ts';
-import type { Graph, Layout, LaneAxis } from '../types.ts';
+import type { Diagnostic, Graph, Layout, LaneAxis } from '../types.ts';
 import type { AlongArrangement } from './along.ts';
 import { alongEstimate, arrangeAlong, considerAlong, polishAlong, refineAlong } from './along.ts';
 import { structuralEstimate } from './estimate.ts';
@@ -13,6 +13,7 @@ import { assignRows } from './rows.ts';
 import type { SlotResult } from './slots.ts';
 import { placeSlots, shiftHalfSteps } from './slots.ts';
 import { crossingCount } from './check.ts';
+import { mirrorLayout } from './mirror.ts';
 import { layoutLayered } from '../layered/index.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
@@ -212,11 +213,27 @@ function layoutAlong(arranged: AlongArrangement, ruler: Ruler, opts: SolveOption
 }
 
 /**
+ * A graph that reads right to left or bottom to top is laid out in the opposite direction and its drawing is flipped.
+ * A terminal drawing is not flipped; it says so in its diagnostics.
+ */
+function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: LayoutOptions): Layout {
+  const { mirror: _mirror, ...plain } = graph;
+  if (ruler.terminal === true) {
+    const drawn = layout(plain, ruler, opts);
+    const note: Diagnostic = { kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
+    return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
+  }
+  const bare = layout(plain, ruler, { ...opts, legend: false });
+  return withLegend(mirrorLayout(bare, how, { width: bare.width, height: bare.height }), ruler, opts.legend);
+}
+
+/**
  * Lays the graph out. When edges between lanes far outnumber edges inside lanes, the lanes are also tried
  * one after another along the flow axis and the drawing with the better score is kept. The choice is made
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
+  if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
   const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {

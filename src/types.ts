@@ -3,12 +3,29 @@ import type { Theme } from './render/theme.ts';
 export type Direction = 'LR' | 'TD';
 export type EdgeStyle = 'normal' | 'thick' | 'dotted';
 
+/** What sits at an end of a line: an arrowhead, a dot, a cross, or nothing. */
+export type EdgeEnd = 'arrow' | 'circle' | 'cross' | 'none';
+
 export interface Lane {
   id: string;
   label: string;
 }
 
-export type NodeShape = 'rect' | 'round' | 'stadium' | 'circle' | 'diamond' | 'hexagon' | 'cylinder' | 'parallelogram' | 'subroutine';
+export type NodeShape =
+  | 'rect'
+  | 'round'
+  | 'stadium'
+  | 'circle'
+  | 'diamond'
+  | 'hexagon'
+  | 'cylinder'
+  | 'parallelogram'
+  | 'subroutine'
+  | 'asym'
+  | 'lean-l'
+  | 'trap-b'
+  | 'trap-t'
+  | 'dbl-circle';
 
 export interface GraphNode {
   id: string;
@@ -16,6 +33,8 @@ export interface GraphNode {
   lines: string[];
   shape: NodeShape;
   lane: string;
+  /** The shape name the source asked for when it is not drawn yet (the node is drawn as a rectangle). */
+  shapeAsked?: string;
 }
 
 export interface GraphEdge {
@@ -23,10 +42,25 @@ export interface GraphEdge {
   to: string;
   label?: string;
   style: EdgeStyle;
+  /** Id given in the source (`e1@-->`). */
+  id?: string;
+  /** What sits at the start of the line; absent when nothing does. */
+  startEnd?: EdgeEnd;
+  /** What sits at the end of the line; absent in a graph that was not read from text, where an arrowhead is drawn. */
+  end?: EdgeEnd;
+  /** Laid out but not drawn (`A ~~~ B`). */
+  invisible?: true;
+  /** Length asked for by a longer line (`--->` is 2); absent for the shortest. */
+  minLength?: number;
 }
 
 export interface Graph {
+  /** The direction the graph is laid out in. */
   direction: Direction;
+  /** Set when the source reads right to left (`RL`) or bottom to top (`BT`): the drawing is laid out in `direction` and mirrored. */
+  mirror?: 'RL' | 'BT';
+  /** Statements that were read and left out of the drawing (classes and styles, edge animations). */
+  ignored?: string[];
   lanes: Lane[];
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -72,6 +106,11 @@ export interface LayoutEdge {
   from: string;
   to: string;
   style: EdgeStyle;
+  id?: string;
+  startEnd?: EdgeEnd;
+  end?: EdgeEnd;
+  /** Takes part in the layout but is not drawn. */
+  invisible?: true;
   points: Point[];
   /** Drawn with one bend, out of or into the side of a box. */
   elbow?: boolean;
@@ -81,7 +120,7 @@ export interface LayoutEdge {
   label?: { text: string; x: number; y: number; w: number; h: number; lines?: string[] };
 }
 
-export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question';
+export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'question' | 'direction-mirrored-in-text';
 
 /** What a drawing looks like, as far as a question compares drawings. */
 export interface DrawingFacts {
@@ -135,7 +174,8 @@ export type LaneAxis = 'across' | 'along';
 export interface Layout {
   width: number;
   height: number;
-  direction: Direction;
+  /** The direction of the source; `RL` and `BT` are laid out as `LR` and `TD` and mirrored. */
+  direction: Direction | 'RL' | 'BT';
   laneAxis: LaneAxis;
   /** Set by the layered engine: whether bands run alongside the reading direction or cross it in reading order. */
   composition?: 'lanes' | 'stages';

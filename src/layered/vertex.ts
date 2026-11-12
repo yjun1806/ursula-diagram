@@ -3,7 +3,7 @@ import type { Diagnostic, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import { hits, overlap, properCross, segs } from './elbows.ts';
 import type { Seg } from './elbows.ts';
 import type { Face } from './ports.ts';
-import { centreOnly, faceOffsets } from './ports.ts';
+import { centreOnly, faceOffsets, portShape } from './ports.ts';
 import { stats } from './stats.ts';
 
 const EPS = 1e-6;
@@ -266,7 +266,8 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
   };
 
   for (const node of nodes) {
-    if (!(node.shape === 'diamond' || node.shape === 'stadium' || node.shape === 'hexagon' || node.shape === 'parallelogram')) continue;
+    const kind = portShape(node.shape);
+    if (!(kind === 'diamond' || kind === 'stadium' || kind === 'hexagon' || kind === 'parallelogram')) continue;
     let shared = 0;
     const sharedFaces: Face[] = [];
     for (const face of FACES) {

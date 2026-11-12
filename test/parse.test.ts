@@ -82,14 +82,13 @@ describe('parse', () => {
   });
 
   it('reports errors with 1-based line numbers', () => {
-    expect(failure('flowchart RL\nA')).toMatchObject({ code: 'unsupported-direction', line: 1 });
+    expect(failure('flowchart XY\nA')).toMatchObject({ code: 'syntax', line: 1 });
     expect(failure('flowchart LR\nA --> B\nsequenceDiagram')).toMatchObject({ line: 3 });
     expect(failure('sequenceDiagram\nA->>B: hi')).toMatchObject({ code: 'unsupported-diagram', line: 1 });
     expect(failure('flowchart LR\nsubgraph a\nsubgraph b\nend\nend')).toMatchObject({ code: 'nested-subgraph', line: 3 });
     expect(failure('flowchart LR\nsubgraph a\nA')).toMatchObject({ line: 2 });
     expect(failure('flowchart LR\nend')).toMatchObject({ line: 2 });
-    expect(failure('flowchart LR\nA & B --> C')).toMatchObject({ code: 'unsupported', line: 2 });
-    expect(failure('flowchart LR\nA --> B\nA --x B')).toMatchObject({ line: 3 });
+    expect(failure('flowchart LR\nA --> B\nA ~~ B')).toMatchObject({ line: 3 });
     expect(failure('flowchart LR\nA[open')).toMatchObject({ line: 2 });
     expect(failure('flowchart LR\nA --> ')).toMatchObject({ line: 2 });
     expect(failure('A --> B')).toMatchObject({ line: 1 });

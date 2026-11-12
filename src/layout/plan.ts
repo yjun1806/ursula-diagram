@@ -1,4 +1,5 @@
-import type { EdgeStyle, Graph } from '../types.ts';
+import { endFields } from '../edge-ends.ts';
+import type { EdgeStyle, Graph, LayoutEdge } from '../types.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Need, Side, Slot, Topology } from './place.ts';
 
@@ -7,6 +8,7 @@ export interface EdgePlan {
   from: string;
   to: string;
   style: EdgeStyle;
+  ends: Pick<LayoutEdge, 'id' | 'startEnd' | 'end' | 'invisible'>;
   label?: string;
   self: boolean;
   /** 'f': one line along the flow axis; 'c': one line across it; null: routed. */
@@ -85,6 +87,7 @@ export function planEdges(
       from: e.from,
       to: e.to,
       style: e.style,
+      ends: endFields(e),
       ...(e.label ? { label: e.label } : {}),
       self,
       straight,

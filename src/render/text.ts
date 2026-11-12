@@ -136,6 +136,7 @@ function drawEdges(c: Canvas, layout: Layout): void {
   };
   const arrows: Array<{ x: number; y: number; ch: string }> = [];
   for (const edge of layout.edges) {
+    if (edge.invisible) continue;
     const pts = edge.points.map((_, i) => cellOf(edge, nodes, i));
     for (let i = 0; i + 1 < pts.length; i++) {
       const [x1, y1] = pts[i] ?? [0, 0];
@@ -185,7 +186,7 @@ function drawEdges(c: Canvas, layout: Layout): void {
 function drawLabels(c: Canvas, layout: Layout): void {
   for (const edge of layout.edges) {
     const l = edge.label;
-    if (!l) continue;
+    if (!l || edge.invisible) continue;
     const x = Math.round(l.x);
     const y = Math.round(l.y);
     for (let dy = 0; dy < Math.round(l.h); dy++) for (let dx = 0; dx < Math.round(l.w); dx++) c.put(x + dx, y + dy, ' ');

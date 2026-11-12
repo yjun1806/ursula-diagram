@@ -1,11 +1,11 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
 import type { LegendKind } from '../sequence/model.ts';
-import { diamondPoints, hexagonPoints, parallelogramPoints, reachRoundedCorner, roundedPolygonPath, trimToOutline } from './shapes.ts';
+import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
 import { arrowFit, flowMarker, flowRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
-import type { EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
+import type { EdgeEnd, EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point, Scene, SceneItem, SceneLine } from '../types.ts';
 
 export interface NodeHookResult {
   attrs?: Record<string, string>;
@@ -34,6 +34,10 @@ const DIAMOND_RADIUS = 12;
 const CHIP_HEIGHT = 24;
 const CHIP_PAD = 10;
 const HALO = 3;
+/** Diameter of a dot at the end of a line, and length of each stroke of a cross. */
+const DOT = 8;
+const CROSS = 8;
+
 /** Height of the end caps of a cylinder, and the inset of the bars of a subroutine. */
 const CAP = 6;
 const BAR = 8;
@@ -144,7 +148,7 @@ interface Paint {
 const shadowAttr = (spec: ThemeSpec): string => (spec.shadow ? ' filter="url(#ursula-shadow)"' : '');
 
 function rolesOf(layout: Layout): Map<string, Role> {
-  const led = new Set(layout.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const led = new Set(layout.edges.filter((e) => e.from !== e.to && !e.invisible).map((e) => e.to));
   const roles = new Map<string, Role>();
   for (const n of layout.nodes) if (n.shape === 'diamond') roles.set(n.id, 'decision');
   const starts = layout.nodes.filter((n) => !led.has(n.id));
@@ -178,18 +182,105 @@ function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[
   return out;
 }
 
+/** Whether a line is drawn in the accent colour: a thick one, or one that leaves a decision. */
+const accented = (edge: LayoutEdge, paint: Paint): boolean => edge.style === 'thick' || paint.roles.get(edge.from) === 'decision';
+
+/** Id of the marker that ends a line in `end`, or undefined when nothing sits there. */
+function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | undefined {
+  switch (end) {
+    case 'none':
+      return undefined;
+    case 'arrow':
+      return `${accent ? 'ursula-arrow-accent' : 'ursula-arrow'}${atStart ? '-start' : ''}`;
+    case 'circle':
+      return accent ? 'ursula-dot-accent' : 'ursula-dot';
+    case 'cross':
+      return accent ? 'ursula-cross-accent' : 'ursula-cross';
+  }
+}
+
+/** How far a line stops short of its end so that the mark there is not drawn over a line. */
+function endTrim(end: EdgeEnd, spec: ThemeSpec): number {
+  return end === 'arrow' ? arrowFit(spec).trim : end === 'none' ? 0 : DOT / 2;
+}
+
+/** The points with the first one moved along the first piece by `amount`, keeping at least 1 of it. */
+function trimStart(pts: Point[], amount: number): Point[] {
+  const [a, b] = pts;
+  if (amount <= 0 || !a || !b) return pts;
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len === 0) return pts;
+  const cut = Math.min(amount, Math.max(0, len - 1));
+  return [{ x: a.x + ((b.x - a.x) / len) * cut, y: a.y + ((b.y - a.y) / len) * cut }, ...pts.slice(1)];
+}
+
 function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint): string {
+  if (edge.invisible) return '';
   const branch = paint.roles.get(edge.from) === 'decision' && edge.style !== 'thick';
-  const marker = markerId(edge.style === 'thick' || branch ? 'thick' : edge.style);
+  const accent = accented(edge, paint);
+  const end = edge.end ?? 'arrow';
+  const start = edge.startEnd ?? 'none';
+  const endId = endMarkerId(end, accent, false);
+  const startId = endMarkerId(start, accent, true);
+  const points = trimStart(trimmedPoints(edge, nodes), endTrim(start, paint.spec));
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(trimmedPoints(edge, nodes), paint.spec.bend, arrowFit(paint.spec).trim)}" marker-end="url(#${marker})"/>`
+    `d="${pathData(points, paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>`
   );
+}
+
+/** The markers (beyond the two arrowheads every drawing has) and style rules that the visible edges of a layout need. */
+function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: string[] } {
+  const spec = paint.spec;
+  const wanted = new Map<string, string>();
+  const reversed = (m: string): string => m.replace('orient="auto"', 'orient="auto-start-reverse"');
+  let rules = false;
+  const want = (end: EdgeEnd, accent: boolean, atStart: boolean): void => {
+    const id = endMarkerId(end, accent, atStart);
+    if (id === undefined || wanted.has(id)) return;
+    const mod = accent ? '--accent' : '';
+    if (end === 'arrow') {
+      if (atStart) wanted.set(id, reversed(flowMarker(spec, id, accent ? 'ursula-arrow ursula-arrow--accent' : 'ursula-arrow')));
+      return;
+    }
+    rules = true;
+    const body =
+      end === 'circle'
+        ? `<circle class="ursula-end-dot${accent ? ` ursula-end-dot${mod}` : ''}" cx="${DOT / 2}" cy="${DOT / 2}" r="${DOT / 2}"/>`
+        : `<path class="ursula-end-cross${accent ? ` ursula-end-cross${mod}` : ''}" d="${crossPath()}"/>`;
+    wanted.set(id, `<marker id="${id}" viewBox="0 0 ${DOT} ${DOT}" refX="${DOT}" refY="${DOT / 2}" markerWidth="${DOT}" markerHeight="${DOT}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${body}</marker>`);
+  };
+  for (const edge of layout.edges) {
+    if (edge.invisible) continue;
+    const accent = accented(edge, paint);
+    want(edge.end ?? 'arrow', accent, false);
+    want(edge.startEnd ?? 'none', accent, true);
+  }
+  const w = spec.lineWidth;
+  return {
+    markers: [...wanted.values()],
+    rules: rules
+      ? [
+          '.ursula-end-dot{fill:$line}',
+          '.ursula-end-dot--accent{fill:$accent}',
+          `.ursula-end-cross{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round}`,
+          '.ursula-end-cross--accent{stroke:$accent}',
+        ]
+      : [],
+  };
+}
+
+/** Two strokes, each `CROSS` long, crossing at the middle of the mark. */
+function crossPath(): string {
+  const mid = DOT / 2;
+  const reach = CROSS / 2 / Math.SQRT2;
+  const [lo, hi] = [num(mid - reach), num(mid + reach)];
+  return `M${lo} ${lo}L${hi} ${hi}M${hi} ${lo}L${lo} ${hi}`;
 }
 
 function labelSvg(edge: LayoutEdge, paint: Paint): string {
   const l = edge.label;
-  if (!l) return '';
+  if (!l || edge.invisible) return '';
   const lines = l.lines ?? [l.text];
   const ruler = pixelRuler();
   const w = Math.max(0, ...lines.map((line) => ruler.textWidth(line, 'edge'))) + 2 * CHIP_PAD;
@@ -237,6 +328,19 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
       return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"${shadow}/>`;
     case 'parallelogram':
       return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"${shadow}/>`;
+    case 'lean-l':
+      return `<polygon class="ursula-node-box" points="${points(leanLeftPoints(node))}"${shadow}/>`;
+    case 'trap-b':
+      return `<polygon class="ursula-node-box" points="${points(trapBottomPoints(node))}"${shadow}/>`;
+    case 'trap-t':
+      return `<polygon class="ursula-node-box" points="${points(trapTopPoints(node))}"${shadow}/>`;
+    case 'asym':
+      return `<polygon class="ursula-node-box" points="${points(asymPoints(node))}"${shadow}/>`;
+    case 'dbl-circle':
+      return (
+        `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"${shadow}/>` +
+        `<ellipse class="ursula-node-box ursula-node-box--lined" cx="${num(cx)}" cy="${num(cy)}" rx="${num(Math.max(0, w / 2 - RING_GAP))}" ry="${num(Math.max(0, h / 2 - RING_GAP))}"/>`
+      );
     case 'subroutine':
       return (
         boxSvg(node, BAR, shadow) +
@@ -329,12 +433,13 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   };
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
   const lookup: Lookup = (name, mode) => tokenVar(spec, name, mode);
+  const ends = extraEnds(layout, paint);
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet(flowRules(spec, FONT), lookup)}</style>`,
-    `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
-    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && layout.direction === 'LR', spec)),
+    `<style>${styleSheet([...flowRules(spec, FONT), ...ends.rules], lookup)}</style>`,
+    `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
+    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
     ...layout.edges.map((e) => labelSvg(e, paint)),

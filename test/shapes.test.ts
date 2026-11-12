@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layout, parse, pixelRuler, render, UrsulaError } from '../src/index.ts';
+import { layout, parse, pixelRuler, render } from '../src/index.ts';
 import type { NodeShape } from '../src/index.ts';
 import { tipOf } from './helpers.ts';
 
@@ -28,17 +28,6 @@ const QUOTED: Array<[string, NodeShape]> = [
   ['a("x y")', 'round'],
 ];
 
-const REFUSED = ['a>x]', 'a[\\x\\]', 'a[/x\\]', 'a[\\x/]', 'a(((x)))', 'a@{ shape: rect }'];
-
-function failure(src: string): UrsulaError {
-  try {
-    parse(src);
-  } catch (e) {
-    if (e instanceof UrsulaError) return e;
-    throw e;
-  }
-  throw new Error('expected parse to fail');
-}
 
 describe('node shapes', () => {
   it.each(CASES)('reads %s as %s', (decl, shape) => {
@@ -49,10 +38,6 @@ describe('node shapes', () => {
     const node = parse(`flowchart LR\n${decl}`).nodes[0];
     expect(node?.shape).toBe(shape);
     expect(node?.title).toBe('x y');
-  });
-
-  it.each(REFUSED)('refuses %s as unsupported', (decl) => {
-    expect(failure(`flowchart LR\n${decl}`)).toMatchObject({ code: 'unsupported', line: 2 });
   });
 
   it('takes the shape of the declaration that gives a label', () => {
