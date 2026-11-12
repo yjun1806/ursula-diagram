@@ -241,8 +241,7 @@ describe('treemap layout', () => {
     }
   });
 
-  it('places items in input order, the first at the top left', () => {
-    const budget = `treemap-beta
+  const BUDGET = `treemap-beta
 "Monthly Budget"
     "Housing"
         "Rent": 1400
@@ -253,22 +252,71 @@ describe('treemap layout', () => {
         "Dining out": 180
     "Transport"
         "Car payment": 320
-        "Fuel": 140`;
-    const { tiles, groups } = layoutTreemap(parseTreemap(budget), pixelRuler());
+        "Fuel": 140
+    "Savings"
+        "Emergency fund": 300
+        "Retirement": 400`;
+
+  it('places columns left to right and tiles top to bottom in input order, the first at the top left', () => {
+    const { tiles, groups } = layoutTreemap(parseTreemap(BUDGET), pixelRuler());
+    const tile = (label: string) => tiles.find((t) => t.label === label);
+    const group = (label: string) => groups.find((g) => g.label === label);
+    const names = ['Housing', 'Food', 'Transport', 'Savings'];
+    expect(group('Housing')?.x).toBe(40);
+    names.slice(1).forEach((n, i) => {
+      expect(group(n)?.x).toBeGreaterThan(group(names[i] ?? '')?.x ?? Infinity);
+      expect(group(n)?.y).toBe(group('Housing')?.y);
+    });
+    expect(tile('Rent')).toMatchObject({ x: 40, y: 100 });
+    expect(tile('Groceries')?.y).toBeLessThan(tile('Dining out')?.y ?? 0);
+    expect(tile('Emergency fund')?.y).toBeLessThan(tile('Retirement')?.y ?? 0);
+  });
+
+  it('gives every column the same height and fills the content width', () => {
+    const { tiles } = layoutTreemap(parseTreemap(BUDGET), pixelRuler());
+    const bottoms = ['Internet', 'Dining out', 'Fuel', 'Retirement'].map((l) => tiles.find((t) => t.label === l)).map((t) => (t?.y ?? 0) + (t?.h ?? 0));
+    for (const b of bottoms) expect(b).toBeCloseTo(500, 6);
+    const right = Math.max(...tiles.map((t) => t.x + t.w));
+    expect(right).toBeCloseTo(976, 6);
+  });
+
+  it('moves low tiles into one row at the foot of the column', () => {
+    const { tiles } = layoutTreemap(parseTreemap(BUDGET), pixelRuler());
     const rent = tiles.find((t) => t.label === 'Rent');
-    expect(rent).toMatchObject({ x: 40 });
-    const housing = groups.find((g) => g.label === 'Housing');
-    const food = groups.find((g) => g.label === 'Food');
-    const transport = groups.find((g) => g.label === 'Transport');
-    expect(housing).toMatchObject({ x: 40 });
-    const before = (a: { x: number; y: number } | undefined, b: { x: number; y: number } | undefined): boolean =>
-      a !== undefined && b !== undefined && (a.y < b.y - 1e-6 || (Math.abs(a.y - b.y) < 1e-6 && a.x < b.x));
-    expect(before(housing, food)).toBe(true);
-    expect(before(food, transport)).toBe(true);
-    const names = ['Rent', 'Utilities', 'Internet'].map((l) => tiles.find((t) => t.label === l));
-    expect(before(names[0], names[1])).toBe(true);
-    expect(before(names[1], names[2])).toBe(true);
-    expect(tiles.find((t) => t.label === 'Rent')?.y).toBe(groups.find((g) => g.label === 'Housing')!.y + 12);
+    const utilities = tiles.find((t) => t.label === 'Utilities');
+    const internet = tiles.find((t) => t.label === 'Internet');
+    expect(utilities?.y).toBeCloseTo(internet?.y ?? 0, 6);
+    expect(utilities?.h).toBeCloseTo(internet?.h ?? 0, 6);
+    expect((utilities?.y ?? 0) - ((rent?.y ?? 0) + (rent?.h ?? 0))).toBeCloseTo(4, 6);
+    // Their widths follow the values (220 : 60) and the gap between them is 4.
+    expect((utilities?.w ?? 0) / (internet?.w ?? 1)).toBeCloseTo(220 / 60, 6);
+    expect((internet?.x ?? 0) - ((utilities?.x ?? 0) + (utilities?.w ?? 0))).toBeCloseTo(4, 6);
+  });
+
+  it('keeps a foot row lower than a label exact in area and sheds its text', () => {
+    const { tiles } = layoutTreemap(parseTreemap(body(EXAMPLES['currency'] ?? '')), pixelRuler());
+    const supplies = tiles.find((t) => t.label === 'Supplies');
+    expect(supplies?.h).toBeLessThan(56);
+    const unit = tiles.reduce((a, t) => a + t.w * t.h, 0) / tiles.reduce((a, t) => a + t.value, 0);
+    expect(Math.abs(((supplies?.w ?? 0) * (supplies?.h ?? 0)) / (unit * 100000) - 1)).toBeLessThan(0.001);
+    expect(supplies?.valueShown).toBeUndefined();
+    expect(supplies?.nameShown).toBeUndefined();
+    expect(supplies?.label).toBe('Supplies');
+  });
+
+  it('stacks nested groups with their names above their tiles', () => {
+    const { tiles, groups } = layoutTreemap(parseTreemap(body(EXAMPLES['styling'] ?? '')), pixelRuler());
+    const sub = groups.find((g) => g.label === 'Section 1.2');
+    const leaf = tiles.find((t) => t.label === 'Leaf 1.2.1');
+    const first = tiles.find((t) => t.label === 'Leaf 1.1');
+    expect(sub).toBeDefined();
+    expect((leaf?.y ?? 0) - (sub?.y ?? 0)).toBe(12);
+    expect((sub?.y ?? 0)).toBeGreaterThan((first?.y ?? 0) + (first?.h ?? 0));
+  });
+
+  it('gives a lone column the whole width', () => {
+    const { tiles } = layoutTreemap(parseTreemap('treemap-beta\n"Only"\n    "A": 3\n    "B": 1'), pixelRuler());
+    expect(Math.max(...tiles.map((t) => t.x + t.w))).toBeCloseTo(976, 6);
   });
 
   it('prints groups with their totals', () => {

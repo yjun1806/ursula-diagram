@@ -4,14 +4,14 @@ import { makeFormatter } from './format.ts';
 import { isLeaf, total } from './model.ts';
 import type { TreeNode, Treemap } from './model.ts';
 
-/** Gap between two tiles; a group keeps a wider gap to its neighbours. */
+/** Gap between two tiles, and between a group and what lies next to it. */
 const TILE_GAP = 4;
 const GROUP_GAP = 16;
 /** Height of a group-name line, and of the root-name block. */
 const NAME_LINE = 24;
 const ROOT_BLOCK = 36;
-/** Space inside a group that holds further groups, on the left, right and bottom. */
-const GROUP_PAD = 12;
+/** A tile lower than a two-line label (padding, name, value, padding) joins the row at the foot of its column. */
+const MIN_TILE_H = 56;
 const TILE_PAD = 12;
 const NAME_H = 18;
 const VALUE_H = 16;
@@ -65,72 +65,10 @@ interface LNode {
   node: TreeNode;
   kids: LNode[];
   series: number;
-  /** True when some child is a group. */
-  nested: boolean;
 }
 
 function build(node: TreeNode, series: number): LNode {
-  const kids = node.children.map((c) => build(c, series));
-  return { node, kids, series, nested: kids.some((k) => !isLeaf(k.node)) };
-}
-
-/** Number of nested group levels at or below a node (0 for a leaf). */
-function depthOf(n: LNode): number {
-  return isLeaf(n.node) ? 0 : 1 + Math.max(0, ...n.kids.map(depthOf));
-}
-
-function worst(row: number[], side: number): number {
-  const sum = row.reduce((a, b) => a + b, 0);
-  const max = Math.max(...row);
-  const min = Math.min(...row);
-  return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
-}
-
-/**
- * Squarified treemap (Bruls, Huizing, van Wijk 2000): rectangles in `rect` with areas proportional to `weights`.
- * Items fill the rows in input order, the first one at the top left.
- */
-function squarify(weights: number[], rect: Rect): Rect[] {
-  const out: Rect[] = new Array<Rect>(weights.length);
-  const order = weights.map((w, i) => i);
-  const sum = weights.reduce((a, b) => a + b, 0);
-  const scale = sum === 0 ? 0 : (rect.w * rect.h) / sum;
-  let { x, y, w, h } = rect;
-  let i = 0;
-  while (i < order.length) {
-    const side = Math.min(w, h);
-    const area = (k: number): number => (weights[order[k] ?? 0] ?? 0) * scale;
-    const row = [area(i)];
-    let j = i + 1;
-    while (j < order.length && side > 0 && worst([...row, area(j)], side) <= worst(row, side)) {
-      row.push(area(j));
-      j++;
-    }
-    const rowSum = row.reduce((a, b) => a + b, 0);
-    if (w >= h) {
-      const stripW = h === 0 ? 0 : rowSum / h;
-      let cy = y;
-      row.forEach((a, k) => {
-        const rh = stripW === 0 ? 0 : a / stripW;
-        out[order[i + k] ?? 0] = { x, y: cy, w: stripW, h: rh };
-        cy += rh;
-      });
-      x += stripW;
-      w -= stripW;
-    } else {
-      const stripH = w === 0 ? 0 : rowSum / w;
-      let cx = x;
-      row.forEach((a, k) => {
-        const rw = stripH === 0 ? 0 : a / stripH;
-        out[order[i + k] ?? 0] = { x: cx, y, w: rw, h: stripH };
-        cx += rw;
-      });
-      y += stripH;
-      h -= stripH;
-    }
-    i = j;
-  }
-  return out;
+  return { node, kids: node.children.map((c) => build(c, series)), series };
 }
 
 interface Raw {
@@ -138,36 +76,82 @@ interface Raw {
   groups: Array<{ node: LNode; x: number; y: number; w: number }>;
 }
 
-/** Places the children of one region; sides that touch the region's border keep no gap. */
-function place(items: LNode[], region: Rect, weight: (n: LNode) => number, raw: Raw): void {
-  if (items.length === 0) return;
-  const rects = squarify(items.map(weight), region);
-  const eps = 1e-6;
-  items.forEach((item, i) => {
-    const r = rects[i];
-    if (r === undefined) return;
-    const inset = isLeaf(item.node) ? TILE_GAP / 2 : GROUP_GAP / 2;
-    const left = r.x > region.x + eps ? inset : 0;
-    const top = r.y > region.y + eps ? inset : 0;
-    const right = r.x + r.w < region.x + region.w - eps ? inset : 0;
-    const bottom = r.y + r.h < region.y + region.h - eps ? inset : 0;
-    const x = r.x + left;
-    const y = r.y + top;
-    const w = Math.max(0, r.w - left - right);
-    const h = Math.max(0, r.h - top - bottom);
-    if (isLeaf(item.node)) {
-      raw.tiles.push({ x, y, w, h, node: item });
-      return;
-    }
-    raw.groups.push({ node: item, x, y, w });
-    const pad = item.nested ? GROUP_PAD : 0;
-    const inner: Rect = { x: x + pad, y: y + NAME_LINE, w: Math.max(0, w - 2 * pad), h: Math.max(0, h - NAME_LINE - pad) };
-    place(item.kids, inner, weight, raw);
-  });
+const valueOf = (n: LNode): number => n.node.value ?? 0;
+const sumValue = (items: LNode[]): number => items.reduce((a, n) => a + valueOf(n), 0);
+const allLeaves = (items: LNode[]): boolean => items.every((n) => isLeaf(n.node));
+
+/** Number of name lines a stack holds below its own top (one per group, counted at every depth). */
+function nameLines(items: LNode[]): number {
+  return allLeaves(items) ? 0 : items.reduce((a, n) => a + (isLeaf(n.node) ? 0 : 1 + nameLines(n.kids)), 0);
 }
 
-function leavesOf(n: LNode): LNode[] {
-  return isLeaf(n.node) ? [n] : n.kids.flatMap(leavesOf);
+/**
+ * Lays `items` out in a column of width `w` whose top is `y` and returns its height; each unit of value takes `k` of area.
+ * Leaves of a column (`foot`) stack from top to bottom; the lowest ones that would be shorter than a two-line label
+ * form one row at the foot, split by value. The leaves of a nested group form one row. A stack holding groups puts
+ * each group's name line above its tiles. Areas always follow the values, so a foot row can be lower than a label;
+ * its tiles then shed text instead.
+ */
+function stack(items: LNode[], x: number, y: number, w: number, k: number, foot: boolean, raw: Raw): number {
+  const area = (n: LNode): number => k * valueOf(n);
+  const rowAt = (row: LNode[], top: number): number => {
+    const room = w - TILE_GAP * (row.length - 1);
+    const h = (k * sumValue(row)) / room;
+    let cx = x;
+    for (const n of row) {
+      const tw = (area(n) / (k * sumValue(row))) * room;
+      raw.tiles.push({ x: cx, y: top, w: tw, h, node: n });
+      cx += tw + TILE_GAP;
+    }
+    return h;
+  };
+  if (allLeaves(items) && !foot) return rowAt(items, y);
+  if (allLeaves(items)) {
+    let start = items.length;
+    while (start > 0 && area(items[start - 1] as LNode) / w < MIN_TILE_H) start--;
+    const above = items.slice(0, start);
+    const row = items.slice(start);
+    const rawRow = row.length === 0 ? 0 : (k * sumValue(row)) / (w - TILE_GAP * (row.length - 1));
+    const gaps = TILE_GAP * Math.max(0, above.length - 1) + (above.length > 0 && row.length > 0 ? TILE_GAP : 0);
+    const stacked = above.reduce((a, n) => a + area(n) / w, 0);
+    let cy = y;
+    for (const n of above) {
+      const h = area(n) / w;
+      raw.tiles.push({ x, y: cy, w, h, node: n });
+      cy += h + TILE_GAP;
+    }
+    if (row.length > 0) rowAt(row, cy);
+    return stacked + gaps + rawRow;
+  }
+  let cy = y;
+  let prevGroup = false;
+  items.forEach((n, i) => {
+    const group = !isLeaf(n.node);
+    if (i > 0) cy += group || prevGroup ? GROUP_GAP : TILE_GAP;
+    if (!group) {
+      const h = area(n) / w;
+      raw.tiles.push({ x, y: cy, w, h, node: n });
+      cy += h;
+    } else {
+      raw.groups.push({ node: n, x, y: cy, w });
+      cy += NAME_LINE + stack(n.kids, x, cy + NAME_LINE, w, k, false, raw);
+    }
+    prevGroup = group;
+  });
+  return cy - y;
+}
+
+/** The width at which a column's stack is `height` tall: the stack only gets shorter as it widens. */
+function widthFor(items: LNode[], k: number, height: number): number {
+  let lo = 1e-3;
+  let hi = 1e6;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    const h = stack(items, 0, 0, mid, k, true, { tiles: [], groups: [] });
+    if (h > height) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
 }
 
 /** Cuts `text` with an ellipsis until it fits `room`; undefined when not even the ellipsis fits. */
@@ -182,11 +166,13 @@ function fitText(text: string, room: number, width: (t: string) => number): stri
   return width(ELLIPSIS) <= room ? ELLIPSIS : undefined;
 }
 
-/** Places a treemap: leaf tiles whose areas follow the values, group names above their tiles. */
+/** Places a treemap: columns side by side in input order, each as tall as the others, tile areas following the values. */
 export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
   const fmt = makeFormatter(map.valueFormat);
   const root = map.roots.length === 1 && !isLeaf(map.roots[0] as TreeNode) ? (map.roots[0] as TreeNode) : undefined;
   const tops = (root === undefined ? map.roots : root.children).map((n, i) => build(n, (i % SERIES) + 1));
+  /** What a column stacks: the children of a group, or the leaf itself. */
+  const itemsOf = (t: LNode): LNode[] => (isLeaf(t.node) ? [t] : t.kids);
 
   const margin = Math.max(MIN_MARGIN, Math.ceil((map.diagramPadding ?? MARGIN) / 4) * 4);
   const nameW = (t: string): number => ruler.textWidth(t, 'title');
@@ -197,51 +183,33 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
   if (map.title !== undefined) y += TITLE_H + TITLE_GAP;
   const rootY = y + 16;
   if (root !== undefined) y += ROOT_BLOCK;
-  const levels = Math.max(0, ...tops.map(depthOf));
-  const regionH = TILE_AREA_H + NAME_LINE * levels + GROUP_PAD * Math.max(0, levels - 1);
-  const region: Rect = { x: margin, y, w: CONTENT_W, h: regionH };
+  const headed = tops.some((t) => !isLeaf(t.node));
+  const columnH = TILE_AREA_H + NAME_LINE * Math.max(0, ...tops.map((t) => nameLines(itemsOf(t))));
+  const regionH = (headed ? NAME_LINE : 0) + columnH;
+  const top = y + (headed ? NAME_LINE : 0);
 
-  const leaves = tops.flatMap(leavesOf);
-  const valueOf = (n: LNode): number => n.node.value ?? 0;
-  const totalValue = leaves.reduce((a, n) => a + valueOf(n), 0);
-
-  // Gaps and name lines take area, so tile areas drift from the values; the weights are refitted until they agree.
-  let weights = new Map<LNode, number>(leaves.map((n) => [n, valueOf(n)]));
-  const weightOf = (w: Map<LNode, number>): ((n: LNode) => number) => {
-    const f = (n: LNode): number => (isLeaf(n.node) ? (w.get(n) ?? 0) : n.kids.reduce((a, k) => a + f(k), 0));
-    return f;
-  };
-  const measure = (raw: Raw): { error: number; ratios: Map<LNode, number> } => {
-    const area = raw.tiles.reduce((a, t) => a + t.w * t.h, 0);
-    const unit = area / totalValue;
-    let error = 0;
-    const ratios = new Map<LNode, number>();
-    for (const t of raw.tiles) {
-      const ratio = (t.w * t.h) / (unit * valueOf(t.node));
-      ratios.set(t.node, ratio);
-      error = Math.max(error, Math.abs(ratio - 1));
-    }
-    return { error, ratios };
-  };
-  let best: { raw: Raw; error: number } | undefined;
-  for (let pass = 0; pass < 400; pass++) {
-    const raw: Raw = { tiles: [], groups: [] };
-    place(tops, region, weightOf(weights), raw);
-    const { error, ratios } = measure(raw);
-    if (best === undefined || error < best.error) best = { raw, error };
-    if (error < 0.002) break;
-    const next = new Map<LNode, number>();
-    let sum = 0;
-    for (const n of leaves) {
-      const ratio = Math.max(ratios.get(n) ?? 0.01, 0.01);
-      const w = (weights.get(n) ?? 0) / ratio ** 0.8;
-      next.set(n, w);
-      sum += w;
-    }
-    const norm = totalValue / sum;
-    weights = new Map([...next].map(([n, w]) => [n, w * norm]));
+  // One area unit per value that makes the columns, with the gaps between them, fill the content width.
+  const widths = (k: number): number[] => tops.map((t) => widthFor(itemsOf(t), k, columnH));
+  const span = (k: number): number => widths(k).reduce((a, b) => a + b, 0) + GROUP_GAP * (tops.length - 1);
+  let lo = 1e-9;
+  let hi = 1e12;
+  for (let i = 0; i < 120; i++) {
+    const mid = Math.sqrt(lo * hi);
+    if (span(mid) > CONTENT_W) hi = mid;
+    else lo = mid;
   }
-  const raw = best?.raw ?? { tiles: [], groups: [] };
+  const k = Math.sqrt(lo * hi);
+  const colW = widths(k);
+
+  const raw: Raw = { tiles: [], groups: [] };
+  let cx = margin;
+  tops.forEach((t, i) => {
+    const w = colW[i] ?? 0;
+    if (!isLeaf(t.node)) raw.groups.push({ node: t, x: cx, y: top - NAME_LINE, w });
+    stack(itemsOf(t), cx, top, w, k, true, raw);
+    cx += w + GROUP_GAP;
+  });
+  const areaError = Math.max(0, ...raw.tiles.map((t) => Math.abs((t.w * t.h) / (k * valueOf(t.node)) - 1)));
 
   const tiles: PlacedTile[] = raw.tiles.map((t) => {
     const value = valueOf(t.node);
@@ -293,5 +261,5 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
   }
 
   const label = map.accTitle ?? (map.title !== undefined ? `Treemap: ${map.title}` : root !== undefined ? `Treemap: ${root.label}` : `Treemap: ${tiles.length} leaves`);
-  return { scene: { width, height, title: label, items }, tiles, groups, areaError: best?.error ?? 0 };
+  return { scene: { width, height, title: label, items }, tiles, groups, areaError };
 }
