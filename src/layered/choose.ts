@@ -72,7 +72,80 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { crossing: 3, extraRow: 2, back: 1, backChain: 2, far: 1, start: 2 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2 } as const;
+
+const properCross = (a: Seg, b: Seg): boolean => {
+  const ah = Math.abs(a.ay - a.by) < EPS;
+  const bh = Math.abs(b.ay - b.by) < EPS;
+  if (ah === bh) return false;
+  const [h, v] = ah ? [a, b] : [b, a];
+  return v.ax > Math.min(h.ax, h.bx) + EPS && v.ax < Math.max(h.ax, h.bx) - EPS && h.ay > Math.min(v.ay, v.by) + EPS && h.ay < Math.max(v.ay, v.by) - EPS;
+};
+
+/** Crossings between edges, counted on the finished segments: [on the main flow, elsewhere]. */
+export function crossingsOf(l: Layout): [number, number] {
+  const all = l.edges.map(segments);
+  const box = all.map((segs) => ({ x0: Math.min(...segs.map((s) => Math.min(s.ax, s.bx))), x1: Math.max(...segs.map((s) => Math.max(s.ax, s.bx))), y0: Math.min(...segs.map((s) => Math.min(s.ay, s.by))), y1: Math.max(...segs.map((s) => Math.max(s.ay, s.by))) }));
+  let onMain = 0;
+  let other = 0;
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const a = box[i];
+      const b = box[j];
+      if (a && b && (a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0)) continue;
+      let n = 0;
+      for (const s of all[i] as Seg[]) for (const t of all[j] as Seg[]) if (properCross(s, t)) n++;
+      if (l.edges[i]?.main || l.edges[j]?.main) onMain += n;
+      else other += n;
+    }
+  }
+  return [onMain, other];
+}
+
+/**
+ * Nodes with two or more partners in one neighbouring layer (going out or coming in, counted apart) that do not
+ * stand in the middle of them: within half a slot unit of the midpoint of the first and last partner, or exactly
+ * in line with the middle partner when the partners are odd in number. Gives the node and the midpoint wanted.
+ */
+export function offCentre(l: Layout): Array<{ id: string; mid: number }> {
+  if (!l.pitch || l.pitch <= 0) return [];
+  const reading = l.direction === 'TD' ? 'y' : 'x';
+  const across = l.direction === 'TD' ? 'x' : 'y';
+  const sizeOf = (n: Layout['nodes'][number], axis: 'x' | 'y'): number => (axis === 'x' ? n.w : n.h);
+  // Layers run along the axis across the reading direction for lanes, and along the reading direction for stages.
+  const layerAxis = l.composition === 'stages' ? reading : across;
+  const spreadAxis = layerAxis === 'x' ? 'y' : 'x';
+  const key = (n: Layout['nodes'][number]): number => Math.round(n[layerAxis] * 100) / 100;
+  const layers = [...new Set(l.nodes.map(key))].sort((a, b) => a - b);
+  const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const centre = (n: Layout['nodes'][number]): number => n[spreadAxis] + sizeOf(n, spreadAxis) / 2;
+  const groups = new Map<string, { id: string; partners: string[] }>();
+  for (const e of l.edges) {
+    const a = byId.get(e.from);
+    const b = byId.get(e.to);
+    if (!a || !b || a === b) continue;
+    const gap = layers.indexOf(key(b)) - layers.indexOf(key(a));
+    if (Math.abs(gap) !== 1) continue;
+    for (const [node, other, out] of [[a, b, true], [b, a, false]] as const) {
+      const k = `${node.id}|${out}|${layers.indexOf(key(other))}`;
+      const g = groups.get(k) ?? { id: node.id, partners: [] };
+      g.partners.push(other.id);
+      groups.set(k, g);
+    }
+  }
+  const found: Array<{ id: string; mid: number }> = [];
+  for (const g of groups.values()) {
+    const partners = [...new Set(g.partners)].map((id) => byId.get(id)).filter((n): n is Layout['nodes'][number] => n !== undefined);
+    if (partners.length < 2) continue;
+    const mine = byId.get(g.id);
+    if (!mine) continue;
+    const cs = partners.map(centre).sort((x, y) => x - y);
+    const mid = ((cs[0] as number) + (cs[cs.length - 1] as number)) / 2;
+    const odd = cs.length % 2 === 1 && Math.abs(centre(mine) - (cs[(cs.length - 1) / 2] as number)) < 0.5;
+    if (!odd && Math.abs(centre(mine) - mid) > l.pitch / 4 + EPS) found.push({ id: g.id, mid });
+  }
+  return found;
+}
 
 /** Places an edge leaves out between its two boxes, in columns (a box and a gap) and in rows; neighbours and the same place count nothing. */
 export function farness(l: Layout): number {
@@ -113,7 +186,8 @@ export function score(l: Layout): number[] {
   let length = 0;
   const against: Array<[string, string]> = [];
   for (const e of l.edges) {
-    bends += Math.max(0, e.points.length - 2);
+    const turns = Math.max(0, e.points.length - 2);
+    bends += (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * turns;
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
@@ -133,8 +207,17 @@ export function score(l: Layout): number[] {
   const rows = new Map<string, number>();
   for (const n of l.nodes) rows.set(n.lane, Math.max(rows.get(n.lane) ?? 0, n.row + 1));
   const extra = [...rows.values()].reduce((sum, r) => sum + r - 1, 0);
-  const crossings = l.diagnostics.filter((d) => d.kind === 'crossing').length;
-  const cost = bends + WEIGHTS.crossing * crossings + WEIGHTS.extraRow * extra + WEIGHTS.back * against.length + WEIGHTS.backChain * chained + WEIGHTS.far * farness(l) + WEIGHTS.start * startMissed(l);
+  const [crossMain, crossOther] = crossingsOf(l);
+  const cost =
+    bends +
+    WEIGHTS.crossingMain * crossMain +
+    WEIGHTS.crossing * crossOther +
+    WEIGHTS.extraRow * extra +
+    WEIGHTS.back * against.length +
+    WEIGHTS.backChain * chained +
+    WEIGHTS.far * farness(l) +
+    WEIGHTS.start * startMissed(l) +
+    WEIGHTS.branch * offCentre(l).length;
   return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, cost, Math.round(length)];
 }
 

@@ -27,6 +27,8 @@ export interface Frame {
   spread?: number;
   /** Let edges between two layers leave or enter through the side of a box (one bend instead of two). */
   elbows?: boolean;
+  /** Edges (`from|to`) that join two nodes of the main flow in turn. */
+  main?: ReadonlySet<string>;
 }
 
 const EPS = 1e-6;
@@ -510,7 +512,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       }
     }
     raw.push(pts);
-    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts) });
+    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });
 
   if (f.elbows) useElbows(edges, nodes, ruler, td);
@@ -566,7 +568,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     );
   });
   const [width, height] = td ? [totalL, totalO] : [totalO, totalL];
-  const layout: Layout = { width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
+  const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
   void raw;
   return { layout, failed: failed.map((ei) => ei) };
 }

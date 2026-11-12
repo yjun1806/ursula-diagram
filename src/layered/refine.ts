@@ -1,7 +1,7 @@
 import type { Graph, Layout, LayoutEdge } from '../types.ts';
 import type { Placed } from './model.ts';
 import type { Rows } from './rows.ts';
-import { score } from './choose.ts';
+import { offCentre, score } from './choose.ts';
 
 const EPS = 1e-6;
 
@@ -105,6 +105,41 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
     return true;
   };
 
+  // A node slides together with the pass-through lines that run straight on from it, when the cells beside it are free.
+  const slideNode = (n: number, to: number): boolean => {
+    if (to === current.start[n] || to < 0) return false;
+    const members = new Set([n]);
+    const queue = [n];
+    for (let q = 0; q < queue.length; q++) {
+      const v = queue[q] as number;
+      for (const c of current.ladder.chains) {
+        const i = c.nodes.indexOf(v);
+        if (c.kind !== 'span' || i < 0) continue;
+        for (const w of [c.nodes[i - 1], c.nodes[i + 1]]) {
+          if (w !== undefined && w >= current.ladder.realCount && !members.has(w) && current.start[w] === current.start[n]) {
+            members.add(w);
+            queue.push(w);
+          }
+        }
+      }
+    }
+    const width = (v: number): number => (v < current.ladder.realCount ? (current.ladder.nodes[v]?.units ?? 2) : 1);
+    for (const v of members) {
+      const lay = current.layers[current.ladder.nodes[v]?.layer ?? 0] ?? [];
+      const i = lay.indexOf(v);
+      const before = lay[i - 1];
+      const after = lay[i + 1];
+      if (before !== undefined && !members.has(before) && to < (current.start[before] ?? 0) + width(before)) return false;
+      if (after !== undefined && !members.has(after) && to + width(v) > (current.start[after] ?? 0)) return false;
+    }
+    return attempt(() => {
+      const start = [...current.start];
+      for (const v of members) start[v] = to;
+      const end = Math.max(...current.ladder.nodes.map((v) => (start[v.idx] ?? 0) + (v.idx < current.ladder.realCount ? v.units : 2)));
+      return { ...current, start, width: end };
+    });
+  };
+
   for (;;) {
     if (draws >= maxDraws || mine.slice(1, -1).every((v) => v === 0)) break;
     // First, lanes with several rows try to give up their last row: its nodes go up to a row with room, at a tighter gap if need be.
@@ -133,6 +168,14 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
         for (const m of [row[k - 1], n, row[k + 1]]) if (m !== undefined) targets.add(m);
       }
     }
+    // Fan-out and fan-in nodes that are not in the middle of their partners are looked at too.
+    const wanted = new Map<number, number>();
+    for (const o of offCentre(layout)) {
+      const i = index.get(o.id);
+      if (i === undefined) continue;
+      targets.add(i);
+      wanted.set(i, o.mid);
+    }
     let changed = false;
     const tried = new Set<string>();
     for (const n of [...targets].sort((x, y) => x - y)) {
@@ -155,6 +198,16 @@ export function refine(graph: Graph, first: Placed, draw: (p: Placed) => Layout,
         }
       }
       if (changed) break;
+      // The node goes to the free place nearest the middle of its partners, inside its layer and in its order.
+      const middle = wanted.get(n);
+      const shape = layout.nodes.find((v) => v.id === graph.nodes[n]?.id);
+      if (middle !== undefined && shape && layout.pitch) {
+        const reading = layout.direction === 'TD' ? 'y' : 'x';
+        const size = layout.direction === 'TD' ? shape.h : shape.w;
+        const shift = Math.round((middle - (shape[reading] + size / 2)) / (layout.pitch / 2));
+        if (shift !== 0 && slideNode(n, (current.start[n] ?? 0) + shift)) changed = true;
+        if (changed) break;
+      }
       if (n >= current.ladder.realCount) continue;
       const comp = component(n);
       const rows = current.rows;

@@ -65,6 +65,8 @@ export interface LayoutEdge {
   points: Point[];
   /** Drawn with one bend, out of or into the side of a box. */
   elbow?: boolean;
+  /** Joins two nodes of the main flow in turn (set by the layered engine for lanes). */
+  main?: true;
   label?: { text: string; x: number; y: number; w: number; h: number };
 }
 

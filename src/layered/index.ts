@@ -254,8 +254,15 @@ function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolea
 }
 
 /** The drawing as it stands, without the spreading of spare room: what candidates and changes are measured on. */
+/** The edges that join two nodes of the main flow in turn. */
+function mainEdges(graph: Graph, rows: Rows): ReadonlySet<string> {
+  const pairs = new Set(rows.main.slice(1).flatMap((v, i) => [`${rows.main[i]}|${v}`, `${v}|${rows.main[i]}`]));
+  const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
+  return new Set(graph.edges.filter((e) => pairs.has(`${index.get(e.from)}|${index.get(e.to)}`)).map((e) => `${e.from}|${e.to}`));
+}
+
 function plainDraw(p: Prep, placed: Placed, elbows = p.opts.elbows !== false): Layout {
-  const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows };
+  const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows, ...(p.apart ? {} : { main: mainEdges(p.graph, placed.rows) }) };
   return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
 }
 
@@ -264,7 +271,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   const ruler = placed.ruler;
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {
-    const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows };
+    const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows, ...(apart ? {} : { main: mainEdges(graph, placed.rows) }) };
     return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
   };
   let drawn = draw(ruler);
