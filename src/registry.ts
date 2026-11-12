@@ -6,6 +6,8 @@ import type { FrontValue } from './front-matter.ts';
 export interface RenderOptions extends SvgOptions {
   /** Title from a leading front-matter block (`title: ...`); a front-end draws it when the diagram text gives none. */
   heading?: string;
+  /** The `config` map of a leading front-matter block; a front-end reads its own section (for example `config.packet`). */
+  config?: Record<string, FrontValue>;
   maxWidth?: number;
   engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
