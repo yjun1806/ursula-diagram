@@ -23,25 +23,29 @@ const TITLE_LINE = 18;
 const BODY_LINE = 16;
 const CORNER_RADIUS = 8;
 
-const TOKENS: Record<string, readonly [string, string]> = {
+/** Colour variables (`--ursula-<name>`) with their light and dark values; the values are the fallbacks written into the drawing. */
+export const TOKENS: Record<string, readonly [string, string]> = {
   bg: ['transparent', 'transparent'],
-  fg: ['#1f2937', '#e5e7eb'],
-  muted: ['#6b7280', '#9ca3af'],
-  line: ['#9ca3af', '#6b7280'],
-  accent: ['#2563eb', '#60a5fa'],
-  surface: ['#ffffff', '#1f2937'],
-  border: ['#d1d5db', '#4b5563'],
-  lane: ['#f3f4f6', '#161b22'],
+  fg: ['#1f2937', '#e8eaee'],
+  muted: ['#6b7280', '#a0a6b2'],
+  line: ['#9ca3af', '#8a909c'],
+  accent: ['#2563eb', '#6aa5ff'],
+  surface: ['#ffffff', '#1f232b'],
+  border: ['#d1d5db', '#3a404c'],
+  lane: ['#f3f4f6', '#22262e'],
+  zone: ['#ffffff', '#1a1d23'],
   hair: ['#e5e7eb', '#2d333b'],
 };
 
-const FONT =
+export const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
+
+const FONT = FONT_STACK;
 
 /** Rules are written once with $name placeholders and expanded per colour scheme. */
 const RULES: readonly string[] = [
   `.ursula{background:$bg;font-family:${FONT};font-size:12px}`,
-  '.ursula-lane{fill:$surface;stroke:$hair;stroke-width:1}',
+  '.ursula-lane{fill:$zone;stroke:$hair;stroke-width:1}',
   '.ursula-lane--tint{fill:$lane}',
   '.ursula-lane-label{fill:$muted;font-size:12px;font-weight:600}',
   '.ursula-node-box{fill:$surface;stroke:$border;stroke-width:1}',

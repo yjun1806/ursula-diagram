@@ -85,9 +85,7 @@ function drawLanes(c: Canvas, layout: Layout): void {
       }
     } else {
       for (let x = x0; x <= x1; x++) c.put(x, y0, '─');
-      const lx = Math.floor(lane.labelBox.x);
-      c.put(lx - 1, y0, ' ');
-      c.put(lx + cellWidth(lane.label), y0, ' ');
+      continue;
     }
     c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
   }
@@ -233,6 +231,36 @@ function drawLegend(c: Canvas, layout: Layout): void {
   }
 }
 
+/**
+ * Writes the name of every horizontal lane on its rule once everything else is drawn: `── name `. No line or label
+ * is drawn over the name; where a line crosses the rule at that place the name moves to the right of the line (a
+ * cell and a blank after it), and where no such place is free, to the first free stretch of the rule.
+ */
+function drawLaneNames(c: Canvas, layout: Layout): void {
+  const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
+  if (vertical) return;
+  for (const lane of layout.lanes) {
+    if (lane.label === '' || !lane.bare) continue;
+    const y = Math.floor(lane.y);
+    const x0 = Math.floor(lane.x);
+    const x1 = x0 + Math.round(lane.w) - 1;
+    const w = cellWidth(lane.label);
+    const free = (x: number): boolean => {
+      for (let k = x - 1; k <= x + w; k++) if (k < x0 || k > x1 || c.get(k, y) !== '─') return false;
+      return true;
+    };
+    const preferred = Math.floor(lane.labelBox.x);
+    const lines: number[] = [];
+    for (let x = x0; x <= x1; x++) if (c.get(x, y) !== '─') lines.push(x);
+    const candidates = [preferred, ...lines.map((x) => x + 2)];
+    for (let x = preferred; x + w <= x1; x++) candidates.push(x);
+    const at = candidates.find(free) ?? preferred;
+    c.put(at - 1, y, ' ');
+    c.text(at, y, lane.label);
+    c.put(at + w, y, ' ');
+  }
+}
+
 /** Draws a layout made with the cell ruler; returns one string per terminal row. */
 export function renderTextLayout(layout: Layout): string[] {
   const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
@@ -240,6 +268,7 @@ export function renderTextLayout(layout: Layout): string[] {
   drawEdges(c, layout);
   drawLabels(c, layout);
   for (const n of layout.nodes) drawNode(c, n);
+  drawLaneNames(c, layout);
   drawLegend(c, layout);
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
