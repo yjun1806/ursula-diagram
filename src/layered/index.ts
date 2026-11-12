@@ -402,9 +402,14 @@ function tightPlacer(p: Prep): ((rows: Rows) => Placed) | undefined {
   return (rows) => place(graph, tight, q.baseUnits, graph.lanes.map(() => Infinity), graph.lanes.map(() => 0), q.unit, tight.rankGap, td, q.capacityUnits, q.dummyShift, apart, variant, false, rows);
 }
 
+const TERMINAL_CANDIDATES: readonly Variant[] = CANDIDATES.filter((v) => ['forced', 'free', 'forced-unheld'].includes(v.name));
+
 /** Lanes: every candidate is drawn to the end and measured, the best is refined by small changes. */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
-  const preps = (opts.quick ? CANDIDATES.slice(0, 1) : CANDIDATES).map((v) => prepare(graph, given, opts, false, v));
+  // A terminal drawing tries three candidates and redraws at most 60 times while refining.
+  const terminal = given.terminal === true;
+  const candidates = opts.quick ? CANDIDATES.slice(0, 1) : terminal ? TERMINAL_CANDIDATES : CANDIDATES;
+  const preps = candidates.map((v) => prepare(graph, given, opts, false, v));
   // Drawings with and without one-bend edges both compete.
   const shapes = opts.elbows === false ? [false] : opts.quick ? [true] : [true, false];
   const drawn = preps.flatMap((p) => shapes.map((e) => finalize(p, p.placed, e)));
@@ -412,7 +417,7 @@ function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Every candidate is also refined by small changes; the best of all finished drawings is kept.
   const refined = [false, true].flatMap((crossingsFirst) =>
     preps.flatMap((p) => {
-      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed, false), { tight: tightPlacer(p), crossingsFirst });
+      const r = refine(graph, p.placed, (placed) => plainDraw(p, placed, false), { tight: tightPlacer(p), crossingsFirst, ...(terminal ? { maxDraws: 60 } : {}) });
       return r.accepted > 0 ? shapes.map((e) => finalize(p, r.placed, e)) : [];
     }),
   );

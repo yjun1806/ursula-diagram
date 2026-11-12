@@ -367,6 +367,8 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
 interface Built {
   layout: Layout;
   failed: number[];
+  /** Per failed label: the band along the layer axis that holds the place it wanted, or -1. */
+  failedBand: number[];
 }
 
 function simplify(points: Point[]): Point[] {
@@ -538,10 +540,12 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 
   if (f.elbows) useElbows(edges, nodes, ruler, td);
 
-  // Labels.
+  // Labels. A terminal label never starts before the first cell.
+  const obstacles: Rect[] = ruler.uniform ? [...rects, td ? { x: -1000, y: -1000, w: 3000, h: 1000 } : { x: -1000, y: -1000, w: 1000, h: 3000 }] : rects;
   const diagnostics: Diagnostic[] = [];
   const placed: Rect[] = [];
   const failed: number[] = [];
+  const failedBand: number[] = [];
   const segs = (points: Point[]): Segment[] => points.slice(1).map((q, i) => [points[i] as Point, q] as Segment);
   edges.forEach((edge, ei) => {
     const c = l.chains[ei];
@@ -552,11 +556,23 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     const mine = segs(edge.points).sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
     let best: ReturnType<typeof placeLabel> | undefined;
     for (const s of mine) {
-      const got = placeLabel(s, size, rects, placed, ruler, foreign);
+      const got = placeLabel(s, size, obstacles, placed, ruler, foreign);
       best ??= got;
       if (!got.overlap) {
         best = got;
         break;
+      }
+    }
+    // In a terminal a label may stand over the line of another edge (it hides one cell of it) when no free place exists;
+    // more lines in a band cannot make room that lines running through it have taken.
+    if (ruler.uniform && best?.overlap) {
+      for (const s of mine) {
+        const got = placeLabel(s, size, obstacles, placed, ruler, []);
+        const [from, to] = td ? [got.rect.x, got.rect.x + got.rect.w] : [got.rect.y, got.rect.y + got.rect.h];
+        if (!got.overlap && from >= 0 && to <= totalL + EPS && (td ? got.rect.y : got.rect.x) >= 0) {
+          best = got;
+          break;
+        }
       }
     }
     if (!best) return;
@@ -564,6 +580,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     edge.label = { text, x: tidy(best.rect.x), y: tidy(best.rect.y), w: size.w, h: size.h };
     if (best.overlap) {
       failed.push(ei);
+      const centre = td ? best.rect.x + best.rect.w / 2 : best.rect.y + best.rect.h / 2;
+      failedBand.push(bandStart.findIndex((b, i) => centre >= b - EPS && centre < b + (bandSize[i] ?? 0) - EPS));
       diagnostics.push({ kind: 'label-overlap', nodes: [edge.from, edge.to], message: `Label of ${edge.from} -> ${edge.to} overlaps a node, another label or another edge.` });
     }
   });
@@ -603,7 +621,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
   const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
   void raw;
-  return { layout, failed: failed.map((ei) => ei) };
+  return { layout, failed: failed.map((ei) => ei), failedBand };
 }
 
 /** Order-axis size of the drawing: the furthest box or dummy line, the lane padding and the margin. */
@@ -637,12 +655,20 @@ export function route(f: Frame, l: Ladder, layers: number[][], start: number[], 
     if (first && !ruler.uniform) demand[first.band] = Math.max(demand[first.band] ?? 0, need(text));
   });
   let built = build(f, l, layers, start, plan, prep, demand);
+  if (ruler.uniform) {
+    // Labels never widen a band by themselves: a band grows by one line, once per round, only where a label found no room.
+    for (let round = 0; round < 8 && built.failedBand.some((b) => b >= 0); round++) {
+      for (const b of new Set(built.failedBand)) if (b >= 0) demand[b] = (demand[b] ?? 0) + 1;
+      built = build(f, l, layers, start, plan, prep, demand);
+    }
+    return built.layout;
+  }
   for (let round = 0; round < 3 && built.failed.length > 0; round++) {
     for (const ei of built.failed) {
       const c = l.chains[ei];
       const text = f.graph.edges[c?.edge ?? -1]?.label;
       if (!c || text === undefined) continue;
-      for (const it of prep.items) if (it.chain === ei) demand[it.band] = ruler.uniform ? (demand[it.band] ?? 0) + 1 : Math.max(demand[it.band] ?? 0, need(text));
+      for (const it of prep.items) if (it.chain === ei) demand[it.band] = Math.max(demand[it.band] ?? 0, need(text));
     }
     built = build(f, l, layers, start, plan, prep, demand);
   }

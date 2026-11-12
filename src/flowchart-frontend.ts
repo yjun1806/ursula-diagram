@@ -77,24 +77,54 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
     const a = stepAttempts[names[0]][0] as Attempt;
     return result(a, numberOf[names[0]], draw(a, true, false));
   }
-  // The widest setting of a step that fits: fitting grows as the boxes narrow, so a bisection finds it.
-  for (const name of names) {
-    const list = stepAttempts[name];
+  // Every width that fits is drawn quickly and the one with the fewest lines of drawing wins (the wider on a tie);
+  // fitting grows as the boxes narrow, so a bisection finds the widest that fits and the narrower ones follow.
+  const distinct = (list: Attempt[]): Attempt[] => {
+    const seen = new Set<string>();
+    return list.filter((a) => {
+      const key = JSON.stringify(a.graph.nodes.map((n) => [n.title, n.lines]));
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  const listLines = descriptionList(full, maxWidth).length;
+  const figureLines = (d: { lines: string[]; layout: Layout }): number => (d.layout.legend ? Math.ceil(d.layout.legend.base.height) : d.lines.length);
+  interface Fit {
+    a: Attempt;
+    quick: { lines: string[]; layout: Layout };
+    cost: number;
+  }
+  const best = (list: Attempt[]): Fit | undefined => {
+    const options = distinct(list);
     let lo = 0;
-    let hi = list.length - 1;
-    let found: { a: Attempt; quick: { lines: string[]; layout: Layout } } | undefined;
+    let hi = options.length - 1;
+    let first = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      const a = list[mid] as Attempt;
-      const quick = draw(a, false, true);
+      const quick = draw(options[mid] as Attempt, false, true);
       if (widest(quick.lines) <= maxWidth) {
-        found = { a, quick };
+        first = mid;
         hi = mid - 1;
       } else lo = mid + 1;
     }
-    if (!found) continue;
-    const heavy = draw(found.a, false, false);
-    return result(found.a, numberOf[name], widest(heavy.lines) <= maxWidth ? heavy : found.quick);
+    if (first < 0) return undefined;
+    let winner: Fit | undefined;
+    for (const a of options.slice(first)) {
+      const quick = draw(a, false, true);
+      if (widest(quick.lines) > maxWidth) continue;
+      const cost = figureLines(quick) + (a.list ? listLines : 0);
+      if (!winner || cost < winner.cost) winner = { a, quick, cost };
+    }
+    return winner;
+  };
+  const textual = detail === 'auto' || detail === 'full' || detail === 'narrow' ? best([...(detail === 'narrow' ? [] : stepAttempts.full), ...(detail === 'full' ? [] : stepAttempts.narrow)]) : undefined;
+  const titles = detail === 'auto' || detail === 'title' ? best(stepAttempts.title) : undefined;
+  const chosen = textual && titles ? (titles.cost < textual.cost * 0.7 ? titles : textual) : (textual ?? titles);
+  if (chosen) {
+    const heavy = draw(chosen.a, false, false);
+    const step: TextStep = chosen.a.list ? 3 : chosen.a.graph === full ? 1 : 2;
+    return result(chosen.a, step, widest(heavy.lines) <= maxWidth ? heavy : chosen.quick);
   }
   // Fold the flow at the narrowest boxes of the last step.
   const narrowest = (stepAttempts[names[names.length - 1] as keyof typeof stepAttempts].at(-1)) as Attempt;

@@ -72,7 +72,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 6 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100 } as const;
 
 const properCross = (a: Seg, b: Seg): boolean => {
   const ah = Math.abs(a.ay - a.by) < EPS;
