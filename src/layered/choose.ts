@@ -1,6 +1,6 @@
-import type { Layout } from '../types.ts';
+import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { Fold } from './rows.ts';
-import { directionsOf, mixedSideEnds } from './sides.ts';
+import { directionsOf, mixedSideEnds, sideOfPoint } from './sides.ts';
 
 /**
  * One way to draw the same graph. Candidates are drawn to the end and the finished drawings are measured, so a
@@ -277,6 +277,50 @@ export function startMissed(l: Layout): number {
   return before.size + (start.row !== 0 ? 1 : 0);
 }
 
+/** Pixels: how far a point of one edge may be from the reflection of the matching point of its mirror edge. */
+const MIRROR_TOL = 1;
+
+/**
+ * Mirror pairs: two bent edges that both leave (or both enter) the same side of a box, are the only two ends on that
+ * side, and are reflections of each other across the line through the box centre along the reading direction. Per
+ * pair the cheaper edge is returned (each edge at most once), so the pair is charged for one edge.
+ */
+export function mirroredEdges(l: Pick<Layout, 'nodes' | 'edges' | 'direction'>, cost: (e: LayoutEdge) => number): Set<number> {
+  const nodeAt = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const ends = new Map<string, Array<{ edge: number; out: boolean }>>();
+  l.edges.forEach((e, i) => {
+    const first = e.points[0];
+    const last = e.points[e.points.length - 1];
+    const a = nodeAt.get(e.from);
+    const b = nodeAt.get(e.to);
+    if (!first || !last || !a || !b || e.points.length < 2) return;
+    for (const [node, p, out] of [[a, first, true], [b, last, false]] as const) {
+      const k = `${node.id}|${sideOfPoint(node, p)}`;
+      const list = ends.get(k) ?? [];
+      list.push({ edge: i, out });
+      ends.set(k, list);
+    }
+  });
+  const dropped = new Set<number>();
+  for (const [k, list] of ends) {
+    const [x, y] = list;
+    if (list.length !== 2 || !x || !y || x.out !== y.out || x.edge === y.edge) continue;
+    const e = l.edges[x.edge] as LayoutEdge;
+    const f = l.edges[y.edge] as LayoutEdge;
+    if (e.points.length !== f.points.length || e.points.length < 3) continue;
+    const node = nodeAt.get(k.slice(0, k.lastIndexOf('|'))) as LayoutNode;
+    const axis = l.direction === 'TD' ? 'x' : 'y';
+    const mid = axis === 'x' ? node.x + node.w / 2 : node.y + node.h / 2;
+    const alike = e.points.every((p, q) => {
+      const r = f.points[q] as Point;
+      return Math.abs(p[axis] + r[axis] - 2 * mid) <= MIRROR_TOL && Math.abs(p[axis === 'x' ? 'y' : 'x'] - r[axis === 'x' ? 'y' : 'x']) <= MIRROR_TOL;
+    });
+    if (!alike || dropped.has(x.edge) || dropped.has(y.edge)) continue;
+    dropped.add(cost(e) > cost(f) ? y.edge : x.edge);
+  }
+  return dropped;
+}
+
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
   const g = segsOf(l);
@@ -287,9 +331,10 @@ export function score(l: Layout): number[] {
   let folded = 0;
   let length = 0;
   const against: Array<[string, string]> = [];
-  for (const e of l.edges) {
-    const turns = Math.max(0, e.points.length - 2);
-    bends += (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * turns;
+  const bendCost = (e: LayoutEdge): number => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
+  const mirrored = mirroredEdges(l, bendCost);
+  for (const [i, e] of l.edges.entries()) {
+    if (!mirrored.has(i)) bends += bendCost(e);
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
     // Against the reading direction along the axis, or, inside one lane, from a lower row up to a higher one.

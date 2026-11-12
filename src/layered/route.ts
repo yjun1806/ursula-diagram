@@ -294,6 +294,42 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     mark(it.a, 'down', x);
     mark(it.b, 'up', x);
   }
+  // Pixels: two or more pieces between the same two boxes stand a step apart, symmetric about the centre of the narrower box (of both centres' midpoint when the boxes are equally wide), when every port keeps clear of the corners and of the other ports of both boxes.
+  if (!ruler.uniform) {
+    const pairs = new Map<string, Item[]>();
+    for (const it of items) {
+      if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
+      const k = `${it.a}|${it.b}`;
+      pairs.set(k, [...(pairs.get(k) ?? []), it]);
+    }
+    for (const group of pairs.values()) {
+      const first = group[0] as Item;
+      if (group.length < 2) continue;
+      const [a, b] = [first.a, first.b];
+      const c = len(a) === len(b) ? (centre(a) + centre(b)) / 2 : centre(len(a) < len(b) ? a : b);
+      const xs = group.map((_, i) => c + (i - (group.length - 1) / 2) * step);
+      const clear = (n: number, side: Side): boolean =>
+        xs.every(
+          (x) =>
+            x >= nodeO(n) + CORNER_CLEAR - EPS &&
+            x <= nodeO(n) + len(n) - CORNER_CLEAR + EPS &&
+            !(taken[key(n, side)] ?? []).some((t) => Math.abs(t / 1000 - x) < PORT_APART - EPS),
+        );
+      if (!clear(a, 'down') || !clear(b, 'up')) continue;
+      // The pieces take the places in the order the lattice would give them: the one nearest the midpoint of the two centres first.
+      const mid = (centre(a) + centre(b)) / 2;
+      const left = [...xs];
+      group.forEach((it) => {
+        left.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid) || p - q);
+        const x = left.shift() as number;
+        it.xa = it.xb = x;
+        mark(a, 'down', x);
+        mark(b, 'up', x);
+        (custom[key(a, 'down')] ??= []).push(x);
+        (custom[key(b, 'up')] ??= []).push(x);
+      });
+    }
+  }
   for (const it of items) {
     if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
     if (!ruler.uniform && (single(it.a, 'down') || single(it.b, 'up'))) continue;

@@ -143,9 +143,24 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
     }
     return false;
   };
+  // Straight edges between the same two boxes stand as a bundle around the centre of the narrower box: half a pitch from it counts.
+  const pairKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const straightBetween = new Map<string, number>();
+  for (const e of l.edges) if (e.points.length === 2) straightBetween.set(pairKey(e.from, e.to), (straightBetween.get(pairKey(e.from, e.to)) ?? 0) + 1);
+  const halfPortOf = (len: number, off: number): boolean => pitches.some((pitch) => near((off - len / 2) / (pitch / 2), Math.round((off - len / 2) / (pitch / 2))));
+  const bundled = (e: Layout['edges'][number]): boolean => {
+    if (e.points.length !== 2 || (straightBetween.get(pairKey(e.from, e.to)) ?? 0) < 2) return false;
+    const vertical = near((e.points[0] as Point).x, (e.points[1] as Point).x);
+    return [e.from, e.to].some((id, i) => {
+      const n = l.nodes.find((x) => x.id === id);
+      const p = e.points[i] as Point;
+      return n !== undefined && halfPortOf(vertical ? n.w : n.h, vertical ? p.x - n.x : p.y - n.y);
+    });
+  };
   for (const e of l.edges) {
     const name = `${e.from}->${e.to}`;
     const ends: Array<[Point | undefined, string]> = [[e.points[0], e.from], [e.points[e.points.length - 1], e.to]];
+    if (bundled(e)) continue;
     for (const [p, id] of ends) {
       const n = l.nodes.find((x) => x.id === id);
       if (!p || !n) continue;

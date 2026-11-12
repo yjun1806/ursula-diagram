@@ -36,7 +36,7 @@ export interface AlignOptions {
   main?: ReadonlySet<number>;
   /** Edges in and out of a real node: of two alignments that cannot both stand, the one of the heavier node is kept. */
   degree?: (node: number) => number;
-  /** Stages: a node with three or more partners in the next layer or the one before stands in the middle of them. */
+  /** Stages: a node with two or more partners in the next layer or the one before stands in the middle of them. */
   hubs?: boolean;
   /** Real nodes whose side (`down` toward the next layer, `up` toward the previous) has this one edge only: the edge is at the centre. */
   single?: (node: number, side: 'up' | 'down') => boolean;
@@ -688,7 +688,7 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     for (let n = 0; n < N; n++) if ((start[n] as number) < lowest) lowest = start[n] as number;
     if (lowest < 0) for (let n = 0; n < N; n++) start[n] = (start[n] as number) - lowest;
   }
-  // Stages: a node with three or more partners in one adjacent layer stands in the middle of them: level with the middle
+  // Stages: a node with two or more partners in one adjacent layer stands in the middle of them: level with the middle
   // partner when there is an odd number, between the two middle ones when even.
   if (opts.hubs) {
     const centres = new Float64Array(Math.max(1, P));
@@ -698,11 +698,11 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
       let from: number;
       let items: Int32Array;
       let d: number;
-      if (downCount >= 3) {
+      if (downCount >= 2) {
         from = downStart[n] as number;
         items = downItem;
         d = downCount;
-      } else if (upCount >= 3) {
+      } else if (upCount >= 2) {
         from = upStart[n] as number;
         items = upItem;
         d = upCount;

@@ -5,6 +5,9 @@ import type { LayoutEdge, LayoutNode, Point } from '../types.ts';
 
 const EPS = 1e-6;
 
+/** Shortest leg an elbow may have in a pixel drawing: an arrowhead and a visible piece of line. */
+const MIN_LEG = 24;
+
 interface Box {
   o0: number;
   o1: number;
@@ -125,6 +128,8 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
       // The end on a side must be a port nobody else uses; the other end keeps the port the edge had.
       if (taken(side)) continue;
       const mine = segs(path);
+      // Each leg stays long enough to read as a line with its arrowhead.
+      if (!ruler.uniform && mine.some((s) => Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay) < MIN_LEG)) continue;
       if (mine.some((s) => nodes.some((n) => (n === u || n === v ? hits(s, n) : hits(s, { x: n.x - clear, y: n.y - clear, w: n.w + 2 * clear, h: n.h + 2 * clear }))))) continue;
       if (otherSegs.some((o) => o.some((t) => mine.some((s) => overlap(s, t))))) continue;
       if (crossings(mine, otherSegs) > before) continue;
