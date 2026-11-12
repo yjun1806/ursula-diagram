@@ -5,6 +5,8 @@ import { cellRuler, pixelRuler } from '../src/metrics.ts';
 import { c4Graph } from '../src/c4/graph.ts';
 import { parseC4 } from '../src/c4/parse.ts';
 import { recordHeight, recordWidth } from '../src/layout/records.ts';
+import { CLUSTER_NAME_INSET, CLUSTER_NAME_ROW, CLUSTER_PAD } from '../src/layout/clusters.ts';
+import { crossesInterior, segmentsOf } from './helpers.ts';
 
 const EXAMPLES: string[] = [
   // 01-c4-diagrams
@@ -461,5 +463,46 @@ describe('c4 boundaries without lines inside are grids', () => {
   it('puts the two systems of a boundary side by side', () => {
     expect(node('SystemA').y).toBe(node('SystemB').y);
     expect(node('SystemF').y).toBe(node('SystemG').y);
+  });
+});
+
+describe('c4 boundaries keep their size and lines keep off their names', () => {
+  const ruler = pixelRuler();
+  const laid = layout(c4Graph(parseC4(EXAMPLES[1] as string), ruler), ruler);
+  const node = (id: string) => laid.nodes.find((n) => n.id === id) as (typeof laid.nodes)[number];
+  const box = (id: string) => (laid.clusters ?? []).find((c) => c.id === id) as NonNullable<typeof laid.clusters>[number];
+
+  it('does not stretch a boundary for the line ends on its sides', () => {
+    const inside = [...laid.nodes.filter((n) => ['SystemE', 'SystemC', 'SystemD'].includes(n.id)), box('b2'), box('b3')];
+    const top = Math.min(...inside.map((r) => r.y));
+    const bottom = Math.max(...inside.map((r) => r.y + r.h));
+    expect(box('b1').h).toBeLessThanOrEqual(bottom - top + 2 * CLUSTER_PAD + CLUSTER_NAME_ROW);
+  });
+
+  it('keeps every line off the name of every boundary', () => {
+    for (const c of laid.clusters ?? []) {
+      const name = { x: c.x + CLUSTER_NAME_INSET, y: c.y, w: ruler.textWidth(c.label, 'lane'), h: CLUSTER_NAME_ROW };
+      for (const e of laid.edges) for (const s of segmentsOf(e)) expect(crossesInterior(s, name), `${e.from} -> ${e.to} through the name of ${c.id}`).toBe(false);
+    }
+  });
+
+  it('meets the top border of a boundary to the right of its name', () => {
+    const c = box('b1');
+    const right = c.x + CLUSTER_NAME_INSET + ruler.textWidth(c.label, 'lane') + 16;
+    for (const e of laid.edges) {
+      for (const s of segmentsOf(e)) {
+        const vertical = Math.abs(s.a.x - s.b.x) < 1e-6;
+        if (vertical && Math.min(s.a.y, s.b.y) < c.y && Math.max(s.a.y, s.b.y) > c.y) expect(s.a.x).toBeGreaterThanOrEqual(right - 1e-6);
+      }
+    }
+  });
+
+  it('lets a line leave a node inside a boundary on the side that faces the node outside', () => {
+    // The e-mail system is below and to the right of the customer: its line goes up first.
+    const e = laid.edges.find((v) => [v.from, v.to].sort().join() === ['SystemC', 'customerA'].sort().join()) as (typeof laid.edges)[number];
+    const points = e.from === 'SystemC' ? e.points : [...e.points].reverse();
+    const [start, next] = points as [{ x: number; y: number }, { x: number; y: number }];
+    expect(start.y).toBeCloseTo(node('SystemC').y, 4);
+    expect(next.y).toBeLessThan(start.y);
   });
 });

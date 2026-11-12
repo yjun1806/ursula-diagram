@@ -13,6 +13,8 @@ export const CLUSTER_NAME_ROW = 32;
 export const CLUSTER_NAME_INSET = 16;
 /** Distance from the border of a cluster at which a line that goes round the nodes inside runs. */
 const CORRIDOR = CLUSTER_PAD / 2;
+/** A line that meets a border above the name of its cluster keeps this far from the end of the name. */
+const NAME_CLEAR = 16;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -320,7 +322,7 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
     for (const [c, box] of grown) kids.set(c, { ...(kids.get(c) as Block), size: box });
   }
   const content = contentOf(layout);
-  const name = ruler.textWidth(tree.label.get(id) ?? '', 'lane') + 2 * CLUSTER_NAME_INSET;
+  const name =ruler.textWidth(tree.label.get(id) ?? '', 'lane') + 2 * CLUSTER_NAME_INSET;
   const size = {
     w: gridUp(ruler, Math.max(content.w + 2 * CLUSTER_PAD, name)),
     h: gridUp(ruler, content.h + CLUSTER_NAME_ROW + 2 * CLUSTER_PAD),
@@ -420,10 +422,11 @@ function clash(a: Point, b: Point, drawn: Seg[]): number {
   for (const s of drawn) {
     const sh = Math.abs(s.a.y - s.b.y) < EPS;
     if (sh === horizontal) {
-      if (horizontal && Math.abs(s.a.y - a.y) < EPS) {
+      // Lines closer than a pitch cost as much as lines on top of each other.
+      if (horizontal && Math.abs(s.a.y - a.y) < FACE_PITCH - EPS) {
         const lap = Math.min(Math.max(a.x, b.x), Math.max(s.a.x, s.b.x)) - Math.max(Math.min(a.x, b.x), Math.min(s.a.x, s.b.x));
         if (lap > EPS) cost += OVERLAP_COST * lap;
-      } else if (!horizontal && Math.abs(s.a.x - a.x) < EPS) {
+      } else if (!horizontal && Math.abs(s.a.x - a.x) < FACE_PITCH - EPS) {
         const lap = Math.min(Math.max(a.y, b.y), Math.max(s.a.y, s.b.y)) - Math.max(Math.min(a.y, b.y), Math.min(s.a.y, s.b.y));
         if (lap > EPS) cost += OVERLAP_COST * lap;
       }
@@ -522,7 +525,8 @@ function pathInside(g: Inside): Point[] | undefined {
     faces.push({ p: { x: target.x, y: target.y + target.h * f }, dir: 0 });
     faces.push({ p: { x: target.x + target.w, y: target.y + target.h * f }, dir: 2 });
   }
-  const lo = { x: region.x + CORRIDOR, y: region.y + CORRIDOR };
+  // A line inside the box turns below the row of the name: it never runs along that row.
+  const lo = { x: region.x + CORRIDOR, y: region.y + CLUSTER_NAME_ROW };
   const hi = { x: region.x + region.w - CORRIDOR, y: region.y + region.h - CORRIDOR };
   const near = (r: Rect): boolean => r.x < region.x + region.w && r.x + r.w > region.x && r.y < region.y + region.h && r.y + r.h > region.y;
   const obstacles = g.obstacles.filter(near);
@@ -536,7 +540,8 @@ function pathInside(g: Inside): Point[] | undefined {
   const s0 = at(indexIn(xs, start.x), indexIn(ys, start.y));
   const goal = new Map<number, { dir: number; price: number }>();
   for (const f of faces) {
-    const price = g.taken.has(key(f.p)) ? 40 : 0;
+    // A line meets the face it comes at; a face it has to turn to costs a bend more.
+    const price = (g.taken.has(key(f.p)) ? 40 : 0) + (f.dir === g.inward ? 0 : 4 * BEND_COST);
     goal.set(at(indexIn(xs, f.p.x), indexIn(ys, f.p.y)) * 4 + f.dir, { dir: f.dir, price });
   }
   // A point of the grid is free when it lies inside the corridors, or is the place the line starts.
@@ -634,6 +639,8 @@ interface Slide {
   /** What stands between the border and the target inside the box: a line that cannot run straight to the target stays where it is. */
   inner: Rect[];
   label?: Rect;
+  /** The room the name of the box takes at its top left corner, with the clearance a line keeps from it: a line may not meet the top or left border inside it. */
+  keep?: Rect;
 }
 
 /**
@@ -658,17 +665,24 @@ function slideEnd(points: Point[], g: Slide): Point[] {
   const lo = (onX ? box.y : box.x) + FACE_CLEAR;
   const hi = (onX ? box.y + box.h : box.x + box.w) - FACE_CLEAR;
   if (hi < lo) return points;
+  // Meeting the top border level with the name, or the left border within the name row, is not allowed.
+  const keep = g.keep;
+  const atStart = Math.abs(across(b) - (onX ? box.x : box.y)) < EPS;
+  const limit = keep === undefined || !atStart ? -Infinity : onX ? keep.y + keep.h : keep.x + keep.w;
+  const floor = limit <= hi ? Math.max(lo, Math.ceil(limit)) : lo;
+  const forced = limit <= hi && along(b) < limit - EPS;
   const centre = onX ? target.y + target.h / 2 : target.x + target.w / 2;
-  if (centre < lo - EPS || centre > hi + EPS) return points;
+  if (!forced && (centre < floor - EPS || centre > hi + EPS)) return points;
+  const wanted = Math.min(hi, Math.max(floor, centre));
   const reach = onX ? (across(b) < target.x ? target.x : target.x + target.w) : across(b) < target.y ? target.y : target.y + target.h;
-  const run = [at(centre, across(b)), at(centre, reach)] as const;
-  if (g.inner.some((o) => through(run[0], run[1], o, 0))) return points;
+  const run = [at(wanted, across(b)), at(wanted, reach)] as const;
+  if (!forced && g.inner.some((o) => through(run[0], run[1], o, 0))) return points;
   const sameFace = g.meets.filter((m) => Math.abs(across(m) - across(b)) < EPS);
   let chosen: number | undefined;
   for (let k = 0; k <= 6 && chosen === undefined; k++) {
     for (const sign of k === 0 ? [0] : [1, -1]) {
-      const v = centre + sign * k * FACE_PITCH;
-      if (v >= lo - EPS && v <= hi + EPS && sameFace.every((m) => Math.abs(along(m) - v) >= FACE_PITCH - EPS)) {
+      const v = wanted + sign * k * FACE_PITCH;
+      if (v >= floor - EPS && v <= hi + EPS && sameFace.every((m) => Math.abs(along(m) - v) >= FACE_PITCH - EPS)) {
         chosen = v;
         break;
       }
@@ -683,26 +697,115 @@ function slideEnd(points: Point[], g: Slide): Point[] {
     const span = Math.abs(across(a) - across(b));
     const room = label === undefined ? 0 : (onX ? label.w : label.h) + 16;
     if (span < 2 * JOG + room) return points;
-    const jog = across(b) + (across(a) < across(b) ? -JOG : JOG);
-    moved = [a, at(along(a), jog), at(chosen, jog), at(chosen, across(b))];
-    changed = moved;
     if (Math.abs(along(a) - chosen) < EPS) {
       moved = [a, at(chosen, across(b))];
+      changed = moved;
+    } else {
+      // The jog takes the lane, a pitch further from the border each time, where it clashes least with the lines already drawn.
+      const way = across(a) < across(b) ? -1 : 1;
+      let least = Infinity;
+      moved = points;
+      for (let k = 0; k <= 3; k++) {
+        const jog = across(b) + way * (JOG + k * FACE_PITCH);
+        if (Math.abs(across(a) - jog) < JOG - EPS) break;
+        const path = [a, at(along(a), jog), at(chosen, jog), at(chosen, across(b))];
+        const cost = segmentsOf(path).reduce((sum, t) => sum + clash(t.a, t.b, g.others), 0);
+        if (cost < least - EPS) {
+          least = cost;
+          moved = path;
+        }
+      }
       changed = moved;
     }
   } else {
     const c = points[n - 3] as Point;
     if (Math.abs(across(c) - across(a)) > EPS || Math.abs(along(a) - along(b)) > EPS) return points;
-    if (touches(c, a) || touches(a, b)) return points;
+    if (!forced && (touches(c, a) || touches(a, b))) return points;
     const [na, nb] = [at(chosen, across(a)), at(chosen, across(b))];
     moved = [...points.slice(0, n - 2), na, nb];
     changed = [c, na, nb];
   }
   const before = n === 2 ? [a, b] : [points[n - 3] as Point, a, b];
   const price = (path: Point[]): number => segmentsOf(path).reduce((sum, s) => sum + clash(s.a, s.b, g.others), 0);
-  if (price(changed) > price(before) + EPS) return points;
+  if (!forced && price(changed) > price(before) + EPS) return points;
   if (segmentsOf(changed).some((s) => g.obstacles.some((o) => through(s.a, s.b, o, 0)))) return points;
   return moved;
+}
+
+type Face = 'top' | 'bottom' | 'left' | 'right';
+
+const faceOfPoint = (p: Point, box: Rect): Face | undefined => {
+  const within = (v: number, lo: number, hi: number): boolean => v > lo - EPS && v < hi + EPS;
+  if (Math.abs(p.y - box.y) < EPS && within(p.x, box.x, box.x + box.w)) return 'top';
+  if (Math.abs(p.y - (box.y + box.h)) < EPS && within(p.x, box.x, box.x + box.w)) return 'bottom';
+  if (Math.abs(p.x - box.x) < EPS && within(p.y, box.y, box.y + box.h)) return 'left';
+  if (Math.abs(p.x - (box.x + box.w)) < EPS && within(p.y, box.y, box.y + box.h)) return 'right';
+  return undefined;
+};
+
+/**
+ * A line that leaves a node inside a cluster for a node outside it leaves through the face of the cluster box that
+ * looks at the outside node: top or bottom when that node is further away vertically, left or right otherwise. The line
+ * `forward`, which ends on the border of `box`, is cut where it crosses the lane beside that face and led on to it;
+ * it stays as it was when the face is the one it meets already, or when no lane leads there clear of the boxes.
+ */
+function reface(forward: Point[], g: { box: Rect; target: Rect; other: Rect; keep: Rect; meets: Point[]; obstacles: Rect[]; others: Seg[] }): Point[] {
+  const { box, target, other, keep } = g;
+  const b = forward.at(-1) as Point;
+  const now = faceOfPoint(b, box);
+  if (now === undefined) return forward;
+  const dx = other.x + other.w / 2 - (target.x + target.w / 2);
+  const dy = other.y + other.h / 2 - (target.y + target.h / 2);
+  const want: Face = Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'top' : 'bottom') : dx < 0 ? 'left' : 'right';
+  if (want === now) return forward;
+  const flat = want === 'top' || want === 'bottom';
+  const lo = (flat ? box.x : box.y) + FACE_CLEAR;
+  const hi = (flat ? box.x + box.w : box.y + box.h) - FACE_CLEAR;
+  const floor = want === 'top' ? Math.max(lo, Math.ceil(keep.x + keep.w)) : want === 'left' ? Math.max(lo, Math.ceil(keep.y + keep.h)) : lo;
+  if (hi < floor) return forward;
+  const wanted = Math.min(hi, Math.max(floor, flat ? target.x + target.w / 2 : target.y + target.h / 2));
+  const along = (p: Point): number => (flat ? p.x : p.y);
+  const same = g.meets.filter((m) => faceOfPoint(m, box) === want);
+  let v: number | undefined;
+  for (let k = 0; k <= 6 && v === undefined; k++) {
+    for (const sign of k === 0 ? [0] : [1, -1]) {
+      const c = wanted + sign * k * FACE_PITCH;
+      if (c >= floor - EPS && c <= hi + EPS && same.every((m) => Math.abs(along(m) - c) >= FACE_PITCH - EPS)) {
+        v = c;
+        break;
+      }
+    }
+  }
+  if (v === undefined) return forward;
+  const edge = want === 'top' ? box.y : want === 'bottom' ? box.y + box.h : want === 'left' ? box.x : box.x + box.w;
+  const q: Point = flat ? { x: v, y: edge } : { x: edge, y: v };
+  let best: { path: Point[]; cost: number } | undefined;
+  // The lane lies a corridor from the border, then a pitch further each time: the one that clashes least with the lines already drawn.
+  for (let k = 0; k <= 3; k++) {
+    const lane = edge + (want === 'top' || want === 'left' ? -1 : 1) * (CORRIDOR + k * FACE_PITCH);
+    const stub: Point = flat ? { x: v, y: lane } : { x: lane, y: v };
+    const path = joinAt(forward, lane, flat, stub, q, g.obstacles);
+    if (path === undefined) continue;
+    const cost = segmentsOf(path).reduce((sum, t) => sum + clash(t.a, t.b, g.others), 0);
+    if (best === undefined || cost < best.cost - EPS) best = { path, cost };
+  }
+  return best === undefined ? forward : best.path;
+}
+
+/** `forward` cut where it crosses the lane (a horizontal one when `flat`), and led along the lane to `stub` and on to `q`; undefined when a box stands in the way. */
+function joinAt(forward: Point[], lane: number, flat: boolean, stub: Point, q: Point, obstacles: Rect[]): Point[] | undefined {
+  for (let i = forward.length - 2; i >= 0; i--) {
+    const a = forward[i] as Point;
+    const c = forward[i + 1] as Point;
+    // The lane runs across the face: a line that crosses it is a stretch that runs along the normal of the face.
+    const crossing = flat ? Math.abs(a.x - c.x) < EPS && Math.min(a.y, c.y) + EPS < lane && lane < Math.max(a.y, c.y) - EPS : Math.abs(a.y - c.y) < EPS && Math.min(a.x, c.x) + EPS < lane && lane < Math.max(a.x, c.x) - EPS;
+    if (!crossing) continue;
+    const joint: Point = flat ? { x: a.x, y: lane } : { x: lane, y: a.y };
+    const added = [joint, stub, q];
+    const free = [[joint, stub], [stub, q]].every(([p, r]) => obstacles.every((o) => !through(p as Point, r as Point, o, 0)));
+    if (free) return [...forward.slice(0, i + 1), ...added];
+  }
+  return undefined;
 }
 
 /** A path that ignores everything but the target, when none goes round it. */
@@ -728,6 +831,12 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
   const rectOf = (id: string): Rect | undefined => acc.clusterRect.get(id) ?? acc.nodes.get(id);
   const nodeCluster = new Map(graph.nodes.map((n) => [n.id, n.cluster] as const));
 
+  /** The room the name of a cluster takes at the top left of its box, and the clearance a line keeps from it. */
+  const keepOf = (id: string): Rect => {
+    const box = acc.clusterRect.get(id) as Rect;
+    return { x: box.x, y: box.y, w: CLUSTER_NAME_INSET + ruler.textWidth(tree.label.get(id) ?? '', 'lane') + NAME_CLEAR, h: CLUSTER_NAME_ROW };
+  };
+
   /** The nodes and boxes a line that goes on to `end` inside a cluster must go round: everything but `end` and the clusters that hold it. */
   const obstaclesFor = (end: string): Rect[] => {
     const holds = new Set(tree.chain(acc.clusterRect.has(end) ? end : nodeCluster.get(end)));
@@ -751,12 +860,17 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
       if (box === undefined || target === undefined) continue;
       const rest = [...acc.pieces].filter(([index]) => index !== r.index).map(([, e]) => e).filter((e) => !e.invisible);
       const obstacles: Rect[] = [...acc.nodes.values(), ...[...acc.clusterRect.values()].filter((c) => !(c.x <= box.x && c.y <= box.y && c.x + c.w >= box.x + box.w && c.y + c.h >= box.y + box.h))];
-      const forward = end === 'to' ? piece.points : [...piece.points].reverse();
+      const keep = keepOf(r[end]);
+      const outside = rectOf(r.edge[end === 'to' ? 'from' : 'to']);
+      const own = end === 'to' ? piece.points : [...piece.points].reverse();
+      const meets = rest.flatMap((e) => [e.points[0] as Point, e.points[e.points.length - 1] as Point]);
+      const forward = outside === undefined ? own : reface(own, { box, target, other: outside, keep, meets, obstacles: obstacles.filter((o) => o !== target), others: rest.flatMap((e) => segmentsOf(e.points)) });
       const moved = slideEnd(forward, {
         box,
         target,
         others: rest.flatMap((e) => segmentsOf(e.points)),
-        meets: rest.flatMap((e) => [e.points[0] as Point, e.points[e.points.length - 1] as Point]),
+        meets,
+        keep,
         obstacles,
         inner: obstaclesFor(r.edge[end]).filter((o) => o.x < box.x + box.w && o.x + o.w > box.x && o.y < box.y + box.h && o.y + o.h > box.y),
         ...(piece.label === undefined ? {} : { label: { x: piece.label.x, y: piece.label.y, w: piece.label.w, h: piece.label.h } }),
@@ -773,7 +887,10 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
     const target = rectOf(end) as Rect;
     const region = acc.clusterRect.get(entry) as Rect;
     const inward = dirOf(towards, start);
-    const obstacles = obstaclesFor(end);
+    // The names of the clusters it goes through to reach `end` are in its way as well.
+    const chain = tree.chain(acc.clusterRect.has(end) ? end : nodeCluster.get(end));
+    const names = chain.slice(chain.indexOf(entry) + 1).filter((c) => c !== end).map(keepOf);
+    const obstacles = [...obstaclesFor(end), ...names];
     const others = drawn.filter((s) => !own.includes(s));
     const found = pathInside({ region, start, inward, target, obstacles, drawn: others, taken }) ?? straightIn(start, inward, target);
     const last = found.at(-1);
