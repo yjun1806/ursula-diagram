@@ -22,7 +22,7 @@ interface State {
 const IMPLICIT_LANE = '_';
 const ID = /[\p{L}\p{N}_]+/uy;
 const DIAGRAM_TYPES = /^(sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline)(\s|$)/;
-const IGNORED = /^(classDef|class|style|linkStyle|click|direction)(\s|$)/;
+const IGNORED = /^(classDef|class|style|linkStyle|click|direction|accTitle\s*:|accDescr\s*:)(\s|$)/;
 const PLAIN_OPS: ReadonlyArray<readonly [string, EdgeStyle]> = [
   ['-.->', 'dotted'],
   ['-.-', 'dotted'],
@@ -252,7 +252,7 @@ function parseChain(stmt: string, line: number, st: State): void {
 }
 
 function parseHeader(stmt: string, line: number): 'LR' | 'TD' {
-  const m = /^(flowchart|graph)(?:\s+(\S+))?$/.exec(stmt);
+  const m = /^(flowchart|graph|swimlane-beta)(?:\s+(\S+))?$/.exec(stmt);
   if (!m) {
     const word = stmt.split(/\s+/)[0] ?? stmt;
     if (DIAGRAM_TYPES.test(stmt)) {

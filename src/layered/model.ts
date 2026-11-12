@@ -6,7 +6,7 @@
 export interface LNode {
   idx: number;
   layer: number;
-  /** Slot units the node covers along the order axis: 2, 4, 6... for a real node, 1 for a dummy. */
+  /** Slot units the node covers along the order axis: 2, 3, 4, 6... for a real node (3 only in pixels), 1 for a dummy. */
   units: number;
   /** The real node a dummy descends from (the node itself for a real one). */
   origin: number;

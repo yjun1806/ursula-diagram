@@ -41,6 +41,8 @@ export interface LayeredOptions {
   quality?: 'fast' | 'best';
   /** Draw the first candidate only and refine nothing: the quick drawing that tells whether a setting fits. */
   quick?: boolean;
+  /** Pixels, left to right: true lets a box a little wider than the common width take three slot units instead of four, false keeps whole pairs; when absent, both are drawn and the better drawing is kept. */
+  compact?: boolean;
   /** Cut paths and give up alignment when a drawing is still too wide after blocks moved to other rows (on by default). */
   fold?: boolean;
   /** Terminal only: the gap between neighbouring boxes in cells (3 holds one pass-through line, each further line adds 2); tried in turn when absent. */
@@ -87,6 +89,9 @@ function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
 
 /** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
 const COMMON_WITHIN = 1.15;
+
+/** The default canvas is a wish, not a border: a drawing may take this many times its width before it counts as too wide. A size the caller gave is kept. */
+const DEFAULT_ROOM = 1.15;
 
 /**
  * The ruler this engine measures with: boxes and gaps snap to half the node grid (when that is a whole number
@@ -179,13 +184,17 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
   return finish(ladder, orderLayers(graph, ladder, rows, variant.free, stage, variant.loose, variant.start).layers);
 }
 
-function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined): { frame: Frame; common: number; baseUnits: number[]; unit: number } {
+/** Slot units of a box: 2, or the next whole pair for a box wider than the common width; compact lets three be enough. */
+function unitsOf(own: number, common: number, unit: number, gap: number, compact: boolean): number {
+  if (own <= common) return 2;
+  if (compact && Math.ceil((own + gap) / unit - 1e-9) <= 3) return 3;
+  return 2 * Math.max(1, Math.ceil((own + gap) / unit / 2 - 1e-9));
+}
+
+function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact = false): { frame: Frame; common: number; baseUnits: number[]; unit: number } {
   const td = graph.direction === 'TD';
   const m = measureNodes(graph.nodes, graph.lanes, ruler, td);
-  const baseUnits = graph.nodes.map((_, i) => {
-    const own = m.w[i] ?? 0;
-    return !td && own > m.common ? 2 * Math.max(1, Math.ceil((own + ruler.rankGap) / m.unit / 2 - 1e-9)) : 2;
-  });
+  const baseUnits = graph.nodes.map((_, i) => (td ? 2 : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
   const layerExt = graph.nodes.map((_, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : m.contentH));
   const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
@@ -199,8 +208,8 @@ interface Solved {
 }
 
 /** Everything the placement needs to know about a ruler and the canvas it must fit. */
-function paramsFor(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean): { frame: Frame; common: number; baseUnits: number[]; unit: number; capacityUnits: number; dummyShift: number } {
-  const { frame, common, baseUnits, unit } = frameFor(graph, ruler, bounded ? limit : undefined);
+function paramsFor(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, compact = false): { frame: Frame; common: number; baseUnits: number[]; unit: number; capacityUnits: number; dummyShift: number } {
+  const { frame, common, baseUnits, unit } = frameFor(graph, ruler, bounded ? limit : undefined, compact);
   const margin = gridUp(ruler, ruler.trackGap);
   const fixed = 2 * margin + frame.gutter + 2 * ruler.lanePad;
   const capacityUnits = bounded && limit !== undefined ? Math.max(2, Math.floor((limit - fixed + ruler.rankGap) / unit + 1e-9)) : Infinity;
@@ -224,9 +233,9 @@ function rowsPerLane(layerLane: number[], lanes: number): number[] {
   return out;
 }
 
-function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant, fold = true, allow: Allowance = {}): Solved {
+function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: boolean, plain: boolean, apart: boolean, variant: Variant, fold = true, allow: Allowance = {}, compact = false): Solved {
   const td = graph.direction === 'TD';
-  const { frame, common, baseUnits, unit, capacityUnits, dummyShift } = paramsFor(graph, ruler, limit, bounded);
+  const { frame, common, baseUnits, unit, capacityUnits, dummyShift } = paramsFor(graph, ruler, limit, bounded, compact);
   const caps = graph.lanes.map(() => (bounded ? 2 * Math.floor(capacityUnits / 2) : Infinity));
   const reduction = graph.lanes.map(() => 0);
   const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
@@ -325,27 +334,28 @@ function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolea
   const base = tuned.uniform && td && apart ? { ...tuned, linePitch: 1 } : tuned;
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
   const bounded = limit !== undefined && Number.isFinite(limit);
+  const compact = opts.compact === true;
   const rowsFirst = order === 'rows' && !base.uniform;
   if (rowsFirst) {
     const second: Allowance = { rows: true, intact: true };
     const unit0 = measureNodes(graph.nodes, graph.lanes, base, td).unit;
     // 1. The default gap, a second row in every lane.
-    let solved = solve(graph, base, limit, bounded, false, apart, variant, false, second);
+    let solved = solve(graph, base, limit, bounded, false, apart, variant, false, second, compact);
     let tightest = base;
     // 2. Close the gaps, the second rows in use.
     for (let gap = base.rankGap - base.nodeGrid; bounded && !solved.ok && gap >= base.rankGapMin; gap -= base.nodeGrid) {
       const tight = { ...base, rankGap: gap };
       if (measureNodes(graph.nodes, graph.lanes, tight, td).unit >= unit0) continue;
       tightest = tight;
-      const attempt = solve(graph, tight, limit, bounded, false, apart, variant, false, second);
+      const attempt = solve(graph, tight, limit, bounded, false, apart, variant, false, second, compact);
       if (attempt.ok) solved = attempt;
     }
     // 3. A third row and further ones, the main flow whole. 4. The flow is cut.
-    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, false, { intact: true });
-    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, opts.fold !== false);
+    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, false, { intact: true }, compact);
+    if (bounded && !solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, opts.fold !== false, {}, compact);
     return { graph, given, opts, apart, base, ruler: solved.ruler, common: solved.common, td, limit, bounded, placed: solved.placed, variant };
   }
-  let solved = solve(graph, base, limit, bounded, true, apart, variant);
+  let solved = solve(graph, base, limit, bounded, true, apart, variant, true, {}, compact);
   if (bounded && !solved.ok) {
     // 1. Close the rank gaps toward the ruler's minimum, one grid step at a time.
     const unit0 = measureNodes(graph.nodes, graph.lanes, base, td).unit;
@@ -354,14 +364,14 @@ function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolea
       const tight = { ...base, rankGap: gap };
       if (measureNodes(graph.nodes, graph.lanes, tight, td).unit >= unit0) continue;
       tightest = tight;
-      const attempt = solve(graph, tight, limit, bounded, true, apart, variant);
+      const attempt = solve(graph, tight, limit, bounded, true, apart, variant, true, {}, compact);
       if (attempt.ok) {
         solved = attempt;
         break;
       }
     }
     // 2. Still too wide: whole blocks to other rows, then cut paths, at the narrowest gap.
-    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, opts.fold !== false);
+    if (!solved.ok) solved = solve(graph, tightest, limit, bounded, false, apart, variant, opts.fold !== false, {}, compact);
   }
   return { graph, given, opts, apart, base, ruler: solved.ruler, common: solved.common, td, limit, bounded, placed: solved.placed, variant };
 }
@@ -393,7 +403,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   if (bounded && limit !== undefined && !ruler.uniform) {
     const total = (d: Layout): number => (td ? d.height : d.width);
     // The default canvas is a wish, not a border: room for passing lines may take up to 15% more than it. A size the caller gave is kept.
-    const room = (td ? opts.maxHeight : opts.maxWidth) === undefined ? limit * 1.15 : limit;
+    const room = (td ? opts.maxHeight : opts.maxWidth) === undefined ? limit * DEFAULT_ROOM : limit;
     let tight = tightPasses(drawn);
     for (let gap = ruler.rankGap + 2 * ruler.nodeGrid; tight > 0 && gap <= 2 * base.rankGap && gap <= common - 2 * ruler.nodeGrid; gap += 2 * ruler.nodeGrid) {
       const r = { ...ruler, rankGap: gap };
@@ -431,7 +441,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   const diagnostics: Diagnostic[] = [...drawn.diagnostics];
   if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) {
     diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${opts.maxWidth}.` });
-  } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth) {
+  } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth * DEFAULT_ROOM) {
     diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
   }
   return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit, ...(ruler.uniform ? {} : { gap: usedGap, gapDefault: base.rankGap }) }, ruler, opts.legend);
@@ -498,14 +508,37 @@ function tightPlacer(p: Prep): ((rows: Rows) => Placed) | undefined {
   const { graph, base, td, limit, bounded, apart, variant } = p;
   const tight = { ...base, rankGap: base.rankGapMin };
   if (tight.rankGap >= p.placed.ruler.rankGap || measureNodes(graph.nodes, graph.lanes, tight, td).unit >= measureNodes(graph.nodes, graph.lanes, p.placed.ruler, td).unit) return undefined;
-  const q = paramsFor(graph, tight, limit, bounded);
+  const q = paramsFor(graph, tight, limit, bounded, p.opts.compact === true);
   return (rows) => place(graph, tight, q.baseUnits, graph.lanes.map(() => Infinity), graph.lanes.map(() => 0), q.unit, tight.rankGap, td, q.capacityUnits, q.dummyShift, apart, variant, false, rows);
 }
 
 const TERMINAL_CANDIDATES: readonly Variant[] = CANDIDATES.filter((v) => ['forced', 'free', 'forced-unheld'].includes(v.name));
 
-/** Lanes: every candidate is drawn to the end and measured, the best is refined by small changes. */
+/** Whether some box is wider than the common width by little enough to take three slot units instead of four. */
+function hasNarrowBox(graph: Graph, given: Ruler, opts: LayeredOptions): boolean {
+  const ruler = layeredRuler(given, opts.gap);
+  const m = measureNodes(graph.nodes, graph.lanes, ruler, false);
+  return graph.nodes.some((_, i) => unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, true) === 3);
+}
+
+/**
+ * Lanes. With the best quality in pixels, when a box could take three slot units, the whole set of candidates is drawn
+ * twice, with whole pairs and with three units allowed, and the better winner is kept: a better score wins, an equal score the smaller drawing (width times height), and whole pairs when that is equal too.
+ */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  const both = opts.compact === undefined && opts.quality === 'best' && opts.quick !== true && !given.terminal && graph.direction !== 'TD' && hasNarrowBox(graph, given, opts);
+  const even = drawCandidates(graph, given, both ? { ...opts, compact: false } : opts);
+  if (!both) return even;
+  const narrow = drawCandidates(graph, given, { ...opts, compact: true });
+  // The narrow sizes win a better score, and an equal score with a smaller drawing.
+  const order = compareScores(score(narrow), score(even));
+  if (order > 0 || (order === 0 && narrow.width * narrow.height >= even.width * even.height)) return even;
+  stats.compact++;
+  return narrow;
+}
+
+/** Every candidate is drawn to the end and measured, the best is refined by small changes. */
+function drawCandidates(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // A terminal drawing tries three candidates and redraws at most 60 times while refining.
   const terminal = given.terminal === true;
   const candidates = opts.quick ? CANDIDATES.slice(0, 1) : terminal ? TERMINAL_CANDIDATES : CANDIDATES;

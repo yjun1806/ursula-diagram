@@ -151,7 +151,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
 
 registerFrontEnd({
   name: 'flowchart',
-  headers: ['flowchart', 'graph'],
+  headers: ['flowchart', 'graph', 'swimlane-beta'],
   svg(src, opts) {
     const { maxWidth, legend, engine, composition, quality, ...svgOpts } = opts;
     return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition, ...(quality === undefined ? {} : { quality }) })), svgOpts);

@@ -52,7 +52,7 @@ export interface LayoutNode {
   id: string;
   lane: string;
   rank: number;
-  /** Number of rank columns the box covers; 1 unless the content is wider than the shared box width. */
+  /** Number of rank columns the box covers; 1 unless the content is wider than the shared box width (it can be a half step, such as 1.5). */
   span: number;
   row: number;
   x: number;

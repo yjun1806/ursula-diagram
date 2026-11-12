@@ -133,13 +133,14 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
   }
   const bad: string[] = [];
   const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
-  // A side whose odd lattice (centre and whole steps from it) cannot hold all the ends on it takes the even lattice: half a step either side of the centre and whole steps beyond, kept CORNER_CLEAR from both ends.
-  const evenPortOf = (len: number, off: number, ends: number): boolean =>
+  // A side whose whole steps cannot hold its ends takes the dense lattice: the centre and every half step from it, kept CORNER_CLEAR from both ends.
+  // The lattice is chosen before one-bend edges move an end to another side, so the ends that stay may stand on the dense lattice of a side that now holds fewer.
+  const evenPortOf = (len: number, off: number, _ends: number): boolean =>
     pitches.some((pitch) => {
-      const odd = 2 * Math.floor((len / 2 - pitch / 2 + 1e-6) / pitch) + 1;
-      const k = Math.abs(off - len / 2) / pitch - 0.5;
-      return odd < ends && near(k, Math.round(k)) && Math.abs(off - len / 2) <= len / 2 - CORNER_CLEAR + 0.01;
+      const k = Math.abs(off - len / 2) / (pitch / 2);
+      return near(k, Math.round(k)) && Math.abs(off - len / 2) <= len / 2 - CORNER_CLEAR + 0.01;
     });
+
   const endsOnSide = new Map<string, number>();
   const sideOfEnd = (p: Point, n: Layout['nodes'][number]): string | undefined => {
     const inX = p.x > n.x - 0.01 && p.x < n.x + n.w + 0.01;
