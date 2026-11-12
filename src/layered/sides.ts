@@ -42,14 +42,27 @@ export function sideOfPoint(node: LayoutNode, p: Point): BoxSide {
 }
 
 /**
+ * How the partner stands against the node along the axis across the layers: 0 when their ranges overlap, 1 or -1 when the
+ * partner lies wholly to one side. An edge to a partner that stands clear of the node may leave through the node's side.
+ */
+function clearSide(node: LayoutNode, other: LayoutNode, td: boolean): number {
+  const [n0, n1, o0, o1] = td ? [node.y, node.y + node.h, other.y, other.y + other.h] : [node.x, node.x + node.w, other.x, other.x + other.w];
+  if (o0 >= n1 - 1e-6) return 1;
+  if (o1 <= n0 + 1e-6) return -1;
+  return 0;
+}
+
+/**
  * Edge ends that break the rule that edges leaving or arriving the same way at a node use the same side: among the
- * ends of a node that look the same way (two or more), every end that is not on that way's side.
+ * ends of a node that look the same way (two or more), every end that is not on that way's side. Partners that stand wholly
+ * to one side of the node look another way than partners that overlap it, and each such side is a way of its own; the
+ * ends of such a way may use any one face, as long as they use the same one.
  */
 export function mixedSideEnds(l: Pick<Layout, 'nodes' | 'edges'>, d: Directions): Diagnostic[] {
   const nodeAt = new Map(l.nodes.map((n, i) => [n.id, i] as const));
   // Groups in the order they are first met: a node and the side its edges to partners looking the same way should use.
-  const groupAt = new Int32Array(l.nodes.length * SIDES.length).fill(-1);
-  const groups: Array<{ node: LayoutNode; side: BoxSide; ends: Array<{ actual: BoxSide; edge: number }> }> = [];
+  const groupAt = new Map<number, number>();
+  const groups: Array<{ node: LayoutNode; side: BoxSide; clear: number; ends: Array<{ actual: BoxSide; edge: number }> }> = [];
   l.edges.forEach((e, i) => {
     const ia = nodeAt.get(e.from);
     const ib = nodeAt.get(e.to);
@@ -60,18 +73,24 @@ export function mixedSideEnds(l: Pick<Layout, 'nodes' | 'edges'>, d: Directions)
     const b = l.nodes[ib] as LayoutNode;
     for (const [at, node, other, p] of [[ia, a, b, first], [ib, b, a, last]] as const) {
       const side = designatedSide(node, other, d);
-      const k = at * SIDES.length + SIDES.indexOf(side);
-      let g = groupAt[k] as number;
+      const clear = clearSide(node, other, d.td);
+      const k = (at * SIDES.length + SIDES.indexOf(side)) * 3 + clear + 1;
+      let g = groupAt.get(k) ?? -1;
       if (g < 0) {
-        g = groupAt[k] = groups.length;
-        groups.push({ node, side, ends: [] });
+        g = groups.length;
+        groupAt.set(k, g);
+        groups.push({ node, side, clear, ends: [] });
       }
       (groups[g] as { ends: Array<{ actual: BoxSide; edge: number }> }).ends.push({ actual: sideOfPoint(node, p), edge: i });
     }
   });
   const out: Diagnostic[] = [];
-  for (const { node, side, ends } of groups) {
+  for (const { node, side: designated, clear, ends } of groups) {
     if (ends.length < 2) continue;
+    // Ends of a way that partners standing clear of the node look: the face most of them use, the designated one on a tie.
+    const used = SIDES.map((s) => ends.filter((end) => end.actual === s).length);
+    const common = SIDES.reduce((best, s, i) => ((used[i] as number) > (used[SIDES.indexOf(best)] as number) ? s : best), designated);
+    const side = clear === 0 ? designated : (used[SIDES.indexOf(designated)] as number) >= (used[SIDES.indexOf(common)] as number) ? designated : common;
     const id = node.id;
     for (const end of ends) {
       if (end.actual !== side) {
