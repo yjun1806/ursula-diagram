@@ -13,6 +13,9 @@ export const portStep = (unit: number, ruler: Ruler): number => unit / Math.max(
 /** Extent of a box of `units` slot units along the order axis. */
 export const boxLength = (units: number, unit: number, gap: number): number => units * unit - gap;
 
+/** The length of a box of its own `size` standing in a slot of `slot`: its own size, at most the slot. */
+export const bodyLength = (size: number, slot: number): number => Math.min(size, slot);
+
 /** Pixels: a port keeps this far from the corners of its box. */
 export const CORNER_CLEAR = 12;
 

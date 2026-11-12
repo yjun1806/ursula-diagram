@@ -44,6 +44,8 @@ export interface LayoutOptions extends SolveOptions {
   fold?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
+  /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
+  nested?: boolean;
 }
 
 export type { LegendOption } from './legend.ts';
@@ -244,13 +246,13 @@ export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): La
 
 function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
-    if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, layout);
+    if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
     const flat = layout(flattenClusters(graph), ruler, opts);
     return { ...flat, diagnostics: [...flat.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, ...solveOpts } = opts;
-  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }) });
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, ...solveOpts } = opts;
+  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
   }

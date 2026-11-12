@@ -516,7 +516,8 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     if (blocks.some((b) => b.folded)) for (const b of blocks) b.anchor = b.folded || b.single || b.cross === 0 ? 'top' : 'bottom';
     const widest = Math.max(...blocks.map((b) => b.width));
     const room = Math.max(widest, cap - less);
-    const lone = apart ? blocks.filter((b) => b.single) : [];
+    // Zones without a name are the stages of a drawing without zones: every box of a stage stands on its row while it fits.
+    const lone = apart && graph.lanes.some((l) => l.label !== '') ? blocks.filter((b) => b.single) : [];
     // Nodes without edges in their lane may wait one place further along the band instead of filling the same row.
     const packed = lone.length > 0 && lone.length < blocks.length
       ? [...pack(fill(blocks.filter((b) => !b.single), room, makeBlock, (n) => units[n] ?? 2), room), ...pack(lone, room)]

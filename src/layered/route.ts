@@ -16,7 +16,7 @@ import { offCentreEnds } from './centre.ts';
 import { settleBodies } from './bodies.ts';
 import { placeEndLabels } from './end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
-import { boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
+import { bodyLength, boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -29,6 +29,8 @@ export interface Frame {
   gutter: number;
   /** Natural extent of every real node along the layer axis. */
   layerExt: number[];
+  /** Own extent of a real node along the order axis when it is shorter than its slot (a box divided into compartments); it stands in the middle of the slot. */
+  bodyLen?: Array<number | undefined>;
   /** Order-axis extent beyond which the drawing counts as overflowing. */
   limit?: number;
   /** Added to (or taken from) the default room of every band between two layers along the layer axis. */
@@ -196,9 +198,13 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const origin = margin + f.gutter + ruler.lanePad;
   // A drawing never starts further than its margin from the edge, whatever the placement before it left.
   const first = Math.min(...start);
-  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit;
-  const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const real = (n: number): boolean => n < l.realCount;
+  const slot = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
+  const len = (n: number): number => {
+    const own = real(n) ? f.bodyLen?.[n] : undefined;
+    return own === undefined ? slot(n) : bodyLength(own, slot(n));
+  };
+  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit + (slot(n) - len(n)) / 2;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
   const shift = new Float64Array(l.nodes.length);
   const shifted = new Uint8Array(l.nodes.length);
@@ -667,15 +673,25 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   };
   const bound = (it: Item, side: Side): number => (side === 'down' ? (bandStart[it.band] ?? 0) : (bandStart[it.band] ?? 0) + (bandSize[it.band] ?? 0));
   // A box given from outside can make its layer thicker than the boxes beside it: those stand in the middle of the layer, as thick as they are.
+  // Boxes divided into compartments are not stretched to the thickest box of their layer either: every box of such a layer is as thick as it is
+  // and stands against the face the flow comes from, so that the heads of the boxes read as one line.
   const boxLayer = new Set<number>();
+  const flush = new Set<number>();
   graph.nodes.forEach((n, i) => {
-    if (n.box !== undefined && i < l.realCount) boxLayer.add(l.nodes[i]?.layer ?? 0);
+    if (i >= l.realCount) return;
+    const layer = l.nodes[i]?.layer ?? 0;
+    if (n.box !== undefined) boxLayer.add(layer);
+    if (n.compartments !== undefined && !ruler.uniform) {
+      boxLayer.add(layer);
+      flush.add(layer);
+    }
   });
   const own = (i: number): { off: number; ext: number } => {
     const layer = l.nodes[i]?.layer ?? 0;
     const full = thick[layer] ?? 0;
     if (!boxLayer.has(layer) || i >= l.realCount) return { off: 0, ext: full };
     const ext = Math.min(full, f.layerExt[i] ?? full);
+    if (flush.has(layer)) return { off: 0, ext };
     return { off: Math.floor((full - ext) / 2 / ruler.nodeGrid + 1e-9) * ruler.nodeGrid, ext };
   };
   /** Where the line of a node meets its face on `side`; `fallback` when the node fills its layer. */

@@ -478,13 +478,11 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
   }
 }
 
-/** The rules and texts of a box divided into compartments; the last compartment takes the room the box has left over. */
+/** The rules and texts of a box divided into compartments; the box is as tall as they are. */
 function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   const cells = node.compartments ?? [];
   const ruler = pixelRuler();
   const heights = compartmentHeights(cells, ruler);
-  const spare = Math.max(0, node.h - heights.reduce((a, b) => a + b, 0));
-  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
   const parts = [boxSvg(node, spec.boxRadius, shadowAttr(spec))];
   let top = node.y;
   cells.forEach((cell, i) => {

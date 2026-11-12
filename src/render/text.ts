@@ -269,12 +269,10 @@ const CORNERS: Record<string, readonly [string, string, string, string]> = {
   note: ['┌', '┒', '└', '┘'],
 };
 
-/** The rules between the compartments, and the lines of each, of a box divided into compartments. The last compartment takes the room that is left. */
-function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: number, h: number): void {
+/** The rules between the compartments, and the lines of each, of a box divided into compartments. */
+function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: number): void {
   const cells = n.compartments ?? [];
   const heights = compartmentHeights(cells, cellRuler());
-  const used = heights.reduce((a, b) => a + b, 0) + cells.length - 1 + 2;
-  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + Math.max(0, h - used);
   let y = y0 + 1;
   cells.forEach((cell, i) => {
     if (i > 0) {
@@ -318,7 +316,7 @@ function drawNode(c: Canvas, n: LayoutNode): void {
     }
   }
   if (hasCompartments(n)) {
-    drawCompartments(c, n, x0, y0, w, h);
+    drawCompartments(c, n, x0, y0, w);
     return;
   }
   if (solid) return;

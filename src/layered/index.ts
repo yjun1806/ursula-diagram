@@ -1,6 +1,7 @@
 import { tightPasses } from './clearance.ts';
 import type { Ruler } from '../metrics.ts';
 import { gridUp, measureNodes } from '../layout/place.ts';
+import { hasCompartments, ownSize } from '../layout/records.ts';
 import type { LegendOption } from '../layout/legend.ts';
 import { withLegend } from '../layout/legend.ts';
 import type { Diagnostic, Graph, Layout } from '../types.ts';
@@ -10,7 +11,7 @@ import { buildLadder } from './dummies.ts';
 import type { Ladder, Placed } from './model.ts';
 import type { Rows } from './rows.ts';
 import { orderLayers } from './order.ts';
-import { boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
+import { bodyLength, boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
@@ -23,6 +24,7 @@ import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
 import { planZones, unzoned } from './composition.ts';
+import { packPieces, piecesOf } from './shelves.ts';
 import { stageOf } from './stage.ts';
 import { refine } from './refine.ts';
 import { questionsFor } from './questions.ts';
@@ -53,6 +55,8 @@ export interface LayeredOptions {
   maxWidth?: number;
   maxHeight?: number;
   legend?: LegendOption;
+  /** The graph is one level of a drawing with clusters: edges outside it join its boxes, so it is neither shelved in pieces nor drawn as stages (off by default). */
+  nested?: boolean;
 }
 
 const RETRIES = 10;
@@ -87,7 +91,20 @@ function labelExtra(graph: Graph, ladder: Ladder, plan: Map<number, FlatPlan>, r
 
 function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
   const step = portStep(unit, ruler);
-  return { steps: Math.max(1, Math.round(unit / step)), ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit }), reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit };
+  return {
+    steps: Math.max(1, Math.round(unit / step)),
+    ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit, innerFor: (length: number) => (length / 2 - CORNER_CLEAR) / unit }),
+    reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit,
+    reachFor: (length) => (length / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit,
+  };
+}
+
+/**
+ * The own length along the order axis of every box divided into compartments in a drawing whose layers are columns
+ * (pixels): such a box keeps its height and stands in the middle of its slot instead of filling it.
+ */
+function bodyLengths(graph: Graph, ruler: Ruler, td: boolean): Array<number | undefined> {
+  return graph.nodes.map((n) => (td && !ruler.uniform && hasCompartments(n) ? ownSize(n, td, ruler)?.h : undefined));
 }
 
 /** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
@@ -163,6 +180,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     degreeOf[b] = (degreeOf[b] ?? 0) + 1;
   }
   const shapes = graph.nodes.map((n) => n.shape);
+  const bodies = bodyLengths(graph, ruler, td);
   const across = stadiumThickness(graph, ruler, td);
   const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
@@ -174,7 +192,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     const plan = planFlat(ladder, layers, ruler);
     growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across);
     const need = portDemand(ladder, plan);
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), body: (n) => { const own = bodies[n]; return own === undefined ? undefined : bodyLength(own, boxLength(ladder.nodes[n]?.units ?? 2, unit, gap)); }, squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
     return {
       ladder,
       layers,
@@ -207,7 +225,7 @@ function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact
   // A box given from outside is as long as its size needs along the reading direction and as thick as it is across.
   const baseUnits = graph.nodes.map((n, i) => (td ? (n.box === undefined ? 2 : unitsOf(m.h[i] ?? 0, m.contentH, m.unit, ruler.rankGap, compact)) : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
   const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? (m.h[i] ?? m.contentH) : Math.max(m.contentH, m.h[i] ?? 0)));
-  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, ...(limit === undefined ? {} : { limit }) };
+  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, bodyLen: bodyLengths(graph, ruler, td), ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
 }
 
@@ -450,13 +468,31 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
     }
     drawn = best;
   }
-  const diagnostics: Diagnostic[] = [...drawn.diagnostics];
-  if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) {
-    diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${opts.maxWidth}.` });
-  } else if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth * DEFAULT_ROOM) {
-    diagnostics.push({ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` });
-  }
+  const diagnostics: Diagnostic[] = [...drawn.diagnostics, ...overflowOf(drawn, opts, ruler, td)];
   return withLegend({ ...drawn, diagnostics, pitch: 2 * frameFor(graph, ruler, undefined).unit, ...(ruler.uniform ? {} : { gap: usedGap, gapDefault: base.rankGap }) }, ruler, opts.legend);
+}
+
+/** The note that a drawing is wider than the limit the caller gave, or than the default canvas by more than the room a wish may take. */
+function overflowOf(drawn: Layout, opts: LayeredOptions, ruler: Ruler, td: boolean): Diagnostic[] {
+  if (opts.maxWidth !== undefined && drawn.width > opts.maxWidth) return [{ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${opts.maxWidth}.` }];
+  if (!td && opts.maxWidth === undefined && ruler.defaultWidth !== undefined && drawn.width > ruler.defaultWidth * DEFAULT_ROOM) return [{ kind: 'overflow', nodes: [], message: `Drawing is ${drawn.width} wide; the limit is ${ruler.defaultWidth}.` }];
+  return [];
+}
+
+/**
+ * The pieces of a drawing without zones that no edge joins are drawn one by one and stand side by side across the
+ * reading direction in the order of the text, on further shelves when they would pass the limit.
+ */
+function layoutPieces(source: Graph, given: Ruler, opts: LayeredOptions): Layout | undefined {
+  if (opts.nested === true || !unzoned(source) || given.terminal || (source.clusters?.length ?? 0) > 0) return undefined;
+  const pieces = piecesOf(source);
+  if (pieces.length < 2) return undefined;
+  const td = source.direction === 'TD';
+  const parts = pieces.map((p) => ({ ...p, drawn: layoutAt(p.graph, given, { ...opts, legend: false }) }));
+  const limit = td ? (opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM) : (opts.maxHeight ?? Infinity);
+  const packed = packPieces(parts, td, limit);
+  const diagnostics = [...packed.diagnostics, ...overflowOf(packed, opts, given, td)];
+  return withLegend({ ...packed, diagnostics }, given, opts.legend);
 }
 
 /**
@@ -464,6 +500,8 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
  * reading direction, so that the bands cross the reading direction; the result is then labelled with the real one.
  */
 function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  const packed = layoutPieces(source, given, opts);
+  if (packed) return packed;
   const plan = planZones(source, opts.composition ?? 'auto');
   const stages = plan.composition === 'stages';
   const lanes = plan.order.flatMap((i) => (source.lanes[i] ? [source.lanes[i]] : []));
@@ -473,7 +511,7 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Without zones the `spread` drawing replaces the usual one only when `spreadWins`.
   const spread = unzoned(source) && !given.terminal && opts.quality === 'best' && opts.quick !== true ? drawSpread(source, given, opts) : undefined;
   const room = { width: opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM, height: opts.maxHeight ?? Infinity };
-  return spread !== undefined && spreadWins(spread, drawn, room) ? spread : drawn;
+  return spread !== undefined && spreadWins(spread, drawn, room, opts.nested !== true) ? spread : drawn;
 }
 
 /**
