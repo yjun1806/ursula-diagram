@@ -9,6 +9,7 @@ import './gantt/frontend.ts';
 import './ishikawa/frontend.ts';
 import './cynefin/frontend.ts';
 import './kanban/frontend.ts';
+import './mindmap/frontend.ts';
 import './quadrant/frontend.ts';
 import './pie/frontend.ts';
 import './packet/frontend.ts';
