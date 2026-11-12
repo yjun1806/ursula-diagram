@@ -1,7 +1,9 @@
 // The routing stage as it was before it was rewritten on number arrays, kept as it was; only `route` is renamed (`routeOld`).
 import type { Ruler } from '../src/metrics.ts';
-import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, Point } from '../src/types.ts';
+import { endFields } from '../src/edge-ends.ts';
+import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../src/types.ts';
 import { crossings } from '../src/layout/check.ts';
+import { withOutline } from '../src/layout/diamond.ts';
 import type { LabelSize, Rect, Segment } from '../src/layout/labels.ts';
 import { labelSize, placeLabel } from '../src/layout/labels.ts';
 import { useElbows } from '../src/layered/elbows.ts';
@@ -10,9 +12,12 @@ import type { Ladder } from '../src/layered/model.ts';
 import type { Side } from '../src/layered/order.ts';
 import type { FlatPlan } from '../src/layered/ports.ts';
 
+import { settleVertices } from '../src/layered/vertex.ts';
 import { offCentreEnds } from '../src/layered/centre.ts';
+import { settleBodies } from '../src/layered/bodies.ts';
+import { placeEndLabels } from '../src/layered/end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from '../src/layered/label-room.ts';
-import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from '../src/layered/ports.ts';
+import { bodyLength, boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from '../src/layered/ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -25,6 +30,8 @@ export interface Frame {
   gutter: number;
   /** Natural extent of every real node along the layer axis. */
   layerExt: number[];
+  /** Own extent of a real node along the order axis when it is shorter than its slot (a box divided into compartments); it stands in the middle of the slot. */
+  bodyLen?: Array<number | undefined>;
   /** Order-axis extent beyond which the drawing counts as overflowing. */
   limit?: number;
   /** Added to (or taken from) the default room of every band between two layers along the layer axis. */
@@ -39,8 +46,7 @@ export interface Frame {
 
 const EPS = 1e-6;
 
-/** Pixels: a port set at the centre of the other box keeps this far from the corners of its own box, and from its other ports. */
-export const CORNER_CLEAR = 12;
+/** Pixels: a port set at the centre of the other box keeps this far from its other ports (and from the corners of its own box, CORNER_CLEAR). */
 const PORT_APART = 8;
 
 /** Space kept free at the outer edge of the drawing: none in a terminal, where an empty cell is lost width. */
@@ -186,9 +192,13 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const origin = margin + f.gutter + ruler.lanePad;
   // A drawing never starts further than its margin from the edge, whatever the placement before it left.
   const first = Math.min(...start);
-  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit;
-  const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const real = (n: number): boolean => n < l.realCount;
+  const slot = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
+  const len = (n: number): number => {
+    const own = real(n) ? f.bodyLen?.[n] : undefined;
+    return own === undefined ? slot(n) : bodyLength(own, slot(n));
+  };
+  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit + (slot(n) - len(n)) / 2;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
   const shift = new Map<number, number>();
   for (const row of layers) {
@@ -202,6 +212,11 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   }
   const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift.get(n) ?? 0));
   const step = portStep(unit, ruler);
+  const shapeOf = (n: number): NodeShape | undefined => f.graph.nodes[n]?.shape;
+  const acrossOf = (n: number): number => f.layerExt[n] ?? 0;
+  /** A port off the lattice may stand at `x` on `side` of box `n` only where the shape of the box has room for it. */
+  const reaches = (n: number, side: Side, x: number): boolean =>
+    Math.abs(x - (nodeO(n) + len(n) / 2)) <= faceReach(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), ruler.uniform === true) + EPS;
 
   const items: Item[] = [];
   for (const [ci, c] of l.chains.entries()) {
@@ -240,7 +255,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const free = (n: number, side: Side): number[] => {
     const set = taken.get(key(n, side));
     const near = custom.get(key(n, side)) ?? [];
-    return portOffsets(len(n), step)
+    return faceOffsets(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), step, sideCount.get(key(n, side)) ?? 0, ruler.uniform === true)
       .map((o) => nodeO(n) + o)
       .filter((x) => !set?.has(rk(x)) && !near.some((c) => Math.abs(c - x) < PORT_APART - EPS));
   };
@@ -269,13 +284,50 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     else {
       const c = centre(one);
       const near = [...(taken.get(key(many, manySide)) ?? [])].some((t) => Math.abs(t / 1000 - c) < PORT_APART - EPS);
-      x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near ? c : undefined;
+      x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near && reaches(many, manySide, c) ? c : undefined;
       if (x !== undefined) custom.set(key(many, manySide), [...(custom.get(key(many, manySide)) ?? []), x]);
     }
     if (x === undefined) continue;
     it.xa = it.xb = x;
     mark(it.a, 'down', x);
     mark(it.b, 'up', x);
+  }
+  // Pixels: two or more pieces between the same two boxes stand a step apart, symmetric about the centre of the narrower box (of both centres' midpoint when the boxes are equally wide), when every port keeps clear of the corners and of the other ports of both boxes.
+  if (!ruler.uniform) {
+    const pairs = new Map<string, Item[]>();
+    for (const it of items) {
+      if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
+      const k = `${it.a}|${it.b}`;
+      pairs.set(k, [...(pairs.get(k) ?? []), it]);
+    }
+    for (const group of pairs.values()) {
+      const first = group[0] as Item;
+      if (group.length < 2) continue;
+      const [a, b] = [first.a, first.b];
+      const c = len(a) === len(b) ? (centre(a) + centre(b)) / 2 : centre(len(a) < len(b) ? a : b);
+      const xs = group.map((_, i) => c + (i - (group.length - 1) / 2) * step);
+      const clear = (n: number, side: Side): boolean =>
+        xs.every(
+          (x) =>
+            x >= nodeO(n) + CORNER_CLEAR - EPS &&
+            x <= nodeO(n) + len(n) - CORNER_CLEAR + EPS &&
+            reaches(n, side, x) &&
+            ![...(taken.get(key(n, side)) ?? [])].some((t) => Math.abs(t / 1000 - x) < PORT_APART - EPS),
+        );
+      if (!clear(a, 'down') || !clear(b, 'up')) continue;
+      // The pieces take the places in the order the lattice would give them: the one nearest the midpoint of the two centres first.
+      const mid = (centre(a) + centre(b)) / 2;
+      const left = [...xs];
+      group.forEach((it) => {
+        left.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid) || p - q);
+        const x = left.shift() as number;
+        it.xa = it.xb = x;
+        mark(a, 'down', x);
+        mark(b, 'up', x);
+        custom.set(key(a, 'down'), [...(custom.get(key(a, 'down')) ?? []), x]);
+        custom.set(key(b, 'up'), [...(custom.get(key(b, 'up')) ?? []), x]);
+      });
+    }
   }
   for (const it of items) {
     if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
@@ -498,7 +550,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     if (b === 0) return ruler.lanePad;
     if (b === count) return bottomPad[l.layerLane[count - 1] ?? 0] ?? ruler.lanePad;
     if (l.layerLane[b - 1] === l.layerLane[b]) return ruler.rowGap;
-    return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + ruler.laneGap + ruler.lanePad;
+    // Lines that turn between two lanes run in the gap between the lane borders, clear of both.
+    const between = (trackCount[b] ?? 0) === 0 ? ruler.laneGap : Math.max(ruler.laneGap, ((trackCount[b] ?? 0) + 1) * ruler.trackGap + ruler.nodeGrid);
+    return (bottomPad[l.layerLane[b - 1] ?? 0] ?? ruler.lanePad) + between + ruler.lanePad;
   };
   // A terminal band holds the lane's name line (when the lane below has a name) and one line per track, and at least one line between two rows.
   const nameLine = (b: number): number => (b < count && (b === 0 || l.layerLane[b - 1] !== l.layerLane[b]) && (graph.lanes[l.layerLane[b] ?? 0]?.label ?? '') !== '' ? 1 : 0);
@@ -549,13 +603,43 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     return edgeNear(ruler, first + it.track * ruler.trackGap);
   };
   const bound = (it: Item, side: Side): number => (side === 'down' ? (bandStart[it.band] ?? 0) : (bandStart[it.band] ?? 0) + (bandSize[it.band] ?? 0));
+  // A box given from outside can make its layer thicker than the boxes beside it: those stand in the middle of the layer, as thick as they are.
+  // Boxes divided into compartments are not stretched to the thickest box of their layer either: every box of such a layer is as thick as it is
+  // and stands against the face the flow comes from, so that the heads of the boxes read as one line.
+  const boxLayer = new Set<number>();
+  const flush = new Set<number>();
+  graph.nodes.forEach((n, i) => {
+    if (i >= l.realCount) return;
+    const layer = l.nodes[i]?.layer ?? 0;
+    if (n.box !== undefined) boxLayer.add(layer);
+    if (n.compartments !== undefined && !ruler.uniform) {
+      boxLayer.add(layer);
+      flush.add(layer);
+    }
+  });
+  const own = (i: number): { off: number; ext: number } => {
+    const layer = l.nodes[i]?.layer ?? 0;
+    const full = thick[layer] ?? 0;
+    if (!boxLayer.has(layer) || i >= l.realCount) return { off: 0, ext: full };
+    const ext = Math.min(full, f.layerExt[i] ?? full);
+    if (flush.has(layer)) return { off: 0, ext };
+    return { off: Math.floor((full - ext) / 2 / ruler.nodeGrid + 1e-9) * ruler.nodeGrid, ext };
+  };
+  /** Where the line of a node meets its face on `side`; `fallback` when the node fills its layer. */
+  const faceAt = (n: number, side: Side, fallback: number): number => {
+    const layer = l.nodes[n]?.layer ?? 0;
+    if (!boxLayer.has(layer) || n >= l.realCount) return fallback;
+    const { off, ext } = own(n);
+    return (layerStart[layer] ?? 0) + off + (side === 'down' ? ext : 0);
+  };
 
   const nodes: LayoutNode[] = graph.nodes.map((n, i) => {
     const ln = l.nodes[i] as { layer: number; units: number };
     const o = nodeO(i);
-    const c = layerStart[ln.layer] ?? 0;
-    const [x, y, w, h] = td ? [c, o, thick[ln.layer] ?? 0, len(i)] : [o, c, len(i), thick[ln.layer] ?? 0];
-    return {
+    const mine = own(i);
+    const c = (layerStart[ln.layer] ?? 0) + mine.off;
+    const [x, y, w, h] = td ? [c, o, mine.ext, len(i)] : [o, c, len(i), mine.ext];
+    return withOutline({
       id: n.id,
       lane: n.lane,
       rank: Math.floor((start[i] ?? 0) / 2),
@@ -568,7 +652,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       title: n.title,
       lines: n.lines,
       shape: n.shape,
-    };
+      ...(n.compartments === undefined ? {} : { compartments: n.compartments }),
+    }, ruler);
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
@@ -587,9 +672,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
         const upperFirst = it.a === p;
         const top = bandStart[it.band] ?? 0;
         const bottom = top + (bandSize[it.band] ?? 0);
-        const seg: Point[] = [order(it.xa, top)];
+        const seg: Point[] = [order(it.xa, faceAt(it.a, 'down', top))];
         if (it.track >= 0) seg.push(order(it.xa, trackY(it)), order(it.xb, trackY(it)));
-        seg.push(order(it.xb, bottom));
+        seg.push(order(it.xb, faceAt(it.b, 'up', bottom)));
         pts.push(...(upperFirst ? seg : seg.reverse()));
       });
     } else if (c.kind === 'flat') {
@@ -599,13 +684,20 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
         const layer = l.nodes[lo]?.layer ?? 0;
         const h = thick[layer] ?? 0;
         // A terminal box with two middle lines takes a lone edge on the upper one.
-        const at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
+        let at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
+        if (!ruler.uniform && boxLayer.has(layer)) {
+          // Both boxes meet the line: it runs through the part of the layer that both of them cover.
+          const [u, v] = [own(lo), own(hi)];
+          const from = Math.max(u.off, v.off);
+          const to = Math.min(u.off + u.ext, v.off + v.ext);
+          at = (layerStart[layer] ?? 0) + from + (to - from) * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5);
+        }
         pts.push(order(nodeO(lo) + len(lo), at), order(nodeO(hi), at));
       } else {
         const it = mine[0];
         if (it) {
           const edge = bound(it, it.aSide);
-          pts.push(order(it.xa, edge), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, edge));
+          pts.push(order(it.xa, faceAt(it.a, it.aSide, edge)), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, faceAt(it.b, it.bSide, edge)));
         }
       }
       if (c.reversed) pts.reverse();
@@ -613,14 +705,16 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       const it = mine[0];
       if (it) {
         const edge = bound(it, 'up');
-        pts.push(order(it.xa, edge), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, edge));
+        pts.push(order(it.xa, faceAt(it.a, 'up', edge)), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, faceAt(it.b, 'up', edge)));
       }
     }
     raw.push(pts);
-    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
+    edges.push({ from: e.from, to: e.to, style: e.style, ...endFields(e), points: simplify(pts), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });
 
   if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });
+
+  const vertices = settleVertices(edges, nodes, ruler, portStep(f.unit, ruler));
 
   // Labels. A terminal label never starts before the first cell.
   const obstacles: Rect[] = ruler.uniform ? [...rects, td ? { x: -1000, y: -1000, w: 3000, h: 1000 } : { x: -1000, y: -1000, w: 1000, h: 3000 }] : rects;
@@ -683,7 +777,12 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
 
   if (!ruler.uniform) diagnostics.push(...tightLabels(edges), ...offCentreEnds({ nodes, edges }));
-  diagnostics.push(...crossings(edges));
+  diagnostics.push(...crossings(edges), ...vertices.diagnostics);
+  // Shapes of a fixed size shrink to their own boxes; the small texts at the ends of lines then find their places.
+  const drawn = settleBodies(nodes, edges, td, ruler);
+  if (graph.edges.some((e) => e.startLabel !== undefined || e.endLabel !== undefined)) {
+    diagnostics.push(...placeEndLabels(edges, l.chains.map((c) => graph.edges[c.edge]).map((e) => (e === undefined ? undefined : { start: e.startLabel, end: e.endLabel })), drawn, ruler));
+  }
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));
   const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);
@@ -716,7 +815,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
   const whole = (v: number): number => (ruler.uniform ? Math.ceil(v - EPS) : v);
   const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
-  const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
+  const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes: drawn, edges, diagnostics };
   void raw;
   return { layout, failed: failed.map((ei) => ei), failedBand };
 }

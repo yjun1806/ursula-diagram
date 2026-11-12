@@ -41,12 +41,25 @@ export function sideOfPoint(node: LayoutNode, p: Point): BoxSide {
 }
 
 /**
+ * How the partner stands against the node along the axis across the layers: 0 when their ranges overlap, 1 or -1 when the
+ * partner lies wholly to one side. An edge to a partner that stands clear of the node may leave through the node's side.
+ */
+function clearSide(node: LayoutNode, other: LayoutNode, td: boolean): number {
+  const [n0, n1, o0, o1] = td ? [node.y, node.y + node.h, other.y, other.y + other.h] : [node.x, node.x + node.w, other.x, other.x + other.w];
+  if (o0 >= n1 - 1e-6) return 1;
+  if (o1 <= n0 + 1e-6) return -1;
+  return 0;
+}
+
+/**
  * Edge ends that break the rule that edges leaving or arriving the same way at a node use the same side: among the
- * ends of a node that look the same way (two or more), every end that is not on that way's side.
+ * ends of a node that look the same way (two or more), every end that is not on that way's side. Partners that stand wholly
+ * to one side of the node look another way than partners that overlap it, and each such side is a way of its own; the
+ * ends of such a way may use any one face, as long as they use the same one.
  */
 export function mixedSideEnds(l: Pick<Layout, 'nodes' | 'edges'>, d: Directions): Diagnostic[] {
   const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
-  const groups = new Map<string, Array<{ actual: BoxSide; edge: string }>>();
+  const groups = new Map<string, { id: string; side: BoxSide; clear: number; ends: Array<{ actual: BoxSide; edge: string }> }>();
   for (const e of l.edges) {
     const a = byId.get(e.from);
     const b = byId.get(e.to);
@@ -54,14 +67,21 @@ export function mixedSideEnds(l: Pick<Layout, 'nodes' | 'edges'>, d: Directions)
     const last = e.points[e.points.length - 1];
     if (!a || !b || a === b || !first || !last) continue;
     for (const [node, other, p] of [[a, b, first], [b, a, last]] as const) {
-      const key = `${node.id}|${designatedSide(node, other, d)}`;
-      groups.set(key, [...(groups.get(key) ?? []), { actual: sideOfPoint(node, p), edge: `${e.from} -> ${e.to}` }]);
+      const side = designatedSide(node, other, d);
+      const clear = clearSide(node, other, d.td);
+      const key = `${node.id}|${side}|${clear}`;
+      const group = groups.get(key) ?? { id: node.id, side, clear, ends: [] };
+      groups.set(key, { ...group, ends: [...group.ends, { actual: sideOfPoint(node, p), edge: `${e.from} -> ${e.to}` }] });
     }
   }
+  const sides: BoxSide[] = ['left', 'right', 'top', 'bottom'];
   const out: Diagnostic[] = [];
-  for (const [key, ends] of groups) {
+  for (const { id, side: designated, clear, ends } of groups.values()) {
     if (ends.length < 2) continue;
-    const [id, side] = key.split('|') as [string, BoxSide];
+    // Ends of a way that partners standing clear of the node look: the face most of them use, the designated one on a tie.
+    const used = (s: BoxSide): number => ends.filter((end) => end.actual === s).length;
+    const common = sides.reduce((best, s) => (used(s) > used(best) ? s : best), designated);
+    const side = clear === 0 ? designated : used(designated) >= used(common) ? designated : common;
     for (const end of ends) {
       if (end.actual !== side) out.push({ kind: 'mixed-side', nodes: [id], message: `The end of ${end.edge} at ${id} is on the ${end.actual}, but other edges that look the same way use the ${side}.` });
     }
