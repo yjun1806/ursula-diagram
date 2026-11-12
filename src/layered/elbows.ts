@@ -69,7 +69,16 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
     const candidates: Array<{ path: Point[]; side: Point }> = [];
     // Positions on a side of a box along the layer axis, most wanted first. A terminal box has one port per text line
     // (per cell on a side that runs across the lines); the title line is the last choice, since a flat edge between neighbours uses the middle.
-    const ports = (b: Box, toward: number, from: number): number[] => {
+    // A side no other edge ends on takes the edge at its centre (the left or upper cell where two share the middle).
+    const sole = (node: LayoutNode, border: number): boolean =>
+      !edges.some((e, i) => i !== index && [e.points[0], e.points[e.points.length - 1]].some((q) => {
+        if (!q) return false;
+        const a = abstract(q);
+        const b = box(node);
+        return Math.abs(a.o - border) < EPS && a.l >= b.l0 - EPS && a.l <= b.l1 + EPS;
+      }));
+    const ports = (b: Box, toward: number, from: number, alone: boolean): number[] => {
+      if (alone) return [ruler.uniform ? b.l0 + Math.floor((b.l1 - b.l0 - 1) / 2) + 0.5 : (b.l0 + b.l1) / 2];
       if (!ruler.uniform) return [b.l0 + (b.l1 - b.l0) * (toward > from ? 0.75 : 0.25)];
       const cells = Array.from({ length: Math.max(0, Math.floor(b.l1 - b.l0) - 2) }, (_, k) => b.l0 + 1 + k + 0.5);
       const ordered = td ? cells.sort((x, y) => Math.abs(x - (b.l0 + (b.l1 - b.l0) * (toward > from ? 0.75 : 0.25))) - Math.abs(y - (b.l0 + (b.l1 - b.l0) * (toward > from ? 0.75 : 0.25)))) : toward > from ? [...cells.slice(1)].reverse().concat(cells.slice(0, 1)) : [...cells.slice(1), ...cells.slice(0, 1)];
@@ -77,14 +86,14 @@ export function useElbows(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler
     };
     // Out of the side of the first box.
     if (p2.o > bu.o1 + EPS || p2.o < bu.o0 - EPS) {
-      for (const ls of ports(bu, p3.l, p0.l)) {
+      for (const ls of ports(bu, p3.l, p0.l, sole(u, p2.o > bu.o1 ? bu.o1 : bu.o0))) {
         const path = [phys(p2.o > bu.o1 ? bu.o1 : bu.o0, ls), phys(p2.o, ls), phys(p3.o, p3.l)];
         candidates.push({ path, side: path[0] as Point });
       }
     }
     // Into the side of the second box.
     if (p0.o > bv.o1 + EPS || p0.o < bv.o0 - EPS) {
-      for (const lt of ports(bv, p0.l, p3.l)) {
+      for (const lt of ports(bv, p0.l, p3.l, sole(v, p0.o > bv.o1 ? bv.o1 : bv.o0))) {
         const path = [phys(p0.o, p0.l), phys(p0.o, lt), phys(p0.o > bv.o1 ? bv.o1 : bv.o0, lt)];
         candidates.push({ path, side: path[2] as Point });
       }

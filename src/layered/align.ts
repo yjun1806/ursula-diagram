@@ -52,6 +52,7 @@ function direction(
   sepOf: (left: number, right: number) => number,
   downward: boolean,
   leftward: boolean,
+  centredLink: (upper: number, lower: number) => boolean = () => false,
 ): number[] {
   const count = layers.length;
   const seq = Array.from({ length: count }, (_, i) => (downward ? i : count - 1 - i));
@@ -60,6 +61,10 @@ function direction(
   rowsT.forEach((r) => r.forEach((n, k) => (pos[n] = k)));
   const root = l.nodes.map((n) => n.idx);
   const aligned = l.nodes.map((n) => n.idx);
+  // Boxes that join through a side with that edge only are centred on one another, the rest keep their left edges together.
+  const wide = (v: number): number => (v < l.realCount ? (l.nodes[v]?.units ?? 2) : 2);
+  const pred = new Array<number>(l.nodes.length).fill(-1);
+  const rel = new Array<number>(l.nodes.length).fill(0);
   for (let s = 1; s < count; s++) {
     let reach = -1;
     for (const v of rowsT[seq[s] as number] ?? []) {
@@ -74,6 +79,9 @@ function direction(
         const key = downward ? `${u}|${v}` : `${v}|${u}`;
         if (marked.has(key) || reach >= (pos[u] ?? 0)) continue;
         aligned[u] = v;
+        pred[v] = u;
+        const [upper, lower] = downward ? [u, v] : [v, u];
+        if (centredLink(upper, lower)) rel[v] = (wide(u) - wide(v)) / 2;
         root[v] = root[u] as number;
         aligned[v] = root[v] as number;
         reach = pos[u] ?? 0;
@@ -85,6 +93,19 @@ function direction(
   for (const n of l.nodes) members.set(root[n.idx] as number, [...(members.get(root[n.idx] as number) ?? []), n.idx]);
   const placed = new Map<number, number>();
   const active = new Set<number>();
+  // Offset of a member from the start of its block: through the chain of links, then shifted so the least is zero.
+  const raw = new Map<number, number>();
+  const rawOff = (v: number): number => {
+    const known = raw.get(v);
+    if (known !== undefined) return known;
+    const u = pred[v] ?? -1;
+    const o = u < 0 || root[u] !== root[v] ? 0 : rawOff(u) + (rel[v] ?? 0);
+    raw.set(v, o);
+    return o;
+  };
+  const least = new Map<number, number>();
+  for (const [r, vs] of members) least.set(r, Math.min(...vs.map(rawOff)));
+  const off = (v: number): number => rawOff(v) - (least.get(root[v] as number) ?? 0);
   const place = (r: number): number => {
     const known = placed.get(r);
     if (known !== undefined) return known;
@@ -97,14 +118,14 @@ function direction(
       const p = row[k - 1];
       if (p === undefined) continue;
       const sep = leftward ? sepOf(p, v) : (l.nodes[p]?.units ?? 2) - (l.nodes[v]?.units ?? 2) + sepOf(v, p);
-      at = Math.max(at, place(root[p] as number) + sep);
+      at = Math.max(at, place(root[p] as number) + off(p) + sep - off(v));
     }
     active.delete(r);
     placed.set(r, at);
     return at;
   };
   const out = new Array<number>(l.nodes.length).fill(0);
-  for (const n of l.nodes) out[n.idx] = place(root[n.idx] as number);
+  for (const n of l.nodes) out[n.idx] = place(root[n.idx] as number) + off(n.idx);
   if (leftward) return out;
   const width = Math.max(0, ...l.nodes.map((n) => (out[n.idx] ?? 0) + n.units));
   return l.nodes.map((n) => width - ((out[n.idx] ?? 0) + n.units));
@@ -116,6 +137,8 @@ export interface PortGeometry {
   reach: (units: number) => number;
   /** Two boxes count as straight only when their centres are on one line (a terminal keeps boxes of a column centred). */
   centred?: boolean;
+  /** Pixels: how far from its centre a box side may hold a port that another box's centre sets (clear of the corners), in units. */
+  inner?: (units: number) => number;
 }
 
 /** The pixel ruler's geometry, used when the caller gives none. */
@@ -131,6 +154,8 @@ export interface AlignOptions {
   lines?: number;
   /** Nodes of the main flow: when two arrangements are equally straight, the one that keeps more edges at them straight wins. */
   main?: ReadonlySet<number>;
+  /** Real nodes whose side (`down` toward the next layer, `up` toward the previous) has this one edge only: the edge is at the centre. */
+  single?: (node: number, side: 'up' | 'down') => boolean;
   /** Units a dummy at the end of a layer needs beyond its own slot to stay inside the limit (0 or 1). */
   dummyShift?: number;
 }
@@ -173,9 +198,18 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     if (!real(a) && !real(b)) return Math.abs(ca - cb) < EPS;
     if (!real(a) || !real(b)) {
       const [r, d] = real(a) ? [a, cb] : [b, ca];
-      return Math.abs(d - centre(r, real(a) ? sa : sb)) <= geom.reach(unitsOf(r)) + EPS;
+      const reach = opts.single?.(r, real(a) ? 'down' : 'up') ? 0 : geom.reach(unitsOf(r));
+      return Math.abs(d - centre(r, real(a) ? sa : sb)) <= reach + EPS;
     }
     if (geom.centred) return Math.abs(ca - cb) < EPS;
+    // A box whose side holds this edge only has it at the centre: both only, the centres agree; one only, its centre is clear of the other's corners.
+    const oneA = opts.single?.(a, 'down') === true;
+    const oneB = opts.single?.(b, 'up') === true;
+    if (oneA && oneB) return Math.abs(ca - cb) < EPS;
+    if (oneA || oneB) {
+      const inner = geom.inner?.(unitsOf(oneA ? b : a)) ?? geom.reach(unitsOf(oneA ? b : a));
+      return Math.abs(ca - cb) <= inner + EPS;
+    }
     const lo = Math.max(ca - geom.reach(unitsOf(a)), cb - geom.reach(unitsOf(b)));
     const hi = Math.min(ca + geom.reach(unitsOf(a)), cb + geom.reach(unitsOf(b)));
     return Math.ceil(lo * geom.steps - EPS) <= Math.floor(hi * geom.steps + EPS);
@@ -189,7 +223,7 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
   const candidates: number[][] = [];
   for (const downward of [true, false]) {
     for (const leftward of [true, false]) {
-      const raw = direction(l, layers, view, marked, sep, downward, leftward);
+      const raw = direction(l, layers, view, marked, sep, downward, leftward, (upper, lower) => opts.single?.(upper, 'down') === true || opts.single?.(lower, 'up') === true);
       const low = Math.min(...raw);
       candidates.push(raw.map((x) => x - low));
     }
@@ -357,5 +391,8 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     const lowest = Math.min(...start);
     if (lowest < 0) for (let i = 0; i < start.length; i++) start[i] = (start[i] ?? 0) - lowest;
   }
+  // Moves may leave the whole drawing a unit or more from the edge.
+  const low = Math.min(...start);
+  if (low > 0) for (let i = 0; i < start.length; i++) start[i] = (start[i] ?? 0) - low;
   return { start, width: endOf(start) };
 }

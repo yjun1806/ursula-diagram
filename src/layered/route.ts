@@ -8,6 +8,7 @@ import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import type { FlatPlan } from './ports.ts';
+import { offCentreEnds } from './centre.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from './ports.ts';
 
@@ -33,6 +34,10 @@ export interface Frame {
 }
 
 const EPS = 1e-6;
+
+/** Pixels: a port set at the centre of the other box keeps this far from the corners of its own box, and from its other ports. */
+export const CORNER_CLEAR = 12;
+const PORT_APART = 8;
 
 /** Space kept free at the outer edge of the drawing: none in a terminal, where an empty cell is lost width. */
 export const marginOf = (ruler: Ruler): number => (ruler.uniform ? 0 : gridUp(ruler, ruler.trackGap));
@@ -175,7 +180,9 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const { ruler, unit, gap } = f;
   const margin = marginOf(ruler);
   const origin = margin + f.gutter + ruler.lanePad;
-  const nodeO = (n: number): number => origin + (start[n] ?? 0) * unit;
+  // A drawing never starts further than its margin from the edge, whatever the placement before it left.
+  const first = Math.min(...start);
+  const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit;
   const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const real = (n: number): boolean => n < l.realCount;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
@@ -224,19 +231,51 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     set.add(rk(x));
     taken.set(k, set);
   };
+  // Ports off the lattice (set at the centre of the box a straight edge comes from) keep the lattice ports within eight pixels away.
+  const custom = new Map<string, number[]>();
   const free = (n: number, side: Side): number[] => {
     const set = taken.get(key(n, side));
-    return portOffsets(len(n), step).map((o) => nodeO(n) + o).filter((x) => !set?.has(rk(x)));
+    const near = custom.get(key(n, side)) ?? [];
+    return portOffsets(len(n), step)
+      .map((o) => nodeO(n) + o)
+      .filter((x) => !set?.has(rk(x)) && !near.some((c) => Math.abs(c - x) < PORT_APART - EPS));
   };
+  // A side that only one edge touches takes it at the centre; where the side has two cells at the centre, the left or upper one.
+  const sideCount = new Map<string, number>();
+  for (const e of ends) sideCount.set(key(e.node, e.side), (sideCount.get(key(e.node, e.side)) ?? 0) + 1);
+  const single = (n: number, side: Side): boolean => sideCount.get(key(n, side)) === 1;
+  const portCentre = (n: number): number => centre(n) - (ruler.uniform && len(n) % 2 === 0 ? 0.5 : 0);
   const setX = (it: Item, which: 'a' | 'b', x: number): void => {
     if (which === 'a') it.xa = x;
     else it.xb = x;
   };
   const done = (e: End): boolean => !Number.isNaN(e.which === 'a' ? e.item.xa : e.item.xb);
 
-  // Pieces between two boxes that share a port go straight on it.
+  // Pieces between two boxes that share a port go straight on it. In pixels a box with only this edge on its side has
+  // it at the centre, so two such boxes go straight only when their centres agree; a box with several edges on its side
+  // puts its port at the centre of the other box when that lies clear of its corners and of its other ports.
   for (const it of items) {
-    if (it.kind !== 'piece' || !real(it.a) || !real(it.b)) continue;
+    if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || ruler.uniform) continue;
+    const sa = single(it.a, 'down');
+    const sb = single(it.b, 'up');
+    if (!sa && !sb) continue;
+    const [one, many, manySide] = sa ? [it.a, it.b, 'up' as const] : [it.b, it.a, 'down' as const];
+    let x: number | undefined;
+    if (sa && sb) x = Math.abs(centre(it.a) - centre(it.b)) < EPS ? centre(it.a) : undefined;
+    else {
+      const c = centre(one);
+      const near = [...(taken.get(key(many, manySide)) ?? [])].some((t) => Math.abs(t / 1000 - c) < PORT_APART - EPS);
+      x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near ? c : undefined;
+      if (x !== undefined) custom.set(key(many, manySide), [...(custom.get(key(many, manySide)) ?? []), x]);
+    }
+    if (x === undefined) continue;
+    it.xa = it.xb = x;
+    mark(it.a, 'down', x);
+    mark(it.b, 'up', x);
+  }
+  for (const it of items) {
+    if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
+    if (!ruler.uniform && (single(it.a, 'down') || single(it.b, 'up'))) continue;
     const fb = free(it.b, 'up');
     // A terminal keeps boxes of one column centred: only two boxes with the same centre are joined by a straight line.
     if (ruler.uniform && Math.abs(centre(it.a) - centre(it.b)) > EPS) continue;
@@ -251,7 +290,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   }
   // A piece whose other end is a dummy line takes that line when the box has a free port there.
   for (const e of ends) {
-    if (done(e) || e.item.kind !== 'piece' || real(e.other)) continue;
+    if (done(e) || e.item.kind !== 'piece' || real(e.other) || single(e.node, e.side)) continue;
     const x = centre(e.other);
     if (free(e.node, e.side).some((p) => Math.abs(p - x) < EPS)) {
       setX(e.item, e.which, x);
@@ -294,6 +333,10 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
         mark(first.node, first.side, x);
       });
     };
+    if (group.length === 1) {
+      assign(loose, [portCentre(first.node)]);
+      continue;
+    }
     if (fixed.length === 0) {
       assign(loose, pickPorts(free(first.node, first.side), loose.length, centre(first.node)));
       continue;
@@ -336,7 +379,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       const { specs } = specsOf(members);
       for (const [p, q] of hardPairs(specs)) {
         const pair = [items[specs[p]?.order ?? 0], items[specs[q]?.order ?? 0]];
-        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS);
+        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS && !single(e.node, e.side));
         for (const e of candidates) {
           const now = e.which === 'a' ? e.item.xa : e.item.xb;
           const others = free(e.node, e.side).filter((x) => Math.abs(x - now) > EPS).sort((x, y) => Math.abs(x - now) - Math.abs(y - now));
@@ -549,7 +592,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       const [lo, hi] = c.reversed ? [c.nodes[1] as number, c.nodes[0] as number] : [c.nodes[0] as number, c.nodes[1] as number];
       if (p?.mode === 'straight') {
         const layer = l.nodes[lo]?.layer ?? 0;
-        const at = (layerStart[layer] ?? 0) + (thick[layer] ?? 0) * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5);
+        const h = thick[layer] ?? 0;
+        // A terminal box with two middle lines takes a lone edge on the upper one.
+        const at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
         pts.push(order(nodeO(lo) + len(lo), at), order(nodeO(hi), at));
       } else {
         const it = mine[0];
@@ -632,7 +677,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     }
   });
 
-  if (!ruler.uniform) diagnostics.push(...tightLabels(edges));
+  if (!ruler.uniform) diagnostics.push(...tightLabels(edges), ...offCentreEnds({ nodes, edges }));
   diagnostics.push(...crossings(edges));
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));

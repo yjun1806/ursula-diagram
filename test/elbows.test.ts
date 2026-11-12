@@ -10,17 +10,17 @@ const u = node('u', 0, 0);
 const v = node('v', 200, 100);
 
 describe('one-bend edges', () => {
-  it('leaves through the side of the first box when the way is free', () => {
+  it('leaves through the middle of the side of the first box when the way is free and no other edge ends there', () => {
     const edges = [jog()];
     expect(useElbows(edges, [u, v], pixelRuler(), false)).toBe(1);
-    expect(edges[0]?.points).toEqual([{ x: 40, y: 30 }, { x: 220, y: 30 }, { x: 220, y: 100 }]);
+    expect(edges[0]?.points).toEqual([{ x: 40, y: 20 }, { x: 220, y: 20 }, { x: 220, y: 100 }]);
     expect(edges[0]?.elbow).toBe(true);
   });
 
   it('enters through the side of the second box when a box stands in the way of the first shape', () => {
     const edges = [jog()];
     expect(useElbows(edges, [u, v, node('w', 100, 10)], pixelRuler(), false)).toBe(1);
-    expect(edges[0]?.points).toEqual([{ x: 20, y: 40 }, { x: 20, y: 110 }, { x: 200, y: 110 }]);
+    expect(edges[0]?.points).toEqual([{ x: 20, y: 40 }, { x: 20, y: 120 }, { x: 200, y: 120 }]);
   });
 
   it('keeps the jog when both shapes are blocked, a port is shared, or the ruler has one side port', () => {
@@ -38,7 +38,7 @@ describe('one-bend edges', () => {
     const edge: LayoutEdge = { from: 'u', to: 'v', style: 'normal', points: [{ x: 40, y: 20 }, { x: 70, y: 20 }, { x: 70, y: 220 }, { x: 100, y: 220 }] };
     const edges = [edge];
     expect(useElbows(edges, [node('u', 0, 0), node('v', 100, 200)], pixelRuler(), true)).toBe(1);
-    expect(edges[0]?.points).toEqual([{ x: 30, y: 40 }, { x: 30, y: 220 }, { x: 100, y: 220 }]);
+    expect(edges[0]?.points).toEqual([{ x: 20, y: 40 }, { x: 20, y: 220 }, { x: 100, y: 220 }]);
   });
 
   it('can be switched off and keeps every drawing valid', () => {

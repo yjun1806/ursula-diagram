@@ -14,7 +14,7 @@ import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
 import type { Frame } from './route.ts';
-import { route } from './route.ts';
+import { CORNER_CLEAR, route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
 import { planZones } from './composition.ts';
@@ -76,7 +76,7 @@ function labelExtra(graph: Graph, ladder: Ladder, plan: Map<number, FlatPlan>, r
 
 function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
   const step = portStep(unit, ruler);
-  return { steps: Math.max(1, Math.round(unit / step)), ...(ruler.uniform ? { centred: true } : {}), reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit };
+  return { steps: Math.max(1, Math.round(unit / step)), ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit }), reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit };
 }
 
 /**
@@ -140,7 +140,8 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     for (const node of ladder.nodes) if (node.idx < ladder.realCount) node.units = units[node.idx] ?? 2;
     const plan = planFlat(ladder, layers, ruler);
     growForPorts(ladder, plan, unit, gap, portStep(unit, ruler));
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main) });
+    const need = portDemand(ladder, plan);
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1 });
     return {
       ladder,
       layers,
