@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Layout } from '../src/types.ts';
 
-// The layouts `route` makes while 500 seeded graphs are drawn are collected, and scored by the new and the old code.
-const seen = vi.hoisted(() => ({ layouts: [] as Layout[] }));
+// Every layout `route` makes while 500 seeded graphs are drawn is scored by the new and the old code the moment it is
+// made, and dropped: holding them all outgrows the default heap. Only a count and the first few mismatches are kept.
+const seen = vi.hoisted(() => ({ calls: 0, check: undefined as ((l: Layout) => void) | undefined }));
 
 vi.mock('../src/layered/route.ts', async (original) => {
   const real = await original<typeof import('../src/layered/route.ts')>();
@@ -10,7 +11,8 @@ vi.mock('../src/layered/route.ts', async (original) => {
     ...real,
     route: (...args: Parameters<typeof real.route>): Layout => {
       const layout = real.route(...args);
-      seen.layouts.push(layout);
+      seen.calls++;
+      seen.check?.(layout);
       return layout;
     },
   };
@@ -80,31 +82,49 @@ function shaken(l: Layout, rnd: () => number): Layout {
 
 describe('choose.ts, sides.ts, centre.ts and check.ts on shared segments give what they gave before', () => {
   it('scores the drawings of 500 seeded graphs, and shaken copies of them, the same', () => {
-    for (let seed = 1; seed <= 500; seed++) {
-      const src = generate(seed);
-      render(src);
-      renderText(src, 80);
-      renderText(src, 120);
-    }
-    expect(seen.layouts.length).toBeGreaterThan(1000);
     const rnd = prng(99);
     let invalid = 0;
-    seen.layouts.forEach((l, i) => {
+    let seed = 0;
+    let mismatches = 0;
+    const first: string[] = [];
+    seen.check = (l) => {
+      const i = seen.calls - 1;
       const subjects = [l, shaken(l, rnd), shaken(l, rnd)];
       subjects.forEach((s, k) => {
-        const tag = [i, k];
         const a = fresh.violations(s);
         if (a > 0) invalid++;
-        expect([tag, a]).toEqual([tag, old.violations(s)]);
-        expect([tag, fresh.crossingsOf(s)]).toEqual([tag, old.crossingsOf(s)]);
-        expect([tag, fresh.score(s)]).toEqual([tag, old.score(s)]);
-        expect([tag, fresh.offCentre(s)]).toEqual([tag, old.offCentre(s)]);
-        expect([tag, freshSides.mixedSideEnds(s, freshSides.directionsOf(s))]).toEqual([tag, oldSides.mixedSideEnds(s, oldSides.directionsOf(s))]);
-        expect([tag, freshCentre.offCentreEnds(s)]).toEqual([tag, oldCentre.offCentreEnds(s)]);
-        expect([tag, freshCheck.crossings(s.edges)]).toEqual([tag, oldCheck.crossings(s.edges)]);
-        expect([tag, freshCheck.crossingCount(s.edges)]).toEqual([tag, oldCheck.crossingCount(s.edges)]);
+        const pairs: Array<[string, unknown, unknown]> = [
+          ['violations', a, old.violations(s)],
+          ['crossingsOf', fresh.crossingsOf(s), old.crossingsOf(s)],
+          ['score', fresh.score(s), old.score(s)],
+          ['offCentre', fresh.offCentre(s), old.offCentre(s)],
+          ['mixedSideEnds', freshSides.mixedSideEnds(s, freshSides.directionsOf(s)), oldSides.mixedSideEnds(s, oldSides.directionsOf(s))],
+          ['offCentreEnds', freshCentre.offCentreEnds(s), oldCentre.offCentreEnds(s)],
+          ['crossings', freshCheck.crossings(s.edges), oldCheck.crossings(s.edges)],
+          ['crossingCount', freshCheck.crossingCount(s.edges), oldCheck.crossingCount(s.edges)],
+        ];
+        for (const [name, x, y] of pairs) {
+          try {
+            expect(x).toEqual(y);
+          } catch {
+            mismatches++;
+            if (first.length < 5) first.push(`seed ${seed} layout ${i} copy ${k} ${name}: new ${JSON.stringify(x).slice(0, 200)} old ${JSON.stringify(y).slice(0, 200)}`);
+          }
+        }
       });
-    });
+    };
+    try {
+      for (seed = 1; seed <= 500; seed++) {
+        const src = generate(seed);
+        render(src);
+        renderText(src, 80);
+        renderText(src, 120);
+      }
+    } finally {
+      seen.check = undefined;
+    }
+    expect(seen.calls).toBeGreaterThan(1000);
+    expect({ mismatches, first }).toEqual({ mismatches: 0, first: [] });
     // The shaken copies must reach the branches of the checks, or the comparison says little.
     expect(invalid).toBeGreaterThan(500);
   }, 600_000);
