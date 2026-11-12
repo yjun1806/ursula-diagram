@@ -19,6 +19,9 @@ export interface PortGeometry {
   centred?: boolean;
   /** Pixels: how far from its centre a box side may hold a port that another box's centre sets (clear of the corners), in units. */
   inner?: (units: number) => number;
+  /** The same two limits for a box of a given length in pixels, when the box is shorter than its slot. */
+  reachFor?: (length: number) => number;
+  innerFor?: (length: number) => number;
 }
 
 /** The pixel ruler's geometry, used when the caller gives none. */
@@ -28,6 +31,8 @@ export interface AlignOptions {
   /** Units a layer may hold; the result only exceeds it when no arrangement fits. */
   limit?: number;
   ports?: PortGeometry;
+  /** The length in pixels of a node that is shorter than its slot. */
+  body?: (n: number) => number | undefined;
   /** Last resort: nodes that stick out of the limit give up their alignment. */
   squeeze?: boolean;
   /** Pass-through lines that may share one gap, drawn side by side (1 when the gap has no room for more). */
@@ -81,6 +86,11 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
     reachOf[n] = n < realCount ? (unitsOf[n] as number) : 1 + (opts.dummyShift ?? 1);
     portReach[n] = geom.reach(unitsOf[n] as number);
     portInner[n] = geom.inner?.(unitsOf[n] as number) ?? (portReach[n] as number);
+    const own = n < realCount ? opts.body?.(n) : undefined;
+    if (own !== undefined && geom.reachFor !== undefined) {
+      portReach[n] = Math.min(portReach[n] as number, geom.reachFor(own));
+      portInner[n] = Math.min(portInner[n] as number, geom.innerFor?.(own) ?? (portReach[n] as number));
+    }
     layerOf[n] = l.nodes[n]?.layer ?? 0;
     singleDown[n] = opts.single?.(n, 'down') === true ? 1 : 0;
     singleUp[n] = opts.single?.(n, 'up') === true ? 1 : 0;

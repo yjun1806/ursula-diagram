@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout } from '../src/index.ts';
+import { recordHeight } from '../src/layout/records.ts';
 import { layout, parse, pixelRuler, render, selectFrontEnd } from '../src/index.ts';
 
 const ruler = pixelRuler();
@@ -59,5 +60,15 @@ describe('boxes with compartments keep their own height', () => {
     const at = new Map(l.nodes.map((n) => [n.id, n] as const));
     expect(at.get('A')?.y).toBe(at.get('B')?.y);
     expect(at.get('A')?.h).toBeGreaterThan(at.get('B')?.h ?? Infinity);
+  });
+});
+
+describe('boxes in a column of a left-to-right drawing', () => {
+  it('are exactly as tall as their compartments, with none left over', () => {
+    const src = 'erDiagram\n  A ||--o{ B : has\n  A {\n    string id\n  }\n  B {\n    string id\n    string name\n    string note\n  }';
+    const l = selectFrontEnd(src).json(src, 'svg', {}) as Layout;
+    for (const n of l.nodes) expect(n.h).toBe(recordHeight(n.compartments ?? [], ruler));
+    const at = new Map(l.nodes.map((n) => [n.id, n] as const));
+    expect(at.get('A')?.x).toBeLessThan(at.get('B')?.x ?? 0);
   });
 });

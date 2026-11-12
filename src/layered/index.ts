@@ -1,6 +1,7 @@
 import { tightPasses } from './clearance.ts';
 import type { Ruler } from '../metrics.ts';
 import { gridUp, measureNodes } from '../layout/place.ts';
+import { hasCompartments, ownSize } from '../layout/records.ts';
 import type { LegendOption } from '../layout/legend.ts';
 import { withLegend } from '../layout/legend.ts';
 import type { Diagnostic, Graph, Layout } from '../types.ts';
@@ -10,7 +11,7 @@ import { buildLadder } from './dummies.ts';
 import type { Ladder, Placed } from './model.ts';
 import type { Rows } from './rows.ts';
 import { orderLayers } from './order.ts';
-import { boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
+import { bodyLength, boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
@@ -90,7 +91,20 @@ function labelExtra(graph: Graph, ladder: Ladder, plan: Map<number, FlatPlan>, r
 
 function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
   const step = portStep(unit, ruler);
-  return { steps: Math.max(1, Math.round(unit / step)), ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit }), reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit };
+  return {
+    steps: Math.max(1, Math.round(unit / step)),
+    ...(ruler.uniform ? { centred: true } : { inner: (units: number) => (boxLength(units, unit, gap) / 2 - CORNER_CLEAR) / unit, innerFor: (length: number) => (length / 2 - CORNER_CLEAR) / unit }),
+    reach: (units) => (boxLength(units, unit, gap) / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit,
+    reachFor: (length) => (length / 2 - step / 2 - (step <= 1 ? 1 : 0)) / unit,
+  };
+}
+
+/**
+ * The own length along the order axis of every box divided into compartments in a drawing whose layers are columns
+ * (pixels): such a box keeps its height and stands in the middle of its slot instead of filling it.
+ */
+function bodyLengths(graph: Graph, ruler: Ruler, td: boolean): Array<number | undefined> {
+  return graph.nodes.map((n) => (td && !ruler.uniform && hasCompartments(n) ? ownSize(n, td, ruler)?.h : undefined));
 }
 
 /** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
@@ -166,6 +180,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     degreeOf[b] = (degreeOf[b] ?? 0) + 1;
   }
   const shapes = graph.nodes.map((n) => n.shape);
+  const bodies = bodyLengths(graph, ruler, td);
   const across = stadiumThickness(graph, ruler, td);
   const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
@@ -177,7 +192,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     const plan = planFlat(ladder, layers, ruler);
     growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across);
     const need = portDemand(ladder, plan);
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), body: (n) => { const own = bodies[n]; return own === undefined ? undefined : bodyLength(own, boxLength(ladder.nodes[n]?.units ?? 2, unit, gap)); }, squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
     return {
       ladder,
       layers,
@@ -210,7 +225,7 @@ function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact
   // A box given from outside is as long as its size needs along the reading direction and as thick as it is across.
   const baseUnits = graph.nodes.map((n, i) => (td ? (n.box === undefined ? 2 : unitsOf(m.h[i] ?? 0, m.contentH, m.unit, ruler.rankGap, compact)) : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
   const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? (m.h[i] ?? m.contentH) : Math.max(m.contentH, m.h[i] ?? 0)));
-  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, ...(limit === undefined ? {} : { limit }) };
+  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, bodyLen: bodyLengths(graph, ruler, td), ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
 }
 

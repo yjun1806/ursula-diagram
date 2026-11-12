@@ -429,7 +429,17 @@ export function spreadWins(spread: Layout, usual: Layout, room: { width: number;
   // The spread drawing is laid out turned a quarter, so a shape whose body depends on the reading direction would stand the wrong way.
   const turns = spread.nodes.some((n) => n.shape === 'bar' || n.shape === 'ellipse');
   const noted = (l: Layout, kind: Diagnostic['kind']): number => l.diagnostics.filter((d) => d.kind === kind).length;
-  const cleaner = (['crossing', 'mixed-side', 'shared-port', 'label-overlap'] as const).every((k) => noted(spread, k) <= noted(usual, k));
+  // The lines of the spread drawing run no further against the reading direction than the ones of the usual drawing.
+  const backRun = (l: Layout): number => {
+    const axis = l.direction === 'TD' ? 'y' : 'x';
+    let run = 0;
+    for (const e of l.edges) {
+      if (e.invisible) continue;
+      for (let i = 1; i < e.points.length; i++) run += Math.max(0, (e.points[i - 1] as Point)[axis] - (e.points[i] as Point)[axis]);
+    }
+    return run;
+  };
+  const cleaner = backRun(spread) <= backRun(usual) + EPS && (['crossing', 'mixed-side', 'shared-port', 'label-overlap'] as const).every((k) => noted(spread, k) <= noted(usual, k));
   if (unfolding && folds(usual) && !folds(spread) && !turns && cleaner && affordable && spread.width <= room.width && spread.height <= room.height && violations(spread) <= violations(usual)) return true;
   const [b, c, s] = [bendsOf(spread) - bendsOf(usual), crossingsRecorded(spread) - crossingsRecorded(usual), sharedPorts(spread) - sharedPorts(usual)];
   if (b > 0 || c > 0 || s > 0 || (b === 0 && c === 0 && s === 0)) return false;
