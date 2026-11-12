@@ -2,6 +2,8 @@ import type { Diagnostic, Layout, LayoutNode, Point } from '../types.ts';
 
 export type BoxSide = 'left' | 'right' | 'top' | 'bottom';
 
+const SIDES: readonly BoxSide[] = ['left', 'right', 'top', 'bottom'];
+
 /** What decides the side an edge is meant to use: the drawing's axes and the order of its bands. */
 export interface Directions {
   /** Bands stand across the reading direction (the stages composition). */
@@ -44,25 +46,38 @@ export function sideOfPoint(node: LayoutNode, p: Point): BoxSide {
  * ends of a node that look the same way (two or more), every end that is not on that way's side.
  */
 export function mixedSideEnds(l: Pick<Layout, 'nodes' | 'edges'>, d: Directions): Diagnostic[] {
-  const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
-  const groups = new Map<string, Array<{ actual: BoxSide; edge: string }>>();
-  for (const e of l.edges) {
-    const a = byId.get(e.from);
-    const b = byId.get(e.to);
+  const nodeAt = new Map(l.nodes.map((n, i) => [n.id, i] as const));
+  // Groups in the order they are first met: a node and the side its edges to partners looking the same way should use.
+  const groupAt = new Int32Array(l.nodes.length * SIDES.length).fill(-1);
+  const groups: Array<{ node: LayoutNode; side: BoxSide; ends: Array<{ actual: BoxSide; edge: number }> }> = [];
+  l.edges.forEach((e, i) => {
+    const ia = nodeAt.get(e.from);
+    const ib = nodeAt.get(e.to);
     const first = e.points[0];
     const last = e.points[e.points.length - 1];
-    if (!a || !b || a === b || !first || !last) continue;
-    for (const [node, other, p] of [[a, b, first], [b, a, last]] as const) {
-      const key = `${node.id}|${designatedSide(node, other, d)}`;
-      groups.set(key, [...(groups.get(key) ?? []), { actual: sideOfPoint(node, p), edge: `${e.from} -> ${e.to}` }]);
+    if (ia === undefined || ib === undefined || ia === ib || !first || !last) return;
+    const a = l.nodes[ia] as LayoutNode;
+    const b = l.nodes[ib] as LayoutNode;
+    for (const [at, node, other, p] of [[ia, a, b, first], [ib, b, a, last]] as const) {
+      const side = designatedSide(node, other, d);
+      const k = at * SIDES.length + SIDES.indexOf(side);
+      let g = groupAt[k] as number;
+      if (g < 0) {
+        g = groupAt[k] = groups.length;
+        groups.push({ node, side, ends: [] });
+      }
+      (groups[g] as { ends: Array<{ actual: BoxSide; edge: number }> }).ends.push({ actual: sideOfPoint(node, p), edge: i });
     }
-  }
+  });
   const out: Diagnostic[] = [];
-  for (const [key, ends] of groups) {
+  for (const { node, side, ends } of groups) {
     if (ends.length < 2) continue;
-    const [id, side] = key.split('|') as [string, BoxSide];
+    const id = node.id;
     for (const end of ends) {
-      if (end.actual !== side) out.push({ kind: 'mixed-side', nodes: [id], message: `The end of ${end.edge} at ${id} is on the ${end.actual}, but other edges that look the same way use the ${side}.` });
+      if (end.actual !== side) {
+        const e = l.edges[end.edge] as Layout['edges'][number];
+        out.push({ kind: 'mixed-side', nodes: [id], message: `The end of ${e.from} -> ${e.to} at ${id} is on the ${end.actual}, but other edges that look the same way use the ${side}.` });
+      }
     }
   }
   return out;

@@ -26,31 +26,49 @@ function properCross(a: Seg, b: Seg): boolean {
   );
 }
 
+/** The segments of every edge and the box around each edge: two edges whose boxes do not meet cannot cross. */
+function prepared(edges: LayoutEdge[]): Array<{ segs: Seg[]; x0: number; x1: number; y0: number; y1: number }> {
+  return edges.map((edge) => {
+    const segs = segments(edge);
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const s of segs) {
+      x0 = Math.min(x0, s.x1, s.x2);
+      x1 = Math.max(x1, s.x1, s.x2);
+      y0 = Math.min(y0, s.y1, s.y2);
+      y1 = Math.max(y1, s.y1, s.y2);
+    }
+    return { segs, x0, x1, y0, y1 };
+  });
+}
+
+function crossCount(a: ReturnType<typeof prepared>[number], b: ReturnType<typeof prepared>[number]): number {
+  if (a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0) return 0;
+  let count = 0;
+  for (const s of a.segs) for (const t of b.segs) if (properCross(s, t)) count++;
+  return count;
+}
+
 /** Number of proper crossings between different edges (an edge crossing another twice counts twice). */
 export function crossingCount(edges: LayoutEdge[]): number {
+  const all = prepared(edges);
   let total = 0;
-  for (let i = 0; i < edges.length; i++) {
-    for (let j = i + 1; j < edges.length; j++) {
-      const a = edges[i];
-      const b = edges[j];
-      if (!a || !b) continue;
-      const sb = segments(b);
-      for (const s of segments(a)) for (const t of sb) if (properCross(s, t)) total++;
-    }
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) total += crossCount(all[i] as (typeof all)[number], all[j] as (typeof all)[number]);
   }
   return total;
 }
 
 export function crossings(edges: LayoutEdge[]): Diagnostic[] {
   const out: Diagnostic[] = [];
-  for (let i = 0; i < edges.length; i++) {
-    for (let j = i + 1; j < edges.length; j++) {
-      const a = edges[i];
-      const b = edges[j];
-      if (!a || !b) continue;
-      const sb = segments(b);
-      let count = 0;
-      for (const s of segments(a)) for (const t of sb) if (properCross(s, t)) count++;
+  const all = prepared(edges);
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const a = edges[i] as LayoutEdge;
+      const b = edges[j] as LayoutEdge;
+      const count = crossCount(all[i] as (typeof all)[number], all[j] as (typeof all)[number]);
       if (count === 0) continue;
       out.push({
         kind: 'crossing',

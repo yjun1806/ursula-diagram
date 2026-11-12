@@ -4,7 +4,7 @@ import { align, type AlignOptions, type Aligned, type Extra, type PortGeometry }
 import { buildLadder } from '../src/layered/dummies.ts';
 import type { Ladder } from '../src/layered/model.ts';
 import { pieces } from '../src/layered/model.ts';
-import { adjacency, counting, flatCrossingsFast, flatRoute, orderLayers, pairCrossingsFast } from '../src/layered/order.ts';
+import { adjacency, counting, flatCrossingsFast, flatRoute, orderLayers, pairCrossingsFast, swapDelta } from '../src/layered/order.ts';
 import { assignLayers } from '../src/layered/rows.ts';
 import type { Rows } from '../src/layered/rows.ts';
 import type { Graph } from '../src/types.ts';
@@ -822,6 +822,40 @@ describe('order.ts on arrays gives what it gave on lists', () => {
       for (const f of ladder.flat) {
         const layer = ladder.nodes[f.lo]?.layer ?? 0;
         expect([seed, flatRoute(ladder, order[layer] ?? [], pos, adj, f.lo, f.hi, layer)]).toEqual([seed, flatRouteOld(ladder, order[layer] ?? [], pos, adj, f.lo, f.hi, layer)]);
+      }
+    }
+  });
+});
+
+describe('the crossings of a swap are counted from what changes', () => {
+  it('keeps, over 200 random swaps in each of 500 seeded orders, a current value equal to the full recount', () => {
+    for (let seed = 1; seed <= CASES; seed++) {
+      const { ladder, rnd } = make(seed);
+      const order = ladder.layers.map((row) => [...row].sort(() => rnd() - 0.5));
+      const pos = new Array<number>(ladder.nodes.length).fill(0);
+      order.forEach((row) => row.forEach((n, k) => (pos[n] = k)));
+      const fast = Int32Array.from(pos);
+      const adj = adjacencyOld(ladder);
+      const c = counting(ladder, adjacency(ladder));
+      const full = (i: number): number => pairCrossingsOld(order, pos, adj, i) + flatCrossingsOld(ladder, order, pos, adj, i) + (i > 0 ? pairCrossingsOld(order, pos, adj, i - 1) : 0);
+      for (let step = 0; step < 200; step++) {
+        const i = Math.floor(rnd() * order.length);
+        const row = order[i] as number[];
+        if (row.length < 2) continue;
+        const k = Math.floor(rnd() * (row.length - 1));
+        const before = full(i);
+        const delta = swapDelta(c, order, fast, i, k);
+        // The order and the places are as they were after the call.
+        expect(fast[row[k] as number]).toBe(k);
+        const a = row[k] as number;
+        const b = row[k + 1] as number;
+        row[k] = b;
+        row[k + 1] = a;
+        pos[a] = k + 1;
+        pos[b] = k;
+        fast[a] = k + 1;
+        fast[b] = k;
+        expect([seed, step, full(i) - before]).toEqual([seed, step, delta]);
       }
     }
   });

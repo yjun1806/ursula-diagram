@@ -7,18 +7,31 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./html": { "types": "./dist/html.d.ts", "default": "./dist/html.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./html": {
+      "types": "./dist/html.d.ts",
+      "default": "./dist/html.js"
+    },
     "./global": "./dist/ursula.global.js"
   },
-  "bin": { "ursula": "dist/cli.js" },
-  "files": ["dist"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "ursula": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "bun scripts/build.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "dev": "bun src/cli.ts"
+    "test": "vitest run --exclude 'test/*-rewrite.test.ts' --exclude 'test/rewrite.test.ts'",
+    "dev": "bun src/cli.ts",
+    "test:rewrite": "vitest run test/rewrite.test.ts test/route-rewrite.test.ts test/choose-rewrite.test.ts test/rows-rewrite.test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

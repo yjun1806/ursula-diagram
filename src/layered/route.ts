@@ -72,7 +72,7 @@ interface End {
   other: number;
 }
 
-const key = (n: number, side: Side): string => `${n}|${side}`;
+const key = (n: number, side: Side): number => 2 * n + (side === 'down' ? 1 : 0);
 const rk = (x: number): number => Math.round(x * 1000);
 
 /** Picks `count` of the free ports, nearest to the centre and symmetric about it where possible. */
@@ -126,31 +126,37 @@ export function assignTracks(items: Array<{ order: number; lo: number; hi: numbe
     for (const x of b.top) c += inside(x, a);
     return c;
   };
-  const before: boolean[][] = items.map(() => items.map(() => false));
-  const overlap: boolean[][] = items.map(() => items.map(() => false));
+  const before = new Uint8Array(n * n);
+  const overlap = new Uint8Array(n * n);
   // What it costs to stack the two the other way round.
-  const loss: number[][] = items.map(() => items.map(() => 0));
+  const loss = new Float64Array(n * n);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const a = items[i] as (typeof items)[number];
       const b = items[j] as (typeof items)[number];
       if (a.lo > b.hi + EPS || b.lo > a.hi + EPS) continue;
-      overlap[i]![j] = overlap[j]![i] = true;
+      overlap[i * n + j] = overlap[j * n + i] = 1;
       const ab = cost(a, b);
       const ba = cost(b, a);
       const first = ab < ba || (ab === ba && a.order <= b.order);
-      before[i]![j] = first;
-      before[j]![i] = !first;
-      loss[i]![j] = loss[j]![i] = Math.abs(ab - ba);
+      before[i * n + j] = first ? 1 : 0;
+      before[j * n + i] = first ? 0 : 1;
+      loss[i * n + j] = loss[j * n + i] = Math.abs(ab - ba);
     }
   }
-  const done = new Array<boolean>(n).fill(false);
+  const done = new Uint8Array(n);
   const sequence: number[] = [];
   while (sequence.length < n) {
     let pick = -1;
     for (let i = 0; i < n; i++) {
       if (done[i]) continue;
-      const ready = items.every((_, j) => done[j] || j === i || !overlap[i]![j] || !before[j]![i]);
+      let ready = true;
+      for (let j = 0; j < n; j++) {
+        if (!done[j] && j !== i && overlap[i * n + j] && before[j * n + i]) {
+          ready = false;
+          break;
+        }
+      }
       if (ready && (pick < 0 || (items[i] as { order: number }).order < (items[pick] as { order: number }).order)) pick = i;
     }
     if (pick < 0) {
@@ -158,21 +164,22 @@ export function assignTracks(items: Array<{ order: number; lo: number; hi: numbe
       let least = Infinity;
       for (let i = 0; i < n; i++) {
         if (done[i]) continue;
-        const price = items.reduce((sum, _, j) => sum + (!done[j] && j !== i && overlap[i]![j] && before[j]![i] ? (loss[i]![j] ?? 0) : 0), 0);
+        let price = 0;
+        for (let j = 0; j < n; j++) if (!done[j] && j !== i && overlap[i * n + j] && before[j * n + i]) price += loss[i * n + j] as number;
         if (price < least) {
           least = price;
           pick = i;
         }
       }
     }
-    done[pick] = true;
+    done[pick] = 1;
     sequence.push(pick);
   }
   const track = new Array<number>(n).fill(0);
   const placed: number[] = [];
   for (const i of sequence) {
     let t = 0;
-    for (const j of placed) if (overlap[i]![j]) t = Math.max(t, (track[j] ?? 0) + 1);
+    for (const j of placed) if (overlap[i * n + j]) t = Math.max(t, (track[j] ?? 0) + 1);
     track[i] = t;
     placed.push(i);
   }
@@ -189,17 +196,21 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const len = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const real = (n: number): boolean => n < l.realCount;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
-  const shift = new Map<number, number>();
+  const shift = new Float64Array(l.nodes.length);
+  const shifted = new Uint8Array(l.nodes.length);
   for (const row of layers) {
     for (let k = 0; k < row.length; k++) {
       const n = row[k] as number;
-      if (real(n) || shift.has(n)) continue;
+      if (real(n) || shifted[n]) continue;
       const group = [n];
       while (!real(row[k + group.length] ?? 0) && row[k + group.length] !== undefined && start[row[k + group.length] as number] === start[n]) group.push(row[k + group.length] as number);
-      group.forEach((d, i) => shift.set(d, edgeNear(ruler, (i - (group.length - 1) / 2) * (ruler.uniform ? (ruler.linePitch ?? LINE_PITCH) : ruler.trackGap))));
+      group.forEach((d, i) => {
+        shift[d] = edgeNear(ruler, (i - (group.length - 1) / 2) * (ruler.uniform ? (ruler.linePitch ?? LINE_PITCH) : ruler.trackGap));
+        shifted[d] = 1;
+      });
     }
   }
-  const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift.get(n) ?? 0));
+  const centre = (n: number): number => nodeO(n) + (real(n) ? len(n) / 2 : boxLength(2, unit, gap) / 2 + (shift[n] ?? 0));
   const step = portStep(unit, ruler);
 
   const items: Item[] = [];
@@ -227,26 +238,33 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     if (real(it.a)) ends.push({ item: it, which: 'a', node: it.a, side: it.aSide, other: it.b });
     if (real(it.b)) ends.push({ item: it, which: 'b', node: it.b, side: it.bSide, other: it.a });
   }
-  const taken = new Map<string, Set<number>>();
+  // Per side of a box (`key`): the rounded ports taken, in the order they were taken.
+  const taken: number[][] = [];
   const mark = (n: number, side: Side, x: number): void => {
     const k = key(n, side);
-    const set = taken.get(k) ?? new Set<number>();
-    set.add(rk(x));
-    taken.set(k, set);
+    const set = (taken[k] ??= []);
+    const r = rk(x);
+    if (!set.includes(r)) set.push(r);
   };
   // Ports off the lattice (set at the centre of the box a straight edge comes from) keep the lattice ports within eight pixels away.
-  const custom = new Map<string, number[]>();
+  const custom: number[][] = [];
   const free = (n: number, side: Side): number[] => {
-    const set = taken.get(key(n, side));
-    const near = custom.get(key(n, side)) ?? [];
-    return portOffsets(len(n), step)
-      .map((o) => nodeO(n) + o)
-      .filter((x) => !set?.has(rk(x)) && !near.some((c) => Math.abs(c - x) < PORT_APART - EPS));
+    const set = taken[key(n, side)];
+    const near = custom[key(n, side)];
+    const origin = nodeO(n);
+    const out: number[] = [];
+    for (const o of portOffsets(len(n), step)) {
+      const x = origin + o;
+      if (set?.includes(rk(x))) continue;
+      if (near?.some((c) => Math.abs(c - x) < PORT_APART - EPS)) continue;
+      out.push(x);
+    }
+    return out;
   };
   // A side that only one edge touches takes it at the centre; where the side has two cells at the centre, the left or upper one.
-  const sideCount = new Map<string, number>();
-  for (const e of ends) sideCount.set(key(e.node, e.side), (sideCount.get(key(e.node, e.side)) ?? 0) + 1);
-  const single = (n: number, side: Side): boolean => sideCount.get(key(n, side)) === 1;
+  const sideCount = new Int32Array(2 * l.nodes.length);
+  for (const e of ends) sideCount[key(e.node, e.side)] = (sideCount[key(e.node, e.side)] ?? 0) + 1;
+  const single = (n: number, side: Side): boolean => sideCount[key(n, side)] === 1;
   const portCentre = (n: number): number => centre(n) - (ruler.uniform && len(n) % 2 === 0 ? 0.5 : 0);
   const setX = (it: Item, which: 'a' | 'b', x: number): void => {
     if (which === 'a') it.xa = x;
@@ -267,9 +285,9 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     if (sa && sb) x = Math.abs(centre(it.a) - centre(it.b)) < EPS ? centre(it.a) : undefined;
     else {
       const c = centre(one);
-      const near = [...(taken.get(key(many, manySide)) ?? [])].some((t) => Math.abs(t / 1000 - c) < PORT_APART - EPS);
+      const near = (taken[key(many, manySide)] ?? []).some((t) => Math.abs(t / 1000 - c) < PORT_APART - EPS);
       x = c >= nodeO(many) + CORNER_CLEAR - EPS && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS && !near ? c : undefined;
-      if (x !== undefined) custom.set(key(many, manySide), [...(custom.get(key(many, manySide)) ?? []), x]);
+      if (x !== undefined) (custom[key(many, manySide)] ??= []).push(x);
     }
     if (x === undefined) continue;
     it.xa = it.xb = x;
@@ -319,20 +337,26 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     mark(it.a, 'up', q);
   }
   // On one side of a box every piece takes a port in the left-to-right order of the other end it leads to; the ports already fixed by straight pieces keep their place in that order.
-  const groups = new Map<string, End[]>();
-  for (const e of ends) groups.set(key(e.node, e.side), [...(groups.get(key(e.node, e.side)) ?? []), e]);
+  const groupAt = new Int32Array(2 * l.nodes.length).fill(-1);
+  const groups: End[][] = [];
+  for (const e of ends) {
+    const k = key(e.node, e.side);
+    if ((groupAt[k] ?? -1) < 0) {
+      groupAt[k] = groups.length;
+      groups.push([]);
+    }
+    (groups[groupAt[k] as number] as End[]).push(e);
+  }
   const xOf = (e: End): number => (e.which === 'a' ? e.item.xa : e.item.xb);
-  for (const group of groups.values()) {
+  for (const group of groups) {
     const first = group[0] as End;
     const loose = group.filter((e) => !done(e)).sort((x, y) => centre(x.other) - centre(y.other) || x.item.chain - y.item.chain);
     if (loose.length === 0) continue;
     const fixed = group.filter(done).map(xOf).sort((x, y) => x - y);
-    const taken$ = new Set<number>();
     const assign = (list: End[], xs: number[]): void => {
       list.forEach((e, k) => {
         const x = xs[k] ?? xs[xs.length - 1] ?? centre(first.node);
         setX(e.item, e.which, x);
-        taken$.add(rk(x));
         mark(first.node, first.side, x);
       });
     };
@@ -358,8 +382,16 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
 
   // Tracks, band by band. Two jogs that swap places over the same two columns collide whichever way they are stacked; one of them then moves to another port.
   const tracks = new Array<number>(items.length).fill(-1);
-  const bands = new Map<number, number[]>();
-  items.forEach((it, i) => bands.set(it.band, [...(bands.get(it.band) ?? []), i]));
+  const bandMembers: number[][] = [];
+  const bands: number[][] = [];
+  items.forEach((it, i) => {
+    let list = bandMembers[it.band];
+    if (!list) {
+      list = bandMembers[it.band] = [];
+      bands.push(list);
+    }
+    list.push(i);
+  });
   const specsOf = (members: number[]): { horizontal: number[]; specs: TrackSpec[] } => {
     const horizontal = members.filter((i) => {
       const it = items[i] as Item;
@@ -378,7 +410,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   };
   for (let round = 0; round < 3; round++) {
     let moved = false;
-    for (const members of bands.values()) {
+    for (const members of bands) {
       const { specs } = specsOf(members);
       for (const [p, q] of hardPairs(specs)) {
         const pair = [items[specs[p]?.order ?? 0], items[specs[q]?.order ?? 0]];
@@ -388,7 +420,9 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
           const others = free(e.node, e.side).filter((x) => Math.abs(x - now) > EPS).sort((x, y) => Math.abs(x - now) - Math.abs(y - now));
           const x = others[0];
           if (x === undefined) continue;
-          taken.get(key(e.node, e.side))?.delete(rk(now));
+          const held = taken[key(e.node, e.side)];
+          const at = held ? held.indexOf(rk(now)) : -1;
+          if (held && at >= 0) held.splice(at, 1);
           mark(e.node, e.side, x);
           setX(e.item, e.which, x);
           moved = true;
@@ -398,7 +432,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     }
     if (!moved) break;
   }
-  for (const members of bands.values()) {
+  for (const members of bands) {
     const { horizontal, specs } = specsOf(members);
     const assigned = assignTracks(specs);
     horizontal.forEach((i, k) => {
@@ -449,25 +483,52 @@ interface Built {
   failedBand: number[];
 }
 
-function simplify(points: Point[]): Point[] {
-  const dedup: Point[] = [];
-  for (const p of points) {
-    const last = dedup[dedup.length - 1];
-    if (!last || Math.abs(last.x - p.x) > EPS || Math.abs(last.y - p.y) > EPS) dedup.push(p);
-  }
-  const out: Point[] = [];
-  for (const p of dedup) {
-    for (;;) {
-      const a = out[out.length - 2];
-      const b = out[out.length - 1];
-      if (!a || !b) break;
-      const collinear = (Math.abs(a.x - b.x) < EPS && Math.abs(b.x - p.x) < EPS) || (Math.abs(a.y - b.y) < EPS && Math.abs(b.y - p.y) < EPS);
-      if (!collinear) break;
-      out.pop();
+/** Drops repeated points and the middle point of three on one line; `xy` holds x and y alternately. */
+function simplify(xy: number[]): Point[] {
+  const dx: number[] = [];
+  const dy: number[] = [];
+  for (let i = 0; i < xy.length; i += 2) {
+    const x = xy[i] as number;
+    const y = xy[i + 1] as number;
+    const k = dx.length - 1;
+    if (k < 0 || Math.abs((dx[k] as number) - x) > EPS || Math.abs((dy[k] as number) - y) > EPS) {
+      dx.push(x);
+      dy.push(y);
     }
-    out.push(p);
   }
-  return out;
+  const ox: number[] = [];
+  const oy: number[] = [];
+  for (let i = 0; i < dx.length; i++) {
+    const x = dx[i] as number;
+    const y = dy[i] as number;
+    for (;;) {
+      const m = ox.length - 1;
+      if (m < 1) break;
+      const ax = ox[m - 1] as number;
+      const ay = oy[m - 1] as number;
+      const bx = ox[m] as number;
+      const by = oy[m] as number;
+      const collinear = (Math.abs(ax - bx) < EPS && Math.abs(bx - x) < EPS) || (Math.abs(ay - by) < EPS && Math.abs(by - y) < EPS);
+      if (!collinear) break;
+      ox.pop();
+      oy.pop();
+    }
+    ox.push(x);
+    oy.push(y);
+  }
+  return ox.map((x, i) => ({ x, y: oy[i] as number }));
+}
+
+/** Reverses the order of the points (pairs of numbers) from index `from` on. */
+function reversePoints(xy: number[], from: number): void {
+  for (let i = from, j = xy.length - 2; i < j; i += 2, j -= 2) {
+    const x = xy[i] as number;
+    const y = xy[i + 1] as number;
+    xy[i] = xy[j] as number;
+    xy[i + 1] = xy[j + 1] as number;
+    xy[j] = x;
+    xy[j + 1] = y;
+  }
 }
 
 function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>, prep: Prepared, demand: number[]): Built {
@@ -477,15 +538,22 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const margin = marginOf(ruler);
   const laneCount = graph.lanes.length;
 
-  const thick = layers.map((row) => Math.max(...row.filter((n) => n < l.realCount).map((n) => f.layerExt[n] ?? 0), 0));
+  const thick = layers.map((row) => {
+    let top = 0;
+    for (const n of row) if (n < l.realCount) top = Math.max(top, f.layerExt[n] ?? 0);
+    return top;
+  });
   const trackCount = new Array<number>(count + 1).fill(0);
   for (const it of items) if (it.track >= 0) trackCount[it.band] = Math.max(trackCount[it.band] ?? 0, it.track + 1);
 
   // Bands: before layer 0, between layers, after the last layer.
-  const laneRange = new Map<number, [number, number]>();
+  const laneFirst: number[] = [];
+  const laneLast: number[] = [];
+  const laneSeen: number[] = [];
   l.layerLane.forEach((lane, i) => {
-    const r = laneRange.get(lane);
-    laneRange.set(lane, r ? [r[0], i] : [i, i]);
+    if (laneFirst[lane] === undefined) laneSeen.push(lane);
+    laneFirst[lane] ??= i;
+    laneLast[lane] = i;
   });
   const bottomPad = new Array<number>(laneCount).fill(ruler.lanePad);
   const wanted = (b: number): number => {
@@ -515,7 +583,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   };
   const ext = (b: number): number => (ruler.uniform ? terminalExt(b) : gridUp(ruler, Math.max(baseExt(b) + (b > 0 && b < count ? Math.max(f.spread ?? 0, 2 * ruler.trackGap - baseExt(b)) : 0), wanted(b))));
   if (td) {
-    for (const [lane, [first, last]] of laneRange) {
+    for (const lane of laneSeen) {
+      const first = laneFirst[lane] as number;
+      const last = laneLast[lane] as number;
       const label = graph.lanes[lane]?.label ?? '';
       if (label === '') continue;
       const need = gridUp(ruler, ruler.textWidth(label, 'lane') + 2 * ruler.laneLabelGap);
@@ -570,26 +640,39 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
-  const byChain = new Map<number, Item[]>();
-  for (const it of items) byChain.set(it.chain, [...(byChain.get(it.chain) ?? []), it]);
+  // Items come in chain order: the items of chain `ci` are items[chainAt[ci] .. chainAt[ci + 1]).
+  const chainAt = new Int32Array(l.chains.length + 1);
+  for (const it of items) chainAt[it.chain + 1] = (chainAt[it.chain + 1] ?? 0) + 1;
+  for (let ci = 0; ci < l.chains.length; ci++) chainAt[ci + 1] = (chainAt[ci + 1] ?? 0) + (chainAt[ci] ?? 0);
   const edges: LayoutEdge[] = [];
-  const raw: Point[][] = [];
+  const xy: number[] = [];
+  const put = (o: number, c: number): void => {
+    if (td) xy.push(tidy(c), tidy(o));
+    else xy.push(tidy(o), tidy(c));
+  };
   l.chains.forEach((c, ci) => {
     const e = graph.edges[c.edge];
     if (!e) return;
-    const mine = byChain.get(ci) ?? [];
-    const pts: Point[] = [];
+    const first = chainAt[ci] as number;
+    const end = chainAt[ci + 1] as number;
+    xy.length = 0;
     if (c.kind === 'span') {
-      mine.forEach((it, k) => {
+      for (let k = 0; first + k < end; k++) {
+        const it = items[first + k] as Item;
         const p = c.nodes[k] as number;
         const upperFirst = it.a === p;
         const top = bandStart[it.band] ?? 0;
         const bottom = top + (bandSize[it.band] ?? 0);
-        const seg: Point[] = [order(it.xa, top)];
-        if (it.track >= 0) seg.push(order(it.xa, trackY(it)), order(it.xb, trackY(it)));
-        seg.push(order(it.xb, bottom));
-        pts.push(...(upperFirst ? seg : seg.reverse()));
-      });
+        const from = xy.length;
+        put(it.xa, top);
+        if (it.track >= 0) {
+          const y = trackY(it);
+          put(it.xa, y);
+          put(it.xb, y);
+        }
+        put(it.xb, bottom);
+        if (!upperFirst) reversePoints(xy, from);
+      }
     } else if (c.kind === 'flat') {
       const p = plan.get(ci);
       const [lo, hi] = c.reversed ? [c.nodes[1] as number, c.nodes[0] as number] : [c.nodes[0] as number, c.nodes[1] as number];
@@ -598,24 +681,28 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
         const h = thick[layer] ?? 0;
         // A terminal box with two middle lines takes a lone edge on the upper one.
         const at = (layerStart[layer] ?? 0) + (ruler.uniform && p.slot === 0 ? (h - (h % 2 === 0 ? 1 : 0)) / 2 : h * (sideFractions(ruler.sidePorts)[p.slot] ?? 0.5));
-        pts.push(order(nodeO(lo) + len(lo), at), order(nodeO(hi), at));
-      } else {
-        const it = mine[0];
-        if (it) {
-          const edge = bound(it, it.aSide);
-          pts.push(order(it.xa, edge), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, edge));
-        }
+        put(nodeO(lo) + len(lo), at);
+        put(nodeO(hi), at);
+      } else if (first < end) {
+        const it = items[first] as Item;
+        const edge = bound(it, it.aSide);
+        const y = trackY(it);
+        put(it.xa, edge);
+        put(it.xa, y);
+        put(it.xb, y);
+        put(it.xb, edge);
       }
-      if (c.reversed) pts.reverse();
-    } else {
-      const it = mine[0];
-      if (it) {
-        const edge = bound(it, 'up');
-        pts.push(order(it.xa, edge), order(it.xa, trackY(it)), order(it.xb, trackY(it)), order(it.xb, edge));
-      }
+      if (c.reversed) reversePoints(xy, 0);
+    } else if (first < end) {
+      const it = items[first] as Item;
+      const edge = bound(it, 'up');
+      const y = trackY(it);
+      put(it.xa, edge);
+      put(it.xa, y);
+      put(it.xb, y);
+      put(it.xb, edge);
     }
-    raw.push(pts);
-    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(pts), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
+    edges.push({ from: e.from, to: e.to, style: e.style, points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
   });
 
   if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });
@@ -627,6 +714,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const failed: number[] = [];
   const failedBand: number[] = [];
   const segs = (points: Point[]): Segment[] => points.slice(1).map((q, i) => [points[i] as Point, q] as Segment);
+  const edgeSegs = edges.map((e) => segs(e.points));
   edges.forEach((edge, ei) => {
     const c = l.chains[ei];
     const text = graph.edges[c?.edge ?? -1]?.label;
@@ -635,8 +723,11 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     const straightFlat = !ruler.uniform && !td && c.kind === 'flat' && plan.get(ei)?.mode === 'straight';
     const lines = straightFlat ? labelLines(text, edge.style, ruler, f.gap, f.unit) : [text];
     const size: LabelSize = ruler.uniform ? labelSize(text, ruler) : labelBox(lines, ruler);
-    const foreign = edges.flatMap((o, k) => (k === ei ? [] : segs(o.points)));
-    let mine = segs(edge.points).sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
+    const foreign: Segment[] = [];
+    edgeSegs.forEach((ss, k) => {
+      if (k !== ei) for (const s of ss) foreign.push(s);
+    });
+    let mine = (edgeSegs[ei] as Segment[]).slice().sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
     // Pixels: a label on a stretch of line that cannot keep a line visible on both sides moves to a longer stretch.
     if (!ruler.uniform) {
       const roomy = (s: Segment): boolean => s[0].y !== s[1].y || Math.abs(s[1].x - s[0].x) >= size.w + 2 * lineBeside('normal');
@@ -687,9 +778,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);
   const lanes: LayoutLane[] = [];
   graph.lanes.forEach((lane, k) => {
-    const range = laneRange.get(k);
-    if (!range) return;
-    const [first, last] = range;
+    const first = laneFirst[k];
+    const last = laneLast[k];
+    if (first === undefined || last === undefined) return;
     const top = first === 0 ? margin : (bandStart[first] ?? 0) + (bandSize[first] ?? 0) - ruler.lanePad;
     const bottom = last + 1 === count ? (bandStart[count] ?? 0) + (bandSize[count] ?? 0) : (bandStart[last + 1] ?? 0) + (bottomPad[k] ?? 0);
     const labelW = ruler.textWidth(lane.label, 'lane');
@@ -715,7 +806,6 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const whole = (v: number): number => (ruler.uniform ? Math.ceil(v - EPS) : v);
   const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
   const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
-  void raw;
   return { layout, failed: failed.map((ei) => ei), failedBand };
 }
 

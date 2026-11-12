@@ -101,6 +101,10 @@ export interface Counting {
   flatItems: Int32Array;
   lo: Int32Array;
   hi: Int32Array;
+  /** The flat edges that end at each node (list of lists), and a buffer for the ones a swap looks at. */
+  flatNodeStart: Int32Array;
+  flatNodeItems: Int32Array;
+  touched: Int32Array;
   /** Per layer: which sides a flat edge may be routed on (1 up, 2 down, 3 both). */
   sides: Uint8Array;
   realCount: number;
@@ -120,7 +124,16 @@ export function counting(l: Ladder, adj: Adjacency): Counting {
   const flat = toCsr(byLayer);
   let edges = 0;
   for (const d of adj.down) edges += d.length;
+  const byNode: number[][] = Array.from({ length: l.nodes.length }, () => []);
+  l.flat.forEach((f, k) => {
+    byNode[f.lo]?.push(k);
+    if (f.hi !== f.lo) byNode[f.hi]?.push(k);
+  });
+  const flatNode = toCsr(byNode);
   return {
+    flatNodeStart: flatNode.start,
+    flatNodeItems: flatNode.items,
+    touched: new Int32Array(Math.max(1, l.flat.length)),
     up: toCsr(adj.up),
     down: toCsr(adj.down),
     flatStart: flat.start,
@@ -164,62 +177,94 @@ export function pairCrossingsFast(c: Counting, order: number[][], pos: Int32Arra
   return total;
 }
 
+/** The cost of flat edge `f` (index into the flat edges of the ladder) for the order of its layer: what `flatRoute` gives. */
+function flatCost(c: Counting, row: number[], pos: Int32Array, f: number, mask: number): number {
+  const p = pos[c.lo[f] as number] as number;
+  const q = pos[c.hi[f] as number] as number;
+  const from = (p < q ? p : q) + 1;
+  const to = p < q ? q : p;
+  let up = 0;
+  let down = 0;
+  let boxes = 0;
+  for (let k = from; k < to; k++) {
+    const n = row[k] as number;
+    up += (c.up.start[n + 1] as number) - (c.up.start[n] as number);
+    down += (c.down.start[n + 1] as number) - (c.down.start[n] as number);
+    if (n < c.realCount) boxes++;
+  }
+  // The cheaper of the sides allowed (the first one when equal); only dummies between the ends: each is crossed once.
+  const best = mask === 1 ? up : mask === 2 ? down : up <= down ? up : down;
+  return boxes === 0 ? to - from : best;
+}
+
 /** The crossings flat edges cause in layer `i`: the `cost` of `flatRoute` for each of them, summed. */
 export function flatCrossingsFast(c: Counting, order: number[][], pos: Int32Array, i: number): number {
   const row = order[i] ?? [];
   let total = 0;
   const mask = c.sides[i] as number;
-  for (let e = c.flatStart[i] as number, end = c.flatStart[i + 1] as number; e < end; e++) {
-    const f = c.flatItems[e] as number;
-    const p = pos[c.lo[f] as number] as number;
-    const q = pos[c.hi[f] as number] as number;
-    const from = (p < q ? p : q) + 1;
-    const to = p < q ? q : p;
-    let up = 0;
-    let down = 0;
-    let boxes = 0;
-    for (let k = from; k < to; k++) {
-      const n = row[k] as number;
-      up += (c.up.start[n + 1] as number) - (c.up.start[n] as number);
-      down += (c.down.start[n + 1] as number) - (c.down.start[n] as number);
-      if (n < c.realCount) boxes++;
-    }
-    // The cheaper of the sides allowed (the first one when equal); only dummies between the ends: each is crossed once.
-    const best = mask === 1 ? up : mask === 2 ? down : up <= down ? up : down;
-    total += boxes === 0 ? to - from : best;
-  }
+  for (let e = c.flatStart[i] as number, end = c.flatStart[i + 1] as number; e < end; e++) total += flatCost(c, row, pos, c.flatItems[e] as number, mask);
   return total;
+}
+
+/**
+ * What swapping the neighbours at places `k` and `k + 1` of layer `i` adds to the crossings around that layer (the
+ * pieces above it, the pieces below it, the flat edges in it): the difference of the pairs that involve one of the two
+ * nodes, which is all that changes. The order is left as it was.
+ */
+export function swapDelta(c: Counting, order: number[][], pos: Int32Array, i: number, k: number): number {
+  const row = order[i] as number[];
+  const u = row[k] as number;
+  const v = row[k + 1] as number;
+  let delta = 0;
+  // Pieces to the layer below: u's against v's. Before the swap u is left of v, so a pair crosses when u's end is further along.
+  for (let e = c.down.start[u] as number, end = c.down.start[u + 1] as number; e < end; e++) {
+    const y1 = pos[c.down.items[e] as number] as number;
+    for (let f = c.down.start[v] as number, fend = c.down.start[v + 1] as number; f < fend; f++) {
+      const y2 = pos[c.down.items[f] as number] as number;
+      delta += (y2 > y1 ? 1 : 0) - (y1 > y2 ? 1 : 0);
+    }
+  }
+  // Pieces from the layer above: their upper ends are fixed, the lower ends u and v change places.
+  for (let e = c.up.start[u] as number, end = c.up.start[u + 1] as number; e < end; e++) {
+    const xa = pos[c.up.items[e] as number] as number;
+    for (let f = c.up.start[v] as number, fend = c.up.start[v + 1] as number; f < fend; f++) {
+      const xb = pos[c.up.items[f] as number] as number;
+      delta += (xa < xb ? 1 : 0) - (xa > xb ? 1 : 0);
+    }
+  }
+  // Flat edges with an end at u or v: their cost is looked at before and after (the other flat edges keep theirs).
+  const mask = c.sides[i] as number;
+  let before = 0;
+  let count = 0;
+  for (let pass = 0; pass < 2; pass++) {
+    const node = pass === 0 ? u : v;
+    for (let e = c.flatNodeStart[node] as number, end = c.flatNodeStart[node + 1] as number; e < end; e++) {
+      const f = c.flatNodeItems[e] as number;
+      // An edge between u and v is listed for both: counted once.
+      if (pass === 1 && (c.lo[f] === u || c.hi[f] === u)) continue;
+      c.touched[count++] = f;
+      before += flatCost(c, row, pos, f, mask);
+    }
+  }
+  if (count > 0) {
+    row[k] = v;
+    row[k + 1] = u;
+    pos[u] = k + 1;
+    pos[v] = k;
+    let after = 0;
+    for (let t = 0; t < count; t++) after += flatCost(c, row, pos, c.touched[t] as number, mask);
+    row[k] = u;
+    row[k + 1] = v;
+    pos[u] = k;
+    pos[v] = k + 1;
+    delta += after - before;
+  }
+  return delta;
 }
 
 function setPositions(order: number[][], pos: Int32Array, layer: number): void {
   const row = order[layer] ?? [];
   for (let k = 0; k < row.length; k++) pos[row[k] as number] = k;
-}
-
-/** Takes, among the nodes whose flat-edge predecessors are placed, the one with the smallest key. */
-function constrained(nodes: number[], key: (n: number) => number, tie: (n: number) => number, preds: number[][]): number[] {
-  const rest = [...nodes];
-  const placed = new Set<number>();
-  const here = new Set(nodes);
-  const out: number[] = [];
-  while (rest.length > 0) {
-    let pick = -1;
-    for (let k = 0; k < rest.length; k++) {
-      const n = rest[k] as number;
-      if (!(preds[n] ?? []).every((p) => !here.has(p) || placed.has(p))) continue;
-      if (pick < 0) {
-        pick = k;
-        continue;
-      }
-      const m = rest[pick] as number;
-      const dk = key(n) - key(m);
-      if (dk < 0 || (dk === 0 && tie(n) < tie(m))) pick = k;
-    }
-    const chosen = rest.splice(Math.max(0, pick), 1)[0] as number;
-    placed.add(chosen);
-    out.push(chosen);
-  }
-  return out;
 }
 
 export interface Ordered {
@@ -290,15 +335,7 @@ export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, s
     return x !== y ? x - y : 0;
   };
   const pos = new Int32Array(l.nodes.length);
-  let order = l.layers.map((nodes) => {
-    const sorted = [...nodes].sort(compare);
-    const at = new Map(sorted.map((n, k) => [n, k] as const));
-    return constrained(sorted, (n) => at.get(n) ?? 0, (n) => at.get(n) ?? 0, adj.preds);
-  });
-  order.forEach((_, i) => setPositions(order, pos, i));
-  const count = order.length;
-
-  // From here on the work is done on arrays: the neighbours and flat edges are listed once, buffers are reused.
+  // The work is done on arrays: the neighbours and flat edges are listed once, buffers are reused.
   const c = counting(l, adj);
   const preds = toCsr(adj.preds);
   const nodeCount = l.nodes.length;
@@ -353,6 +390,18 @@ export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, s
     void i;
   };
 
+  let order = l.layers.map((nodes) => {
+    const sorted = [...nodes].sort(compare);
+    sorted.forEach((n, k) => {
+      keys[n] = k;
+      prev[n] = k;
+    });
+    constrainRow(0, sorted);
+    return sorted;
+  });
+  order.forEach((_, i) => setPositions(order, pos, i));
+  const count = order.length;
+
   const total = (): number => {
     let sum = 0;
     for (let i = 0; i < count; i++) sum += pairCrossingsFast(c, order, pos, i) + flatCrossingsFast(c, order, pos, i);
@@ -401,20 +450,14 @@ export function orderLayers(graph: Graph, l: Ladder, rows: Rows, free = false, s
             }
           }
           if (blocked) continue;
-          const before = current;
-          row[k] = b;
-          row[k + 1] = a;
-          pos[a] = k + 1;
-          pos[b] = k;
-          const now = local(i);
-          if (now < before) {
+          const delta = swapDelta(c, order, pos, i, k);
+          if (delta < 0) {
+            row[k] = b;
+            row[k + 1] = a;
+            pos[a] = k + 1;
+            pos[b] = k;
             improved = true;
-            current = now;
-          } else {
-            row[k] = a;
-            row[k + 1] = b;
-            pos[a] = k;
-            pos[b] = k + 1;
+            current += delta;
           }
         }
       }

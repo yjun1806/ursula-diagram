@@ -30,65 +30,70 @@ interface LaneEdge {
   b: number;
 }
 
-/** Marks the edges that close a cycle in a depth-first walk in source order. */
-function backEdges(ids: number[], out: Map<number, LaneEdge[]>): Set<number> {
-  const state = new Map<number, 1 | 2>();
-  const back = new Set<number>();
+/** Marks the edges that close a cycle in a depth-first walk in source order. `out[v]` holds the edges leaving `v`. */
+function backEdges(ids: number[], out: LaneEdge[][], size: number, edgeCount: number): boolean[] {
+  // 0: not reached, 1: on the walk, 2: done.
+  const state = new Uint8Array(size);
+  const back = new Array<boolean>(edgeCount).fill(false);
   const visit = (v: number): void => {
-    state.set(v, 1);
-    for (const e of out.get(v) ?? []) {
-      const s = state.get(e.b);
-      if (s === 1) back.add(e.edge);
-      else if (s === undefined) visit(e.b);
+    state[v] = 1;
+    for (const e of out[v] ?? []) {
+      const s = state[e.b];
+      if (s === 1) back[e.edge] = true;
+      else if (s === 0) visit(e.b);
     }
-    state.set(v, 2);
+    state[v] = 2;
   };
-  for (const v of ids) if (!state.has(v)) visit(v);
+  for (const v of ids) if (state[v] === 0) visit(v);
   return back;
 }
 
-/** Topological order of a DAG (sources first). */
-function topoOrder(ids: number[], succ: Map<number, number[]>): number[] {
+/** Topological order of a DAG (sources first). `succ[v]` holds the nodes `v` leads to. */
+function topoOrder(ids: number[], succ: number[][], size: number): number[] {
   const post: number[] = [];
-  const seen = new Set<number>();
+  const seen = new Uint8Array(size);
+  const member = new Uint8Array(size);
+  for (const v of ids) member[v] = 1;
   const visit = (v: number): void => {
-    seen.add(v);
-    for (const w of succ.get(v) ?? []) if (!seen.has(w) && ids.includes(w)) visit(w);
+    seen[v] = 1;
+    for (const w of succ[v] ?? []) if (!seen[w] && member[w]) visit(w);
     post.push(v);
   };
-  for (const v of ids) if (!seen.has(v)) visit(v);
+  for (const v of ids) if (!seen[v]) visit(v);
   return post.reverse();
 }
 
 /** The longest path of a DAG; among equal lengths the one whose nodes have more links elsewhere, then the earliest source order. */
-function longestPath(ids: number[], succ: Map<number, number[]>, weight: (v: number) => number = () => 0): number[] {
-  const longest = new Map<number, number>();
-  const heavy = new Map<number, number>();
-  const next = new Map<number, number>();
-  for (const v of [...topoOrder(ids, succ)].reverse()) {
+function longestPath(ids: number[], succ: number[][], size: number, weight: (v: number) => number = () => 0): number[] {
+  const longest = new Float64Array(size);
+  const heavy = new Float64Array(size);
+  const next = new Int32Array(size).fill(-1);
+  const order = topoOrder(ids, succ, size);
+  for (let k = order.length - 1; k >= 0; k--) {
+    const v = order[k] as number;
     let best = 0;
     let bestWeight = 0;
     let via = -1;
-    for (const w of succ.get(v) ?? []) {
-      const len = longest.get(w) ?? 0;
-      const sum = heavy.get(w) ?? 0;
+    for (const w of succ[v] ?? []) {
+      const len = longest[w] as number;
+      const sum = heavy[w] as number;
       if (len > best || (len === best && sum > bestWeight) || (len === best && sum === bestWeight && via >= 0 && w < via)) {
         best = len;
         bestWeight = sum;
         via = w;
       }
     }
-    longest.set(v, 1 + best);
-    heavy.set(v, weight(v) + bestWeight);
-    next.set(v, via);
+    longest[v] = 1 + best;
+    heavy[v] = weight(v) + bestWeight;
+    next[v] = via;
   }
   let start = -1;
   for (const v of ids) {
     if (start < 0) start = v;
-    else if ((longest.get(v) ?? 0) > (longest.get(start) ?? 0) || ((longest.get(v) ?? 0) === (longest.get(start) ?? 0) && (heavy.get(v) ?? 0) > (heavy.get(start) ?? 0))) start = v;
+    else if ((longest[v] as number) > (longest[start] as number) || ((longest[v] as number) === (longest[start] as number) && (heavy[v] as number) > (heavy[start] as number))) start = v;
   }
   const path: number[] = [];
-  for (let v = start; v >= 0; v = next.get(v) ?? -1) path.push(v);
+  for (let v = start; v >= 0; v = next[v] as number) path.push(v);
   return path;
 }
 
@@ -341,29 +346,39 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       const b = index.get(e.to);
       if (a !== undefined && b !== undefined && a !== b && laneOf[a] === lane && laneOf[b] === lane) inLane.push({ edge, a, b });
     });
-    const out = new Map<number, LaneEdge[]>();
-    for (const e of inLane) out.set(e.a, [...(out.get(e.a) ?? []), e]);
-    const back = backEdges(ids, out);
-    const succ = new Map<number, number[]>();
-    const pred = new Map<number, number[]>();
-    const parent = new Map(ids.map((i) => [i, i] as const));
+    const size = graph.nodes.length;
+    const out: LaneEdge[][] = [];
+    for (const e of inLane) (out[e.a] ??= []).push(e);
+    const back = backEdges(ids, out, size, graph.edges.length);
+    const succ: number[][] = [];
+    const pred: number[][] = [];
+    const parent = Array.from({ length: size }, (_, i) => i);
     const find = (x: number): number => {
       let r = x;
-      while ((parent.get(r) as number) !== r) r = parent.get(r) as number;
+      while ((parent[r] as number) !== r) r = parent[r] as number;
       return r;
     };
     for (const e of inLane) {
-      const flip = back.has(e.edge);
+      const flip = back[e.edge] === true;
       if (flip) reversed[e.edge] = true;
       const [from, to] = flip ? [e.b, e.a] : [e.a, e.b];
-      succ.set(from, [...(succ.get(from) ?? []), to]);
-      pred.set(to, [...(pred.get(to) ?? []), from]);
-      parent.set(Math.max(find(from), find(to)), Math.min(find(from), find(to)));
+      (succ[from] ??= []).push(to);
+      (pred[to] ??= []).push(from);
+      parent[Math.max(find(from), find(to))] = Math.min(find(from), find(to));
     }
-    const flow = longestPath(ids, succ, (v) => partners[v]?.length ?? 0);
+    const flow = longestPath(ids, succ, size, (v) => partners[v]?.length ?? 0);
     if (flow.length > 1 && shorter(main, flow)) main = flow;
-    const comps = new Map<number, number[]>();
-    for (const i of ids) comps.set(find(i), [...(comps.get(find(i)) ?? []), i]);
+    // The connected pieces of the lane, in the order their first node comes.
+    const compAt = new Int32Array(size).fill(-1);
+    const comps: number[][] = [];
+    for (const i of ids) {
+      const root = find(i);
+      if ((compAt[root] as number) < 0) {
+        compAt[root] = comps.length;
+        comps.push([]);
+      }
+      (comps[compAt[root] as number] as number[]).push(i);
+    }
 
     const edgesOut = (nodes: number[]): Array<{ node: number; other: number }> =>
       nodes.flatMap((n) => (partners[n] ?? []).map((other) => ({ node: n, other })));
@@ -375,20 +390,28 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
     const makeBlock = (nodes: number[], rankOf: Map<number, number>, rowOf: Map<number, number>, comp: number[] = nodes): Block => {
       const list = edgesOut(nodes);
       const [up, down] = lean(list);
-      const shared = new Map<number, number>();
-      for (const p of list) shared.set(laneOf[p.other] ?? 0, (shared.get(laneOf[p.other] ?? 0) ?? 0) + 1);
+      // How many partners stand in each lane; the lane with the most (the lowest on a tie) is the one the block leans to.
+      const shared = new Array<number>(graph.lanes.length).fill(0);
+      for (const p of list) shared[laneOf[p.other] ?? 0] = (shared[laneOf[p.other] ?? 0] ?? 0) + 1;
       let best = -1;
-      for (const [l, c] of [...shared].sort((x, y) => x[0] - y[0])) if (best < 0 || c > (shared.get(best) ?? 0)) best = l;
+      shared.forEach((c, l) => {
+        if (c > 0 && (best < 0 || c > (shared[best] ?? 0))) best = l;
+      });
       const anchor = up > down ? 'top' : down > up ? 'bottom' : best >= 0 && best > lane ? 'bottom' : 'top';
+      // The widest node of each rank, summed over the ranks in the order they first come.
       const widthAt = new Map<number, number>();
       for (const n of nodes) widthAt.set(rankOf.get(n) ?? 0, Math.max(widthAt.get(rankOf.get(n) ?? 0) ?? 0, units[n] ?? 2));
+      let width = 0;
+      for (const w of widthAt.values()) width += w;
+      let height = -Infinity;
+      for (const n of nodes) height = Math.max(height, (rowOf.get(n) ?? 0) + 1);
       const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
       return {
         nodes,
         rankOf,
         rowOf,
-        height: Math.max(...nodes.map((n) => (rowOf.get(n) ?? 0) + 1)),
-        width: [...widthAt.values()].reduce((s, w) => s + w, 0),
+        height,
+        width,
         up,
         down,
         cross: list.length,
@@ -400,21 +423,27 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         firstRank: Math.min(...nodes.map((n) => rankOf.get(n) ?? 0)),
       };
     };
-    for (const nodes of comps.values()) {
-      const topo = topoOrder(nodes, succ);
+    for (const nodes of comps) {
+      const topo = topoOrder(nodes, succ, size);
       const rankOf = new Map<number, number>();
-      for (const v of topo) rankOf.set(v, Math.max(-1, ...(pred.get(v) ?? []).map((p) => rankOf.get(p) ?? -1)) + 1);
+      for (const v of topo) {
+        let before = -1;
+        for (const p of pred[v] ?? []) before = Math.max(before, rankOf.get(p) ?? -1);
+        rankOf.set(v, before + 1);
+      }
       const rowOf = new Map<number, number>();
-      const taken = new Set<string>();
+      // Cells (row, rank) already holding a node; a rank is at most the node count.
+      const taken = new Set<number>();
+      const cell = (r: number, rank: number | undefined): number => r * (size + 2) + (rank ?? -1) + 1;
       const take = (v: number, r: number): void => {
         rowOf.set(v, r);
-        taken.add(`${r}|${rankOf.get(v)}`);
+        taken.add(cell(r, rankOf.get(v)));
       };
-      for (const v of longestPath(nodes, succ)) take(v, 0);
+      for (const v of longestPath(nodes, succ, size)) take(v, 0);
       for (const v of topo) {
         if (rowOf.has(v)) continue;
-        const free = (r: number): boolean => !taken.has(`${r}|${rankOf.get(v)}`);
-        let row = (pred.get(v) ?? []).map((p) => rowOf.get(p) ?? 0).find(free);
+        const free = (r: number): boolean => !taken.has(cell(r, rankOf.get(v)));
+        let row = (pred[v] ?? []).map((p) => rowOf.get(p) ?? 0).find(free);
         if (row === undefined) {
           row = 1;
           while (!free(row)) row++;
@@ -425,7 +454,7 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
       if (fold !== 'flat') {
         // The entry: it takes edges from another lane, none from its own, and sends exactly one into its own lane.
         const crossIn = (n: number): number[] => (partners[n] ?? []).filter((o) => graph.edges.some((e) => e.to === graph.nodes[n]?.id && index.get(e.from) === o));
-        const entry = nodes.find((n) => (pred.get(n) ?? []).length === 0 && (succ.get(n) ?? []).length === 1 && crossIn(n).length > 0);
+        const entry = nodes.find((n) => (pred[n] ?? []).length === 0 && (succ[n] ?? []).length === 1 && crossIn(n).length > 0);
         if (entry !== undefined && nodes.length > 1 && crossIn(entry).every((o) => (laneOf[o] ?? 0) < lane) && nodes.every((n) => n === entry || (rankOf.get(n) ?? 0) >= 1)) {
           // The rest of the flow moves a row down and a column back, so that its first node stands under the entry.
           for (const v of nodes) {
@@ -437,9 +466,9 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         }
         if (fold === 'headTail') {
           for (const t of nodes) {
-            if ((succ.get(t) ?? []).length > 0 || (pred.get(t) ?? []).length !== 1) continue;
+            if ((succ[t] ?? []).length > 0 || (pred[t] ?? []).length !== 1) continue;
             const goesDown = graph.edges.some((e) => index.get(e.from) === t && (laneOf[index.get(e.to) ?? 0] ?? 0) > lane);
-            const before = (pred.get(t) ?? [])[0] as number;
+            const before = (pred[t] ?? [])[0] as number;
             const row = (rowOf.get(before) ?? 0) + 1;
             const column = rankOf.get(before) ?? 0;
             if (!goesDown || nodes.some((n) => n !== t && rowOf.get(n) === row && rankOf.get(n) === column)) continue;
@@ -448,7 +477,9 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
           }
         }
       }
-      const height = Math.max(...[...rowOf.values()]) + 1;
+      let height = -Infinity;
+      for (const r of rowOf.values()) height = Math.max(height, r);
+      height += 1;
       if (foldedBlock) foldedComps.add(Math.min(...nodes));
       if (height > 1) {
         const rowLean = (r: number): [number, number] => lean(edgesOut(nodes.filter((n) => rowOf.get(n) === r)));

@@ -1,4 +1,4 @@
-import type { Layout, LayoutEdge } from '../types.ts';
+import type { Layout } from '../types.ts';
 import type { Fold } from './rows.ts';
 import { directionsOf, mixedSideEnds } from './sides.ts';
 
@@ -39,74 +39,149 @@ export const FOLDED: readonly Variant[] = [
 
 const EPS = 1e-6;
 
-interface Seg {
-  ax: number;
-  ay: number;
-  bx: number;
-  by: number;
+/**
+ * The segments of every edge of a drawing in one array, eight numbers each: the two ends (ax, ay, bx, by), then the
+ * lowest and the highest x and y. A segment is horizontal when its two ends are within `EPS` in y; everything else
+ * (diagonals too) is kept with the vertical ones and read by its first end.
+ */
+interface Segs {
+  v: Float64Array;
+  /** The segments of edge i are `at[i]` up to `at[i + 1]`. */
+  at: Int32Array;
+  horizontal: number[][];
+  vertical: number[][];
+  /** Per edge: lowest and highest x and y over its segments; an edge without segments has the empty box (Infinity, -Infinity). */
+  box: Float64Array;
 }
 
-const segments = (e: LayoutEdge): Seg[] => e.points.slice(1).map((q, i) => ({ ax: (e.points[i] as { x: number }).x, ay: (e.points[i] as { y: number }).y, bx: q.x, by: q.y }));
-
-const inside = (s: Seg, r: { x: number; y: number; w: number; h: number }): boolean =>
-  Math.min(s.ax, s.bx) < r.x + r.w - EPS && Math.max(s.ax, s.bx) > r.x + EPS && Math.min(s.ay, s.by) < r.y + r.h - EPS && Math.max(s.ay, s.by) > r.y + EPS;
-
-function overlap(s: Seg, t: Seg): boolean {
-  const sh = Math.abs(s.ay - s.by) < EPS;
-  const th = Math.abs(t.ay - t.by) < EPS;
-  if (sh !== th) return false;
-  if (sh) return Math.abs(s.ay - t.ay) < EPS && Math.min(Math.max(s.ax, s.bx), Math.max(t.ax, t.bx)) - Math.max(Math.min(s.ax, s.bx), Math.min(t.ax, t.bx)) > EPS;
-  return Math.abs(s.ax - t.ax) < EPS && Math.min(Math.max(s.ay, s.by), Math.max(t.ay, t.by)) - Math.max(Math.min(s.ay, s.by), Math.min(t.ay, t.by)) > EPS;
+function segsOf(l: Pick<Layout, 'edges'>): Segs {
+  let total = 0;
+  for (const e of l.edges) total += Math.max(0, e.points.length - 1);
+  const v = new Float64Array(total * 8);
+  const at = new Int32Array(l.edges.length + 1);
+  const box = new Float64Array(l.edges.length * 4);
+  const horizontal: number[][] = [];
+  const vertical: number[][] = [];
+  let k = 0;
+  l.edges.forEach((e, i) => {
+    at[i] = k;
+    const hs: number[] = [];
+    const vs: number[] = [];
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (let q = 1; q < e.points.length; q++) {
+      const a = e.points[q - 1] as { x: number; y: number };
+      const b = e.points[q] as { x: number; y: number };
+      const o = k * 8;
+      v[o] = a.x;
+      v[o + 1] = a.y;
+      v[o + 2] = b.x;
+      v[o + 3] = b.y;
+      v[o + 4] = Math.min(a.x, b.x);
+      v[o + 5] = Math.max(a.x, b.x);
+      v[o + 6] = Math.min(a.y, b.y);
+      v[o + 7] = Math.max(a.y, b.y);
+      x0 = Math.min(x0, v[o + 4] as number);
+      x1 = Math.max(x1, v[o + 5] as number);
+      y0 = Math.min(y0, v[o + 6] as number);
+      y1 = Math.max(y1, v[o + 7] as number);
+      (Math.abs(a.y - b.y) < EPS ? hs : vs).push(k);
+      k++;
+    }
+    box[4 * i] = x0;
+    box[4 * i + 1] = x1;
+    box[4 * i + 2] = y0;
+    box[4 * i + 3] = y1;
+    horizontal.push(hs);
+    vertical.push(vs);
+  });
+  at[l.edges.length] = k;
+  return { v, at, horizontal, vertical, box };
 }
 
 /** Things that make a drawing invalid: boxes that touch, lines through boxes, lines that share a stretch, diagonals, labels on boxes, anything outside. */
 export function violations(l: Layout): number {
+  return violationsOf(l, segsOf(l));
+}
+
+function violationsOf(l: Layout, g: Segs): number {
   let n = 0;
-  l.nodes.forEach((a, i) => {
+  const nodes = l.nodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i] as Layout['nodes'][number];
     if (a.x < -EPS || a.y < -EPS || a.x + a.w > l.width + EPS || a.y + a.h > l.height + EPS) n++;
-    for (const b of l.nodes.slice(i + 1)) if (a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS) n++;
-  });
+    for (let j = i + 1; j < nodes.length; j++) {
+      const b = nodes[j] as Layout['nodes'][number];
+      if (a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS) n++;
+    }
+  }
   for (const e of l.edges) {
     const t = e.label;
     if (!t) continue;
     if (t.x < -EPS || t.y < -EPS || t.x + t.w > l.width + EPS || t.y + t.h > l.height + EPS) n++;
-    for (const b of l.nodes) if (t.x < b.x + b.w - EPS && b.x < t.x + t.w - EPS && t.y < b.y + b.h - EPS && b.y < t.y + t.h - EPS) n++;
+    for (const b of nodes) if (t.x < b.x + b.w - EPS && b.x < t.x + t.w - EPS && t.y < b.y + b.h - EPS && b.y < t.y + t.h - EPS) n++;
   }
-  const all = l.edges.map(segments);
-  all.forEach((segs, i) => {
-    for (const s of segs) {
-      if (Math.abs(s.ax - s.bx) > EPS && Math.abs(s.ay - s.by) > EPS) n++;
-      for (const b of l.nodes) if (inside(s, b)) n++;
-      for (const other of all.slice(i + 1)) for (const t of other) if (overlap(s, t)) n++;
+  const S = g.v;
+  const nx0 = nodes.map((b) => b.x + EPS);
+  const nx1 = nodes.map((b) => b.x + b.w - EPS);
+  const ny0 = nodes.map((b) => b.y + EPS);
+  const ny1 = nodes.map((b) => b.y + b.h - EPS);
+  const m = l.edges.length;
+  for (let i = 0; i < m; i++) {
+    for (let s = g.at[i] as number; s < (g.at[i + 1] as number); s++) {
+      const o = s * 8;
+      if (Math.abs((S[o] as number) - (S[o + 2] as number)) > EPS && Math.abs((S[o + 1] as number) - (S[o + 3] as number)) > EPS) n++;
+      for (let b = 0; b < nodes.length; b++) {
+        if ((S[o + 4] as number) < (nx1[b] as number) && (S[o + 5] as number) > (nx0[b] as number) && (S[o + 6] as number) < (ny1[b] as number) && (S[o + 7] as number) > (ny0[b] as number)) n++;
+      }
     }
-  });
+  }
+  // Two segments share a stretch when both are horizontal or both are not, they lie on one line and their spans overlap.
+  const apart = 2 * EPS;
+  for (let i = 0; i < m; i++) {
+    for (let j = i + 1; j < m; j++) {
+      if ((g.box[4 * i + 1] as number) + apart < (g.box[4 * j] as number) || (g.box[4 * j + 1] as number) + apart < (g.box[4 * i] as number)) continue;
+      if ((g.box[4 * i + 3] as number) + apart < (g.box[4 * j + 2] as number) || (g.box[4 * j + 3] as number) + apart < (g.box[4 * i + 2] as number)) continue;
+      for (const s of g.horizontal[i] as number[]) {
+        for (const t of g.horizontal[j] as number[]) {
+          if (Math.abs((S[s * 8 + 1] as number) - (S[t * 8 + 1] as number)) < EPS && Math.min(S[s * 8 + 5] as number, S[t * 8 + 5] as number) - Math.max(S[s * 8 + 4] as number, S[t * 8 + 4] as number) > EPS) n++;
+        }
+      }
+      for (const s of g.vertical[i] as number[]) {
+        for (const t of g.vertical[j] as number[]) {
+          if (Math.abs((S[s * 8] as number) - (S[t * 8] as number)) < EPS && Math.min(S[s * 8 + 7] as number, S[t * 8 + 7] as number) - Math.max(S[s * 8 + 6] as number, S[t * 8 + 6] as number) > EPS) n++;
+        }
+      }
+    }
+  }
   return n;
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
 export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 } as const;
 
-const properCross = (a: Seg, b: Seg): boolean => {
-  const ah = Math.abs(a.ay - a.by) < EPS;
-  const bh = Math.abs(b.ay - b.by) < EPS;
-  if (ah === bh) return false;
-  const [h, v] = ah ? [a, b] : [b, a];
-  return v.ax > Math.min(h.ax, h.bx) + EPS && v.ax < Math.max(h.ax, h.bx) - EPS && h.ay > Math.min(v.ay, v.by) + EPS && h.ay < Math.max(v.ay, v.by) - EPS;
-};
+/** Whether horizontal segment `h` and vertical segment `v` (indices into `S`) cross inside both of them. */
+const crosses = (S: Float64Array, h: number, v: number): boolean =>
+  (S[v * 8] as number) > (S[h * 8 + 4] as number) + EPS && (S[v * 8] as number) < (S[h * 8 + 5] as number) - EPS && (S[h * 8 + 1] as number) > (S[v * 8 + 6] as number) + EPS && (S[h * 8 + 1] as number) < (S[v * 8 + 7] as number) - EPS;
 
 /** Crossings between edges, counted on the finished segments: [on the main flow, elsewhere]. */
 export function crossingsOf(l: Layout): [number, number] {
-  const all = l.edges.map(segments);
-  const box = all.map((segs) => ({ x0: Math.min(...segs.map((s) => Math.min(s.ax, s.bx))), x1: Math.max(...segs.map((s) => Math.max(s.ax, s.bx))), y0: Math.min(...segs.map((s) => Math.min(s.ay, s.by))), y1: Math.max(...segs.map((s) => Math.max(s.ay, s.by))) }));
+  return crossingsFrom(l, segsOf(l));
+}
+
+function crossingsFrom(l: Layout, g: Segs): [number, number] {
+  const S = g.v;
   let onMain = 0;
   let other = 0;
-  for (let i = 0; i < all.length; i++) {
-    for (let j = i + 1; j < all.length; j++) {
-      const a = box[i];
-      const b = box[j];
-      if (a && b && (a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0)) continue;
+  const m = l.edges.length;
+  for (let i = 0; i < m; i++) {
+    for (let j = i + 1; j < m; j++) {
+      if ((g.box[4 * i + 1] as number) < (g.box[4 * j] as number) || (g.box[4 * j + 1] as number) < (g.box[4 * i] as number) || (g.box[4 * i + 3] as number) < (g.box[4 * j + 2] as number) || (g.box[4 * j + 3] as number) < (g.box[4 * i + 2] as number)) continue;
       let n = 0;
-      for (const s of all[i] as Seg[]) for (const t of all[j] as Seg[]) if (properCross(s, t)) n++;
+      for (const h of g.horizontal[i] as number[]) for (const v of g.vertical[j] as number[]) if (crosses(S, h, v)) n++;
+      for (const v of g.vertical[i] as number[]) for (const h of g.horizontal[j] as number[]) if (crosses(S, h, v)) n++;
       if (l.edges[i]?.main || l.edges[j]?.main) onMain += n;
       else other += n;
     }
@@ -128,25 +203,36 @@ export function offCentre(l: Layout): Array<{ id: string; mid: number }> {
   const layerAxis = l.composition === 'stages' ? reading : across;
   const spreadAxis = layerAxis === 'x' ? 'y' : 'x';
   const key = (n: Layout['nodes'][number]): number => Math.round(n[layerAxis] * 100) / 100;
-  const layers = [...new Set(l.nodes.map(key))].sort((a, b) => a - b);
+  const layers: number[] = [];
+  for (const n of l.nodes) {
+    const k = key(n);
+    if (!layers.includes(k)) layers.push(k);
+  }
+  layers.sort((a, b) => a - b);
+  const nodeAt = new Map(l.nodes.map((n, i) => [n.id, i] as const));
+  const layerOf = l.nodes.map((n) => layers.indexOf(key(n)));
   const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
   const centre = (n: Layout['nodes'][number]): number => n[spreadAxis] + sizeOf(n, spreadAxis) / 2;
-  const groups = new Map<string, { id: string; partners: string[] }>();
+  // Groups in the order they are first met: a node, a way (out or in) and the layer the partner stands in.
+  const groupAt = new Int32Array(l.nodes.length * 2 * layers.length).fill(-1);
+  const groups: Array<{ id: string; partners: string[] }> = [];
   for (const e of l.edges) {
-    const a = byId.get(e.from);
-    const b = byId.get(e.to);
-    if (!a || !b || a === b) continue;
-    const gap = layers.indexOf(key(b)) - layers.indexOf(key(a));
-    if (Math.abs(gap) !== 1) continue;
-    for (const [node, other, out] of [[a, b, true], [b, a, false]] as const) {
-      const k = `${node.id}|${out}|${layers.indexOf(key(other))}`;
-      const g = groups.get(k) ?? { id: node.id, partners: [] };
-      g.partners.push(other.id);
-      groups.set(k, g);
+    const a = nodeAt.get(e.from);
+    const b = nodeAt.get(e.to);
+    if (a === undefined || b === undefined || a === b) continue;
+    if (Math.abs((layerOf[b] as number) - (layerOf[a] as number)) !== 1) continue;
+    for (const [node, other, out] of [[a, b, 0], [b, a, 1]] as const) {
+      const k = (node * 2 + out) * layers.length + (layerOf[other] as number);
+      let at = groupAt[k] as number;
+      if (at < 0) {
+        at = groupAt[k] = groups.length;
+        groups.push({ id: (l.nodes[node] as Layout['nodes'][number]).id, partners: [] });
+      }
+      (groups[at] as { partners: string[] }).partners.push((l.nodes[other] as Layout['nodes'][number]).id);
     }
   }
   const found: Array<{ id: string; mid: number }> = [];
-  for (const g of groups.values()) {
+  for (const g of groups) {
     const partners = [...new Set(g.partners)].map((id) => byId.get(id)).filter((n): n is Layout['nodes'][number] => n !== undefined);
     if (partners.length < 2) continue;
     const mine = byId.get(g.id);
@@ -193,6 +279,7 @@ export function startMissed(l: Layout): number {
 
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
+  const g = segsOf(l);
   const axis = l.direction === 'TD' ? 'y' : 'x';
   const across = l.direction === 'TD' ? 'x' : 'y';
   const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
@@ -211,8 +298,8 @@ export function score(l: Layout): number[] {
     const upward = l.composition !== 'stages' && l.direction !== 'TD' && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
     if (upward) folded++;
-    for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
+  for (let s = 0; s < (g.at[l.edges.length] as number); s++) length += Math.abs((g.v[s * 8 + 2] as number) - (g.v[s * 8] as number)) + Math.abs((g.v[s * 8 + 3] as number) - (g.v[s * 8 + 1] as number));
   // An edge against the reading direction that leaves a node that sends out two more edges than it takes in, or enters
   // one that takes in two more than it sends out, counts once more.
   const balance = new Map<string, number>();
@@ -239,7 +326,7 @@ export function score(l: Layout): number[] {
   const pixels = l.gapDefault !== undefined;
   const rowCost = pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
   const tightCost = pixels ? WEIGHTS.tight * (l.gap !== undefined && l.gap < (l.gapDefault ?? 0) ? 1 : 0) + WEIGHTS.labelTight * l.diagnostics.filter((d) => d.kind === 'label-tight').length + WEIGHTS.offCentre * l.diagnostics.filter((d) => d.kind === 'off-centre').length : 0;
-  const [crossMain, crossOther] = crossingsOf(l);
+  const [crossMain, crossOther] = crossingsFrom(l, g);
   const cost =
     bends +
     WEIGHTS.crossingMain * crossMain +
@@ -254,7 +341,7 @@ export function score(l: Layout): number[] {
     WEIGHTS.start * startMissed(l) +
     WEIGHTS.mixedSide * mixedSideEnds(l, directionsOf(l)).length +
     WEIGHTS.branch * offCentre(l).length;
-  return [violations(l) + l.diagnostics.filter((d) => d.kind === 'overflow').length, cost, Math.round(length)];
+  return [violationsOf(l, g) + l.diagnostics.filter((d) => d.kind === 'overflow').length, cost, Math.round(length)];
 }
 
 /** The best drawing; the earliest wins a tie, so the first candidate is the default. */
