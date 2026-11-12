@@ -8,6 +8,7 @@ import './class/frontend.ts';
 import './er/frontend.ts';
 import './journey/frontend.ts';
 import './gantt/frontend.ts';
+import './eventmodeling/frontend.ts';
 import './ishikawa/frontend.ts';
 import './cynefin/frontend.ts';
 import './git/frontend.ts';
