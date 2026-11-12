@@ -10,13 +10,13 @@ import { buildLadder } from './dummies.ts';
 import type { Ladder, Placed } from './model.ts';
 import type { Rows } from './rows.ts';
 import { orderLayers } from './order.ts';
-import { boxLength, growForPorts, LINE_PITCH, planFlat, portDemand, portOffsets, portStep } from './ports.ts';
+import { boxLength, CORNER_CLEAR, growForPorts, LINE_PITCH, planFlat, portDemand, portRoom, portStep } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
 import { refineLabels } from './label-spot.ts';
 import type { Frame } from './route.ts';
-import { CORNER_CLEAR, route } from './route.ts';
+import { route } from './route.ts';
 import { assignByStage, assignLayers } from './rows.ts';
 import type { Composition } from './composition.ts';
 import { planZones } from './composition.ts';
@@ -157,7 +157,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     leftToRight(ladder, layers);
     for (const node of ladder.nodes) if (node.idx < ladder.realCount) node.units = units[node.idx] ?? 2;
     const plan = planFlat(ladder, layers, ruler);
-    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler));
+    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true);
     const need = portDemand(ladder, plan);
     const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart });
     return {
@@ -400,7 +400,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
       const u = frameFor(graph, r, undefined).unit;
       // Wider gaps coarsen the port lattice: stop when a box would lose a port an edge needs.
       const need = portDemand(placed.ladder, placed.plan);
-      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && portOffsets(boxLength(n.units, u, gap), portStep(u, r)).length < Math.max(need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
+      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && portRoom(boxLength(n.units, u, gap), portStep(u, r), r.uniform === true) < Math.max(need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
       const wider = draw(r);
       if (total(wider) > room) break;
       const now = tightPasses(wider);

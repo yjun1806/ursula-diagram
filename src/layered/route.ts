@@ -11,7 +11,7 @@ import type { FlatPlan } from './ports.ts';
 import { stats } from './stats.ts';
 import { offCentreEnds } from './centre.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
-import { boxLength, LINE_PITCH, portOffsets, portStep, sideFractions } from './ports.ts';
+import { boxLength, CORNER_CLEAR, LINE_PITCH, portStep, sideFractions, sideOffsets } from './ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -38,8 +38,7 @@ export interface Frame {
 
 const EPS = 1e-6;
 
-/** Pixels: a port set at the centre of the other box keeps this far from the corners of its own box, and from its other ports. */
-export const CORNER_CLEAR = 12;
+/** Pixels: a port set at the centre of the other box keeps this far from its other ports (and from the corners of its own box, CORNER_CLEAR). */
 const PORT_APART = 8;
 
 /** Space kept free at the outer edge of the drawing: none in a terminal, where an empty cell is lost width. */
@@ -253,7 +252,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     const near = custom[key(n, side)];
     const origin = nodeO(n);
     const out: number[] = [];
-    for (const o of portOffsets(len(n), step)) {
+    for (const o of sideOffsets(len(n), step, sideCount[key(n, side)] ?? 0, ruler.uniform === true)) {
       const x = origin + o;
       if (set?.includes(rk(x))) continue;
       if (near?.some((c) => Math.abs(c - x) < PORT_APART - EPS)) continue;

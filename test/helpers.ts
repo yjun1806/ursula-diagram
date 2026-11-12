@@ -1,4 +1,5 @@
 import type { Ruler } from '../src/metrics.ts';
+import { CORNER_CLEAR } from '../src/layered/ports.ts';
 import { measureNodes } from '../src/layout/place.ts';
 import type { Graph, Layout, LayoutEdge, Point } from '../src/types.ts';
 
@@ -132,6 +133,30 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
   }
   const bad: string[] = [];
   const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
+  // A side whose odd lattice (centre and whole steps from it) cannot hold all the ends on it takes the even lattice: half a step either side of the centre and whole steps beyond, kept CORNER_CLEAR from both ends.
+  const evenPortOf = (len: number, off: number, ends: number): boolean =>
+    pitches.some((pitch) => {
+      const odd = 2 * Math.floor((len / 2 - pitch / 2 + 1e-6) / pitch) + 1;
+      const k = Math.abs(off - len / 2) / pitch - 0.5;
+      return odd < ends && near(k, Math.round(k)) && Math.abs(off - len / 2) <= len / 2 - CORNER_CLEAR + 0.01;
+    });
+  const endsOnSide = new Map<string, number>();
+  const sideOfEnd = (p: Point, n: Layout['nodes'][number]): string | undefined => {
+    const inX = p.x > n.x - 0.01 && p.x < n.x + n.w + 0.01;
+    const inY = p.y > n.y - 0.01 && p.y < n.y + n.h + 0.01;
+    if (near(p.x, n.x) && inY) return `${n.id}|left`;
+    if (near(p.x, n.x + n.w) && inY) return `${n.id}|right`;
+    if (near(p.y, n.y) && inX) return `${n.id}|top`;
+    if (near(p.y, n.y + n.h) && inX) return `${n.id}|bottom`;
+    return undefined;
+  };
+  for (const e of l.edges) {
+    for (const [p, id] of [[e.points[0], e.from], [e.points[e.points.length - 1], e.to]] as const) {
+      const n = l.nodes.find((x) => x.id === id);
+      const side = p && n ? sideOfEnd(p, n) : undefined;
+      if (side !== undefined) endsOnSide.set(side, (endsOnSide.get(side) ?? 0) + 1);
+    }
+  }
   const portOf = (len: number, off: number): boolean => {
     for (const pitch of pitches) {
       const k = (off - len / 2) / pitch;
@@ -173,7 +198,8 @@ export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): strin
         continue;
       }
       const off = onH ? p.x - n.x : p.y - n.y;
-      if (!portOf(onH ? n.w : n.h, off)) bad.push(`edge ${name} ends off the ports of ${id}`);
+      const ends = endsOnSide.get(sideOfEnd(p, n) ?? '') ?? 0;
+      if (!portOf(onH ? n.w : n.h, off) && !evenPortOf(onH ? n.w : n.h, off, ends)) bad.push(`edge ${name} ends off the ports of ${id}`);
     }
   }
   return bad;

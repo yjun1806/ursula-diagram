@@ -12,6 +12,9 @@ export const portStep = (unit: number, ruler: Ruler): number => unit / Math.max(
 /** Extent of a box of `units` slot units along the order axis. */
 export const boxLength = (units: number, unit: number, gap: number): number => units * unit - gap;
 
+/** Pixels: a port keeps this far from the corners of its box. */
+export const CORNER_CLEAR = 12;
+
 /** Offsets from the start of a side: the centre and every multiple of the step from it that keeps clear of the corners. */
 export function portOffsets(length: number, step: number): number[] {
   const out: number[] = [];
@@ -19,6 +22,27 @@ export function portOffsets(length: number, step: number): number[] {
   const reach = length / 2 - step / 2 - (step <= 1 ? 1 : 0) + 1e-6;
   for (let k = -Math.floor(reach / step); k <= Math.floor(reach / step); k++) out.push(length / 2 + k * step);
   return out;
+}
+
+/** Offsets from the start of a short side on the dense lattice: the centre and every half step from it, at least CORNER_CLEAR from both ends. */
+export function evenOffsets(length: number, step: number): number[] {
+  const half = step / 2;
+  const each = Math.max(0, Math.floor((length / 2 - CORNER_CLEAR + 1e-6) / half));
+  const out: number[] = [];
+  for (let j = -each; j <= each; j++) out.push(length / 2 + j * half);
+  return out;
+}
+
+/** How many ports a side of this length holds: the lattice of whole steps, or the dense one where that holds more (never in a terminal). */
+export const portRoom = (length: number, step: number, terminal: boolean): number =>
+  Math.max(portOffsets(length, step).length, terminal ? 0 : evenOffsets(length, step).length);
+
+/** The lattice a side takes for `count` ports: whole steps when that holds them, else the dense one when that does, else whole steps (the box has to grow). */
+export function sideOffsets(length: number, step: number, count: number, terminal: boolean): number[] {
+  const odd = portOffsets(length, step);
+  if (terminal || odd.length >= count) return odd;
+  const even = evenOffsets(length, step);
+  return even.length >= count ? even : odd;
 }
 
 /** Fraction positions of the ports on a side along the layer axis: the centre first, then outward. */
@@ -91,11 +115,11 @@ export function portDemand(l: Ladder, plan: Map<number, FlatPlan>): Array<{ up: 
 }
 
 /** Widens real nodes by whole pairs of slot units until their sides hold the ports that edges need. */
-export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number): void {
+export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number, terminal: boolean): void {
   const need = portDemand(l, plan);
   for (const n of l.nodes) {
     if (n.idx >= l.realCount) continue;
     const want = Math.max(need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0);
-    while (portOffsets(boxLength(n.units, unit, gap), step).length < want && n.units < 40) n.units += 2;
+    while (portRoom(boxLength(n.units, unit, gap), step, terminal) < want && n.units < 40) n.units += 2;
   }
 }
