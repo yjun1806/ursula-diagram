@@ -362,6 +362,35 @@ describe('gantt layout', () => {
   });
 });
 
+describe('gantt compact mode', () => {
+  const compact = `---
+displayMode: compact
+---
+gantt
+    dateFormat  YYYY-MM-DD
+    section Section
+    A task           :a1, 2014-01-01, 30d
+    Another task     :a2, 2014-01-20, 25d
+    Another one      :a3, 2014-02-10, 20d`;
+  const blank = compact.replace(/^---[\s\S]*?---\n/, '\n\n\n\n');
+
+  it('puts a task on the topmost row of its section that it does not overlap', () => {
+    const rows = (src: string, config?: Record<string, never>) => layoutGantt(parseGantt(src, config === undefined ? {} : { config }), pixelRuler()).bars.map((b) => b.row);
+    expect(rows(blank)).toEqual([0, 1, 2]);
+    expect(layoutGantt(parseGantt(blank, { frontMatter: { displayMode: 'compact' } }), pixelRuler()).bars.map((b) => b.row)).toEqual([0, 1, 0]);
+    expect(layoutGantt(parseGantt(blank, { config: { gantt: { displayMode: 'compact' } } }), pixelRuler()).bars.map((b) => b.row)).toEqual([0, 1, 0]);
+  });
+
+  it('reads the front matter through render and names a shared row\'s later task inside its band', () => {
+    const svg = render(compact);
+    expect(svg.match(/ursula-band/g)).toHaveLength(3);
+    const layout = layoutGantt(parseGantt(blank, { frontMatter: { displayMode: 'compact' } }), pixelRuler());
+    const inner = layout.scene.items.filter((i): i is SceneText => i.kind === 'text' && i.text === 'Another one');
+    expect(inner).toHaveLength(1);
+    expect(layout.scene.items.filter((i) => i.kind === 'text' && i.text === 'A task')).toHaveLength(1);
+  });
+});
+
 describe('gantt text', () => {
   const text = (src: string, width: number): string[] => {
     const r = renderText(src, width);

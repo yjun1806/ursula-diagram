@@ -37,4 +37,6 @@ export interface Gantt {
   tickInterval?: { step: number; unit: TickUnit };
   /** Day of the week (0 is Sunday) on which week ticks start. */
   weekday?: number;
+  /** `displayMode: compact`: tasks of a section that do not overlap share a row. */
+  compact?: true;
 }

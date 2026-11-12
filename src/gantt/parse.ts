@@ -45,7 +45,7 @@ const stringOf = (v: unknown): string | undefined => (typeof v === 'string' && v
  * Reads a Mermaid Gantt chart and works out every task's dates. `heading` is the title of a leading front-matter block
  * (a `title` line wins over it); `config` is its `config` map, of which only the `gantt` section is read.
  */
-export function parseGantt(src: string, opts: { heading?: string; config?: unknown } = {}): Gantt {
+export function parseGantt(src: string, opts: { heading?: string; config?: unknown; frontMatter?: unknown } = {}): Gantt {
   const rows = src.split(/\r?\n/);
   const fromConfig = ganttConfig(opts.config);
   let title: string | undefined;
@@ -178,6 +178,8 @@ export function parseGantt(src: string, opts: { heading?: string; config?: unkno
   const kept: GanttTask[] = tasks.map((t) => ({ ...t, section: renumber.get(t.section) ?? 0 }));
 
   const heading = opts.heading;
+  const topMode = typeof opts.frontMatter === 'object' && opts.frontMatter !== null && 'displayMode' in opts.frontMatter ? opts.frontMatter.displayMode : undefined;
+  const compact = topMode === 'compact' || stringOf(fromConfig['displayMode']) === 'compact';
   return {
     ...(title !== undefined ? { title } : heading !== undefined && heading !== '' ? { title: heading } : {}),
     ...(accTitle === undefined ? {} : { accTitle }),
@@ -188,6 +190,7 @@ export function parseGantt(src: string, opts: { heading?: string; config?: unkno
     ...(axisFormat === undefined ? {} : { axisFormat }),
     ...(tickInterval === undefined ? {} : { tickInterval }),
     ...(weekday === undefined ? {} : { weekday }),
+    ...(compact ? { compact: true as const } : {}),
   };
 }
 

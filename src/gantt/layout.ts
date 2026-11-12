@@ -17,6 +17,9 @@ const TAG_GAP = 8;
 const MAX_CHART = 960;
 const MIN_BAR = 4;
 const TICK_GAP = 12;
+const COMPACT_GAP = 8;
+/** A band narrower than this cannot carry its own name in compact mode. */
+const INNER_MIN = 40;
 
 /** Pixels per unit of time the chart may use: `ladder` values of each unit; the largest that fits wins. */
 const UNITS_MS = [1, 1000, 60_000, 3_600_000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
@@ -81,59 +84,88 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const posOf = (t: number): number => (t - t0) * scale;
   const plan = planTicks({ t0, t1, posOf, width: w11, gap: TICK_GAP, axisFormat: model.axisFormat, tickInterval: model.tickInterval, weekday: model.weekday, wholeDays: marks.every((m) => m % DAY === 0) });
 
+  // Each task's band and the text to its right, measured from the axis start (`rx`)
+  interface Geo {
+    rx: number;
+    w: number;
+    dur: string;
+    chips: Array<{ dx: number; w: number; text: string }>;
+    /** Right end of the text after the band, from the axis start. */
+    reach: number;
+  }
+  const geoOf = new Map<number, Geo>();
+  for (const ti of rowTasks) {
+    const t = taskOf(ti);
+    const milestone = t.milestone;
+    const w = milestone ? BAND : Math.max(MIN_BAR, (t.end - t.start) * scale);
+    const rx = milestone ? posOf(centreOf(t)) - HALF : posOf(t.start);
+    let at = rx + w + TAG_GAP + w11(t.durationText);
+    const chips: Geo['chips'] = [];
+    for (const [on, text] of [[t.done, 'done'], [t.active, 'active'], [t.milestone, 'milestone']] as const) {
+      if (!on) continue;
+      const cw = ceil4(w11(text) + 16);
+      const dx = at + (chips.length === 0 ? TAG_GAP : 4);
+      chips.push({ dx, w: cw, text });
+      at = dx + cw;
+    }
+    geoOf.set(ti, { rx, w, dur: t.durationText, chips, reach: at });
+  }
+  const geo = (ti: number): Geo => geoOf.get(ti) as Geo;
+
+  // Rows: one task each, or in compact mode the topmost row of its section where it clears the others
+  const lines: number[][] = [];
+  const lineSection: number[] = [];
+  const lineEnds: number[] = [];
+  for (const ti of rowTasks) {
+    const t = taskOf(ti);
+    const g = geo(ti);
+    let row = -1;
+    if (model.compact === true && !t.milestone && g.w >= INNER_MIN) {
+      row = lines.findIndex((_, r) => lineSection[r] === t.section && g.rx >= (lineEnds[r] ?? 0) + COMPACT_GAP);
+    }
+    if (row < 0) {
+      row = lines.length;
+      lines.push([]);
+      lineSection.push(t.section);
+      lineEnds.push(Number.NEGATIVE_INFINITY);
+    }
+    lines[row]?.push(ti);
+    lineEnds[row] = g.reach;
+  }
+  const rowOfTask = new Map<number, number>();
+  lines.forEach((tasksOfLine, row) => tasksOfLine.forEach((ti) => rowOfTask.set(ti, row)));
+
   // Columns
   const named = model.sections.some((s) => s !== '');
   const sectionW = named ? Math.max(SECTION_MIN, ceil4(Math.max(...model.sections.map(w13)) + 16)) : 0;
   const nameX = LEFT + sectionW;
-  const nameW = Math.max(...rowTasks.map((i) => w12(taskOf(i).label)));
+  const nameW = Math.max(...lines.map((l) => w12(taskOf(l[0] ?? 0).label)));
   const x0 = Math.max(nameX + NAME_ROOM, ceil4(nameX + nameW + 24));
   const xOf = (t: number): number => x0 + posOf(t);
 
-  // Rows
+  // Rows' places
   const hasTitle = model.title !== undefined;
   const base = hasTitle ? 120 : 80;
   const gridTop = plan.twoRow ? base : base - 12;
   const rowTop = (row: number): number => gridTop + ROW * row;
-  const gridBottom = rowTop(rowTasks.length);
+  const gridBottom = rowTop(lines.length);
 
-  // Bars and the text to their right
   const bars: PlacedBar[] = [];
   const labels = new Map<number, { dur: { x: number; text: string }; chips: Array<{ x: number; w: number; text: string }>; right: number }>();
-  const obstacles: Rect[][] = [];
-  rowTasks.forEach((ti, row) => {
-    const t = taskOf(ti);
+  const obstacles: Rect[][] = lines.map(() => []);
+  for (const ti of rowTasks) {
+    const row = rowOfTask.get(ti) ?? 0;
+    const g = geo(ti);
+    const x = x0 + g.rx;
     const y = rowTop(row) + BAND_TOP;
     const cy = y + HALF;
-    let x: number;
-    let w: number;
-    let cx: number;
-    if (t.milestone) {
-      cx = xOf(centreOf(t));
-      x = cx - HALF;
-      w = BAND;
-    } else {
-      x = xOf(t.start);
-      w = Math.max(MIN_BAR, (t.end - t.start) * scale);
-      cx = x + w / 2;
-    }
-    bars.push({ task: ti, row, x, y, w, h: BAND, cx, cy });
-    const right = x + w;
-    const durX = right + TAG_GAP;
-    let at = durX + w11(t.durationText);
-    const chips: Array<{ x: number; w: number; text: string }> = [];
-    for (const [on, text] of [[t.done, 'done'], [t.active, 'active'], [t.milestone, 'milestone']] as const) {
-      if (!on) continue;
-      const cw = ceil4(w11(text) + 16);
-      const cxl = ceil4(at + (chips.length === 0 ? TAG_GAP : 4));
-      chips.push({ x: cxl, w: cw, text });
-      at = cxl + cw;
-    }
-    labels.set(ti, { dur: { x: durX, text: t.durationText }, chips, right: at });
-    obstacles.push([
-      { x0: x, x1: right, y0: y, y1: y + BAND },
-      { x0: durX, x1: at, y0: cy - 10, y1: cy + 10 },
-    ]);
-  });
+    bars.push({ task: ti, row, x, y, w: g.w, h: BAND, cx: x + g.w / 2, cy });
+    const durX = x + g.w + TAG_GAP;
+    const chips = g.chips.map((c) => ({ x: ceil4(x0 + c.dx), w: c.w, text: c.text }));
+    const right = chips.length === 0 ? durX + w11(g.dur) : (chips[chips.length - 1]?.x ?? 0) + (chips[chips.length - 1]?.w ?? 0);
+    labels.set(ti, { dur: { x: durX, text: g.dur }, chips, right });
+    obstacles[row]?.push({ x0: x, x1: x + g.w, y0: y, y1: y + BAND }, { x0: durX, x1: right, y0: cy - 10, y1: cy + 10 });
+  }
 
   // Vertical markers: a dashed line with its name under the chart
   const vertLabels = vertTasks.map((ti) => {
@@ -206,10 +238,11 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   // Section dividers and names
   const firstRowOf = new Map<number, number>();
   const lastRowOf = new Map<number, number>();
-  rowTasks.forEach((ti, row) => {
+  rowTasks.forEach((ti) => {
+    const row = rowOfTask.get(ti) ?? 0;
     const s = taskOf(ti).section;
     if (!firstRowOf.has(s)) firstRowOf.set(s, row);
-    lastRowOf.set(s, row);
+    lastRowOf.set(s, Math.max(lastRowOf.get(s) ?? 0, row));
   });
   const dividerRows = [0, ...[...lastRowOf.values()].map((r) => r + 1)];
   for (const row of new Set(dividerRows)) items.push(lineItem(LEFT, rowTop(row), width - 40, rowTop(row), ['grid']));
@@ -217,7 +250,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const row = firstRowOf.get(s);
     if (name !== '' && row !== undefined) items.push({ kind: 'text', x: LEFT, y: rowTop(row) + 20, text: name, role: ['zone-name'] });
   });
-  rowTasks.forEach((ti, row) => items.push({ kind: 'text', x: nameX, y: rowTop(row) + 20, text: taskOf(ti).label, role: ['body'] }));
+  lines.forEach((tasksOfLine, row) => items.push({ kind: 'text', x: nameX, y: rowTop(row) + 20, text: taskOf(tasksOfLine[0] ?? 0).label, role: ['body'] }));
 
   // `after` lines, under the bars
   const omitted: GanttLayout['omitted'] = [];
@@ -279,6 +312,10 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
       items.push({ kind: 'box', style: 'frame', x: bar.x, y: bar.y, w: bar.w, h: bar.h, role: ['band', t.active ? series : `${series}--tint`], data });
       if (t.crit) items.push({ kind: 'path', d: roundedOutline(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2, Math.min(5, (bar.w - 2) / 2)), role: ['edge', 'edge--accent'], data });
     }
+    if (lines[bar.row]?.[0] !== bar.task) {
+      const text = clip(t.label, bar.w - 16, w12);
+      items.push({ kind: 'text', x: bar.x + 8, y: bar.cy, text, role: t.active ? ['body', 'on-start'] : ['body'], data });
+    }
     const label = labels.get(bar.task);
     if (label === undefined) continue;
     items.push({ kind: 'text', x: label.dur.x, y: bar.cy, text: label.dur.text, role: ['tick', 'start'] });
@@ -292,6 +329,17 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const name = model.accTitle ?? (model.title === undefined ? 'gantt' : `gantt — ${model.title}`);
   const scene: Scene = { width, height, title: name, items, ...(theme === undefined ? {} : { theme }) };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
+}
+
+/** `text` cut to `limit` with an ellipsis when it does not fit. */
+function clip(text: string, limit: number, width: (s: string) => number): string {
+  if (width(text) <= limit) return text;
+  let out = '';
+  for (const ch of text) {
+    if (width(`${out}${ch}…`) > limit) break;
+    out += ch;
+  }
+  return `${out}…`;
 }
 
 function range(from: number, to: number): number[] {
