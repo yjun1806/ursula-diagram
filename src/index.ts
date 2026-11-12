@@ -5,6 +5,7 @@ import { selectFrontEnd } from './registry.ts';
 import type { TextOptions } from './registry.ts';
 import type { SvgOptions } from './render/svg.ts';
 import './sequence/frontend.ts';
+import './treeview/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
 
