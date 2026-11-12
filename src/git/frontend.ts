@@ -6,13 +6,18 @@ import { layoutGit } from './layout.ts';
 import { parseGit } from './parse.ts';
 import { gitTextLines } from './text.ts';
 
+/** Texts that carry `data-rotate` turn by that many degrees around their anchor. */
+function turnLabels(svg: string): string {
+  return svg.replace(/<text ([^>]*?)x="([^"]+)" y="([^"]+)"([^>]*?) data-rotate="([^"]+)"/gu, (_m, a: string, x: string, y: string, b: string, deg: string) => `<text ${a}x="${x}" y="${y}"${b} data-rotate="${deg}" transform="rotate(${deg} ${x} ${y})"`);
+}
+
 export const gitFrontEnd: FrontEnd = {
   name: 'git',
   headers: ['gitGraph', 'gitGraph:', 'gitgraph', 'gitgraph:', 'GitGraph', 'GitGraph:'],
   svg(src, opts) {
     const theme = opts.theme ?? 'solid';
     const layout = layoutGit(parseGit(src, opts.heading, opts.config), pixelRuler(), theme);
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), theme });
+    return turnLabels(renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), theme }));
   },
   textLines(src, maxWidth, opts) {
     return gitTextLines(parseGit(src, opts.heading, opts.config), maxWidth);
