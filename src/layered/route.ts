@@ -13,6 +13,8 @@ import type { FlatPlan } from './ports.ts';
 import { stats } from './stats.ts';
 import { settleVertices } from './vertex.ts';
 import { offCentreEnds } from './centre.ts';
+import { settleBodies } from './bodies.ts';
+import { placeEndLabels } from './end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
 
@@ -683,6 +685,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       title: n.title,
       lines: n.lines,
       shape: n.shape,
+      ...(n.compartments === undefined ? {} : { compartments: n.compartments }),
     }, ruler);
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
@@ -822,6 +825,11 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
 
   if (!ruler.uniform) diagnostics.push(...tightLabels(edges), ...offCentreEnds({ nodes, edges }));
   diagnostics.push(...crossings(edges), ...vertices.diagnostics);
+  // Shapes of a fixed size shrink to their own boxes; the small texts at the ends of lines then find their places.
+  const drawn = settleBodies(nodes, edges, td, ruler);
+  if (graph.edges.some((e) => e.startLabel !== undefined || e.endLabel !== undefined)) {
+    diagnostics.push(...placeEndLabels(edges, l.chains.map((c) => graph.edges[c.edge]).map((e) => (e === undefined ? undefined : { start: e.startLabel, end: e.endLabel })), drawn, ruler));
+  }
   // A label beside a line near the end of the order axis may reach past the lane padding: the canvas grows to hold it.
   const labelEnd = Math.max(0, ...edges.map((e) => (e.label ? (td ? e.label.y + e.label.h : e.label.x + e.label.w) : 0)));
   const totalO = Math.max(prepWidth(f, l, start, nodeO, prep.centre), gridUp(ruler, labelEnd) + margin);
@@ -854,7 +862,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   });
   const whole = (v: number): number => (ruler.uniform ? Math.ceil(v - EPS) : v);
   const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
-  const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes, edges, diagnostics };
+  const layout: Layout = { pitch: 2 * f.unit, width: tidy(width), height: tidy(height), direction: graph.direction, laneAxis: 'across', lanes, nodes: drawn, edges, diagnostics };
   return { layout, failed: failed.map((ei) => ei), failedBand };
 }
 

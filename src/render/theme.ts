@@ -25,6 +25,15 @@ export interface ThemeSpec {
   chipBorder: boolean;
   /** Whether edge labels have a rim of the background colour around them. */
   chipHalo: boolean;
+  /** Boxes divided by rules, notes and the small texts at the ends of lines. */
+  records: {
+    /** Colour token and width of the rule between two compartments; a rule of the page colour is a gap. */
+    rule: { token: string; width: number };
+    /** Fill of a note, and its outline (width 0 draws none). */
+    note: { fill: string; line: string; width: number };
+    /** Colour token and weight of the small text at the end of a line. */
+    value: { token: string; weight: number };
+  };
 }
 
 const COMMON: Record<string, Token> = {
@@ -64,6 +73,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: false,
     chipBorder: false,
     chipHalo: true,
+    records: { rule: { token: 'zone', width: 2 }, note: { fill: 'zone', line: 'hair', width: 2 }, value: { token: 'accent-ink', weight: 600 } },
   },
   outline: {
     tokens: {
@@ -91,6 +101,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: false,
     chipBorder: true,
     chipHalo: false,
+    records: { rule: { token: 'hair', width: 1 }, note: { fill: 'lane', line: 'hair', width: 1 }, value: { token: 'fg', weight: 500 } },
   },
   card: {
     tokens: {
@@ -118,6 +129,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: true,
     chipBorder: false,
     chipHalo: false,
+    records: { rule: { token: 'hair', width: 1 }, note: { fill: 'lane', line: 'hair', width: 0 }, value: { token: 'fg', weight: 600 } },
   },
 };
 
@@ -171,6 +183,38 @@ export function flowRules(spec: ThemeSpec, font: string): string[] {
     '.ursula-edge-label--branch{fill:$accent}',
     '.ursula-legend-rule{stroke:$hair;stroke-width:1}',
     '.ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}',
+  ];
+}
+
+/**
+ * Rules of the record shapes (boxes divided by rules, dots, bar, note, actor), of the marks at the ends of relation
+ * lines and of the small texts at their ends. A drawing carries them only when it uses one of them.
+ */
+export function recordRules(spec: ThemeSpec): string[] {
+  const w = spec.lineWidth;
+  const { rule, note, value } = spec.records;
+  const stroke = (colour: string): string => `fill:none;stroke:${colour};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round`;
+  const noteLine = note.width > 0 ? `stroke:$${note.line};stroke-width:${note.width};stroke-linejoin:round` : 'stroke:none';
+  return [
+    `.ursula-rule{fill:none;stroke:$${rule.token};stroke-width:${rule.width}}`,
+    '.ursula-cell-title{fill:$fg;font-size:13px;font-weight:600}',
+    '.ursula-cell-tag{fill:$muted;font-size:11px;font-weight:500}',
+    '.ursula-cell-body{fill:$fg;font-size:12px;font-weight:400}',
+    '.ursula-start-dot{fill:$accent}',
+    `.ursula-end-ring{fill:$zone;stroke:$fg;stroke-width:${w}}`,
+    '.ursula-end-core{fill:$fg}',
+    '.ursula-bar{fill:$fg}',
+    `.ursula-note{fill:$${note.fill};${noteLine}}`,
+    `.ursula-note-fold{fill:none;${noteLine}}`,
+    `.ursula-actor{${stroke('$line')}}`,
+    '.ursula-actor-name{fill:$muted;font-size:12px;font-weight:500}',
+    `.ursula-end-stroke{${stroke('$line')}}`,
+    '.ursula-end-stroke--accent{stroke:$accent}',
+    `.ursula-end-hollow{fill:$zone;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
+    '.ursula-end-hollow--accent{stroke:$accent}',
+    `.ursula-end-solid{fill:$line;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
+    '.ursula-end-solid--accent{fill:$accent;stroke:$accent}',
+    `.ursula-end-label{fill:$${value.token};font-size:11px;font-weight:${value.weight}}`,
   ];
 }
 

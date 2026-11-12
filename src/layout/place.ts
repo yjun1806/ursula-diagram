@@ -1,6 +1,8 @@
 import type { Graph, NodeShape } from '../types.ts';
 import type { Ruler } from '../metrics.ts';
 import { diamondHeight, diamondWidth, hasOutline } from './diamond.ts';
+import { isFixedShape, ownSize } from './records.ts';
+import type { Compartment } from '../types.ts';
 
 /**
  * Everything here is "abstract": f is the flow axis (x for LR, y for TD) and c is
@@ -150,7 +152,7 @@ export interface Measure {
 
 /** Sizes that depend on the text alone, never on where a node is placed. */
 export function measureNodes(
-  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined }>,
+  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined }>,
   lanes: ReadonlyArray<{ label: string }>,
   ruler: Ruler,
   td: boolean,
@@ -165,15 +167,20 @@ export function measureNodes(
     while (((r + ruler.rankGap) / 2) % ruler.nodeGrid > 1e-9) r += ruler.nodeGrid;
     return r;
   };
+  // Boxes with compartments and the shapes of a fixed size ask for sizes of their own.
+  const own = nodes.map((s) => ownSize(s, td, ruler));
   const heights = nodes.map(
-    (s) => ruler.lineHeight('title') + s.lines.length * ruler.lineHeight('line') + 2 * ruler.nodePadY + 2 * border,
+    (s, i) => own[i]?.h ?? ruler.lineHeight('title') + s.lines.length * ruler.lineHeight('line') + 2 * ruler.nodePadY + 2 * border,
   );
-  const contentH = td ? fit(Math.max(0, ...heights)) : gridUp(ruler, Math.max(0, ...heights));
+  // The common height is set by the boxes that fill their slot; a shape of a fixed size does not raise it.
+  const sets = heights.filter((_, i) => !isFixedShape(nodes[i]?.shape) || ruler.terminal === true);
+  const tallest = Math.max(0, ...(sets.length > 0 ? sets : heights));
+  const contentH = td ? fit(tallest) : gridUp(ruler, tallest);
   // A diamond is measured by its outline, which stands out eight pixels above and below the box height.
   const content = nodes.map((s, i) => {
     const texts = [ruler.textWidth(s.title, 'title'), ...s.lines.map((l) => ruler.textWidth(l, 'line'))];
     return {
-      w: hasOutline(s.shape, ruler) ? diamondWidth(ruler, s, diamondHeight(contentH)) : Math.max(...texts) + 2 * ruler.nodePadX + 2 * border,
+      w: own[i]?.w ?? (hasOutline(s.shape, ruler) ? diamondWidth(ruler, s, diamondHeight(contentH)) : Math.max(...texts) + 2 * ruler.nodePadX + 2 * border),
       h: heights[i] as number,
     };
   });
@@ -196,7 +203,7 @@ export function measureNodes(
   const gutter = !labelled
     ? 0
     : gridUp(ruler, 2 * ruler.laneLabelGap + (td ? ruler.lineHeight('lane') : Math.max(0, ...labelWidths)));
-  return { w, h: content.map(() => contentH), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter };
+  return { w, h: content.map((c, i) => (!td && own[i] !== undefined ? c.h : contentH)), common, contentH, unit: ((td ? contentH : common) + ruler.rankGap) / 2, gutter };
 }
 
 export function sizeSlots(topo: Topology, ruler: Ruler, direction: 'LR' | 'TD', needs: Map<string, Need>): Skeleton {

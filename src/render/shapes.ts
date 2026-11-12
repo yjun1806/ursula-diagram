@@ -170,6 +170,9 @@ function entry(b: Box, p: Point, d: Point): number | undefined {
   switch (b.shape) {
     case 'circle':
     case 'dbl-circle':
+    case 'ellipse':
+    case 'start-dot':
+    case 'end-dot':
       return enterEllipse(cx, cy, b.w / 2, b.h / 2, p, d);
     case 'hexagon':
       return enterPolygon(hexagonPoints(b), p, d);

@@ -1,11 +1,12 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, compartmentHeights, END_CORE, hasCompartments, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
-import { arrowFit, flowMarker, flowRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
+import { arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
-import type { EdgeEnd, EdgeStyle, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
+import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
 
 export interface NodeHookResult {
   attrs?: Record<string, string>;
@@ -142,12 +143,20 @@ interface Paint {
 
 const shadowAttr = (spec: ThemeSpec): string => (spec.shadow ? ' filter="url(#ursula-shadow)"' : '');
 
+/** Whether a node is one of the record shapes, which are coloured by their own rules and take no role. */
+const isRecordNode = (n: LayoutNode): boolean => hasCompartments(n) || RECORD_SHAPES.has(n.shape);
+
+const RECORD_SHAPES: ReadonlySet<LayoutNode['shape']> = new Set(['start-dot', 'end-dot', 'bar', 'note', 'ellipse', 'actor']);
+
 function rolesOf(layout: Layout): Map<string, Role> {
   const led = new Set(layout.edges.filter((e) => e.from !== e.to && !e.invisible).map((e) => e.to));
   const roles = new Map<string, Role>();
   for (const n of layout.nodes) if (n.shape === 'diamond') roles.set(n.id, 'decision');
-  const starts = layout.nodes.filter((n) => !led.has(n.id));
-  for (const n of starts.length > 0 ? starts : layout.nodes.slice(0, 1)) if (!roles.has(n.id)) roles.set(n.id, 'start');
+  const plain = layout.nodes.filter((n) => !isRecordNode(n));
+  const starts = plain.filter((n) => !led.has(n.id));
+  // A drawing with a start dot has its start there: no box is promoted when every box has a line leading to it.
+  const first = layout.nodes.some(isRecordNode) ? [] : plain.slice(0, 1);
+  for (const n of starts.length > 0 ? starts : first) if (!roles.has(n.id)) roles.set(n.id, 'start');
   return roles;
 }
 
@@ -180,6 +189,12 @@ function trimmedPoints(edge: LayoutEdge, nodes: Map<string, LayoutNode>): Point[
 /** Whether a line is drawn in the accent colour: a thick one, or one that leaves a decision. */
 const accented = (edge: LayoutEdge, paint: Paint): boolean => edge.style === 'thick' || paint.roles.get(edge.from) === 'decision';
 
+/** Length of the marks of relation lines (triangle, diamonds, open arrow, crow's feet): the line stops this far short of its end. */
+const MARK = 12;
+
+/** The marks of relation lines. */
+const MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many']);
+
 /** Id of the marker that ends a line in `end`, or undefined when nothing sits there. */
 function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | undefined {
   switch (end) {
@@ -191,12 +206,47 @@ function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | 
       return accent ? 'ursula-dot-accent' : 'ursula-dot';
     case 'cross':
       return accent ? 'ursula-cross-accent' : 'ursula-cross';
+    default:
+      return `ursula-end-${end}${accent ? '-accent' : ''}`;
   }
 }
 
 /** How far a line stops short of its end so that the mark there is not drawn over a line. */
 function endTrim(end: EdgeEnd, spec: ThemeSpec): number {
-  return end === 'arrow' ? arrowFit(spec).trim : end === 'none' ? 0 : DOT / 2;
+  return end === 'arrow' ? arrowFit(spec).trim : end === 'none' ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+}
+
+/**
+ * The drawing of a relation mark. The marker's x axis runs from the end of the line (0) to the box (12), so that one
+ * marker serves both ends of a line. Every mark carries a stem, which keeps the line whole up to the box.
+ */
+function markBody(end: EdgeEnd, accent: boolean): string {
+  const cls = (base: string): string => (accent ? `ursula-end-${base} ursula-end-${base}--accent` : `ursula-end-${base}`);
+  const stroke = (d: string): string => `<path class="${cls('stroke')}" d="${d}"/>`;
+  const foot = 'M12 -5L4 0L12 5';
+  const ring = (cx: number): string => `<circle class="${cls('hollow')}" cx="${cx}" cy="0" r="2.5"/>`;
+  switch (end) {
+    case 'triangle-open':
+      return `<polygon class="${cls('hollow')}" points="0,-6 12,0 0,6"/>`;
+    case 'diamond-filled':
+      return `<polygon class="${cls('solid')}" points="0,0 6,-5 12,0 6,5"/>`;
+    case 'diamond-open':
+      return `<polygon class="${cls('hollow')}" points="0,0 6,-5 12,0 6,5"/>`;
+    case 'arrow-open':
+      return stroke('M0 0H12M4 -5L12 0L4 5');
+    case 'one':
+      return stroke('M0 0H12M9 -5V5M4 -5V5');
+    case 'zero-one':
+      return stroke('M0 0H12M9 -5V5') + ring(2.5);
+    case 'many':
+      return stroke(`M0 0H12${foot}`);
+    case 'one-many':
+      return stroke(`M0 0H12${foot}M1 -5V5`);
+    case 'zero-many':
+      return stroke(`M0 0H12${foot}`) + ring(1.5);
+    default:
+      return '';
+  }
 }
 
 /** The points with the first one moved along the first piece by `amount`, keeping at least 1 of it. */
@@ -236,6 +286,10 @@ function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: st
     const mod = accent ? '--accent' : '';
     if (end === 'arrow') {
       if (atStart) wanted.set(id, reversed(flowMarker(spec, id, accent ? 'ursula-arrow ursula-arrow--accent' : 'ursula-arrow')));
+      return;
+    }
+    if (MARKS.has(end)) {
+      wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
       return;
     }
     rules = true;
@@ -299,6 +353,22 @@ function labelSvg(edge: LayoutEdge, paint: Paint): string {
   );
 }
 
+function endLabelSvg(edge: LayoutEdge): string {
+  const one = (label: EndLabel | undefined, which: 'start' | 'end'): string =>
+    label === undefined
+      ? ''
+      : `<text class="ursula-end-label" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" data-end="${which}" x="${num(label.x + label.w / 2)}" y="${num(label.y + label.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(label.text)}</text>`;
+  return edge.invisible ? '' : one(edge.startLabel, 'start') + one(edge.endLabel, 'end');
+}
+
+/** Whether a layout uses the record shapes, the marks of relation lines or the small texts at the ends of lines. */
+function usesRecords(layout: Layout): boolean {
+  return (
+    layout.nodes.some(isRecordNode) ||
+    layout.edges.some((e) => (e.end !== undefined && MARKS.has(e.end)) || (e.startEnd !== undefined && MARKS.has(e.startEnd)) || e.startLabel !== undefined || e.endLabel !== undefined)
+  );
+}
+
 const points = (pts: Point[]): string => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(' ');
 
 function boxSvg(node: LayoutNode, rx: number, extra = ''): string {
@@ -318,7 +388,33 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
     case 'stadium':
       return boxSvg(node, h / 2, shadow);
     case 'circle':
+    case 'ellipse':
       return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"${shadow}/>`;
+    case 'start-dot':
+      return `<circle class="ursula-start-dot" cx="${num(cx)}" cy="${num(cy)}" r="${num(Math.min(w, h) / 2)}"/>`;
+    case 'end-dot': {
+      const outer = Math.min(w, h) / 2;
+      return (
+        `<circle class="ursula-end-ring" cx="${num(cx)}" cy="${num(cy)}" r="${num(outer - spec.lineWidth / 2)}"/>` +
+        `<circle class="ursula-end-core" cx="${num(cx)}" cy="${num(cy)}" r="${num(END_CORE / 2)}"/>`
+      );
+    }
+    case 'bar':
+      return `<rect class="ursula-bar" x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" rx="${num(Math.min(2, w / 2, h / 2))}"/>`;
+    case 'note': {
+      const fold = Math.min(NOTE_FOLD, w / 2, h / 2);
+      return (
+        `<path class="ursula-note" d="M${num(x)} ${num(y)}H${num(x + w - fold)}L${num(x + w)} ${num(y + fold)}V${num(y + h)}H${num(x)}Z"${shadow}/>` +
+        `<path class="ursula-note-fold" d="M${num(x + w - fold)} ${num(y)}V${num(y + fold)}H${num(x + w)}"/>`
+      );
+    }
+    case 'actor': {
+      const top = y;
+      return (
+        `<circle class="ursula-actor" cx="${num(cx)}" cy="${num(top + 8)}" r="8"/>` +
+        `<path class="ursula-actor" d="M${num(cx)} ${num(top + 16)}V${num(top + 32)}M${num(x)} ${num(top + 24)}H${num(x + w)}M${num(cx)} ${num(top + 32)}L${num(cx - 10)} ${num(y + h)}M${num(cx)} ${num(top + 32)}L${num(cx + 10)} ${num(y + h)}"/>`
+      );
+    }
     case 'hexagon':
       return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"${shadow}/>`;
     case 'parallelogram':
@@ -359,6 +455,30 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
   }
 }
 
+/** The rules and texts of a box divided into compartments; the last compartment takes the room the box has left over. */
+function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
+  const cells = node.compartments ?? [];
+  const heights = compartmentHeights(cells, pixelRuler());
+  const spare = Math.max(0, node.h - heights.reduce((a, b) => a + b, 0));
+  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
+  const parts = [boxSvg(node, spec.boxRadius, shadowAttr(spec))];
+  let top = node.y;
+  cells.forEach((cell, i) => {
+    if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
+    const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center';
+    const emphasis = cell.emphasis ?? (i === 0 ? 'title' : 'body');
+    const first = top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
+    cell.lines.forEach((line, k) => {
+      const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
+      parts.push(
+        `<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${num(first + k * COMPARTMENT_LINE)}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(line)}</text>`,
+      );
+    });
+    top += heights[i] ?? 0;
+  });
+  return parts.join('');
+}
+
 function nodeSvg(node: LayoutNode, hook: NodeHook | undefined, paint: Paint): string {
   const extra = hook?.(node) ?? {};
   const attrs = Object.entries(extra.attrs ?? {})
@@ -379,10 +499,18 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined, paint: Paint): st
     );
     y += BODY_LINE;
   }
+  const bare = node.shape === 'start-dot' || node.shape === 'end-dot' || node.shape === 'bar';
+  const body = hasCompartments(node)
+    ? compartmentsSvg(node, paint.spec)
+    : shapeSvg(node, paint.spec) +
+      (node.shape === 'actor'
+        ? `<text class="ursula-actor-name" x="${num(cx)}" y="${num(node.y + ACTOR_H + ACTOR_NAME_GAP - 4)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>`
+        : bare
+          ? ''
+          : texts.join(''));
   return (
     `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}${role === undefined ? '' : ` data-role="${role}"`}>` +
-    shapeSvg(node, paint.spec) +
-    texts.join('') +
+    body +
     (extra.extra ?? '') +
     '</g>'
   );
@@ -428,12 +556,13 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...ends.rules], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : [])], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
     ...layout.edges.map((e) => labelSvg(e, paint)),
+    ...layout.edges.map(endLabelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),
     '</svg>',
   ].join('');

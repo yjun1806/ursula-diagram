@@ -1,5 +1,6 @@
-import { cellWidth, cellWidthOf } from '../metrics.ts';
-import type { EdgeStyle, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
+import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
+import { compartmentHeights, hasCompartments } from '../layout/records.ts';
+import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
 const E = 2;
@@ -120,6 +121,43 @@ function arrowFor(edge: LayoutEdge): string {
   return b.y > a.y ? '▼' : '▲';
 }
 
+type Heading = 'right' | 'left' | 'down' | 'up';
+
+/**
+ * The glyphs of a relation mark, from the cell next to the box outwards along the line. `heading` is the way the
+ * line runs into the box. A mark of a count is a pair: the foot or the bars next to the box, then the bar or the
+ * circle (`|<`, `o<`, `||`). Marks that are not relation marks give nothing.
+ */
+export function markGlyphs(end: EdgeEnd, heading: Heading): string[] {
+  const across = heading === 'right' || heading === 'left';
+  const foot = { right: '<', left: '>', down: '^', up: 'v' }[heading];
+  const bar = across ? '|' : '─';
+  switch (end) {
+    case 'triangle-open':
+      return [{ right: '▷', left: '◁', down: '▽', up: '△' }[heading]];
+    case 'diamond-filled':
+      return ['◆'];
+    case 'diamond-open':
+      return ['◇'];
+    case 'arrow-open':
+      return [{ right: '>', left: '<', down: 'v', up: '^' }[heading]];
+    case 'one':
+      return [bar, bar];
+    case 'zero-one':
+      return [bar, 'o'];
+    case 'many':
+      return [foot];
+    case 'one-many':
+      return [foot, bar];
+    case 'zero-many':
+      return [foot, 'o'];
+    default:
+      return [];
+  }
+}
+
+const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many']);
+
 function drawEdges(c: Canvas, layout: Layout): void {
   const nodes = new Map(layout.nodes.map((n) => [n.id, n] as const));
   const cells = new Map<string, Cell>();
@@ -135,6 +173,17 @@ function drawEdges(c: Canvas, layout: Layout): void {
     return next;
   };
   const arrows: Array<{ x: number; y: number; ch: string }> = [];
+  // A drawing of records says what sits at each end of a line: a line that ends in nothing has no arrow.
+  const records =
+    layout.nodes.some((n) => hasCompartments(n) || ['start-dot', 'end-dot', 'bar', 'note', 'ellipse', 'actor'].includes(n.shape)) ||
+    layout.edges.some((e) => (e.end !== undefined && RELATION_MARKS.has(e.end)) || (e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd)));
+  /** Writes the glyphs of a relation mark at an end of a line, from the cell next to the box outwards. */
+  const mark = (end: EdgeEnd, at: readonly [number, number], from: readonly [number, number]): void => {
+    const dx = Math.sign(at[0] - from[0]);
+    const dy = Math.sign(at[1] - from[1]);
+    const heading: Heading = dx !== 0 ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+    markGlyphs(end, heading).forEach((ch, i) => arrows.push({ x: at[0] - dx * i, y: at[1] - dy * i, ch }));
+  };
   for (const edge of layout.edges) {
     if (edge.invisible) continue;
     const pts = edge.points.map((_, i) => cellOf(edge, nodes, i));
@@ -168,7 +217,10 @@ function drawEdges(c: Canvas, layout: Layout): void {
     };
     toward(0, edge.from);
     toward(edge.points.length - 1, edge.to);
-    if (last) arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
+    const endMark = edge.end !== undefined && RELATION_MARKS.has(edge.end) ? edge.end : undefined;
+    if (last && pts.length >= 2 && endMark !== undefined) mark(endMark, last, pts[pts.length - 2] as [number, number]);
+    else if (last && !(records && edge.end === 'none')) arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
+    if (first && pts.length >= 2 && edge.startEnd !== undefined && RELATION_MARKS.has(edge.startEnd)) mark(edge.startEnd, first, pts[1] as [number, number]);
   }
   for (const [key, cell] of cells) {
     const [xs, ys] = key.split(',');
@@ -195,28 +247,77 @@ function drawLabels(c: Canvas, layout: Layout): void {
   }
 }
 
+function drawEndLabels(c: Canvas, layout: Layout): void {
+  const put = (label: EndLabel | undefined): void => {
+    if (label) c.text(Math.round(label.x), Math.round(label.y), label.text);
+  };
+  for (const edge of layout.edges) {
+    if (edge.invisible) continue;
+    put(edge.startLabel);
+    put(edge.endLabel);
+  }
+}
+
+/** The corners of a box: square, or rounded for the shapes that are not square. */
+const CORNERS: Record<string, readonly [string, string, string, string]> = {
+  square: ['┌', '┐', '└', '┘'],
+  round: ['╭', '╮', '╰', '╯'],
+  note: ['┌', '┒', '└', '┘'],
+};
+
+/** The rules between the compartments, and the lines of each, of a box divided into compartments. The last compartment takes the room that is left. */
+function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: number, h: number): void {
+  const cells = n.compartments ?? [];
+  const heights = compartmentHeights(cells, cellRuler());
+  const used = heights.reduce((a, b) => a + b, 0) + cells.length - 1 + 2;
+  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + Math.max(0, h - used);
+  let y = y0 + 1;
+  cells.forEach((cell, i) => {
+    if (i > 0) {
+      c.put(x0, y, '├');
+      for (let x = x0 + 1; x < x0 + w - 1; x++) c.put(x, y, '─');
+      c.put(x0 + w - 1, y, '┤');
+      y += 1;
+    }
+    const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center';
+    cell.lines.forEach((line, k) => c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line));
+    y += heights[i] ?? 0;
+  });
+}
+
 function drawNode(c: Canvas, n: LayoutNode): void {
   const x0 = Math.round(n.x);
   const y0 = Math.round(n.y);
   const w = Math.round(n.w);
   const h = Math.round(n.h);
+  const [tl, tr, bl, br] = CORNERS[n.shape === 'ellipse' || n.shape === 'actor' ? 'round' : n.shape === 'note' ? 'note' : 'square'] as readonly [string, string, string, string];
+  const solid = n.shape === 'bar';
   for (let y = y0; y < y0 + h; y++) {
     for (let x = x0; x < x0 + w; x++) {
       const top = y === y0;
       const bottom = y === y0 + h - 1;
       const left = x === x0;
       const right = x === x0 + w - 1;
-      let ch = ' ';
-      if (top && left) ch = '┌';
-      else if (top && right) ch = '┐';
-      else if (bottom && left) ch = '└';
-      else if (bottom && right) ch = '┘';
-      else if (top || bottom) ch = '─';
-      else if (left || right) ch = '│';
+      let ch = solid ? '█' : ' ';
+      if (top && left) ch = solid ? '█' : tl;
+      else if (top && right) ch = solid ? '█' : tr;
+      else if (bottom && left) ch = solid ? '█' : bl;
+      else if (bottom && right) ch = solid ? '█' : br;
+      else if (top || bottom) ch = solid ? '█' : '─';
+      else if (left || right) ch = solid ? '█' : '│';
       c.put(x, y, ch);
     }
   }
-  const texts = [n.title, ...n.lines];
+  if (hasCompartments(n)) {
+    drawCompartments(c, n, x0, y0, w, h);
+    return;
+  }
+  if (solid) return;
+  if (n.shape === 'start-dot' || n.shape === 'end-dot') {
+    c.put(x0 + Math.floor((w - 1) / 2), y0 + Math.floor((h - 1) / 2), n.shape === 'start-dot' ? '●' : '◉');
+    return;
+  }
+  const texts = [n.shape === 'actor' ? `o ${n.title}` : n.title, ...n.lines];
   const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
   texts.forEach((t, i) => {
     c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
@@ -268,6 +369,7 @@ export function renderTextLayout(layout: Layout): string[] {
   drawLanes(c, layout);
   drawEdges(c, layout);
   drawLabels(c, layout);
+  drawEndLabels(c, layout);
   for (const n of layout.nodes) drawNode(c, n);
   drawLaneNames(c, layout);
   drawLegend(c, layout);
