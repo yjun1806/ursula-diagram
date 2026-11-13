@@ -364,7 +364,9 @@ function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
     from.map((e, ei) => {
       const l = e.label;
       if (l === undefined || e.from === e.to) return e;
-      for (const sg of segsOf(e.points)) {
+      // A line of a trunk carries its label on its own branch: the run into its box first.
+      const order = e.trunk === undefined ? segsOf(e.points) : [...segsOf(e.points)].reverse();
+      for (const sg of order) {
         const spot = spotOn(ei, l, sg);
         if (spot === undefined) continue;
         const label = { ...l, x: spot.x, y: spot.y };
@@ -533,7 +535,9 @@ function trunked(graph: Graph, nodes: readonly LayoutNode[], edges: Layout['edge
         return a === undefined || b === undefined || !((a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y));
       });
       const points = e.trunk?.end === 'from' ? way : [...way].reverse();
-      out[i] = { ...(out[i] as Layout['edges'][number]), points, trunk: { id: k, lead: n === 0, dot: run.dot } };
+      // Only the lead line draws the mark at the shared end.
+      const shared = n === 0 ? {} : e.trunk?.end === 'from' ? { startEnd: 'none' as const } : { end: 'none' as const };
+      out[i] = { ...(out[i] as Layout['edges'][number]), points, trunk: { id: k, lead: n === 0, dot: run.dot }, ...shared };
     });
   }
   return out;
