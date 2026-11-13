@@ -302,7 +302,7 @@ function alongGap(layout: Layout): Layout {
  * such gap from the start of the line, over all its runs in order, that is deep enough for the label and where the label
  * touches no box, border, name, other line or other label. The gaps are cut by the boxes, the borders and the names of
  * the clusters, the runs of the other lines and the other labels, so labels of one gap stand at one level. A label with
- * no such gap stays where it was put.
+ * no such gap stays where it was put. The labels are placed twice, so that each sees the others where they end up.
  */
 function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
   const rects: Rect[] = [...layout.nodes, ...(layout.clusters ?? []), ...(layout.clusters ?? []).flatMap((c) => (c.name ? [c.name] : []))];
@@ -342,19 +342,21 @@ function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
     }
     return undefined;
   };
-  const edges = layout.edges.map((e, ei) => {
-    const l = e.label;
-    if (l === undefined || e.from === e.to) return e;
-    for (const sg of segsOf(e.points)) {
-      const spot = spotOn(ei, l, sg);
-      if (spot === undefined) continue;
-      const label = { ...l, x: spot.x, y: spot.y };
-      placed[ei] = label;
-      return { ...e, label };
-    }
-    return e;
-  });
-  return { ...layout, edges };
+  const settle = (from: Layout['edges']): Layout['edges'] =>
+    from.map((e, ei) => {
+      const l = e.label;
+      if (l === undefined || e.from === e.to) return e;
+      for (const sg of segsOf(e.points)) {
+        const spot = spotOn(ei, l, sg);
+        if (spot === undefined) continue;
+        const label = { ...l, x: spot.x, y: spot.y };
+        placed[ei] = label;
+        return { ...e, label };
+      }
+      return e;
+    });
+  // A label placed later leaves where it was put; a second round lets the labels before it use that room.
+  return { ...layout, edges: settle(settle(layout.edges)) };
 }
 
 /** The chip a label is drawn on (`CHIP_PAD` and `CHIP_HEIGHT` of the renderer): the room the label takes on the drawing. */

@@ -329,6 +329,32 @@ describe('c4 reading', () => {
     expect(svg).toContain('ursula-zone-name ursula-zone-sub');
   });
 
+  it('starts the title at the outermost boundary and sets a subtitle 18 under its name', () => {
+    const svg = render(EXAMPLES[1] as string);
+    const outer = /<g class="ursula-cluster" data-cluster="b0"><rect[^>]* x="([\d.]+)"/.exec(svg);
+    expect(/<text class="ursula-title ursula-diagram-title" x="([\d.]+)"/.exec(svg)?.[1]).toBe(outer?.[1]);
+    const ys = [...svg.matchAll(/data-cluster="b0">.*?<text class="ursula-zone-name" x="[\d.]+" y="([\d.]+)">.*?<text class="ursula-zone-name ursula-zone-sub" x="[\d.]+" y="([\d.]+)">/g)][0];
+    expect(Number(ys?.[2]) - Number(ys?.[1])).toBe(18);
+  });
+
+  it('on band sets a boundary name in ink over a muted subtitle and a description muted under its name', () => {
+    const svg = render(EXAMPLES[1] as string, { theme: 'band' });
+    expect(svg).toMatch(/\.ursula-zone-name\{fill:var\(--ursula-fg[^}]*font-size:13px\}/);
+    expect(svg).toMatch(/\.ursula-zone-sub\{fill:var\(--ursula-muted[^}]*font-size:12px;font-weight:500;opacity:1\}/);
+    expect(svg).toMatch(/\.ursula-cell-body\{fill:var\(--ursula-muted/);
+    expect(render(EXAMPLES[1] as string, { theme: 'solid' })).not.toMatch(/\.ursula-cell-body\{fill:var\(--ursula-muted/);
+  });
+
+  it('sets the label of a line in the middle of the free gap it crosses, not of one cut short by a label moved later', () => {
+    const l = layout(c4Graph(parseC4(EXAMPLES[1] as string), pixelRuler()), pixelRuler());
+    const e = l.edges.find((x) => x.label?.text.startsWith('Sends e-mails '));
+    const b1 = l.clusters?.find((c) => c.id === 'b1');
+    const [first, corner] = [e?.points[0], e?.points[1]];
+    expect(e && b1 && first && corner).toBeTruthy();
+    const mid = (e?.label?.y ?? 0) + (e?.label?.h ?? 0) / 2;
+    expect(mid).toBe(((corner?.y ?? 0) + (b1?.y ?? 0)) / 2);
+  });
+
   it('draws a back relation along its arrow', () => {
     const g = c4Graph(parseC4(EXAMPLES[2] as string), pixelRuler());
     const e = g.edges.find((x) => x.label?.startsWith('Reads from'));
