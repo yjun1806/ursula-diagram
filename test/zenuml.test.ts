@@ -210,6 +210,21 @@ describe('zenuml layout', () => {
     }
   });
 
+  it('fits the tag pill to its keyword and keeps the keyword centred in it', () => {
+    const tag = layout.scene.items.find((i) => i.kind === 'box' && i.role?.includes('tag'));
+    const text = textItems.find((t) => t.role?.includes('tag-text'));
+    if (tag?.kind !== 'box' || text === undefined) throw new Error('missing tag');
+    expect(tag.w).toBe(28);
+    expect(text.x).toBe(tag.x + tag.w / 2);
+  });
+
+  it('spans the if frame over the lifelines it covers, 24 out from each', () => {
+    const frame = layout.frames[0];
+    const xs = layout.participants.map((p) => p.x);
+    expect(frame?.x).toBe((xs[0] ?? 0) - 24);
+    expect((frame?.x ?? 0) + (frame?.w ?? 0)).toBe((xs[2] ?? 0) + 24);
+  });
+
   it('writes the condition right of the tag, without brackets', () => {
     const tag = layout.scene.items.find((i) => i.kind === 'box' && i.role?.includes('tag'));
     const cond = textItems.find((t) => t.text === 'condition');

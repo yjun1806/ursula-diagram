@@ -69,6 +69,13 @@ function layoutFrames(model: ZenumlModel, ruler: Ruler, opts: SequenceLayoutOpti
   return retag(base, model, ruler, beside);
 }
 
+/** Width of a tag pill around its keyword, measured as the engine measures its own tags. */
+function tagWidth(text: string, ruler: Ruler): number {
+  const S = ruler.sequence;
+  const w = ruler.textWidth(text, 'lane') * S.tabScale + text.length * S.tabSpacing + 2 * S.tabPad;
+  return Math.max(S.tabW, Math.ceil(w / ruler.grid - 1e-9) * ruler.grid);
+}
+
 /** Writes the tags, the conditions kept beside them, captions without brackets and comment boxes fitted to their text. */
 function retag(base: SequenceLayout, model: ZenumlModel, ruler: Ruler, beside: ReadonlyMap<number, string>): SequenceLayout {
   let tagAt = 0;
@@ -76,24 +83,30 @@ function retag(base: SequenceLayout, model: ZenumlModel, ruler: Ruler, beside: R
   const added: SceneItem[] = [];
   const backings: SceneItem[] = [];
   const pad = ruler.sequence.labelBgPad;
+  /** Left side and new width of each tag pill, by frame order, so that its text stays centred in it. */
+  const pills: Array<{ x: number; w: number }> = [];
   const items = base.scene.items.map((it): SceneItem => {
     if (it.kind === 'box' && it.role?.includes('tag')) {
       const frame = base.frames[boxAt++];
+      const keyword = frame === undefined ? undefined : model.tags.get(frame.statement);
+      const pill = keyword === undefined || ruler.terminal ? it : { ...it, w: tagWidth(keyword, ruler) };
+      pills.push({ x: pill.x, w: pill.w });
       const text = frame === undefined ? undefined : beside.get(frame.statement);
       if (text !== undefined && text !== '') {
-        const x = it.x + it.w + CONDITION_GAP;
+        const x = pill.x + pill.w + CONDITION_GAP;
         const w = ruler.textWidth(text, 'edge') * ruler.sequence.captionScale;
         // A backing in the page colour keeps the lifelines from striking through the condition.
-        backings.push({ kind: 'box', style: 'label', role: ['bg'], x: x - pad, y: it.y, w: Math.ceil(w + 2 * pad), h: it.h });
-        added.push({ kind: 'text', x, y: it.y + it.h / 2, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
+        backings.push({ kind: 'box', style: 'label', role: ['bg'], x: x - pad, y: pill.y, w: Math.ceil(w + 2 * pad), h: pill.h });
+        added.push({ kind: 'text', x, y: pill.y + pill.h / 2, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
       }
-      return it;
+      return pill;
     }
     if (it.kind !== 'text') return it;
     if (it.role?.includes('tag-text')) {
+      const pill = pills[tagAt];
       const open = base.frames[tagAt++]?.statement;
       const tag = open === undefined ? undefined : model.tags.get(open);
-      return tag === undefined ? it : { ...it, text: tag };
+      return tag === undefined || pill === undefined ? it : { ...it, text: tag, x: pill.x + pill.w / 2 };
     }
     return it.role?.includes('label') ? { ...it, text: unbracket(it.text) } : it;
   });

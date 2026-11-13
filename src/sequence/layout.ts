@@ -389,7 +389,8 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const backItems: SceneItem[] = [];
   const frameItems: SceneItem[] = [];
   const lifeItems: SceneItem[] = [];
-  const barItems: SceneItem[] = [];
+  /** Bars with their nesting level; a nested bar is drawn over the one it sits on. */
+  const barDrafts: Array<{ level: number; item: SceneItem }> = [];
   const lineItems: SceneItem[] = [];
   const boxItems: SceneItem[] = [];
   const textItems: SceneItem[] = [];
@@ -506,14 +507,17 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   /** Closes a bar; `last` is the last coordinate it covers. */
   const closeBar = (bar: Bar, last: number): void => {
     const lx = xs[bar.col] ?? 0;
-    barItems.push({
-      kind: 'box',
-      style: 'bar',
-      role: ['active'],
-      x: lx - hb + bar.level * S.barNest,
-      y: bar.y1,
-      w: S.barW,
-      h: Math.max(g, up(last - bar.y1 + S.stroke)),
+    barDrafts.push({
+      level: bar.level,
+      item: {
+        kind: 'box',
+        style: 'bar',
+        role: ['active'],
+        x: lx - hb + bar.level * S.barNest,
+        y: bar.y1,
+        w: S.barW,
+        h: Math.max(g, up(last - bar.y1 + S.stroke)),
+      },
     });
   };
   const openBar = (c: number, y: number): void => {
@@ -559,6 +563,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
   const gapFor = (next: 'message' | 'note' | 'open' | 'branch'): number => {
     if (last === 'open' || last === 'branch') return S.gapHead;
     if (last === 'close') return S.gapFrame;
+    if (last === 'note' && next === 'message') return S.gapNote;
     if (next === 'open' || next === 'branch') return S.gapFrame;
     return last === 'header' ? S.gapFirst : S.gapMsg;
   };
@@ -687,7 +692,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             span(label.x, label.x + label.w - S.stroke);
             right = Math.max(right, label.x + label.w - S.stroke);
           }
-          frameSpan(lx1 - half, right);
+          frameSpan(lx1 - S.framePad, right);
           after = Math.max(lineY + loopSpan, nl > 0 ? labelTop + nl * lhE : 0);
         } else {
           const dir = lx2 > lx1 ? 1 : -1;
@@ -736,12 +741,13 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
             const at = placed[b];
             if (at) placed[b] = { ...at, box: head };
             lifeStart[b] = bottomY;
+            frameSpan(head.x, head.x + head.w - S.stroke);
             rowTop = Math.min(rowTop, head.y);
             createdBottom = bottomY;
           }
           span(Math.min(ea.left, eb.left), Math.max(ea.right, eb.right) - S.stroke);
           span(x1, x2);
-          frameSpan(Math.min(lx1, lx2) - half, Math.max(lx1, lx2) + half);
+          frameSpan(Math.min(lx1, lx2) - S.framePad, Math.max(lx1, lx2) + S.framePad);
           if (nl > 0) {
             const first = (lx1 + (xs[a + dir] ?? lx2)) / 2;
             const cx = createdUpper > 0 && a + dir === b ? (x1 + x2) / 2 : info.w + S.labelPad <= pitch ? first : (lx1 + lx2) / 2;
@@ -830,7 +836,9 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
           break;
         }
         const bar = bars[c]?.pop();
-        if (bar) closeBar(bar, Math.max(bar.y1, cursor - S.stroke));
+        // A bar that ends where a frame closes continues past the frame's bottom border.
+        const past = last === 'close' ? S.barPastFrame : 0;
+        if (bar) closeBar(bar, Math.max(bar.y1, cursor - S.stroke + past));
         break;
       }
       case 'open': {
@@ -1019,6 +1027,7 @@ function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOptio
       ? []
       : [{ kind: 'text', x: gs.lo + GROUP_PAD, y: margin + GROUP_PAD + lhT / 2, text: gs.label, anchor: 'start', font: 'title', tone: 'fg', role: ['zone-name'] } satisfies SceneItem]),
   ]);
+  const barItems = [...barDrafts].sort((a, b) => a.level - b.level).map((d) => d.item);
   const items: SceneItem[] = [...groupItems, ...zoneItems, ...lifeItems, ...barItems, ...backItems, ...frameItems, ...lineItems, ...boxItems, ...textItems];
   const left = Number.isFinite(minX) ? minX : 0;
   const right = Number.isFinite(maxX) ? maxX : 0;

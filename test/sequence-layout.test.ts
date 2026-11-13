@@ -276,7 +276,7 @@ describe('layoutSequence geometry in pixels', () => {
 
   it('only needs a label that spans several columns to fit its own span', () => {
     const one = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok'), ruler);
-    const spanning = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok\nA->>C: a label that is wider than one column but not two'), ruler);
+    const spanning = layoutSequence(seqOf('sequenceDiagram\nA->>B: ok\nB->>C: ok\nA->>C: a label wider than one column, not two'), ruler);
     expect(spanning.pitch).toBe(one.pitch);
   });
 
@@ -309,13 +309,41 @@ describe('layoutSequence geometry in pixels', () => {
     expect(bar.y + bar.h).toBeLessThan(l.height - ruler.sequence.margin - ruler.sequence.tail);
   });
 
-  it('aligns a frame with the header edges of the participants inside it', () => {
+  it('draws a nested bar over the bar it sits on, shifted right', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>+B: one\nA->>+B: two\nB-->>-A: three\nB-->>-A: four'), ruler);
+    const bars = l.scene.items.filter((i) => i.kind === 'box' && i.role?.includes('active'));
+    if (bars[0]?.kind !== 'box' || bars[1]?.kind !== 'box') throw new Error('missing bars');
+    expect(bars[1].x - bars[0].x).toBe(ruler.sequence.barNest);
+    expect(bars[1].y).toBeGreaterThan(bars[0].y);
+  });
+
+  it('keeps the longest label clear of the lifelines by half the label pad on each side', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>B: Hello John, how are you?'), ruler);
+    const w = ruler.textWidth('Hello John, how are you?', 'edge');
+    expect(l.pitch).toBeGreaterThanOrEqual(w + ruler.sequence.labelPad);
+  });
+
+  it('continues a bar that ends where a frame closes past the frame bottom', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>B: x\nactivate B\nopt c\nB->>A: y\nend\ndeactivate B\nA->>B: z'), ruler);
+    const bar = l.scene.items.find((i) => i.kind === 'box' && i.role?.includes('active'));
+    const frame = l.frames[0];
+    if (bar?.kind !== 'box' || frame === undefined) throw new Error('missing bar or frame');
+    expect(bar.y + bar.h).toBe(frame.y + frame.h + ruler.sequence.barPastFrame);
+  });
+
+  it('puts a note right above the label of the message below it', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nA->>B: x\nNote over A: n\nB->>A: y'), ruler);
+    const note = l.notes[0];
+    const label = l.messages[1]?.label;
+    expect((label?.y ?? 0) - ((note?.box.y ?? 0) + (note?.box.h ?? 0))).toBe(ruler.sequence.gapNote);
+  });
+
+  it('spans a frame over the lifelines inside it, a pad wide on each side', () => {
     const l = layoutSequence(seqOf('sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nparticipant D\nA->>B: x\nloop L\nB->>C: y\nend'), ruler);
     const frame = l.frames[0];
-    const b = l.participants[1];
-    const c = l.participants[2];
-    expect(frame?.x).toBe(b?.box.x);
-    expect((frame?.x ?? 0) + (frame?.w ?? 0)).toBe((c?.box.x ?? 0) + (c?.box.w ?? 0));
+    const pad = ruler.sequence.framePad;
+    expect(frame?.x).toBe((l.participants[1]?.x ?? 0) - pad);
+    expect((frame?.x ?? 0) + (frame?.w ?? 0)).toBe((l.participants[2]?.x ?? 0) + pad);
   });
 
   it('keeps a note that can wrap inside the first and last header edges', () => {

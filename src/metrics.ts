@@ -94,6 +94,8 @@ export interface SequenceMetrics {
   gapMsg: number;
   gapFrame: number;
   gapHead: number;
+  /** Space between a note and the label of the message right below it. */
+  gapNote: number;
   /** Space between the bottom of a label and its line. */
   labelDrop: number;
   /** Space between the sequence number and the label text. */
@@ -110,6 +112,8 @@ export interface SequenceMetrics {
   barNest: number;
   /** Length a bar that is never deactivated continues below its last message line. */
   barTail: number;
+  /** Length a bar that ends where a frame closes continues below the frame's bottom border. */
+  barPastFrame: number;
   tabW: number;
   tabH: number;
   tabPad: number;
@@ -125,6 +129,8 @@ export interface SequenceMetrics {
   /** Distance from the last row to the bottom of a frame, and between a nested frame bottom and its parent. */
   frameFoot: number;
   frameInset: number;
+  /** Distance of a frame's sides from the outermost lifelines it covers. */
+  framePad: number;
   dividerInset: number;
   /** Distance of condition texts from the left edge of a frame. */
   condInset: number;
@@ -263,13 +269,13 @@ export function pixelRuler(): Ruler {
     defaultWidth: 1280,
     sequence: {
       stroke: 0,
-      margin: 40,
+      margin: 24,
       headH: 44,
       headMinW: 120,
       headPadX: 32,
       pitchGap: 48,
       pitchGapTight: 24,
-      labelPad: 32,
+      labelPad: 96,
       notePadX: 8,
       notePadY: 6,
       noteGap: 12,
@@ -278,6 +284,7 @@ export function pixelRuler(): Ruler {
       gapMsg: 20,
       gapFrame: 24,
       gapHead: 12,
+      gapNote: 8,
       labelDrop: 4,
       numGap: 6,
       labelBgPad: 4,
@@ -287,9 +294,10 @@ export function pixelRuler(): Ruler {
       loopR: 8,
       loopGap: 8,
       barW: 8,
-      barNest: 4,
+      barNest: 6,
       barTail: 16,
-      tabW: 40,
+      barPastFrame: 8,
+      tabW: 28,
       tabH: 18,
       tabPad: 8,
       tabGap: 8,
@@ -300,6 +308,7 @@ export function pixelRuler(): Ruler {
       captionScale: 0.92,
       frameFoot: 24,
       frameInset: 8,
+      framePad: 24,
       dividerInset: 8,
       condInset: 12,
       tail: 32,
@@ -360,6 +369,7 @@ export function cellRuler(): Ruler {
       gapMsg: 0,
       gapFrame: 0,
       gapHead: 0,
+      gapNote: 0,
       labelDrop: 0,
       numGap: 1,
       labelBgPad: 1,
@@ -371,6 +381,7 @@ export function cellRuler(): Ruler {
       barW: 1,
       barNest: 1,
       barTail: 0,
+      barPastFrame: 0,
       tabW: 4,
       tabH: 1,
       tabPad: 1,
@@ -382,6 +393,7 @@ export function cellRuler(): Ruler {
       captionScale: 1,
       frameFoot: 1,
       frameInset: 1,
+      framePad: 2,
       dividerInset: 0,
       condInset: 2,
       tail: 1,
