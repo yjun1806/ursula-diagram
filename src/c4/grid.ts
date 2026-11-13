@@ -103,7 +103,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
    * The drawing with the columns inside each cluster moved right by `shiftOf`, and its lines, kept off the names of the
    * clusters when `names` is set.
    */
-  const drawn = (shiftOf: ReadonlyMap<string, number>, names: boolean) => {
+  const drawn = (shiftOf: ReadonlyMap<string, number>, names: boolean, wider: ReadonlyMap<number, number> = new Map()) => {
     // The width a long name needs beyond what the cluster holds, given half to each side so what it holds stays in the middle.
     const extraRight = new Map<string, number>();
     for (const c of clusters) {
@@ -171,7 +171,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         if (left + right > most) mostGap = left > 0 && right > 0 ? BORDER_GAP : left + right > 0 ? BOX_GAP : 0;
         most = Math.max(most, left + right);
       }
-      colGap.push(k === 0 || k === grid.columns ? base + most : Math.max(base, most + Math.max(mostGap, need)));
+      colGap.push((k === 0 || k === grid.columns ? base + most : Math.max(base, most + Math.max(mostGap, need))) + (wider.get(k) ?? 0));
     }
     const rowGap: number[] = [];
     for (let k = 0; k <= grid.rows; k++) {
@@ -271,15 +271,28 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     }
     if (need > 0) shiftOf.set(c.id, need);
   }
-  const { width, height, nodes, laidClusters, edges, diagnostics } = drawn(shiftOf, true);
-
-  const laid: Layout = { width, height, direction: 'TD', laneAxis: 'across', lanes: [], clusters: laidClusters, nodes, edges, diagnostics };
-  const every = new Set(laidClusters.map((c) => c.id));
-  const subtitled = new Set(clusters.filter((c) => c.subtitled === true).map((c) => c.id));
-  const named = { ...laid, clusters: placeNames(laid, ruler, every, subtitled).clusters };
-  const avoid = keepOffBoxes(named.clusters ?? [], true);
-  const refined = alongGap(centreLabels(refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), avoid), avoid));
-  const grown = withinCanvas({ ...refined, clusters: placeNames(refined, ruler, every, subtitled).clusters });
+  const finish = (wider: ReadonlyMap<number, number>): { layout: Layout; colX: number[] } => {
+    const { width, height, nodes, laidClusters, edges, diagnostics, colX } = drawn(shiftOf, true, wider);
+    const laid: Layout = { width, height, direction: 'TD', laneAxis: 'across', lanes: [], clusters: laidClusters, nodes, edges, diagnostics };
+    const every = new Set(laidClusters.map((c) => c.id));
+    const subtitled = new Set(clusters.filter((c) => c.subtitled === true).map((c) => c.id));
+    const named = { ...laid, clusters: placeNames(laid, ruler, every, subtitled).clusters };
+    const avoid = keepOffBoxes(named.clusters ?? [], true);
+    const refined = alongGap(centreLabels(refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), avoid), avoid));
+    return { layout: { ...refined, clusters: placeNames(refined, ruler, every, subtitled).clusters }, colX };
+  };
+  // A label left on another line, in a gap between two columns, widens that gap by its width once.
+  const once = finish(new Map());
+  const wider = new Map<number, number>();
+  for (const e of once.layout.edges) {
+    const l = e.label;
+    if (l === undefined || !once.layout.edges.some((o) => o !== e && o.points.slice(1).some((q, i) => crossesRect(o.points[i] as Point, q, l)))) continue;
+    const cx = l.x + l.w / 2;
+    for (let k = 1; k < once.colX.length; k++) {
+      if (cx > (once.colX[k - 1] as number) + bw && cx < (once.colX[k] as number)) wider.set(k, Math.max(wider.get(k) ?? 0, l.w + 2 * LABEL_GAP));
+    }
+  }
+  const grown = withinCanvas(wider.size === 0 ? once.layout : finish(wider).layout);
   return withLegend(grown, ruler, opts.legend);
 }
 
@@ -575,4 +588,9 @@ function trunkRun(at: LayoutNode, ends: readonly (LayoutNode | undefined)[]): { 
     return { dot, paths: bs.map((b) => [{ x: x0, y: y0 }, dot, { x: b.x + b.w / 2, y: dot.y }, { x: b.x + b.w / 2, y: b.y }]) };
   }
   return undefined;
+}
+
+/** True when the run from `a` to `b` passes through the inside of `r`. */
+function crossesRect(a: Point, b: Point, r: { x: number; y: number; w: number; h: number }): boolean {
+  return Math.max(a.x, b.x) > r.x + 1 && Math.min(a.x, b.x) < r.x + r.w - 1 && Math.max(a.y, b.y) > r.y + 1 && Math.min(a.y, b.y) < r.y + r.h - 1;
 }
