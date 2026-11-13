@@ -338,7 +338,9 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     count.set(`${e.from}:${f[0]}`, (count.get(`${e.from}:${f[0]}`) ?? 0) + 1);
     count.set(`${e.to}:${f[1]}`, (count.get(`${e.to}:${f[1]}`) ?? 0) + 1);
   });
-  const options: Array<Array<[Face, Face]>> = graph.edges.map((e, i) => {
+  // The lines on each face as the lines are given their faces in turn: a line moved off a face frees it for the next.
+  const taken = new Map(count);
+  const optionsOf = (e: (typeof graph.edges)[number], i: number, give: boolean): Array<[Face, Face]> => {
     const f = natural[i];
     if (f === undefined) return [];
     if (straight.has(i) || !nodeIds.has(e.from) || !nodeIds.has(e.to)) return [f];
@@ -350,10 +352,22 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     const add = (o: [Face, Face]): void => {
       if (!out.some((x) => x[0] === o[0] && x[1] === o[1])) out.push(o);
     };
-    // One bend by a side where that end has no other line in its direction; then the faces toward each other, the sides
-    // toward each other through the gap between the columns, and round on either side.
-    if ((count.get(`${e.to}:${f[1]}`) ?? 0) === 1) add([f[0], side(b, a)]);
-    if ((count.get(`${e.from}:${f[0]}`) ?? 0) === 1) add([side(a, b), f[1]]);
+    // One bend by a side that has no line of its own yet, the end whose face toward the other is shared moving first, so
+    // that a face carries one line to another box where the box has a face to spare; then the faces toward each other,
+    // the sides toward each other through the gap between the columns, and round on either side.
+    const freeFrom = (taken.get(`${e.from}:${side(a, b)}`) ?? 0) === 0;
+    const freeTo = (taken.get(`${e.to}:${side(b, a)}`) ?? 0) === 0;
+    const sharedFrom = (taken.get(`${e.from}:${f[0]}`) ?? 0) > 1;
+    const sharedTo = (taken.get(`${e.to}:${f[1]}`) ?? 0) > 1;
+    const byFrom = freeFrom && (sharedFrom || !sharedTo);
+    const byTo = freeTo && (sharedTo || !sharedFrom);
+    if (byFrom && (sharedFrom || !byTo)) add([side(a, b), f[1]]);
+    if (byTo) add([f[0], side(b, a)]);
+    if (byFrom) add([side(a, b), f[1]]);
+    // Any other face with no line of its own, at the end whose face toward the other is shared.
+    const faces: Face[] = [0, 1, 2, 3];
+    if (sharedFrom) for (const d of faces) if ((taken.get(`${e.from}:${d}`) ?? 0) === 0) add([d, f[1]]);
+    if (sharedTo) for (const d of faces) if ((taken.get(`${e.to}:${d}`) ?? 0) === 0) add([f[0], d]);
     add(f);
     add([f[0], side(b, a)]);
     add([side(a, b), f[1]]);
@@ -362,8 +376,20 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     add([2, 2]);
     // The pairs of faces with a clear shape between their middles, in that order; all of them when none has one.
     const clear = out.filter(([fa, fb]) => shapes({ ...pointOn(a, fa, 0), d: fa }, { ...pointOn(b, fb, 0), d: fb }).some((sh) => ownCost(sh.pts, i) !== undefined));
-    return clear.length > 0 ? clear : out;
-  });
+    const list = clear.length > 0 ? clear : out;
+    if (!give) return list;
+    const first = list[0] as [Face, Face];
+    for (const [id, was, now] of [[e.from, f[0], first[0]], [e.to, f[1], first[1]]] as const) {
+      if (was === now) continue;
+      taken.set(`${id}:${was}`, (taken.get(`${id}:${was}`) ?? 1) - 1);
+      taken.set(`${id}:${now}`, (taken.get(`${id}:${now}`) ?? 0) + 1);
+    }
+    return list;
+  };
+  // The lines with fewer faces they may use choose first.
+  const options: Array<Array<[Face, Face]>> = graph.edges.map(() => []);
+  const turn = graph.edges.map((e, i) => ({ i, n: optionsOf(e, i, false).length })).sort((x, y) => x.n - y.n || x.i - y.i);
+  for (const { i } of turn) options[i] = optionsOf(graph.edges[i] as (typeof graph.edges)[number], i, true);
 
   const pinsOf = (choice: readonly number[], orders: ReadonlyMap<string, number[]>, flips: ReadonlySet<string>): Pins => {
     const faces = options.map((o, i) => o[choice[i] as number]);

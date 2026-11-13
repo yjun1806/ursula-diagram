@@ -389,10 +389,13 @@ describe('c4 shapes, boundaries and sizes', () => {
     }
   });
 
-  it('draws a dashed zone without a fill, and the boxes in it on the page face', () => {
-    for (const theme of THEMES) {
-      const svg = render(EXAMPLES[0] as string, { theme });
-      expect(svg.match(/class="ursula-zone ursula-zone--dashed"/g)).toHaveLength(4);
+  it('draws a dashed zone without a fill but in the band theme, there with a fill a step deeper each level, and the boxes in it on the page face', () => {
+    // The band theme is the default one and not in THEMES: `undefined` draws it.
+    for (const theme of [...THEMES, undefined]) {
+      const svg = render(EXAMPLES[0] as string, theme === undefined ? {} : { theme });
+      expect(svg.match(/class="ursula-zone ursula-zone--dashed ursula-zone--tint-[a-z]+"/g)).toHaveLength(4);
+      if (theme === undefined) for (const t of ['outer', 'mid']) expect(svg).toMatch(new RegExp(`\\.ursula-zone--dashed\\.ursula-zone--tint-${t}\\{fill:var\\(`));
+      else expect(svg).not.toContain('.ursula-zone--dashed.ursula-zone--tint');
       expect(svg).toMatch(/\.ursula-zone--dashed\{fill:none;stroke:[^;]+;stroke-width:[\d.]+;stroke-dasharray:[\d. ]+;stroke-linecap:round\}/);
       expect(svg).not.toContain('class="ursula-node ursula-node--on-lane');
     }
