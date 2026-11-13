@@ -32,6 +32,8 @@ export interface SceneThemeSpec {
   shadow: boolean;
   /** Whether a box that names its kind carries the kind in a band across its top instead of in a pill. */
   headBand: boolean;
+  /** Whether a timeline draws every period in one scheme (plain boxes, neutral dots) unless asked otherwise; false when absent. */
+  plainTimeline?: boolean;
   /** Whether a chart of one bar series and at most one line draws the bars neutral, the highest bar in the accent, and the line in ink. */
   peakBar: boolean;
   /** Shape of a value line between its points. */
@@ -375,6 +377,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     arrow: { kind: 'filled', length: 9, width: 9, stroke: 1.5 },
     shadow: false,
     headBand: true,
+    plainTimeline: true,
     peakBar: true,
     interpolation: 'linear',
     valueLabel: 'outside',
