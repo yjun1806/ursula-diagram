@@ -511,6 +511,19 @@ function layoutPieces(source: Graph, given: Ruler, opts: LayeredOptions): Layout
  * reading direction, so that the bands cross the reading direction; the result is then labelled with the real one.
  */
 function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  // With the best quality in pixels, when one width per kind changes a box, the whole drawing is made with and without it:
+  // a wider box can push the usual drawing over the canvas and hand the choice to another composition.
+  if (opts.share === undefined && opts.quality === 'best' && opts.quick !== true && !given.terminal && sharingChangesWidths(source, given, opts)) {
+    const before = stats.compact;
+    const shared = layoutAt(source, given, { ...opts, share: true });
+    const sharedCompact = stats.compact - before;
+    const own = layoutAt(source, given, { ...opts, share: false });
+    const ownCompact = stats.compact - before - sharedCompact;
+    const keep = keepsShared(shared, own);
+    // Only the kept drawing counts a box given three units.
+    stats.compact = before + (keep ? sharedCompact : ownCompact);
+    return keep ? shared : own;
+  }
   const packed = layoutPieces(source, given, opts);
   if (packed) return packed;
   const plan = planZones(source, opts.composition ?? 'auto');
@@ -632,12 +645,11 @@ function hasNarrowBox(graph: Graph, given: Ruler, opts: LayeredOptions): boolean
 }
 
 /**
- * Lanes. With the best quality in pixels, when one width per kind changes a box, the drawing is made with and without it (`share`). Then, when a box could take three slot units, the whole set of candidates is drawn
+ * Lanes. With the best quality in pixels, when a box could take three slot units, the whole set of candidates is drawn
  * twice, with whole pairs and with three units allowed, and the better winner is kept: a better score wins, an equal score the smaller drawing (width times height), and whole pairs when that is equal too.
  */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
-  const both = opts.share === undefined && opts.quality === 'best' && opts.quick !== true && !given.terminal && sharingChangesWidths(graph, given, opts);
-  const chosen = both ? chooseShare(graph, given, opts) : drawSized(graph, given, opts);
+  const chosen = drawSized(graph, given, opts);
   if (chosen.compact) stats.compact++;
   return chosen.drawn;
 }
@@ -649,16 +661,14 @@ function tangle(l: Layout): number[] {
 
 /**
  * One width per kind wins unless the boxes at their own widths make a better drawing: one with more crossings or bends,
- * or one that scores worse (more invalid things, or a greater cost).
+ * or one that scores worse (more invalid things, or a greater cost). Counts `stats.unshared` when own widths win.
  */
-function chooseShare(graph: Graph, given: Ruler, opts: LayeredOptions): Sized {
-  const shared = drawSized(graph, given, { ...opts, share: true });
-  const own = drawSized(graph, given, { ...opts, share: false });
-  const [a, b] = [score(shared.drawn), score(own.drawn)];
-  const [ta, tb] = [tangle(shared.drawn), tangle(own.drawn)];
-  if (ta[0] as number <= (tb[0] as number) && (ta[1] as number) <= (tb[1] as number) && compareScores(a.slice(0, 2), b.slice(0, 2)) <= 0) return shared;
+function keepsShared(shared: Layout, own: Layout): boolean {
+  const [a, b] = [score(shared), score(own)];
+  const [ta, tb] = [tangle(shared), tangle(own)];
+  if (ta[0] as number <= (tb[0] as number) && (ta[1] as number) <= (tb[1] as number) && compareScores(a.slice(0, 2), b.slice(0, 2)) <= 0) return true;
   stats.unshared++;
-  return own;
+  return false;
 }
 
 /** Whether drawing boxes of one kind at one width changes the measured width of some box. */

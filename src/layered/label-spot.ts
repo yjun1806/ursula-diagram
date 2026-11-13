@@ -233,8 +233,8 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
 
 /**
  * Lines that leave one box carry their labels at one distance from it along the reading direction (one height down the
- * page, one column across it): the nearest to the box at which every label of the group keeps the room that
- * `chooseSpot` asks of a clean place. A group whose labels cannot stand at one level stays as it is.
+ * page, one column across it): the one nearest the middle of the stretch every label of the group may take at which each
+ * label keeps the room that `chooseSpot` asks of a clean place. A group whose labels cannot stand at one level stays as it is.
  */
 function levelSiblings(layout: Layout, edges: LayoutEdge[], all: Segment[][], nodes: Rect[], ruler: Ruler, avoid: Rect[]): LayoutEdge[] {
   const flowsDown = layout.direction !== 'LR' && layout.direction !== 'RL';
@@ -268,10 +268,11 @@ function levelSiblings(layout: Layout, edges: LayoutEdge[], all: Segment[][], no
     const low = Math.max(...spans.map((s) => s.from));
     const high = Math.min(...spans.map((s) => s.to));
     if (high < low - EPS) continue;
-    const sign = above[0] as number;
     const moved = (s: (typeof spans)[number], at: number): Rect => ({ ...s.rect, ...(flowsDown ? { y: edgeNear(ruler, at - s.rect.h / 2) } : { x: edgeNear(ruler, at - s.rect.w / 2) }) });
-    for (let k = 0; low + k * SLIDE <= high + EPS; k++) {
-      const at = sign > 0 ? low + k * SLIDE : high - k * SLIDE;
+    const middle = (low + high) / 2;
+    const reach = Math.floor((high - low) / 2 / SLIDE + EPS);
+    const levels = Array.from({ length: reach + 1 }, (_, k) => (k === 0 ? [middle] : [middle - k * SLIDE, middle + k * SLIDE])).flat();
+    for (const at of levels) {
       const rects = spans.map((s) => moved(s, at));
       const clean = spans.every((s, m) => {
         const edge = out[s.i] as LayoutEdge;

@@ -149,6 +149,7 @@ export function placeLabel(
   placed: Rect[],
   ruler: Ruler,
   foreign: Segment[] = [],
+  beside = false,
 ): Placed {
   const [p, q] = segment;
   const horizontal = p.y === q.y;
@@ -167,7 +168,8 @@ export function placeLabel(
   const step = ruler.trackGap;
   const reach = Math.floor((hi - lo) / 2 / step);
   // A label on a vertical line hides a stretch of it only in pixels; a terminal keeps it beside.
-  const sides = horizontal ? [0, -1, 1] : ruler.terminal === true ? [1, -1, 0] : [0, 1, -1];
+  // `beside`: the stretch is too short to show a line on both sides of a label on it, so the label stands next to it first.
+  const sides = horizontal ? (beside ? [-1, 1, 0] : [0, -1, 1]) : ruler.terminal === true || beside ? [1, -1, 0] : [0, 1, -1];
   for (const side of sides) {
     for (let k = 0; k <= reach; k++) {
       for (const sign of k === 0 ? [1] : [1, -1]) {

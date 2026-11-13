@@ -833,13 +833,12 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     });
     let mine = (edgeSegs[ei] as Segment[]).slice().sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
     // Pixels: a label on a stretch of line that cannot keep a line visible on both sides moves to a longer stretch.
-    if (!ruler.uniform) {
-      const roomy = (s: Segment): boolean => Math.abs(s[1].x - s[0].x) + Math.abs(s[1].y - s[0].y) >= (s[0].y === s[1].y ? size.w : size.h) + 2 * lineBeside('normal');
-      mine = [...mine.filter(roomy), ...mine.filter((s) => !roomy(s))];
-    }
+    // A stretch that is still too short holds the label beside the line rather than on it.
+    const roomy = (s: Segment): boolean => ruler.uniform || Math.abs(s[1].x - s[0].x) + Math.abs(s[1].y - s[0].y) >= (s[0].y === s[1].y ? size.w : size.h) + 2 * lineBeside(edge.style) + ARROW;
+    if (!ruler.uniform) mine = [...mine.filter(roomy), ...mine.filter((s) => !roomy(s))];
     let best: ReturnType<typeof placeLabel> | undefined;
     for (const s of mine) {
-      const got = placeLabel(s, size, obstacles, placed, ruler, foreign);
+      const got = placeLabel(s, size, obstacles, placed, ruler, foreign, !roomy(s));
       best ??= got;
       if (!got.overlap) {
         best = got;

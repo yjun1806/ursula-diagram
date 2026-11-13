@@ -69,8 +69,8 @@ describe('compact box sizes', () => {
   it('draws the whole candidate set twice when a box can take three units', () => {
     const even = draw(SKIP_ROW, { quality: 'best', compact: false });
     const narrow = draw(SKIP_ROW, { quality: 'best', compact: true });
-    // Each run counts one more drawing for the spread candidate, which a graph without zones makes once per set; the two sets share it.
-    expect(draw(SKIP_ROW, { quality: 'best' }).draws).toBe(even.draws + narrow.draws - 1);
+    // Each run counts two more drawings for the spread candidate (one with one width per kind, one at own widths), which a graph without zones makes once per set; the two sets share them.
+    expect(draw(SKIP_ROW, { quality: 'best' }).draws).toBe(even.draws + narrow.draws - 2);
   });
 
   it('takes three units on an equal score when the drawing is smaller', () => {
