@@ -1,6 +1,7 @@
 import type { Ruler } from '../metrics.ts';
 import { wrapWords } from '../text/wrap.ts';
-import type { Compartment, Graph, GraphEdge, GraphNode } from '../types.ts';
+import type { Compartment, Graph, GraphEdge, GraphNode, GridHint, GridSpec } from '../types.ts';
+import { emptySpec } from '../c4/grid-rows.ts';
 import { KIND_TAGS } from './parse.ts';
 import type { ElementNode, RequirementModel, RequirementNode } from './parse.ts';
 
@@ -61,5 +62,8 @@ export function requirementGraph(model: RequirementModel, ruler: Ruler): Graph {
     style: 'normal',
     ...(r.type === 'contains' ? { startEnd: 'circle-plus', end: 'none', trunk: { end: 'from' as const, kind: 'contains' } } : { end: 'arrow' }),
   }));
-  return { direction, ...(mirror === undefined ? {} : { mirror }), ignored: model.ignored, lanes: [LANE], nodes, edges };
+  // A requirement stands above what satisfies or verifies it and beside what it derives; what contains stands above.
+  const hints = model.relations.map((r): GridHint | undefined => (r.type === 'satisfies' || r.type === 'verifies' ? 'up' : r.type === 'derives' ? 'right' : undefined));
+  const grid: GridSpec = { ...emptySpec({ nodes, edges } as Graph), hints };
+  return { direction, ...(mirror === undefined ? {} : { mirror }), ignored: model.ignored, lanes: [LANE], nodes, edges, placer: 'c4-grid', grid };
 }

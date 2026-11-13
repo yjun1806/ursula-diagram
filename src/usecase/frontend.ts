@@ -6,7 +6,8 @@ import type { RenderOptions } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
 import type { NodeHook } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
-import type { LayoutNode } from '../types.ts';
+import type { GridSpec, LayoutNode } from '../types.ts';
+import { emptySpec } from '../c4/grid-rows.ts';
 import type { UsecaseModel } from './model.ts';
 import { parseUsecase } from './parse.ts';
 import { titledLines } from '../front/title.ts';
@@ -44,7 +45,8 @@ function summary(model: UsecaseModel): string {
 }
 
 function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean) {
-  return layout(model.graph, text ? cellRuler() : pixelRuler(), {
+  const grid = text ? undefined : actorColumns(model);
+  return layout(grid === undefined ? model.graph : { ...model.graph, placer: 'c4-grid', grid }, text ? cellRuler() : pixelRuler(), {
     ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.quality === undefined ? {} : { quality: opts.quality }),
     ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
@@ -71,3 +73,29 @@ registerFrontEnd({
     return { graph: model.graph, layout: laidOut(model, opts, mode === 'text') };
   },
 });
+
+/**
+ * The cells of a drawing of actors and their use cases only (no boundary, note or line between two use cases): the
+ * actors in the first column, each in the middle of its use cases, and the use cases in the second, grouped by actor in
+ * the order written. Undefined for any other drawing, which keeps the layered engine.
+ */
+function actorColumns(model: UsecaseModel): GridSpec | undefined {
+  const g = model.graph;
+  const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
+  if ((g.clusters ?? []).length > 0 || g.direction !== 'LR') return undefined;
+  if (g.nodes.some((n) => kind(n.id) !== 'actor' && kind(n.id) !== 'usecase')) return undefined;
+  if (g.edges.some((e) => (kind(e.from) === 'actor') === (kind(e.to) === 'actor'))) return undefined;
+  const cells: Record<string, { r: number; c: number }> = {};
+  const shift: Record<string, number> = {};
+  let row = 0;
+  for (const a of g.nodes.filter((n) => kind(n.id) === 'actor')) {
+    const mine = g.edges.flatMap((e) => (e.from === a.id ? [e.to] : e.to === a.id ? [e.from] : [])).filter((u) => cells[u] === undefined);
+    const first = row;
+    for (const u of [...new Set(mine)]) cells[u] = { r: row++, c: 1 };
+    cells[a.id] = { r: first, c: 0 };
+    shift[a.id] = Math.max(0, row - first - 1) / 2;
+    if (row === first) row++;
+  }
+  for (const u of g.nodes.filter((n) => cells[n.id] === undefined)) cells[u.id] = { r: row++, c: 1 };
+  return { ...emptySpec(g), cells, shift };
+}
