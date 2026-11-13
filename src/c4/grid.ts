@@ -10,6 +10,7 @@ import type { Cell, CellRect } from './grid-place.ts';
 import { placeCells } from './grid-place.ts';
 import { emptySpec, gridRows } from './grid-rows.ts';
 import { drawLines } from './grid-lines.ts';
+import type { Rect } from './grid-lines.ts';
 
 /** Gaps between cells: across, down, and around the drawing. */
 const GAP_X = 32;
@@ -234,7 +235,8 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
   const every = new Set(laidClusters.map((c) => c.id));
   const subtitled = new Set(clusters.filter((c) => c.subtitled === true).map((c) => c.id));
   const named = { ...laid, clusters: placeNames(laid, ruler, every, subtitled).clusters };
-  const refined = alongGap(refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), keepOffBoxes(named.clusters ?? [], true)));
+  const avoid = keepOffBoxes(named.clusters ?? [], true);
+  const refined = alongGap(centreLabels(refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), avoid), avoid));
   const grown = withinCanvas({ ...refined, clusters: placeNames(refined, ruler, every, subtitled).clusters });
   return withLegend(grown, ruler, opts.legend);
 }
@@ -275,5 +277,66 @@ function alongGap(layout: Layout): Layout {
       at += (sizes[n] as number) + LABEL_GAP;
     }
   }
+  return { ...layout, edges };
+}
+
+/**
+ * A label on a line stands in the middle of a free gap the line crosses: the first gap from the start of the line, along
+ * the run that carries the label, where it is deep enough and touches no box, border, name, other line or other label.
+ * The gaps are cut by the boxes, the borders and the names of the clusters, the runs of the other lines and the other
+ * labels, so labels of one gap stand at one level. A label with no such gap stays where it is.
+ */
+function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
+  const rects: Rect[] = [...layout.nodes, ...(layout.clusters ?? []), ...(layout.clusters ?? []).flatMap((c) => (c.name ? [c.name] : []))];
+  const solid: Rect[] = [...layout.nodes, ...avoid];
+  const segsOf = (pts: readonly Point[]): Array<[Point, Point]> => pts.slice(1).map((q, i) => [pts[i] as Point, q]);
+  const meets = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  // Every label as it stands now; a label moved takes its new place here.
+  const placed: Array<Rect | undefined> = layout.edges.map((e) => e.label);
+  const others = (ei: number): Rect[] => placed.flatMap((b, k) => (k === ei || b === undefined ? [] : [b]));
+  const edges = layout.edges.map((e, ei) => {
+    const l = e.label;
+    if (l === undefined || e.from === e.to) return e;
+    const cx = l.x + l.w / 2;
+    const cy = l.y + l.h / 2;
+    // The run the label stands on or right beside.
+    const own = segsOf(e.points).find(([a, b]) =>
+      Math.abs(a.x - b.x) < 0.5
+        ? a.x >= l.x - LABEL_GAP && a.x <= l.x + l.w + LABEL_GAP && cy >= Math.min(a.y, b.y) - 0.5 && cy <= Math.max(a.y, b.y) + 0.5
+        : a.y >= l.y - LABEL_GAP && a.y <= l.y + l.h + LABEL_GAP && cx >= Math.min(a.x, b.x) - 0.5 && cx <= Math.max(a.x, b.x) + 0.5,
+    );
+    if (own === undefined) return e;
+    const down = Math.abs(own[0].x - own[1].x) < 0.5;
+    // Along `t` (y when the run goes down), across `u`.
+    const t0 = down ? own[0].y : own[0].x;
+    const t1 = down ? own[1].y : own[1].x;
+    const [u0, u1] = down ? [l.x, l.x + l.w] : [l.y, l.y + l.h];
+    const size = down ? l.h : l.w;
+    const span = (r: Rect): [number, number, number, number] => (down ? [r.y, r.y + r.h, r.x, r.x + r.w] : [r.x, r.x + r.w, r.y, r.y + r.h]);
+    const cuts = [t0, t1];
+    for (const r of [...rects, ...others(ei)]) {
+      const [lo, hi, ulo, uhi] = span(r);
+      if (ulo < u1 && uhi > u0) cuts.push(lo, hi);
+    }
+    const runs = layout.edges.flatMap((o, oi) => segsOf(o.points).map((sg) => ({ sg, mine: oi === ei })));
+    for (const { sg: [a, b] } of runs) {
+      if (down ? Math.abs(a.y - b.y) >= 0.5 : Math.abs(a.x - b.x) >= 0.5) continue;
+      const [v0, v1] = down ? [Math.min(a.x, b.x), Math.max(a.x, b.x)] : [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+      if (v0 < u1 && v1 > u0) cuts.push(down ? a.y : a.x);
+    }
+    const [s0, s1] = [Math.min(t0, t1), Math.max(t0, t1)];
+    const ts = [...new Set(cuts.filter((t) => t >= s0 - 0.5 && t <= s1 + 0.5))].sort((a, b) => (t1 >= t0 ? a - b : b - a));
+    for (let k = 1; k < ts.length; k++) {
+      const [a, b] = [ts[k - 1] as number, ts[k] as number];
+      if (Math.abs(b - a) < size + 2 * LABEL_GAP) continue;
+      const at = (a + b) / 2;
+      const moved = down ? { ...l, y: at - l.h / 2 } : { ...l, x: at - l.w / 2 };
+      const through = runs.some(({ sg: [p, q], mine }) => !mine && Math.max(p.x, q.x) > moved.x && Math.min(p.x, q.x) < moved.x + moved.w && Math.max(p.y, q.y) > moved.y && Math.min(p.y, q.y) < moved.y + moved.h);
+      if (through || [...solid, ...others(ei)].some((r) => meets(r, moved))) continue;
+      placed[ei] = moved;
+      return { ...e, label: moved };
+    }
+    return e;
+  });
   return { ...layout, edges };
 }
