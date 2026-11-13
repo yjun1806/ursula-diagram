@@ -260,13 +260,21 @@ describe('timeline box sizes', () => {
 });
 
 describe('timeline event text', () => {
-  it('centres the lines of an event in a box taller than they need', () => {
+  it('centres the lines of an event in a box taller than they need, each standing on a baseline 5 below the middle of its line', () => {
     const l = layoutTimeline(parseTimeline(src('04-wrapping-of-text-for-long-time-periods-or-events')), ruler);
     for (const p of l.periods)
       for (const b of p.boxes) {
         const ys = texts(l.scene.items).filter((t) => b.lines.includes(t.text) && t.x === b.x + b.w / 2 && t.y > b.y && t.y < b.y + b.h).map((t) => t.y);
         const mid = (Math.min(...ys) + Math.max(...ys)) / 2;
-        expect(mid).toBe(b.y + b.h / 2);
+        expect(mid).toBe(b.y + b.h / 2 + 5);
       }
+  });
+
+  it('puts a ring at the start of the time axis', () => {
+    const l = layoutTimeline(parseTimeline('timeline\n    2002 : LinkedIn\n    2004 : Facebook'), ruler);
+    const axis = l.scene.items.find((i) => i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--arrow'));
+    const rings = l.scene.items.filter((i) => i.kind === 'circle' && i.role.includes('port'));
+    expect(rings).toHaveLength(1);
+    expect(axis?.kind === 'line' ? axis.points[0] : undefined).toEqual(rings[0]?.kind === 'circle' ? { x: rings[0].cx, y: rings[0].cy } : undefined);
   });
 });
