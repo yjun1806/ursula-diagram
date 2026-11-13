@@ -26,6 +26,10 @@ const SUB_BLOCK = 40;
 /** How far a bone leans across the height of a sub-bone and its text. */
 const SUB_LEAN = (SUB_RISE + SUB_TEXT + TEXT_GAP) / 2;
 const CLEAR = 16;
+/** Room between a cause's text and the bone before it on its side. */
+const CAUSE_CLEAR = 48;
+/** Radius of the ring at the tail of the spine. */
+const PORT_R = 4;
 const HEAD_GAP = 48;
 const TITLE_H = 40;
 
@@ -100,8 +104,10 @@ interface Draft {
   rows: Row[];
   /** Offsets of the rows from the start of the list. */
   offsets: number[];
-  /** From the first row to the end of the last row's sub-bones. */
+  /** From the first row to the last row. */
   height: number;
+  /** Set when the last row has sub-bones. */
+  tail: boolean;
 }
 
 function assignSides(categories: IshikawaCategory[], mode: Assign): Side[] {
@@ -154,13 +160,14 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
       if (r > 0) at += CAUSE_PITCH + ((rows[r - 1]?.subs.length ?? 0) > 0 ? SUB_BLOCK : 0);
       offsets.push(at);
     });
-    const height = at + ((rows[rows.length - 1]?.subs.length ?? 0) > 0 ? SUB_BLOCK : 0);
-    return { category, side, rank: ranks[side]++, boxW: nameW(category.name), rows, offsets, height };
+    const tail = (rows[rows.length - 1]?.subs.length ?? 0) > 0;
+    return { category, side, rank: ranks[side]++, boxW: nameW(category.name), rows, offsets, height: at, tail };
   });
-  const reach = (side: Side): number => {
-    const own = drafts.filter((d) => d.side === side);
-    return own.length === 0 ? 0 : ceilTo(Math.max(MIN_REACH, ...own.map((d) => 2 * EDGE_GAP + d.height)), 8);
-  };
+  // Bones above and below lean alike and are as long as the longest one, so the boxes of a pair stand over each other;
+  // the sub-bones of the last row take the place of the gap at its end.
+  const need = (d: Draft): number => EDGE_GAP + d.height + Math.max(EDGE_GAP, d.tail ? SUB_BLOCK + CLEAR : 0);
+  const longest = ceilTo(Math.max(MIN_REACH, ...drafts.map(need)), 8);
+  const reach = (side: Side): number => (drafts.some((d) => d.side === side) ? longest : 0);
   const reachOf = { top: reach('top'), bottom: reach('bottom') };
   // Rows lie at a distance from the spine: above, counted down from the far end; below, counted down from the spine.
   const distance = (d: Draft, offset: number): number => (d.side === 'top' ? reachOf.top - EDGE_GAP - offset : EDGE_GAP + offset);
@@ -182,7 +189,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
     }
     const pitch = here.map((d) => {
       const prev = at(d.side, k - 1);
-      const text = Math.max(0, ...d.rows.map((row) => row.reach)) + CLEAR;
+      const text = Math.max(0, ...d.rows.map((row) => row.reach)) + CAUSE_CLEAR;
       return Math.max(text, prev === undefined ? 0 : (prev.boxW + d.boxW) / 2 + CLEAR);
     });
     joinX.push((joinX[k - 1] ?? 0) + ceilTo(Math.max(0, ...pitch), 4));
@@ -233,6 +240,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
   const lines: SceneItem[] = [{ kind: 'line', points: [{ x: spine.x1, y: spineY }, { x: spine.x2, y: spineY }], role: ['edge', 'edge--arrow'], data: { part: 'spine' } }];
   const texts: SceneItem[] = [];
   const boxes: SceneItem[] = [];
+  const ports: SceneItem[] = [{ kind: 'circle', cx: spine.x1, cy: spineY, r: PORT_R, role: ['port'] }];
   bones.forEach((bone, bi) => {
     lines.push({ kind: 'line', points: [bone.far, bone.join], role: ['edge'], data: { part: 'bone', bone: String(bi) } });
     for (const cause of bone.causes) {
@@ -256,7 +264,7 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
     width,
     height,
     title: model.accTitle ?? heading ?? `ishikawa — ${model.head}`,
-    items: [...titleItems, ...lines, ...boxes, ...texts],
+    items: [...titleItems, ...lines, ...boxes, ...texts, ...ports],
     ...(theme === undefined ? {} : { theme }),
   };
   return { scene, bones, head, spine };
