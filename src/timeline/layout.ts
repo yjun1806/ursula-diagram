@@ -213,7 +213,7 @@ const withSeries = (col: Col, series: string | undefined): Col => (series === un
 const dotRole = (series: string | undefined): string[] => (series === undefined ? ['dot'] : ['dot', series]);
 
 function titleItems(title: string | undefined): SceneItem[] {
-  return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'] }];
+  return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'], baseline: 'alphabetic' }];
 }
 
 function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limit: number, multicolor: boolean): TimelineLayout {
@@ -274,7 +274,7 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
         if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: cx, y: axis }, { x: cx, y: boxTop }], role: ['edge'] });
         dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: dotRole(col.series) });
         col.label.forEach((text, i) =>
-          dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'] }),
+          dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' }),
         );
         for (const b of boxes) contentItems.push(...boxItems(b, part.named, col.series));
         periods.push({ label: col.label, dot: { x: cx, y: axis }, boxes, row: rowIndex });

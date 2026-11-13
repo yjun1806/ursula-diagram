@@ -91,7 +91,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   let width = Math.max(right + MARGIN, MARGIN + titleW + MARGIN);
   const height = bottom + (chart.xAxis === undefined ? MARGIN : 24 + MARGIN);
 
-  if (chart.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: 56, text: chart.title, anchor: 'start', role: ['title'] });
+  if (chart.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: 56, text: chart.title, anchor: 'start', role: ['title'], baseline: 'alphabetic' });
 
   // Zones: quadrant-2 top left, 1 top right, 3 bottom left, 4 bottom right; neighbours alternate in fill.
   const zw = (plotW - ZONE_GAP) / 2;
@@ -112,16 +112,16 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
     items.push({ kind: 'box', style: 'frame', x, y, w: zw, h: zh, role: (col + row) % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'] });
   }
   for (const z of zones) {
-    z.lines.forEach((line, i) => items.push({ kind: 'text', x: z.x + ZONE_PAD, y: z.y + 28 + i * LINE_H, text: line, anchor: 'start', role: ['zone-name'] }));
+    z.lines.forEach((line, i) => items.push({ kind: 'text', x: z.x + ZONE_PAD, y: z.y + 28 + i * LINE_H, text: line, anchor: 'start', role: ['zone-name'], baseline: 'alphabetic' }));
   }
 
   // Axes: both end names with an arrow between them, or the one name alone.
   if (chart.xAxis !== undefined) {
     const y = bottom + 24;
     const { low, high } = chart.xAxis;
-    items.push({ kind: 'text', x: plotX, y, text: low, anchor: 'start', role: ['axis-name'] });
+    items.push({ kind: 'text', x: plotX, y, text: low, anchor: 'start', role: ['axis-name'], baseline: 'alphabetic' });
     if (high !== undefined) {
-      items.push({ kind: 'text', x: right, y, text: high, anchor: 'end', role: ['axis-name'] });
+      items.push({ kind: 'text', x: right, y, text: high, anchor: 'end', role: ['axis-name'], baseline: 'alphabetic' });
       const x1 = ceilTo(plotX + body(low) + 16);
       const x2 = floorTo(right - body(high) - 16);
       if (x2 - x1 >= 24) items.push({ kind: 'line', points: [{ x: x1, y: y - 4 }, { x: x2, y: y - 4 }], role: ['edge', 'edge--arrow'] });
@@ -130,9 +130,10 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   if (chart.yAxis !== undefined) {
     const x = plotX - 16;
     const { low, high } = chart.yAxis;
-    items.push({ kind: 'text', x, y: bottom - 12, text: low, anchor: 'end', role: ['axis-name'] });
+    // The low name stands on a line just above the plot's bottom edge; the high name hangs from its top edge.
+    items.push({ kind: 'text', x, y: bottom - 4, text: low, anchor: 'end', role: ['axis-name'], baseline: 'alphabetic' });
     if (high !== undefined) {
-      items.push({ kind: 'text', x, y: top + 12, text: high, anchor: 'end', role: ['axis-name'] });
+      items.push({ kind: 'text', x, y: top + 12, text: high, anchor: 'end', role: ['axis-name'], baseline: 'alphabetic' });
       const y1 = floorTo(bottom - 32);
       const y2 = ceilTo(top + 32);
       if (y1 - y2 >= 24) items.push({ kind: 'line', points: [{ x: plotX - 20, y: y1 }, { x: plotX - 20, y: y2 }], role: ['edge', 'edge--arrow'] });

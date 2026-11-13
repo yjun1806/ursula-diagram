@@ -234,8 +234,9 @@ function textSvg(item: SceneText): string {
   const anchor = item.anchor === undefined ? [] : [item.anchor];
   const turn = item.rotate === undefined ? '' : ` transform="rotate(${num(item.rotate)} ${num(item.x)} ${num(item.y)})"`;
   const body = item.spans === undefined ? escapeXml(item.text) : item.spans.map(spanSvg).join('');
+  const centred = item.baseline === 'alphabetic' ? '' : ' dominant-baseline="central"';
   return (
-    `<text class="${classOf(roles, anchor)}" x="${num(item.x)}" y="${num(item.y)}" dominant-baseline="central"` +
+    `<text class="${classOf(roles, anchor)}" x="${num(item.x)}" y="${num(item.y)}"${centred}` +
     `${turn}${dataAttrs(item.data)}>${body}</text>`
   );
 }

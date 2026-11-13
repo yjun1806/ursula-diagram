@@ -23,7 +23,7 @@ const TITLE_SHIFT = 44;
 const DATA_PAD = 8;
 const DATA_ROW = 20;
 const DATA_WRAP = 240;
-const LABEL_LINE = 20;
+const LABEL_LINE = 18;
 const PORT_R = 4;
 /** Distance before a target at which a detour edge turns toward it. */
 const TURN = 16;
@@ -141,7 +141,7 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, _theme?: Theme
     const spec = lanes[i];
     if (spec === undefined) return;
     labelLines(spec).forEach((t, li) => {
-      items.push({ kind: 'text', x: lane.x + LABEL_PAD, y: lane.y + 28 + LABEL_LINE * li, text: t.text, anchor: 'start', role: [t.sub ? 'zone-sub' : 'zone-name'] });
+      items.push({ kind: 'text', x: lane.x + LABEL_PAD, y: lane.y + 28 + LABEL_LINE * li, text: t.text, anchor: 'start', role: [t.sub ? 'zone-sub' : 'zone-name'], baseline: 'alphabetic' });
     });
   });
 
