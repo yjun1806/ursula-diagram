@@ -6,24 +6,27 @@ import { renderTextLayout } from '../render/text.ts';
 import type { Layout } from '../types.ts';
 import { c4Graph } from './graph.ts';
 import { parseC4 } from './parse.ts';
+import { titledLines } from '../front/title.ts';
 
-function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): { layout: Layout; title: string | undefined } {
+function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): { layout: Layout; title: string | undefined; shown: string | undefined } {
   const model = parseC4(src);
   const ruler = mode === 'text' ? cellRuler() : pixelRuler();
   const laid = layout(c4Graph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }) });
-  return { layout: laid, title: model.accTitle ?? model.title };
+  return { layout: laid, title: model.accTitle ?? model.title, shown: model.title };
 }
 
 registerFrontEnd({
   name: 'c4',
   headers: ['C4Context', 'C4Container', 'C4Component', 'C4Dynamic', 'C4Deployment'],
   svg(src, opts) {
-    const { layout: laid, title } = draw(src, 'svg', opts.maxWidth);
+    const { layout: laid, title, shown } = draw(src, 'svg', opts.maxWidth);
+    const heading = shown === undefined || shown === '' ? opts.heading : shown;
     const name = opts.title ?? title ?? opts.heading;
-    return renderSvg(laid, { ...(name === undefined ? {} : { title: name }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderSvg(laid, { ...(name === undefined ? {} : { title: name }), ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(heading === undefined ? {} : { drawTitle: heading }) });
   },
-  textLines(src, maxWidth) {
-    return renderTextLayout(draw(src, 'text', maxWidth).layout);
+  textLines(src, maxWidth, opts) {
+    const { layout: laid, shown } = draw(src, 'text', maxWidth);
+    return titledLines(renderTextLayout(laid), shown === undefined || shown === '' ? opts.heading : shown, maxWidth);
   },
   json(src, mode, opts) {
     return draw(src, mode, opts.maxWidth).layout;

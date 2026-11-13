@@ -70,6 +70,11 @@ export interface Compartment {
   columns?: string[][];
   /** Look of each column of `columns`, by index (a key column in the small muted type); a column without an entry takes the look of its line. */
   columnEmphasis?: Array<'title' | 'tag' | 'body'>;
+  /**
+   * The only band of a box that has no rules: its lines stand as one group in the middle of the box, and the first line
+   * (the kind of the box) is drawn in a small pill; the line after it is a little further down.
+   */
+  face?: true;
 }
 
 /** A note that stands beside the node it belongs to; the layout puts it on the same layer, in the neighbouring place on `side` (`over`: above it). */
@@ -107,6 +112,8 @@ export interface GraphCluster {
   mirror?: 'RL' | 'BT';
   /** `dashed`: drawn as a dashed outline without a fill; the boxes in it keep the face they have outside any cluster. */
   style?: 'dashed';
+  /** The label is `name · subtitle` and is always written on two lines, the subtitle faint under the name. */
+  subtitled?: true;
 }
 
 export interface GraphEdge {
@@ -164,6 +171,11 @@ export interface Graph {
   clusters?: GraphCluster[];
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /**
+   * Gaps in pixels this drawing asks for, when they differ from the ruler's: `flow` is the gap along the reading direction
+   * (`rankGap`), `join` the gap between the boxes that join the first rank of a level of clusters (`joinGap`). A terminal drawing keeps its own.
+   */
+  gaps?: { flow?: number; join?: number };
 }
 
 export interface Point {
@@ -227,7 +239,7 @@ export interface LayoutCluster {
   /** As in `GraphCluster`. */
   style?: 'dashed';
   /** Where the name is written: the box of its text (the first line's baseline is 12 below the top, each further line 16 further), on how many lines, and whether a line passes behind it, so that the name is drawn over a knockout of the fill. */
-  name?: { x: number; y: number; w: number; h: number; lines: string[]; knockout?: boolean };
+  name?: { x: number; y: number; w: number; h: number; lines: string[]; knockout?: boolean; subtitle?: true };
 }
 
 export interface LayoutEdge {

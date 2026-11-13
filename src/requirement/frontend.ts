@@ -6,6 +6,7 @@ import { renderSvg } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
 import { requirementGraph } from './graph.ts';
 import { parseRequirement } from './parse.ts';
+import { titledLines } from '../front/title.ts';
 
 export const requirementFrontEnd: FrontEnd = {
   name: 'requirement',
@@ -18,12 +19,12 @@ export const requirementFrontEnd: FrontEnd = {
     const summary = `Requirement diagram: ${requirements} requirements, ${model.nodes.length - requirements} elements, ${model.relations.length} relations`;
     const title = svgOpts.title ?? model.accTitle ?? opts.heading ?? summary;
     const laid = layout(requirementGraph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(quality === undefined ? {} : { quality }) });
-    return renderSvg(laid, { title, ...(svgOpts.theme === undefined ? {} : { theme: svgOpts.theme }) });
+    return renderSvg(laid, { title, ...(svgOpts.theme === undefined ? {} : { theme: svgOpts.theme }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     const ruler = cellRuler();
     const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(opts.quality === undefined ? {} : { quality: opts.quality }) });
-    return renderTextLayout(laid);
+    return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const ruler = mode === 'text' ? cellRuler() : pixelRuler();

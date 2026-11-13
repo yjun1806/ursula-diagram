@@ -56,7 +56,8 @@ describe('boxes divided into compartments: size', () => {
       const l = layout(g, px);
       for (const n of g.nodes) {
         const placed = nodeOf(l, n.id);
-        expect(placed.compartments).toEqual(n.compartments);
+        // A box of a row is padded with blank lines up to the fullest box of its row; its own lines stay first.
+        expect(placed.compartments?.map((c) => ({ ...c, lines: c.lines.filter((line) => line !== '') }))).toEqual(n.compartments);
         expect(placed.w).toBeGreaterThanOrEqual(recordWidth(n.compartments ?? [], px) - EPS);
         expect(placed.h).toBeGreaterThanOrEqual(recordHeight(n.compartments ?? [], px) - EPS);
       }

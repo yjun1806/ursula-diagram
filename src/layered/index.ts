@@ -49,6 +49,8 @@ export interface LayeredOptions {
   quick?: boolean;
   /** Pixels, left to right: true lets a box a little wider than the common width take three slot units instead of four, false keeps whole pairs; when absent, both are drawn and the better drawing is kept. */
   compact?: boolean;
+  /** Pixels: draw boxes of one kind at one width (true), at their own widths (false); when absent both are drawn when sharing changes a width, and sharing wins unless it costs a worse drawing. */
+  share?: boolean;
   /** Cut paths and give up alignment when a drawing is still too wide after blocks moved to other rows (on by default). */
   fold?: boolean;
   /** Terminal only: the gap between neighbouring boxes in cells (3 holds one pass-through line, each further line adds 2); tried in turn when absent. */
@@ -116,6 +118,9 @@ function bodyLengths(graph: Graph, ruler: Ruler, td: boolean): Array<number | un
 /** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
 const COMMON_WITHIN = 1.15;
 
+/** Boxes of one kind up to 1.75 times as wide as the median of the kind are drawn at one width. */
+const SHARE_WITHIN = 1.75;
+
 /** The default canvas is a wish, not a border: a drawing may take this many times its width before it counts as too wide. A size the caller gave is kept. */
 const DEFAULT_ROOM = 1.15;
 
@@ -123,11 +128,12 @@ const DEFAULT_ROOM = 1.15;
  * The ruler this engine measures with: boxes and gaps snap to half the node grid (when that is a whole number
  * of at least two edge grid steps), so a smaller gap really buys another column; gaps may shrink to half the default.
  */
-export function layeredRuler(r: Ruler, gap?: number): Ruler {
+export function layeredRuler(r: Ruler, gap?: number, share = true): Ruler {
   if (r.terminal) return terminalRuler(r, gap);
+  const sharing = share ? { shareWithin: SHARE_WITHIN } : {};
   const half = r.nodeGrid / 2;
-  if (!Number.isInteger(half) || half < 2 * r.edgeGrid) return { ...r, commonWithin: COMMON_WITHIN };
-  return { ...r, commonWithin: COMMON_WITHIN, nodeGrid: half, rankGapMin: Math.max(half, Math.floor(r.rankGap / 2 / half) * half) };
+  if (!Number.isInteger(half) || half < 2 * r.edgeGrid) return { ...r, commonWithin: COMMON_WITHIN, ...sharing };
+  return { ...r, commonWithin: COMMON_WITHIN, ...sharing, nodeGrid: half, rankGapMin: Math.max(half, Math.floor(r.rankGap / 2 / half) * half) };
 }
 
 /**
@@ -231,7 +237,7 @@ function frameFor(graph: Graph, ruler: Ruler, limit: number | undefined, compact
   // A box given from outside is as long as its size needs along the reading direction and as thick as it is across.
   const baseUnits = graph.nodes.map((n, i) => (td ? (n.box === undefined ? 2 : unitsOf(m.h[i] ?? 0, m.contentH, m.unit, ruler.rankGap, compact)) : unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, compact)));
   const layerExt = graph.nodes.map((n, i) => (td ? Math.max(m.w[i] ?? 0, m.common) : ruler.uniform ? (m.h[i] ?? m.contentH) : n.box === undefined ? (m.h[i] ?? m.contentH) : Math.max(m.contentH, m.h[i] ?? 0)));
-  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, bodyLen: bodyLengths(graph, ruler, td), ...(limit === undefined ? {} : { limit }) };
+  const frame: Frame = { graph, ruler, td, unit: m.unit, gap: ruler.rankGap, gutter: m.gutter, layerExt, measured: m.w, bodyLen: bodyLengths(graph, ruler, td), ...(limit === undefined ? {} : { limit }) };
   return { frame, common: td ? m.contentH : m.common, baseUnits, unit: m.unit };
 }
 
@@ -364,7 +370,7 @@ export type Order = 'gap' | 'rows';
 
 function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant, order: Order = 'gap'): Prep {
   const td = graph.direction === 'TD';
-  const tuned = layeredRuler(given, opts.gap);
+  const tuned = layeredRuler(given, opts.gap, opts.share !== false);
   // Terminal stages stack boxes in a column: the lines that cross the gap between them stand on adjacent rows.
   const base = tuned.uniform && td && apart ? { ...tuned, linePitch: 1 } : tuned;
   const limit = td ? opts.maxHeight : (opts.maxWidth ?? base.defaultWidth);
@@ -506,6 +512,19 @@ function layoutPieces(source: Graph, given: Ruler, opts: LayeredOptions): Layout
  * reading direction, so that the bands cross the reading direction; the result is then labelled with the real one.
  */
 function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  // With the best quality in pixels, when one width per kind changes a box, the whole drawing is made with and without it:
+  // a wider box can push the usual drawing over the canvas and hand the choice to another composition.
+  if (opts.share === undefined && opts.quality === 'best' && opts.quick !== true && !given.terminal && sharingChangesWidths(source, given, opts)) {
+    const before = stats.compact;
+    const shared = layoutAt(source, given, { ...opts, share: true });
+    const sharedCompact = stats.compact - before;
+    const own = layoutAt(source, given, { ...opts, share: false });
+    const ownCompact = stats.compact - before - sharedCompact;
+    const keep = keepsShared(shared, own);
+    // Only the kept drawing counts a box given three units.
+    stats.compact = before + (keep ? sharedCompact : ownCompact);
+    return keep ? shared : own;
+  }
   const packed = layoutPieces(source, given, opts);
   if (packed) return packed;
   const plan = planZones(source, opts.composition ?? 'auto');
@@ -625,7 +644,7 @@ const TERMINAL_CANDIDATES: readonly Variant[] = CANDIDATES.filter((v) => ['force
 
 /** Whether some box is wider than the common width by little enough to take three slot units instead of four. */
 function hasNarrowBox(graph: Graph, given: Ruler, opts: LayeredOptions): boolean {
-  const ruler = layeredRuler(given, opts.gap);
+  const ruler = layeredRuler(given, opts.gap, opts.share !== false);
   const m = measureNodes(graph.nodes, graph.lanes, ruler, false);
   return graph.nodes.some((_, i) => unitsOf(m.w[i] ?? 0, m.common, m.unit, ruler.rankGap, true) === 3);
 }
@@ -635,15 +654,52 @@ function hasNarrowBox(graph: Graph, given: Ruler, opts: LayeredOptions): boolean
  * twice, with whole pairs and with three units allowed, and the better winner is kept: a better score wins, an equal score the smaller drawing (width times height), and whole pairs when that is equal too.
  */
 function drawLanes(graph: Graph, given: Ruler, opts: LayeredOptions): Layout {
+  const chosen = drawSized(graph, given, opts);
+  if (chosen.compact) stats.compact++;
+  return chosen.drawn;
+}
+
+/** Crossings and bends of a drawing: what sharing a width must not make worse. */
+function tangle(l: Layout): number[] {
+  return [l.diagnostics.filter((d) => d.kind === 'crossing').length, l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0)];
+}
+
+/**
+ * One width per kind wins unless the boxes at their own widths make a better drawing: one with more crossings or bends,
+ * or one that scores worse (more invalid things, or a greater cost). Counts `stats.unshared` when own widths win.
+ */
+function keepsShared(shared: Layout, own: Layout): boolean {
+  const [a, b] = [score(shared), score(own)];
+  const [ta, tb] = [tangle(shared), tangle(own)];
+  if (ta[0] as number <= (tb[0] as number) && (ta[1] as number) <= (tb[1] as number) && compareScores(a.slice(0, 2), b.slice(0, 2)) <= 0) return true;
+  stats.unshared++;
+  return false;
+}
+
+/** Whether drawing boxes of one kind at one width changes the measured width of some box. */
+function sharingChangesWidths(graph: Graph, given: Ruler, opts: LayeredOptions): boolean {
+  const td = graph.direction === 'TD';
+  const shared = measureNodes(graph.nodes, graph.lanes, layeredRuler(given, opts.gap, true), td);
+  const own = measureNodes(graph.nodes, graph.lanes, layeredRuler(given, opts.gap, false), td);
+  return shared.w.some((w, i) => w !== own.w[i]);
+}
+
+interface Sized {
+  drawn: Layout;
+  /** True when a box a little wider than the common width was given three slot units. */
+  compact: boolean;
+}
+
+/** The better of whole pairs and three slot units for a box a little wider than the common width, with one setting of box sharing. */
+function drawSized(graph: Graph, given: Ruler, opts: LayeredOptions): Sized {
   const both = opts.compact === undefined && opts.quality === 'best' && opts.quick !== true && !given.terminal && graph.direction !== 'TD' && hasNarrowBox(graph, given, opts);
   const even = drawCandidates(graph, given, both ? { ...opts, compact: false } : opts);
-  if (!both) return even;
+  if (!both) return { drawn: even, compact: false };
   const narrow = drawCandidates(graph, given, { ...opts, compact: true });
   // The narrow sizes win a better score, and an equal score with a smaller drawing.
   const order = compareScores(score(narrow), score(even));
-  if (order > 0 || (order === 0 && narrow.width * narrow.height >= even.width * even.height)) return even;
-  stats.compact++;
-  return narrow;
+  if (order > 0 || (order === 0 && narrow.width * narrow.height >= even.width * even.height)) return { drawn: even, compact: false };
+  return { drawn: narrow, compact: true };
 }
 
 /** Every candidate is drawn to the end and measured, the best is refined by small changes. */

@@ -8,6 +8,7 @@ import { createAccessibilityReader } from '../front/accessibility.ts';
 import type { Graph } from '../types.ts';
 import { parseClass, readClassConfig } from './parse.ts';
 import type { FrontValue } from '../front-matter.ts';
+import { titledLines } from '../front/title.ts';
 
 function read(src: string, config: Record<string, FrontValue> | undefined): Graph {
   return parseClass(src, readClassConfig(src, config));
@@ -37,14 +38,14 @@ registerFrontEnd({
       ...(composition === undefined ? {} : { composition }),
       ...(quality === undefined ? {} : { quality }),
     });
-    return renderSvg(laid, { ...svgOpts, title, legend: false });
+    return renderSvg(laid, { ...svgOpts, title, legend: false, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     const graph = read(src, opts.config);
     const draw = (g: Graph): string[] => renderTextLayout(layout(g, cellRuler(), { legend: false, fold: true, ...(maxWidth === undefined ? {} : { maxWidth }) }));
     const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
     let lines = draw(graph);
-    if (maxWidth === undefined) return lines;
+    if (maxWidth === undefined) return titledLines(lines, opts.heading, maxWidth);
     // A drawing that is too wide is drawn again with every line of every box cut shorter, from 40 cells down to 8.
     for (let limit = 40; widest(lines) > maxWidth && limit >= 8; limit -= 4) {
       const clipLines = (ls: string[]): string[] => ls.map((l) => clip(l, limit));
@@ -53,7 +54,7 @@ registerFrontEnd({
         nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: clipLines(n.lines), ...(n.compartments === undefined ? {} : { compartments: n.compartments.map((c) => ({ ...c, lines: clipLines(c.lines) })) }) })),
       });
     }
-    return lines;
+    return titledLines(lines, opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(read(src, opts.config), mode === 'text' ? cellRuler() : pixelRuler(), { legend: false });

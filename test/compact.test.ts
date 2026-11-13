@@ -5,12 +5,12 @@ import { score } from '../src/layered/choose.ts';
 import { stats } from '../src/layered/stats.ts';
 import { geometryViolations } from './helpers.ts';
 
-/** One box a little wider than the others; the skip edge makes the shorter drawing score better. */
-const SKIP_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Verify]\n  c-->d[Save]\n  d-->e[Tell]\n  e-->f[End]\n  a-->e';
+/** One box of another kind (a stadium) a little wider than the others, which share one width by kind; the skip edge makes the shorter drawing score better. */
+const SKIP_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c([Verify])\n  c-->d[Save]\n  d-->e[Tell]\n  e-->f[End]\n  a-->e';
 /** The same row without the skip edge: both sizes score the same, and three units draw it narrower. */
-const PLAIN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Verify]\n  c-->d[Save]\n  d-->e[Tell]\n  e-->f[End]';
+const PLAIN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c([Verify])\n  c-->d[Save]\n  d-->e[Tell]\n  e-->f[End]';
 /** A wider lane sets the size of the drawing, so three units change neither the score nor the size. */
-const SAME_SIZE = 'swimlane-beta LR\n  subgraph top[Top]\n    a[Go]-->b[Run]\n    b-->c[Save]\n    c-->d[Tell]\n    d-->e[End]\n    e-->f[Log]\n    f-->g[Sync]\n  end\n  subgraph low[Low]\n    x[Go]-->y[Verify]\n    y-->z[End]\n  end';
+const SAME_SIZE = 'swimlane-beta LR\n  subgraph top[Top]\n    a[Go]-->b[Run]\n    b-->c[Save]\n    c-->d[Tell]\n    d-->e[End]\n    e-->f[Log]\n    f-->g[Sync]\n  end\n  subgraph low[Low]\n    x[Go]-->y([Verify])\n    y-->z[End]\n  end';
 /** No box is wider than the common width. */
 const EVEN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Save]\n  c-->d[Tell]\n  d-->e[End]\n  a-->d';
 /** Three slot units make the drawing score worse than whole pairs. One named lane keeps the rows of the lane model: a drawing without zones may be laid out as stages instead. */
@@ -18,13 +18,13 @@ const LOSING = `swimlane-beta LR
 subgraph main[Main]
 n0[Run] --> n1[Tell]
 n1[Tell] --> n2[Sync]
-n2[Sync] --> n3[Verify]
-n3[Verify] --> n4[End]
-n4[End] --> n5[Verify]
-n5[Verify] --> n6[Save]
+n2[Sync] --> n3([Verify])
+n3([Verify]) --> n4[End]
+n4[End] --> n5([Verify])
+n5([Verify]) --> n6[Save]
 n6[Save] --> n7[Log]
-n7[Log] --> n8[Verify]
-n8[Verify] --> n9[Tell]
+n7[Log] --> n8([Verify])
+n8([Verify]) --> n9[Tell]
 n5 --> n8
 n4 --> n9
 n4 --> n0
@@ -69,8 +69,8 @@ describe('compact box sizes', () => {
   it('draws the whole candidate set twice when a box can take three units', () => {
     const even = draw(SKIP_ROW, { quality: 'best', compact: false });
     const narrow = draw(SKIP_ROW, { quality: 'best', compact: true });
-    // Each run counts one more drawing for the spread candidate, which a graph without zones makes once per set; the two sets share it.
-    expect(draw(SKIP_ROW, { quality: 'best' }).draws).toBe(even.draws + narrow.draws - 1);
+    // Each run counts two more drawings for the spread candidate (one with one width per kind, one at own widths), which a graph without zones makes once per set; the two sets share them.
+    expect(draw(SKIP_ROW, { quality: 'best' }).draws).toBe(even.draws + narrow.draws - 2);
   });
 
   it('takes three units on an equal score when the drawing is smaller', () => {

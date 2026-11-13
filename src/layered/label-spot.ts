@@ -103,35 +103,48 @@ function sideOf(seg: Segment, r: Rect): number {
     const d = r.y + r.h / 2 - p.y;
     return Math.abs(d) < EPS ? 0 : Math.sign(d);
   }
-  return Math.sign(r.x + r.w / 2 - p.x) || 1;
+  const d = r.x + r.w / 2 - p.x;
+  return Math.abs(d) < EPS ? 0 : Math.sign(d);
 }
 
 /**
- * Candidate places along every segment long enough to keep a line visible on both sides of the label: a label on a
- * horizontal segment sits on the line, a label on a vertical one beside it. Slides in steps of `SLIDE` from the middle
- * of the allowed stretch; at the arrowhead the stretch also leaves the room of the arrowhead.
+ * The stretch a label of `size` may be centred on along segment `si` of a line of `count` segments, so that a line stays
+ * visible on both sides of it (and the room of the arrowhead at the last end); undefined when the segment is too short
+ * or runs aslant.
+ */
+export function slideRange(seg: Segment, si: number, count: number, size: LabelSize, style: EdgeStyle): { from: number; to: number; horizontal: boolean } | undefined {
+  const [p, z] = seg;
+  const horizontal = p.y === z.y;
+  if (!horizontal && p.x !== z.x) return undefined;
+  const beside = lineBeside(style);
+  const dim = horizontal ? size.w : size.h;
+  const lo = horizontal ? Math.min(p.x, z.x) : Math.min(p.y, z.y);
+  const hi = horizontal ? Math.max(p.x, z.x) : Math.max(p.y, z.y);
+  if (hi - lo < dim + 2 * beside - EPS) return undefined;
+  const headHigh = horizontal ? z.x > p.x : z.y > p.y;
+  const head = si === count - 1 ? ARROW : 0;
+  const from = lo + beside + dim / 2 + (head && !headHigh ? head : 0);
+  const to = hi - beside - dim / 2 - (head && headHigh ? head : 0);
+  return to < from - EPS ? undefined : { from, to, horizontal };
+}
+
+/**
+ * Candidate places along every segment long enough to keep a line visible on both sides of the label: a label sits on
+ * the line, or beside it on a vertical segment. Slides in steps of `SLIDE` from the middle of the allowed stretch; at the
+ * arrowhead the stretch also leaves the room of the arrowhead.
  */
 function candidates(q: SpotQuery): Candidate[] {
   const { own, size, ruler } = q;
-  const beside = lineBeside(q.style);
   const out: Candidate[] = [];
   own.forEach((seg, si) => {
-    const [p, z] = seg;
-    const horizontal = p.y === z.y;
-    if (!horizontal && p.x !== z.x) return;
-    const dim = horizontal ? size.w : size.h;
-    const lo = horizontal ? Math.min(p.x, z.x) : Math.min(p.y, z.y);
-    const hi = horizontal ? Math.max(p.x, z.x) : Math.max(p.y, z.y);
-    if (hi - lo < dim + 2 * beside - EPS) return;
-    const headHigh = horizontal ? z.x > p.x : z.y > p.y;
-    const head = si === own.length - 1 ? ARROW : 0;
-    const from = lo + beside + dim / 2 + (head && !headHigh ? head : 0);
-    const to = hi - beside - dim / 2 - (head && headHigh ? head : 0);
-    if (to < from - EPS) return;
+    const range = slideRange(seg, si, own.length, size, q.style);
+    if (!range) return;
+    const { from, to, horizontal } = range;
+    const [p] = seg;
     const mid = (from + to) / 2;
     const reach = Math.floor((to - from) / 2 / SLIDE + EPS);
     const gap = (horizontal ? size.h : size.w) / 2 + (horizontal ? ruler.labelPadY : ruler.labelPadX);
-    for (const side of horizontal ? [0] : [1, -1]) {
+    for (const side of horizontal ? [0] : [0, 1, -1]) {
       for (let k = 0; k <= reach; k++) {
         for (const sign of k === 0 ? [1] : [1, -1]) {
           const along = mid + sign * k * SLIDE;
@@ -174,12 +187,12 @@ export function chooseSpot(q: SpotQuery): Spot {
   return { rect: best.rect, moved: best.rect !== q.basic, overlap: best.overlap };
 }
 
-/** The place of a label on the middle of the longest straight stretch of a line that was drawn again: on a horizontal one the label sits on it, on a vertical one beside it. */
+/** The place of a label on the middle of the longest straight stretch of a line that was drawn again: the label sits on it. */
 function onLongest(own: Segment[], label: Rect, ruler: Ruler): Rect {
   const long = (sg: Segment): number => Math.abs(sg[1].x - sg[0].x) + Math.abs(sg[1].y - sg[0].y);
   const [p, z] = own.reduce((a, b) => (long(b) > long(a) ? b : a)) as Segment;
   const horizontal = p.y === z.y;
-  const cx = horizontal ? (p.x + z.x) / 2 : p.x + label.w / 2 + ruler.labelPadX;
+  const cx = horizontal ? (p.x + z.x) / 2 : p.x;
   const cy = horizontal ? p.y : (p.y + z.y) / 2;
   return { x: edgeNear(ruler, cx - label.w / 2), y: edgeNear(ruler, cy - label.h / 2), w: label.w, h: label.h };
 }
@@ -214,5 +227,68 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
     changed = true;
     return { ...edge, label: { ...label, x: spot.rect.x, y: spot.rect.y } };
   });
-  return changed ? { ...layout, edges } : layout;
+  const levelled = levelSiblings(layout, edges, all, nodes, ruler, avoid);
+  return changed || levelled.some((e, i) => e !== edges[i]) ? { ...layout, edges: levelled } : layout;
+}
+
+/**
+ * Lines that leave one box carry their labels at one distance from it along the reading direction (one height down the
+ * page, one column across it): the one nearest the middle of the stretch every label of the group may take at which each
+ * label keeps the room that `chooseSpot` asks of a clean place. A group whose labels cannot stand at one level stays as it is.
+ */
+function levelSiblings(layout: Layout, edges: LayoutEdge[], all: Segment[][], nodes: Rect[], ruler: Ruler, avoid: Rect[]): LayoutEdge[] {
+  const flowsDown = layout.direction !== 'LR' && layout.direction !== 'RL';
+  const groups = new Map<string, number[]>();
+  edges.forEach((e, i) => {
+    if (e.label && e.from !== e.to) groups.set(e.from, [...(groups.get(e.from) ?? []), i]);
+  });
+  const out = [...edges];
+  const centreOf = (r: Rect): number => (flowsDown ? r.y + r.h / 2 : r.x + r.w / 2);
+  for (const [from, members] of groups) {
+    const source = layout.nodes.find((n) => n.id === from);
+    if (members.length < 2 || !source) continue;
+    const sourceAt = flowsDown ? source.y + source.h / 2 : source.x + source.w / 2;
+    const spans = members.map((i) => {
+      const edge = out[i] as LayoutEdge;
+      const label = edge.label as NonNullable<LayoutEdge['label']>;
+      const rect: Rect = { x: label.x, y: label.y, w: label.w, h: label.h };
+      const own = all[i] as Segment[];
+      const near = own.map((sg) => segmentToRect(sg, rect));
+      const si = near.indexOf(Math.min(...near));
+      const seg = own[si] as Segment;
+      const range = slideRange(seg, si, own.length, { w: label.w, h: label.h }, edge.style);
+      const along = flowsDown ? seg[0].x === seg[1].x : seg[0].y === seg[1].y;
+      const sits = flowsDown ? Math.abs(rect.x + rect.w / 2 - seg[0].x) < ruler.edgeGrid : Math.abs(rect.y + rect.h / 2 - seg[0].y) < ruler.edgeGrid;
+      const here = centreOf(rect);
+      const free = range !== undefined && along && sits;
+      return { i, rect, here, from: free ? range.from : here, to: free ? range.to : here };
+    });
+    const above = spans.map((s) => Math.sign(s.here - sourceAt));
+    if (new Set(above).size !== 1 || above[0] === 0) continue;
+    const low = Math.max(...spans.map((s) => s.from));
+    const high = Math.min(...spans.map((s) => s.to));
+    if (high < low - EPS) continue;
+    const moved = (s: (typeof spans)[number], at: number): Rect => ({ ...s.rect, ...(flowsDown ? { y: edgeNear(ruler, at - s.rect.h / 2) } : { x: edgeNear(ruler, at - s.rect.w / 2) }) });
+    const middle = (low + high) / 2;
+    const reach = Math.floor((high - low) / 2 / SLIDE + EPS);
+    const levels = Array.from({ length: reach + 1 }, (_, k) => (k === 0 ? [middle] : [middle - k * SLIDE, middle + k * SLIDE])).flat();
+    for (const at of levels) {
+      const rects = spans.map((s) => moved(s, at));
+      const clean = spans.every((s, m) => {
+        const edge = out[s.i] as LayoutEdge;
+        const others = edges.flatMap((e, j) => (j === s.i || !e.label ? [] : spans.some((t) => t.i === j) ? [rects[spans.findIndex((t) => t.i === j)] as Rect] : [{ x: e.label.x, y: e.label.y, w: e.label.w, h: e.label.h }]));
+        const foreign = all.flatMap((ss, j) => (j === s.i ? [] : ss));
+        return measure(rects[m] as Rect, { own: all[s.i] as Segment[], foreign, nodes, placed: others, size: { w: s.rect.w, h: s.rect.h }, style: edge.style, ruler, basic: s.rect, basicSeg: 0, ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) }).clean;
+      });
+      if (!clean) continue;
+      spans.forEach((s, m) => {
+        const r = rects[m] as Rect;
+        if (r.x === s.rect.x && r.y === s.rect.y) return;
+        const edge = out[s.i] as LayoutEdge;
+        out[s.i] = { ...edge, label: { ...(edge.label as NonNullable<LayoutEdge['label']>), x: r.x, y: r.y } };
+      });
+      break;
+    }
+  }
+  return out;
 }

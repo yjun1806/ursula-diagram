@@ -42,12 +42,12 @@ describe('refineLabels', () => {
     expect(after.edges[0]?.label?.text).toBe('a');
   });
 
-  it('takes the other side of the same segment, in the middle of the stretch the arrowhead leaves', () => {
+  it('stands on its line, in the middle of the stretch the arrowhead leaves', () => {
     const before = layoutOf([edge('a', vertical(100, 0, 200), { x: 104, y: 90 }), edge('b', vertical(150, 0, 200))]);
     const label = refineLabels(before, ruler).edges[0]?.label;
     // The stretch for the label ends 16px + the 8px arrowhead before the end, so its middle is 4px above the middle of the line.
     expect(label?.y).toBe(86);
-    expect((label?.x ?? 0) + box.w).toBeLessThanOrEqual(100);
+    expect((label?.x ?? 0) + box.w / 2).toBe(100);
   });
 
   it('leaves a label that is already clean exactly where it was', () => {

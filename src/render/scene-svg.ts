@@ -1,3 +1,4 @@
+import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
 import type { Arrow, SceneThemeSpec } from './scene-theme.ts';
 import { escapeXml, num, pathData } from './svg.ts';
@@ -291,13 +292,35 @@ function markersUsed(scene: Scene): [Variant, End][] {
   return [...found].map((k) => k.split(':') as [Variant, End]);
 }
 
+/** The left edge of what a scene draws: the smallest x of its boxes, lines and left-anchored texts; 24 when it has none. */
+function contentLeft(scene: Scene): number {
+  const xs = scene.items.flatMap((it) => {
+    switch (it.kind) {
+      case 'box':
+        return [it.x];
+      case 'line':
+        return it.points.map((p) => p.x);
+      case 'text':
+        return it.anchor === 'start' && it.rotate === undefined ? [it.x] : [];
+      case 'circle':
+        return [it.cx - it.r];
+      case 'path':
+        return [];
+    }
+  });
+  return xs.length === 0 ? 24 : Math.max(0, Math.min(...xs));
+}
+
 /** Draws a scene in one of the three themes; the colours are variables with dark values for `prefers-color-scheme`. */
-export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: Theme } = {}): string {
+export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: Theme; drawTitle?: string } = {}): string {
   const theme = opts.theme ?? scene.theme ?? 'solid';
   const spec = SCENE_THEME_SPECS[theme];
   if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${THEMES.join(', ')}.`, 'theme');
-  const w = num(scene.width);
-  const h = num(scene.height);
+  const heading = opts.drawTitle === undefined || opts.drawTitle === '' ? undefined : opts.drawTitle;
+  const left = heading === undefined ? 0 : contentLeft(scene);
+  const rowH = heading === undefined ? 0 : TITLE_ROW;
+  const w = num(heading === undefined ? scene.width : widthWithTitle(scene.width, left, heading));
+  const h = num(scene.height + rowH);
   const defs = [...markersUsed(scene).map(([variant, end]) => markerSvg(spec, variant, end)), ...(spec.shadow ? [SHADOW_FILTER] : [])];
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
@@ -305,7 +328,9 @@ export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: 
     `<style>${sceneStyleSheet(spec)}</style>`,
     ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
     `<rect class="ursula-bg" x="0" y="0" width="${w}" height="${h}"/>`,
+    ...(heading === undefined ? [] : [textSvg({ kind: 'text', x: left, y: TITLE_CENTRE, text: heading, anchor: 'start', role: ['title', 'diagram-title'] }), `<g transform="translate(0 ${rowH})">`]),
     ...scene.items.map((it) => itemSvg(it, spec)),
+    ...(heading === undefined ? [] : ['</g>']),
     '</svg>',
   ].join('');
 }

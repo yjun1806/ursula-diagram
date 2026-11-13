@@ -22,6 +22,8 @@ export interface Ruler {
   /** Space between two adjacent lane bands. */
   laneGap: number;
   rowGap: number;
+  /** Room between the boxes that join the first rank of a level of clusters, when it is not `rankGap` (a drawing that gives the gap along the flow a size of its own). */
+  joinGap?: number;
   trackGap: number;
   lanePad: number;
   laneLabelGap: number;
@@ -38,6 +40,8 @@ export interface Ruler {
   nodeGrid: number;
   /** When set, the common box width is the widest that is no more than this many times the middle width, instead of the width three quarters of the boxes fit. */
   commonWithin?: number;
+  /** When set, boxes of one kind (shape) up to this many times as wide as the median of the kind all take the width of the widest of them; wider boxes keep their own. */
+  shareWithin?: number;
   /** Finer grid every edge bend, track offset and label position is a multiple of. Attachment points on a side are exempt. */
   edgeGrid: number;
   /**
