@@ -165,6 +165,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
   const barSeries = chart.series.map((s, i) => ({ s, i })).filter((e) => e.s.kind === 'bar');
   const lineSeries = chart.series.map((s, i) => ({ s, i })).filter((e) => e.s.kind === 'line');
   const strongBars = !single;
+  // Band: one bar series and at most one line are neutral, with the highest bar in the accent; more series take their own colours.
+  const neutral = spec.peakBar && barSeries.length <= 1 && lineSeries.length <= 1;
 
   // value range
   const values = chart.series.flatMap((s) => s.points.map((p) => p.value));
@@ -314,7 +316,9 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     const groupW = k * barW + (k - 1) * gap;
     const barRects: { box: Box; len: number; series: number; i: number; end: number; centre: number }[] = [];
     barSeries.forEach(({ s, i: sIdx }, slot) => {
-      const role = strongBars ? [`series-${colour(sIdx)}`] : ['mark'];
+      const role = strongBars && !neutral ? [`series-${colour(sIdx)}`] : ['mark'];
+      const top = Math.max(...s.points.map((q) => q.value));
+      const peak = neutral ? s.points.findIndex((p) => p.value === top) : -1;
       s.points.forEach((p, i) => {
         const c = catPos(i) - groupW / 2 + slot * (barW + gap) + barW / 2;
         const end = valPos(p.value);
@@ -326,7 +330,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           const d = horizontal
             ? `M${round2(base)} ${round2(x0)}H${round2(end - radius)}Q${round2(end)} ${round2(x0)} ${round2(end)} ${round2(x0 + radius)}V${round2(x1 - radius)}Q${round2(end)} ${round2(x1)} ${round2(end - radius)} ${round2(x1)}H${round2(base)}Z`
             : `M${round2(x0)} ${round2(base)}V${round2(end + radius)}Q${round2(x0)} ${round2(end)} ${round2(x0 + radius)} ${round2(end)}H${round2(x1 - radius)}Q${round2(x1)} ${round2(end)} ${round2(x1)} ${round2(end + radius)}V${round2(base)}Z`;
-          items.push({ kind: 'path', d, role });
+          items.push({ kind: 'path', d, role: i === peak ? ['mark', 'mark--peak'] : role });
         }
         barRects.push({
           box: horizontal ? { x0: base, x1: end, y0: x0, y1: x1 } : { x0, x1, y0: end, y1: base },
@@ -354,9 +358,9 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           const swapped = monotonePath(pts.map((p) => ({ x: p.y, y: p.x })));
           d = swapped.replace(/(-?[\d.]+)[ ,](-?[\d.]+)/g, '$2 $1');
         } else d = monotonePath(pts);
-        items.push({ kind: 'path', d, role: [single ? 'mark-line' : `series-${colour(sIdx)}--line`] });
+        items.push({ kind: 'path', d, role: [neutral ? 'mark-line--ink' : single ? 'mark-line' : `series-${colour(sIdx)}--line`] });
       }
-      for (const p of pts) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: [single ? 'mark-dot' : `series-${colour(sIdx)}--dot`] });
+      for (const p of pts) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: [neutral ? 'mark-dot--ink' : single ? 'mark-dot' : `series-${colour(sIdx)}--dot`] });
     });
 
     // category names
@@ -398,7 +402,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           row++;
         }
         const cy = top + row * 24 + 12;
-        items.push({ kind: 'box', style: 'frame', x, y: cy - 6, w: 12, h: 12, role: ['swatch', `series-${colour(i)}`] });
+        items.push({ kind: 'box', style: 'frame', x, y: cy - 6, w: 12, h: 12, role: ['swatch', ...(neutral ? [s.kind === 'bar' ? 'mark' : 'mark--ink'] : [`series-${colour(i)}`])] });
         text({ kind: 'text', x: x + 20, y: cy, text: name, anchor: 'start', role: ['legend'] });
         x += w + 24;
       }

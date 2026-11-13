@@ -87,3 +87,35 @@ describe('band port ring', () => {
     expect(render(src, { theme: 'solid' })).toContain('.ursula-port{display:none;');
   });
 });
+
+describe('band chart emphasis', () => {
+  const src = 'xychart-beta\n  x-axis [a, b, c, d]\n  bar [3, 9, 5, 7]';
+  const marks = (svg: string): string[] => svg.match(/<path class="ursula-mark[^"]*"/g) ?? [];
+
+  it('paints only the highest bar of a single bar series in the accent', () => {
+    const bars = marks(render(src, { theme: 'band' }));
+    expect(bars).toHaveLength(4);
+    expect(bars.filter((b) => b.includes('ursula-mark--peak'))).toHaveLength(1);
+    // The second bar holds the highest value, 9.
+    expect(bars[1]).toContain('ursula-mark--peak');
+  });
+
+  it('gives each of several series its own colour with no emphasis', () => {
+    const svg = render('xychart-beta\n  x-axis [a, b, c]\n  bar [3, 9, 5]\n  bar [4, 2, 8]', { theme: 'band' });
+    expect(svg).not.toContain('class="ursula-mark ursula-mark--peak"');
+    expect(svg).toContain('class="ursula-series-1"');
+    expect(svg).toContain('ursula-series-2');
+  });
+
+  it('draws the line in ink with a dot of the background', () => {
+    const svg = render('xychart-beta\n  x-axis [a, b, c]\n  bar [3, 9, 5]\n  line [4, 6, 5]', { theme: 'band' });
+    expect(svg).toContain('<path class="ursula-mark-line--ink"');
+    expect(svg).toContain('<circle class="ursula-mark-dot--ink"');
+  });
+
+  it('leaves solid unchanged', () => {
+    const svg = render(src, { theme: 'solid' });
+    expect(svg).not.toContain('ursula-mark--peak');
+    expect(marks(svg)).toHaveLength(4);
+  });
+});

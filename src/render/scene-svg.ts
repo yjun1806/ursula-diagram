@@ -16,7 +16,7 @@ const SERIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
  * Rules of a themed drawing, written once with `$name` colour placeholders and `%name` metric placeholders.
  * A role `x` is the class `ursula-x`.
  */
-function sceneRules(spec: SceneThemeSpec): string[] {
+function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
   const arrow = spec.arrow;
   const head =
     arrow.kind === 'filled'
@@ -116,6 +116,14 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-mark-line{fill:none;stroke:$data;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
     '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:2.5}',
     '.ursula-dot{fill:$dot-neutral}',
+    ...(peak
+      ? [
+          '.ursula-mark--peak{fill:$accent-mid}',
+          '.ursula-mark--ink{fill:$ink}',
+          '.ursula-mark-line--ink{fill:none;stroke:$ink;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
+          '.ursula-mark-dot--ink{fill:$bg;stroke:$ink;stroke-width:1.5}',
+        ]
+      : []),
     ...seriesRules,
     ...head,
     ...msgHead,
@@ -129,8 +137,8 @@ function expand(rule: string, spec: SceneThemeSpec, mode: 0 | 1): string {
     .replace(/\$([a-z][a-z0-9-]*)/g, (_, name: string) => `var(--ursula-${name},${spec.colors[name]?.[mode] ?? 'inherit'})`);
 }
 
-function sceneStyleSheet(spec: SceneThemeSpec): string {
-  const rules = sceneRules(spec);
+function sceneStyleSheet(spec: SceneThemeSpec, peak: boolean): string {
+  const rules = sceneRules(spec, peak);
   const light = rules.map((r) => expand(r, spec, 0)).join('\n');
   const dark = rules.map((r) => expand(r, spec, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
@@ -324,14 +332,17 @@ export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: 
   const w = num(heading === undefined ? scene.width : widthWithTitle(scene.width, left, heading));
   const h = num(scene.height + rowH);
   const defs = [...markersUsed(scene).map(([variant, end]) => markerSvg(spec, variant, end)), ...(spec.shadow ? [SHADOW_FILTER] : [])];
+  const items = scene.items.map((it) => itemSvg(it, spec));
+  // The rules of a neutral chart with an emphasised bar are written only into a drawing that uses them.
+  const peak = spec.peakBar && items.some((it) => /ursula-mark(--peak|--ink|-line--ink|-dot--ink)/.test(it));
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
-    `<style>${sceneStyleSheet(spec)}</style>`,
+    `<style>${sceneStyleSheet(spec, peak)}</style>`,
     ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
     `<rect class="ursula-bg" x="0" y="0" width="${w}" height="${h}"/>`,
     ...(heading === undefined ? [] : [textSvg({ kind: 'text', x: left, y: TITLE_CENTRE, text: heading, anchor: 'start', role: ['title', 'diagram-title'] }), `<g transform="translate(0 ${rowH})">`]),
-    ...scene.items.map((it) => itemSvg(it, spec)),
+    ...items,
     ...(heading === undefined ? [] : ['</g>']),
     '</svg>',
   ].join('');
