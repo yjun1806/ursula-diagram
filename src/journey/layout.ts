@@ -200,7 +200,7 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
 
   for (const t of placed) {
     items.push({ kind: 'box', style: 'box', x: t.x, y: t.y, w: t.w, h: t.h, role: ['box', 'box--in-zone'] });
-    t.name.forEach((text, i) => items.push({ kind: 'text', x: t.x + t.w / 2, y: t.y + 24 + LINE * i, text, anchor: 'middle', role: ['name'] }));
+    t.name.forEach((text, i) => items.push({ kind: 'text', x: t.x + t.w / 2, y: t.y + 26 + LINE * i, text, anchor: 'middle', role: ['name'] }));
     for (const tag of t.tags) {
       items.push({ kind: 'box', style: 'label', x: tag.x, y: tag.y, w: tag.w, h: TAG_H, role: ['tag'] });
       items.push({ kind: 'text', x: tag.x + tag.w / 2, y: tag.y + TAG_H / 2, text: tag.text, anchor: 'middle', role: ['tag-text'] });

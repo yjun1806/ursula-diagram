@@ -5,7 +5,7 @@ import type { Scene, SceneItem } from '../types.ts';
 import type { Pie } from './model.ts';
 
 export const RADIUS = 160;
-const GAP = 3;
+const GAP = 2;
 const CORNER = 4;
 /** The guide runs straight out from the circle, from `LEAD` to at least `ELBOW` outside it. */
 const LEAD = 4;

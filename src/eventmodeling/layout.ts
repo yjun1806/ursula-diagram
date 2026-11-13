@@ -29,7 +29,7 @@ const DATA_ROW = 20;
 const DATA_WRAP = 240;
 const LABEL_LINE = 18;
 /** Centre of a box's name under a head band. */
-const NAME_UNDER_BAND = 46;
+const NAME_UNDER_BAND = 48;
 const PORT_R = 4;
 /** Distance before a target at which a detour edge turns toward it. */
 const TURN = 16;
