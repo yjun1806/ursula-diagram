@@ -548,3 +548,14 @@ describe('block arrows, labels and lines around the blocks', () => {
     expect(box.role).not.toContain('box--in-zone');
   });
 });
+
+describe('block cylinder front arc', () => {
+  const arcOf = (scene: Scene) => scene.items.find((i) => i.kind === 'path' && i.data?.shape === 'cylinder' && i.role.includes('rule'));
+  it('draws the arc as a hairline where the theme rule has the colour of the box fill, and as the rule elsewhere', () => {
+    const src = 'block-beta\n  db[("Database")]';
+    const band = arcOf(layoutBlock(parseBlock(src), ruler, 'band').scene);
+    expect(band?.kind === 'path' ? band.role : undefined).toEqual(['rule', 'rule--in-zone']);
+    const solid = arcOf(layoutBlock(parseBlock(src), ruler, 'solid').scene);
+    expect(solid?.kind === 'path' ? solid.role : undefined).toEqual(['rule']);
+  });
+});

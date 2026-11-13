@@ -1,4 +1,6 @@
 import type { Ruler } from '../metrics.ts';
+import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 import type { Theme } from '../render/theme.ts';
 import { trimToOutline } from '../render/shapes.ts';
 import type { NodeShape, Point, Scene, SceneItem, SceneLine } from '../types.ts';
@@ -219,7 +221,7 @@ export function layoutBlock(model: BlockDiagram, ruler: Ruler, theme?: Theme, co
   const label = model.accTitle ?? (model.title === undefined ? `Block diagram: ${leaves.length} blocks` : `Block diagram: ${model.title}`);
   const fit = u.terminal ? { dx: 0, dy: 0, width, height } : keepMargin(links, width, height, u);
   const shifted = fit.dx === 0 && fit.dy === 0 ? { blocks: placed, links } : shift(placed, links, fit.dx, fit.dy);
-  const scene: Scene = { width: fit.width, height: fit.height, title: label, items: u.terminal ? [] : sceneItems(shifted.blocks, shifted.links, model, u), ...(theme === undefined ? {} : { theme }) };
+  const scene: Scene = { width: fit.width, height: fit.height, title: label, items: u.terminal ? [] : sceneItems(shifted.blocks, shifted.links, model, u, arcRoleOf(theme)), ...(theme === undefined ? {} : { theme }) };
   return { scene, width: fit.width, height: fit.height, blocks: shifted.blocks, links: shifted.links };
 }
 
@@ -257,7 +259,16 @@ function shift(blocks: readonly PlacedBlock[], links: readonly PlacedLink[], dx:
   };
 }
 
-function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[], model: BlockDiagram, u: Units): SceneItem[] {
+/**
+ * Look of the front arc of a cylinder: a rule, or a hairline where the theme's rule has the colour of a box's fill and
+ * would not show on it.
+ */
+function arcRoleOf(theme: Theme = DEFAULT_THEME): string[] {
+  const colors = SCENE_THEME_SPECS[theme].colors;
+  return colors.rule?.[0] === colors['box-fill']?.[0] ? ['rule', 'rule--in-zone'] : ['rule'];
+}
+
+function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[], model: BlockDiagram, u: Units, arcRole: string[]): SceneItem[] {
   const items: SceneItem[] = [];
   const depthOf = new Map(blocks.filter((g) => g.kind === 'group').map((g) => [g.id, g.depth] as const));
   if (model.title !== undefined) items.push({ kind: 'text', x: u.margin, y: u.margin + 9, text: model.title, anchor: 'start', role: ['title'] });
@@ -274,7 +285,7 @@ function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[]
     // A box in a filled zone turns white; one in a plain (white) zone keeps the box fill so it still shows.
     const inZone = b.parent !== undefined && (depthOf.get(b.parent) ?? 1) % 2 === 1;
     const role = ['box', ...(b.shape === 'round' ? ['box--round'] : []), ...(b.shape === 'diamond' ? ['box--decision'] : b.start ? ['box--start'] : []), ...(inZone ? ['box--in-zone'] : [])];
-    for (const item of shapeItems(b, role)) items.push({ ...item, data: { block: b.id, shape: b.shape } });
+    for (const item of shapeItems(b, role, arcRole)) items.push({ ...item, data: { block: b.id, shape: b.shape } });
     const nameRole = ['name', ...(b.shape === 'diamond' ? ['on-decision'] : b.start ? ['on-start'] : [])];
     const centre = b.shape === 'arrow' ? arrowBody(b, b.heads ?? ['right']) : { x: b.x + b.w / 2, y: b.y + b.h / 2 + (b.shape === 'cylinder' ? 4 : 0) };
     b.lines.forEach((text, i) => {
