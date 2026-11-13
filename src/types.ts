@@ -219,6 +219,8 @@ export interface LayoutCluster {
   depth: number;
   /** As in `GraphCluster`. */
   style?: 'dashed';
+  /** Where the name is written: the box of its text (the first line's baseline is 12 below the top, each further line 16 further), on how many lines, and whether a line passes behind it, so that the name is drawn over a knockout of the fill. */
+  name?: { x: number; y: number; w: number; h: number; lines: string[]; knockout?: boolean };
 }
 
 export interface LayoutEdge {
