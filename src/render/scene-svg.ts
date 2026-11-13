@@ -261,8 +261,10 @@ function pathSvg(item: ScenePath, spec: SceneThemeSpec): string {
   return `<path class="${classOf(item.role)}" d="${item.d}"${shadowAttr(item.role, spec)}${dataAttrs(item.data)}/>`;
 }
 
-function circleSvg(item: SceneCircle): string {
-  return `<circle class="${classOf(item.role)}" cx="${num(item.cx)}" cy="${num(item.cy)}" r="${num(item.r)}"${dataAttrs(item.data)}/>`;
+function circleSvg(item: SceneCircle, spec: SceneThemeSpec): string {
+  // A theme may size the ring at the start of a message line itself.
+  const r = item.role?.includes('port') === true && spec.metrics['port-r'] !== undefined ? spec.metrics['port-r'] : num(item.r);
+  return `<circle class="${classOf(item.role)}" cx="${num(item.cx)}" cy="${num(item.cy)}" r="${r}"${dataAttrs(item.data)}/>`;
 }
 
 function itemSvg(item: SceneItem, spec: SceneThemeSpec): string {
@@ -276,7 +278,7 @@ function itemSvg(item: SceneItem, spec: SceneThemeSpec): string {
     case 'path':
       return pathSvg(item, spec);
     case 'circle':
-      return circleSvg(item);
+      return circleSvg(item, spec);
   }
 }
 

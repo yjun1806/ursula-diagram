@@ -60,3 +60,30 @@ describe('band head band', () => {
     expect(render(CLASS, { theme: 'solid' })).not.toContain('ursula-head-band');
   });
 });
+
+const ports = (svg: string): number => (svg.match(/<circle class="ursula-port"/g) ?? []).length;
+
+describe('band port ring', () => {
+  it('rings the start of each line that ends in an arrowhead', () => {
+    const svg = render('flowchart TD\n a-->b\n a-->c', { theme: 'band' });
+    // Both lines leave a at different points, so there are two rings.
+    expect(ports(svg)).toBe(2);
+    expect(svg).toContain('.ursula-port{');
+  });
+
+  it('draws no ring on a line without an arrowhead', () => {
+    expect(ports(render('flowchart TD\n a---b', { theme: 'band' }))).toBe(0);
+  });
+
+  it('draws no ring in solid', () => {
+    expect(ports(render('flowchart TD\n a-->b\n a-->c', { theme: 'solid' }))).toBe(0);
+  });
+
+  it('shows the ring at the start of a sequence message in band, sized by the theme', () => {
+    const src = 'sequenceDiagram\n  A->>B: hi';
+    const band = render(src, { theme: 'band' });
+    expect(band).toContain('.ursula-port{display:inline;');
+    expect(band).toMatch(/<circle class="ursula-port ursula-port--msg"[^>]* r="4"/);
+    expect(render(src, { theme: 'solid' })).toContain('.ursula-port{display:none;');
+  });
+});

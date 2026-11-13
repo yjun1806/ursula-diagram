@@ -337,6 +337,21 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint)
   );
 }
 
+/** Radius of the ring where a line leaves its box. */
+const PORT_RING_R = 4;
+
+/** Rings at the start of every visible line that ends in a mark and starts bare; lines that share a start share one ring. */
+function portRings(layout: Layout, nodes: Map<string, LayoutNode>): string {
+  const seen: Point[] = [];
+  for (const edge of layout.edges) {
+    if (edge.invisible || (edge.end ?? 'arrow') === 'none' || (edge.startEnd ?? 'none') !== 'none') continue;
+    const at = trimmedPoints(edge, nodes)[0];
+    if (at === undefined || seen.some((p) => Math.abs(p.x - at.x) <= 0.5 && Math.abs(p.y - at.y) <= 0.5)) continue;
+    seen.push(at);
+  }
+  return seen.map((p) => `<circle class="ursula-port" cx="${num(p.x)}" cy="${num(p.y)}" r="${PORT_RING_R}"/>`).join('');
+}
+
 /** The markers (beyond the two arrowheads every drawing has) and style rules that the visible edges of a layout need. */
 function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: string[] } {
   const spec = paint.spec;
@@ -682,6 +697,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
+    ...(spec.portRing ? [portRings(layout, byId)] : []),
     ...(layout.clusters ?? []).map(knockoutSvg),
     ...layout.edges.map((e) => labelSvg(e, paint)),
     ...layout.edges.map(endLabelSvg),

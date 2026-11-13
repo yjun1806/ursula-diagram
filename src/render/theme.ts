@@ -25,6 +25,8 @@ export interface ThemeSpec {
   shadow: boolean;
   /** Whether a box's head — the kind of a C4 element, the title compartment of a record — sits on a band of the lane colour cut to the box's corners. */
   headBand: boolean;
+  /** Whether a line that ends in an arrowhead and starts bare gets a ring where it leaves its box. */
+  portRing: boolean;
   /** Whether edge labels have an outline of their own. */
   chipBorder: boolean;
   /** Whether edge labels have a rim of the background colour around them. */
@@ -78,6 +80,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     arrow: { kind: 'filled', length: 10, width: 9.5 },
     shadow: false,
     headBand: false,
+    portRing: false,
     chipBorder: false,
     chipHalo: true,
     accentEdges: true,
@@ -108,6 +111,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     arrow: { kind: 'filled', length: 8, width: 8 },
     shadow: false,
     headBand: false,
+    portRing: false,
     chipBorder: true,
     chipHalo: false,
     accentEdges: true,
@@ -138,6 +142,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     arrow: { kind: 'open', length: 8, width: 9 },
     shadow: true,
     headBand: false,
+    portRing: false,
     chipBorder: false,
     chipHalo: false,
     accentEdges: true,
@@ -173,6 +178,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     arrow: { kind: 'filled', length: 9, width: 9 },
     shadow: false,
     headBand: true,
+    portRing: true,
     chipBorder: false,
     chipHalo: false,
     accentEdges: false,
@@ -226,6 +232,7 @@ export function flowRules(spec: ThemeSpec, font: string): string[] {
     `.ursula-edge-label-bg{fill:$chip-fill${spec.chipBorder ? ';stroke:$border;stroke-width:1' : ''}}`,
     '.ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}',
     ...(spec.accentEdges ? ['.ursula-edge-label--thick{fill:$accent}', '.ursula-edge-label--branch{fill:$accent}'] : []),
+    ...(spec.portRing ? [`.ursula-port{fill:$surface;stroke:$line;stroke-width:${w}}`] : []),
     '.ursula-legend-rule{stroke:$hair;stroke-width:1}',
     '.ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}',
   ];
