@@ -5,6 +5,7 @@ import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Node, Railroad } from './model.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 24;
 const TITLE_LINE = 18;
@@ -240,7 +241,7 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
 }
 
 /** Places every rule: its name at the left, then its rail from the start dot to the end dot; rules stand one under the other. */
-export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = 'solid'): RailroadLayout {
+export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEFAULT_THEME): RailroadLayout {
   const spec = SCENE_THEME_SPECS[theme];
   const out: Out = { lines: [], marks: [], bend: spec.bend, arrowLength: spec.arrow.length };
   const sized = model.rules.map((r) => measure(r.body, ruler));

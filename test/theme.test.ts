@@ -5,7 +5,7 @@ import { roundedPolygonPath } from '../src/render/shapes.ts';
 import { ARROW_TRIM } from './helpers.ts';
 import type { Point } from '../src/index.ts';
 
-const TRIM: Record<Theme, number> = { solid: ARROW_TRIM, outline: 7, card: 0.875 };
+const TRIM: Record<Theme, number> = { solid: ARROW_TRIM, outline: 7, card: 0.875, band: 8 };
 
 /** The tip of the arrowhead of an edge: the end of its path plus what the line stops short. */
 function tipOf(d: string, theme: Theme): Point {
@@ -23,21 +23,21 @@ const FLOW = 'flowchart TD\n a[Start] --> b{Check}\n b -->|yes| c[Done]\n b -->|
 
 const LANES = 'swimlane-beta LR\nsubgraph one[One]\n a[Alpha] --> b[Beta]\nend\nsubgraph two[Two]\n c[Gamma]\nend\nb --> c';
 
-const RX: Record<Theme, number> = { solid: 18, outline: 12, card: 16 };
-const LINE: Record<Theme, number> = { solid: 2.5, outline: 1.5, card: 1.75 };
+const RX: Record<Theme, number> = { solid: 18, outline: 12, card: 16, band: 10 };
+const LINE: Record<Theme, number> = { solid: 2.5, outline: 1.5, card: 1.75, band: 1.5 };
 
 const tag = (svg: string, node: string): string => new RegExp(`<g class="[^"]*" data-node="${node}"[^>]*>`).exec(svg)?.[0] ?? '';
 
 const rectOf = (svg: string, node: string): string => new RegExp(`data-node="${node}"[^>]*><rect class="ursula-node-box"[^>]*>`).exec(svg)?.[0] ?? '';
 
 describe('theme option', () => {
-  it('draws the solid theme unless told otherwise', () => {
-    expect(render(FLOW)).toBe(render(FLOW, { theme: 'solid' }));
-    expect(render(FLOW)).toContain('data-theme="solid"');
+  it('draws the band theme unless told otherwise', () => {
+    expect(render(FLOW)).toBe(render(FLOW, { theme: 'band' }));
+    expect(render(FLOW)).toContain('data-theme="band"');
   });
 
   it('names the themes', () => {
-    expect([...THEMES]).toEqual(['solid', 'outline', 'card']);
+    expect([...THEMES]).toEqual(['solid', 'outline', 'card', 'band']);
   });
 
   it('refuses a theme it does not know', () => {
@@ -97,8 +97,9 @@ describe.each(THEMES)('%s theme', (theme) => {
     expect(svg).toContain('@media (prefers-color-scheme: dark)');
     const light = svg.slice(svg.indexOf('<style>'), svg.indexOf('@media'));
     const dark = svg.slice(svg.indexOf('@media'), svg.indexOf('</style>'));
-    expect(light).toMatch(/var\(--ursula-fg,#1c1a24\)/);
-    expect(dark).toMatch(/var\(--ursula-fg,#ecebf2\)/);
+    const fg = theme === 'band' ? ['#201f1e', '#efeeec'] : ['#1c1a24', '#ecebf2'];
+    expect(light).toContain(`var(--ursula-fg,${fg[0]})`);
+    expect(dark).toContain(`var(--ursula-fg,${fg[1]})`);
   });
 
   it('stops the line of an edge short of the tip so that it stays inside the arrowhead', () => {
@@ -106,7 +107,7 @@ describe.each(THEMES)('%s theme', (theme) => {
     const b = l.nodes.find((n) => n.id === 'b');
     const d = /data-from="a" data-to="b" d="([^"]*)"/.exec(render('flowchart LR\na --> b', { theme }))?.[1] ?? '';
     const end = Number((d.match(/-?\d+(?:\.\d+)?/g) ?? []).slice(-2)[0]);
-    const trim = theme === 'card' ? LINE.card / 2 : theme === 'solid' ? 9 : 7;
+    const trim = theme === 'card' ? LINE.card / 2 : theme === 'solid' ? 9 : theme === 'band' ? 8 : 7;
     expect(end).toBeCloseTo((b?.x ?? 0) - trim, 1);
   });
 });
@@ -245,8 +246,8 @@ describe('ends on the rounded corners of a flat diamond', () => {
 describe('html page', () => {
   it('declares the colours of the theme of the drawing', async () => {
     const { renderHtml } = await import('../src/html.ts');
-    expect(renderHtml(FLOW, {})).toContain('--ursula-start-fill:#7447c8');
-    expect(renderHtml(FLOW, {})).toContain('--ursula-line:#c4c1d0');
-    expect(renderHtml('sequenceDiagram\nA->>B: hi', {})).toContain('--ursula-line:#c4c1d0');
+    expect(renderHtml(FLOW, {})).toContain('--ursula-start-fill:#e5c37a');
+    expect(renderHtml(FLOW, {})).toContain('--ursula-line:#565554');
+    expect(renderHtml('sequenceDiagram\nA->>B: hi', {})).toContain('--ursula-line:#a5a4a2');
   });
 });

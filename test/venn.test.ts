@@ -92,7 +92,7 @@ function textBoxes(src: string): { boxes: Box[]; width: number; height: number }
 describe('venn: drawing', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
     it(`draws ${name} in the three themes`, () => {
-      for (const theme of ['solid', 'outline', 'card'] as const) {
+      for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
         const svg = render(src, { theme });
         expect(svg).toContain(`data-theme="${theme}"`);
         expect(svg).toContain('series-1--overlap');
@@ -100,8 +100,8 @@ describe('venn: drawing', () => {
     });
   }
 
-  it('uses solid when no theme is given', () => {
-    expect(render(DEFAULTS)).toContain('data-theme="solid"');
+  it('uses band when no theme is given', () => {
+    expect(render(DEFAULTS)).toContain('data-theme="band"');
   });
 
   it('shows the front-matter title when the text has none', () => {

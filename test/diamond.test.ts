@@ -7,7 +7,7 @@ const ruler = pixelRuler();
 
 function drawn(src: string): { l: Layout; svg: string } {
   const l = layout(parse(src), ruler);
-  return { l, svg: renderSvg(l) };
+  return { l, svg: renderSvg(l, { theme: 'solid' }) };
 }
 
 function node(l: Layout, id: string): LayoutNode {

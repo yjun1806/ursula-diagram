@@ -404,7 +404,7 @@ describe('the three themes', () => {
         expect(svg).toContain(`data-theme="${theme}"`);
         sheets.add(svg.slice(svg.indexOf('<style>'), svg.indexOf('</style>')));
       }
-      expect(sheets.size).toBe(3);
+      expect(sheets.size).toBe(THEMES.length);
     }
   });
 

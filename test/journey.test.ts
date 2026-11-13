@@ -27,7 +27,7 @@ describe('journey render', () => {
   for (const [name, src] of Object.entries(SAMPLES)) {
     it(`draws ${name} in every theme`, () => {
       for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
-      expect(render(src)).toContain('data-theme="solid"');
+      expect(render(src)).toContain('data-theme="band"');
     });
   }
   it('ignores a configuration block and an init directive', () => {

@@ -71,7 +71,7 @@ const scene = (src: string) => drawn(src).layout.scene;
 
 describe('packet render', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of ['solid', 'outline', 'card'] as const) {
+    for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
       it(`${name} draws in ${theme}`, () => {
         expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
       });
@@ -83,7 +83,7 @@ describe('packet render', () => {
   }
 
   it('accepts the packet-beta header', () => {
-    expect(render('packet-beta\n0-7: "A"')).toContain('data-theme="solid"');
+    expect(render('packet-beta\n0-7: "A"')).toContain('data-theme="band"');
   });
 });
 
