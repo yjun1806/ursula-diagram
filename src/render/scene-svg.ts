@@ -114,7 +114,7 @@ function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
     '.ursula-grid{fill:none;stroke:$grid;stroke-width:%grid-w;stroke-dasharray:%grid-dash;stroke-linecap:round}',
     '.ursula-mark{fill:$bar}',
     '.ursula-mark-line{fill:none;stroke:$data;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
-    '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:2.5}',
+    '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:%dot-w}',
     '.ursula-dot{fill:$dot-neutral}',
     ...(peak
       ? [

@@ -101,7 +101,7 @@ function shortened(from: Point, to: Point, by: number): Point {
 /** Computes the scene of a Wardley map; the theme sets the radius of a component's dot. */
 export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFAULT_THEME): WardleyLayout {
   const spec = SCENE_THEME_SPECS[theme];
-  const dot = spec.dotRadius;
+  const dot = spec.neutralDotRadius ?? spec.dotRadius;
   const text = (s: string): number => ruler.textWidth(s, 'line');
   const strong = (s: string): number => ruler.textWidth(s, 'title');
   const items: SceneItem[] = [];

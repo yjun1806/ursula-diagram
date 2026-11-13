@@ -243,6 +243,7 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
 /** Places every rule: its name at the left, then its rail from the start dot to the end dot; rules stand one under the other. */
 export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEFAULT_THEME): RailroadLayout {
   const spec = SCENE_THEME_SPECS[theme];
+  const dotR = spec.neutralDotRadius ?? spec.dotRadius;
   const out: Out = { lines: [], marks: [], bend: spec.bend, arrowLength: spec.arrow.length };
   const sized = model.rules.map((r) => measure(r.body, ruler));
   const nameW = Math.max(...model.rules.map((r) => ruler.textWidth(r.name, 'title')));
@@ -267,10 +268,10 @@ export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEF
     names.push({ kind: 'text', x: MARGIN, y: ay, text: rule.name, anchor: 'start', role: ['zone-name'] });
     out.lines.push({ kind: 'line', points: [pt(railX, ay), pt(bx, ay)], role: ['edge'], radius: out.bend });
     out.lines.push({ kind: 'line', points: [pt(bx + s.w, ay), pt(bx + s.w + END_STUB, ay)], role: ['edge'], radius: out.bend });
-    dots.push({ kind: 'circle', cx: railX, cy: ay, r: spec.dotRadius, role: ['dot'] });
-    dots.push({ kind: 'circle', cx: bx + s.w + END_STUB, cy: ay, r: spec.dotRadius, role: ['dot'] });
+    dots.push({ kind: 'circle', cx: railX, cy: ay, r: dotR, role: ['dot'] });
+    dots.push({ kind: 'circle', cx: bx + s.w + END_STUB, cy: ay, r: dotR, role: ['dot'] });
     emit(out, s, bx, ay);
-    right = Math.max(right, bx + s.w + END_STUB + spec.dotRadius);
+    right = Math.max(right, bx + s.w + END_STUB + dotR);
     y += s.up + s.down + RULE_GAP;
   });
   const width = ceilTo(right + MARGIN, 4);
