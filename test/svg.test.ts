@@ -1,3 +1,4 @@
+import { pathData } from '../src/render/svg.ts';
 import { describe, expect, it } from 'vitest';
 import { layout, parse, pixelRuler, render, renderSvg } from '../src/index.ts';
 import { twoLanes } from './fixtures.ts';
@@ -89,5 +90,14 @@ describe('svg legend', () => {
     const l = layout(parse(three), pixelRuler());
     expect(renderSvg(l, { legend: false })).toContain(`height="${l.height - 32}"`);
     expect(renderSvg(l, { legend: { normal: 'Step' } })).toContain('>Step<');
+  });
+});
+
+describe('line jumps', () => {
+  it('jumps a level run over an upright run it crosses, by a half circle above, and only there', () => {
+    expect(pathData([{ x: 0, y: 50 }, { x: 100, y: 50 }], 8, 0, [{ x: 40, y: 50 }])).toBe('M0 50 L34 50 A6 6 0 0 1 46 50 L100 50');
+    expect(pathData([{ x: 100, y: 50 }, { x: 0, y: 50 }], 8, 0, [{ x: 40, y: 50 }])).toBe('M100 50 L46 50 A6 6 0 0 0 34 50 L0 50');
+    // A crossing too near the end of the run, or on another level, is no jump.
+    expect(pathData([{ x: 0, y: 50 }, { x: 100, y: 50 }], 8, 0, [{ x: 4, y: 50 }, { x: 40, y: 20 }])).toBe('M0 50 L100 50');
   });
 });

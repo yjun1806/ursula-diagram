@@ -99,10 +99,25 @@ export function num(v: number): string {
  * `endTrim` (the length an arrowhead takes), and the bend before it is made smaller when the piece is too short to
  * keep that much straight.
  */
-export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0): string {
+export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0, hops: readonly Point[] = []): string {
   const first = points[0];
   if (!first) return '';
   let d = `M${num(first.x)} ${num(first.y)}`;
+  let at = { x: first.x, y: first.y };
+  // A straight run to (x, y); on a level run it jumps over the crossings in `hops` by a half circle above the line.
+  const line = (x: number, y: number): void => {
+    if (Math.abs(y - at.y) < 0.5 && hops.length > 0) {
+      const dir = Math.sign(x - at.x);
+      const over = hops
+        .filter((h) => Math.abs(h.y - y) < 0.5 && (h.x - at.x) * dir > HOP + 0.5 && (x - h.x) * dir > HOP + 0.5)
+        .sort((p, q) => (p.x - q.x) * dir);
+      for (const h of over) {
+        d += ` L${num(h.x - dir * HOP)} ${num(y)} A${HOP} ${HOP} 0 0 ${dir > 0 ? 1 : 0} ${num(h.x + dir * HOP)} ${num(y)}`;
+      }
+    }
+    d += ` L${num(x)} ${num(y)}`;
+    at = { x, y };
+  };
   let consumed = 0;
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
@@ -112,14 +127,14 @@ export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0): 
     const lenIn = Math.hypot(cur.x - prev.x, cur.y - prev.y);
     if (!next) {
       const cut = lenIn === 0 ? 0 : Math.min(endTrim, Math.max(0, lenIn - consumed - 1));
-      d += ` L${num(cur.x - ((cur.x - prev.x) / (lenIn || 1)) * cut)} ${num(cur.y - ((cur.y - prev.y) / (lenIn || 1)) * cut)}`;
+      line(cur.x - ((cur.x - prev.x) / (lenIn || 1)) * cut, cur.y - ((cur.y - prev.y) / (lenIn || 1)) * cut);
       continue;
     }
     const lenOut = Math.hypot(next.x - cur.x, next.y - cur.y);
     const room = i + 1 === points.length - 1 ? Math.max(0, lenOut - endTrim) : lenOut;
     const r = Math.min(radius, lenIn / 2, lenOut / 2, room);
     if (r <= 0) {
-      d += ` L${num(cur.x)} ${num(cur.y)}`;
+      line(cur.x, cur.y);
       consumed = 0;
       continue;
     }
@@ -129,10 +144,36 @@ export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0): 
     const outX = (next.x - cur.x) / lenOut;
     const outY = (next.y - cur.y) / lenOut;
     const sweep = inX * outY - inY * outX > 0 ? 1 : 0;
-    d += ` L${num(cur.x - inX * r)} ${num(cur.y - inY * r)}`;
+    line(cur.x - inX * r, cur.y - inY * r);
     d += ` A${num(r)} ${num(r)} 0 0 ${sweep} ${num(cur.x + outX * r)} ${num(cur.y + outY * r)}`;
+    at = { x: cur.x + outX * r, y: cur.y + outY * r };
   }
   return d;
+}
+
+/** The radius of the half circle a level line jumps a crossing line by. */
+const HOP = 6;
+
+/** Per edge, the points where a level run of it crosses an upright run of another edge, both strictly inside: it jumps there. */
+function hopsOf(edges: readonly LayoutEdge[]): Point[][] {
+  const runs = edges.map((e) => (e.invisible ? [] : e.points.slice(1).map((q, i) => [e.points[i] as Point, q] as const)));
+  return runs.map((mine, i) =>
+    mine.flatMap(([a, b]) => {
+      if (Math.abs(a.y - b.y) >= 0.5) return [];
+      const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+      return runs.flatMap((other, j) =>
+        j === i
+          ? []
+          : edges[j]?.trunk !== undefined && edges[j]?.trunk?.id === edges[i]?.trunk?.id
+            ? []
+            : other.flatMap(([p, q]) => {
+              if (Math.abs(p.x - q.x) >= 0.5) return [];
+              const [y0, y1] = [Math.min(p.y, q.y), Math.max(p.y, q.y)];
+              return p.x > x0 + 0.5 && p.x < x1 - 0.5 && a.y > y0 + 0.5 && a.y < y1 - 0.5 ? [{ x: p.x, y: a.y }] : [];
+            }),
+      );
+    }),
+  );
 }
 
 type Role = 'start' | 'decision';
@@ -345,7 +386,7 @@ function trimStart(pts: Point[], amount: number): Point[] {
   return [{ x: a.x + ((b.x - a.x) / len) * cut, y: a.y + ((b.y - a.y) / len) * cut }, ...pts.slice(1)];
 }
 
-function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint): string {
+function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint, hops: readonly Point[] = []): string {
   if (edge.invisible) return '';
   const branch = paint.roles.get(edge.from) === 'decision' && edge.style !== 'thick';
   const accent = accented(edge, paint);
@@ -357,7 +398,7 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint)
   const junction = edge.trunk?.dot;
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(points, edge.trunk?.square ? 0 : paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
+    `d="${pathData(points, edge.trunk?.square ? 0 : paint.spec.bend, endTrim(end, paint.spec), hops)}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
     (junction === undefined ? '' : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`)
   );
 }
@@ -740,7 +781,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
     ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
-    ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
+    ...((hops) => layout.edges.map((e, i) => edgeSvg(e, byId, paint, hops[i])))(hopsOf(layout.edges)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
     ...(spec.portRing ? [portRings(layout, byId)] : []),
     ...(layout.clusters ?? []).map(knockoutSvg),
