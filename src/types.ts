@@ -145,6 +145,13 @@ export interface GraphEdge {
   /** Small texts beside the start and the end of the line (a multiplicity such as `1..*`). */
   startLabel?: string;
   endLabel?: string;
+  /**
+   * Set on a relation that may share a trunk with the other relations of the same `kind` at one box: `end` is the end at
+   * that box (the parent of an inheritance, the container of a containment, the actor of an association). When two or more
+   * such lines leave that box by the same face, the layout draws one line out of the face that splits where the other ends
+   * are, with the mark of the end drawn once. `dot` asks for a dot where it splits.
+   */
+  trunk?: { end: 'from' | 'to'; kind: string; dot?: true };
 }
 
 export interface Graph {
@@ -254,6 +261,12 @@ export interface LayoutEdge {
   /** Small texts beside the start and the end of the line. */
   startLabel?: EndLabel;
   endLabel?: EndLabel;
+  /**
+   * The line is one of several that leave a box together as a trunk. `id` is the same on all of them. `lead` is the one
+   * that keeps the mark at the shared end (the others have none there). `dot` is the place of the dot where the trunk
+   * splits, on the lead only. `square`: the branches leave a flat bar and are drawn without rounded bends.
+   */
+  trunk?: { id: string; lead: boolean; dot?: Point; square?: true };
 }
 
 export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'attach-overlap' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';

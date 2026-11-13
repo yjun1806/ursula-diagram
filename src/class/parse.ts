@@ -260,6 +260,8 @@ export function parseClass(src: string, config: ClassConfig = DEFAULT_CLASS_CONF
         style,
         end,
         ...(startEnd === undefined ? {} : { startEnd }),
+        // Inheritance and realization lines that end at one parent share a trunk.
+        ...((startEnd === 'triangle-open') !== (end === 'triangle-open') ? { trunk: { end: startEnd === 'triangle-open' ? ('from' as const) : ('to' as const), kind: 'triangle-open' } } : {}),
         ...(label === undefined || label.trim() === '' ? {} : { label: genericsOf(label.trim()) }),
         ...(fromCount === undefined ? {} : { startLabel: fromCount }),
         ...(toCount === undefined ? {} : { endLabel: toCount }),
