@@ -22,6 +22,8 @@ export interface Ruler {
   /** Space between two adjacent lane bands. */
   laneGap: number;
   rowGap: number;
+  /** Room between the boxes that join the first rank of a level of clusters, when it is not `rankGap` (a drawing that gives the gap along the flow a size of its own). */
+  joinGap?: number;
   trackGap: number;
   lanePad: number;
   laneLabelGap: number;
