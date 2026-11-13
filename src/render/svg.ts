@@ -1,6 +1,6 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, FACE_PILL_GAP, FACE_PILL_PAD, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, faceLineHeights, FACE_PILL_GAP, FACE_PILL_PAD, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
@@ -205,7 +205,7 @@ function knockoutSvg(cluster: LayoutCluster): string {
 /** The rules of what only a C4 drawing has: the pill of a kind and the technology of a relation. */
 function faceRules(layout: Layout): string[] {
   return [
-    ...(layout.nodes.some((n) => n.compartments?.some((c) => c.face === true)) ? ['.ursula-cell-pill{fill:$chip-fill}'] : []),
+    ...(layout.nodes.some((n) => n.compartments?.some((c) => c.face === true)) ? ['.ursula-cell-pill{fill:$hair}'] : []),
     ...(layout.edges.some((e) => e.label?.text.includes('\u2003')) ? ['.ursula-edge-label-tech{font-weight:400;opacity:.7}'] : []),
   ];
 }
@@ -537,12 +537,15 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
     const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center' && cell.columns === undefined;
     // A face is one group in the middle of the box: its first line stands in a pill and the next is a little further down.
-    const content = cell.lines.length * COMPARTMENT_LINE + (cell.face === true ? FACE_PILL_GAP : 0);
-    const first = cell.face === true ? top + ((heights[i] ?? 0) - content) / 2 + COMPARTMENT_LINE / 2 : top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
+    const rows = faceLineHeights(cell.lines.length);
+    const content = rows.reduce((a, b) => a + b, 0) + FACE_PILL_GAP;
+    const rowTop = (k: number): number => rows.slice(0, k).reduce((a, b) => a + b, 0) + (k > 0 ? FACE_PILL_GAP : 0);
+    const faceTop = top + ((heights[i] ?? 0) - content) / 2;
+    const first = cell.face === true ? faceTop + (rows[0] ?? 0) / 2 : top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
     const starts = cell.columns === undefined ? [] : columnStarts(cell, ruler);
     cell.lines.forEach((line, k) => {
       const emphasis = lineEmphasis(cell, k, i);
-      const y = num(first + k * COMPARTMENT_LINE + (cell.face === true && k > 0 ? FACE_PILL_GAP : 0));
+      const y = num(cell.face === true ? faceTop + rowTop(k) + (rows[k] ?? 0) / 2 : first + k * COMPARTMENT_LINE);
       if (cell.face === true && k === 0) {
         const pill = ruler.textWidth(line, 'line') + FACE_PILL_PAD;
         parts.push(`<rect class="ursula-cell-pill" x="${num(node.x + node.w / 2 - pill / 2)}" y="${num(first - 10)}" width="${num(pill)}" height="20" rx="10"/>`);

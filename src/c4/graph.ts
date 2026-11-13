@@ -107,5 +107,5 @@ export function c4Graph(model: C4Model, ruler: Ruler): Graph {
         : { from: r.from, to: r.to, ...base, end: 'arrow', ...(r.heads === 'both' ? { startEnd: 'arrow' as const } : {}) };
     return person.has(edge.to) && !person.has(edge.from) ? reversed(edge) : edge;
   });
-  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored };
+  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored, gaps: { flow: 96, join: 48 } };
 }

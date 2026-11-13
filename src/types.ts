@@ -164,6 +164,11 @@ export interface Graph {
   clusters?: GraphCluster[];
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /**
+   * Gaps in pixels this drawing asks for, when they differ from the ruler's: `flow` is the gap along the reading direction
+   * (`rankGap`), `join` the gap between the boxes that join the first rank of a level of clusters (`joinGap`). A terminal drawing keeps its own.
+   */
+  gaps?: { flow?: number; join?: number };
 }
 
 export interface Point {

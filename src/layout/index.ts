@@ -242,7 +242,8 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * one after another along the flow axis and the drawing with the better score is kept. The choice is made
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
-export function layout(graph: Graph, ruler: Ruler, opts: LayoutOptions = {}): Layout {
+export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
+  const ruler: Ruler = graph.gaps === undefined || given.terminal === true ? given : { ...given, ...(graph.gaps.flow === undefined ? {} : { rankGap: graph.gaps.flow }), ...(graph.gaps.join === undefined ? {} : { joinGap: graph.gaps.join }) };
   const attached = splitAttached(graph);
   if (attached === undefined) return arrange(graph, ruler, opts);
   // Notes and lollipop stubs are not arranged: they are drawn beside their nodes once everything else has its place.
