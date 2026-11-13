@@ -81,7 +81,8 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   const plotH = chart.chartHeight ?? DEFAULT_PLOT;
   const yW = chart.yAxis === undefined ? 0 : Math.max(body(chart.yAxis.low), chart.yAxis.high === undefined ? 0 : body(chart.yAxis.high));
   const titleW = chart.title === undefined ? 0 : ruler.textWidth(chart.title, 'title') * TITLE_SCALE * WEIGHT;
-  const plotX = chart.yAxis === undefined ? MARGIN : ceilTo(MARGIN + yW + 16);
+  // The ruler measures wide, so the plot edge rounds down to the grid rather than up.
+  const plotX = chart.yAxis === undefined ? MARGIN : floorTo(MARGIN + yW + 16);
   const top = chart.title === undefined ? MARGIN : 80;
   const bottom = top + plotH;
   const right = plotX + plotW;
