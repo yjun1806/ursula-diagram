@@ -69,7 +69,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     outward.set(own, n + 1);
     const text = e.label;
     if (text === undefined || text === '') return;
-    const size = labelSize(text, layeredRuler(ruler));
+    const size = chipSize(text, ruler);
     const side = (['r', 'l', 'b', 't'] as const)[n % 4] as 'r' | 'l' | 'b' | 't';
     const k = `${outer}:${side}`;
     inner.set(k, Math.max(inner.get(k) ?? 0, (side === 'r' || side === 'l' ? size.w : size.h) + 2 * LABEL_ROOM));
@@ -99,7 +99,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
 
     const labelOf = (i: number): { w: number; h: number } | undefined => {
       const text = graph.edges[i]?.label;
-      return text === undefined || text === '' ? undefined : labelSize(text, layeredRuler(ruler));
+      return text === undefined || text === '' ? undefined : chipSize(text, ruler);
     };
     /**
      * The room the labels of the straight lines across gap `k` need: the lines between two boxes side by side (`across`,
@@ -143,13 +143,15 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     const rowGap: number[] = [];
     for (let k = 0; k <= grid.rows; k++) {
       let base = k === 0 || k === grid.rows ? MARGIN : GAP_Y;
-      base = Math.max(base, labelRoom('down', k));
-      // A bent line turns in the gap under its upper end, half of them to each side: each keeps a lane of its own.
+      // A bent line turns in the gap under its upper end, half of them to each side: each keeps a lane of its own,
+      // beside the labels that stand in the gap.
       const turning = graph.edges.filter((e) => {
         const [a, b] = [cellOf(e.from), cellOf(e.to)];
         return a !== undefined && b !== undefined && a.c !== b.c && a.r !== b.r && Math.min(a.r, b.r) === k - 1;
       }).length;
-      if (turning > 0) base = Math.max(base, 2 * TURN + LANE * Math.ceil(turning / 2));
+      const labels = labelRoom('down', k);
+      base = Math.max(base, labels);
+      if (turning > 0) base = Math.max(base, 2 * TURN + LANE * Math.ceil(turning / 2) + (labels > 0 ? labels - 2 * LABEL_ROOM + LABEL_GAP : 0));
       let most = 0;
       for (let c = 0; c < grid.columns; c++) {
         const above = Math.max(0, ...rects.filter((x) => x.q.r1 === k - 1 && x.q.c0 <= c && c <= x.q.c1).map((x) => x.b));
@@ -196,7 +198,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
       return d;
     };
     const order = new Map(spec.order.map((id, i) => [id, i] as const));
-    const laidClusters: LayoutCluster[] = rects
+    const placedClusters: LayoutCluster[] = rects
       .map(({ id, q, l, r, t, b }): LayoutCluster => {
         const c = clusters.find((k) => k.id === id);
         const x = (colX[q.c0] as number) - l;
@@ -204,6 +206,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
         return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + bh + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
       })
       .sort((a, b) => a.depth - b.depth || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    const laidClusters = alignSiblings(placedClusters, (id) => grid.rect.get(id) as CellRect, (id) => parentOf.get(id));
 
     // The name stands in the top left corner, two lines high.
     const nameOf = (id: string): { x: number; y: number; w: number; h: number } | undefined => {
@@ -281,10 +284,11 @@ function alongGap(layout: Layout): Layout {
 }
 
 /**
- * A label on a line stands in the middle of a free gap the line crosses: the first gap from the start of the line, along
- * the run that carries the label, where it is deep enough and touches no box, border, name, other line or other label.
- * The gaps are cut by the boxes, the borders and the names of the clusters, the runs of the other lines and the other
- * labels, so labels of one gap stand at one level. A label with no such gap stays where it is.
+ * A label stands across its line, the line through its middle, in the middle of a free gap the line crosses: the first
+ * such gap from the start of the line, over all its runs in order, that is deep enough for the label and where the label
+ * touches no box, border, name, other line or other label. The gaps are cut by the boxes, the borders and the names of
+ * the clusters, the runs of the other lines and the other labels, so labels of one gap stand at one level. A label with
+ * no such gap stays where it was put.
  */
 function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
   const rects: Rect[] = [...layout.nodes, ...(layout.clusters ?? []), ...(layout.clusters ?? []).flatMap((c) => (c.name ? [c.name] : []))];
@@ -294,33 +298,21 @@ function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
   // Every label as it stands now; a label moved takes its new place here.
   const placed: Array<Rect | undefined> = layout.edges.map((e) => e.label);
   const others = (ei: number): Rect[] => placed.flatMap((b, k) => (k === ei || b === undefined ? [] : [b]));
-  const edges = layout.edges.map((e, ei) => {
-    const l = e.label;
-    if (l === undefined || e.from === e.to) return e;
-    const cx = l.x + l.w / 2;
-    const cy = l.y + l.h / 2;
-    // The run the label stands on or right beside.
-    const own = segsOf(e.points).find(([a, b]) =>
-      Math.abs(a.x - b.x) < 0.5
-        ? a.x >= l.x - LABEL_GAP && a.x <= l.x + l.w + LABEL_GAP && cy >= Math.min(a.y, b.y) - 0.5 && cy <= Math.max(a.y, b.y) + 0.5
-        : a.y >= l.y - LABEL_GAP && a.y <= l.y + l.h + LABEL_GAP && cx >= Math.min(a.x, b.x) - 0.5 && cx <= Math.max(a.x, b.x) + 0.5,
-    );
-    if (own === undefined) return e;
-    const down = Math.abs(own[0].x - own[1].x) < 0.5;
-    // Along `t` (y when the run goes down), across `u`.
-    const t0 = down ? own[0].y : own[0].x;
-    const t1 = down ? own[1].y : own[1].x;
-    const [u0, u1] = down ? [l.x, l.x + l.w] : [l.y, l.y + l.h];
+  const runs = layout.edges.flatMap((o, oi) => segsOf(o.points).map((sg) => ({ sg, oi })));
+  const spotOn = (ei: number, l: Rect, [p, q]: [Point, Point]): Rect | undefined => {
+    const down = Math.abs(p.x - q.x) < 0.5;
+    if (!down && Math.abs(p.y - q.y) >= 0.5) return undefined;
+    // Along `t` (y when the run goes down); the label across the run, its middle on it.
+    const [t0, t1] = down ? [p.y, q.y] : [p.x, q.x];
+    const [u0, u1] = down ? [p.x - l.w / 2, p.x + l.w / 2] : [p.y - l.h / 2, p.y + l.h / 2];
     const size = down ? l.h : l.w;
-    const span = (r: Rect): [number, number, number, number] => (down ? [r.y, r.y + r.h, r.x, r.x + r.w] : [r.x, r.x + r.w, r.y, r.y + r.h]);
     const cuts = [t0, t1];
     for (const r of [...rects, ...others(ei)]) {
-      const [lo, hi, ulo, uhi] = span(r);
+      const [lo, hi, ulo, uhi] = down ? [r.y, r.y + r.h, r.x, r.x + r.w] : [r.x, r.x + r.w, r.y, r.y + r.h];
       if (ulo < u1 && uhi > u0) cuts.push(lo, hi);
     }
-    const runs = layout.edges.flatMap((o, oi) => segsOf(o.points).map((sg) => ({ sg, mine: oi === ei })));
-    for (const { sg: [a, b] } of runs) {
-      if (down ? Math.abs(a.y - b.y) >= 0.5 : Math.abs(a.x - b.x) >= 0.5) continue;
+    for (const { sg: [a, b], oi } of runs) {
+      if (oi === ei || (down ? Math.abs(a.y - b.y) >= 0.5 : Math.abs(a.x - b.x) >= 0.5)) continue;
       const [v0, v1] = down ? [Math.min(a.x, b.x), Math.max(a.x, b.x)] : [Math.min(a.y, b.y), Math.max(a.y, b.y)];
       if (v0 < u1 && v1 > u0) cuts.push(down ? a.y : a.x);
     }
@@ -330,13 +322,100 @@ function centreLabels(layout: Layout, avoid: readonly Rect[]): Layout {
       const [a, b] = [ts[k - 1] as number, ts[k] as number];
       if (Math.abs(b - a) < size + 2 * LABEL_GAP) continue;
       const at = (a + b) / 2;
-      const moved = down ? { ...l, y: at - l.h / 2 } : { ...l, x: at - l.w / 2 };
-      const through = runs.some(({ sg: [p, q], mine }) => !mine && Math.max(p.x, q.x) > moved.x && Math.min(p.x, q.x) < moved.x + moved.w && Math.max(p.y, q.y) > moved.y && Math.min(p.y, q.y) < moved.y + moved.h);
-      if (through || [...solid, ...others(ei)].some((r) => meets(r, moved))) continue;
-      placed[ei] = moved;
-      return { ...e, label: moved };
+      const spot = down ? { x: u0, y: at - l.h / 2, w: l.w, h: l.h } : { x: at - l.w / 2, y: u0, w: l.w, h: l.h };
+      const through = runs.some(({ sg: [m, n], oi }) => oi !== ei && Math.max(m.x, n.x) > spot.x && Math.min(m.x, n.x) < spot.x + spot.w && Math.max(m.y, n.y) > spot.y && Math.min(m.y, n.y) < spot.y + spot.h);
+      if (!through && ![...solid, ...others(ei)].some((r) => meets(r, spot))) return spot;
+    }
+    return undefined;
+  };
+  const edges = layout.edges.map((e, ei) => {
+    const l = e.label;
+    if (l === undefined || e.from === e.to) return e;
+    for (const sg of segsOf(e.points)) {
+      const spot = spotOn(ei, l, sg);
+      if (spot === undefined) continue;
+      const label = { ...l, x: spot.x, y: spot.y };
+      placed[ei] = label;
+      return { ...e, label };
     }
     return e;
   });
   return { ...layout, edges };
+}
+
+/** The chip a label is drawn on (`CHIP_PAD` and `CHIP_HEIGHT` of the renderer): the room the label takes on the drawing. */
+const CHIP_PAD = 10;
+const CHIP_HEIGHT = 24;
+function chipSize(text: string, ruler: Ruler): { w: number; h: number } {
+  const size = labelSize(text, layeredRuler(ruler));
+  const pad = layeredRuler(ruler).labelPadX;
+  return { w: size.w + 2 * (CHIP_PAD - pad), h: Math.max(size.h, CHIP_HEIGHT) };
+}
+
+/**
+ * Boundaries of one parent that start in one column share their left side, that end in one column their right side, and
+ * likewise their top and bottom in rows, so that they stand as one frame instead of each fitting its own nesting. A
+ * boundary only grows. From the deepest up, siblings align and a parent grows to keep its margin round the children at
+ * its sides; then from the top down, a child at a side of its parent grows with it, keeping that margin, and its
+ * siblings align again.
+ */
+function alignSiblings(clusters: readonly LayoutCluster[], rectOf: (id: string) => CellRect, parentOf: (id: string) => string | undefined): LayoutCluster[] {
+  type Edges = { x0: number; x1: number; y0: number; y1: number };
+  const at = new Map<string, Edges>(clusters.map((c) => [c.id, { x0: c.x, x1: c.x + c.w, y0: c.y, y1: c.y + c.h }]));
+  const was = new Map(at);
+  const depthOf = new Map(clusters.map((c) => [c.id, c.depth]));
+  const depths = [...new Set(clusters.map((c) => c.depth))].sort((a, b) => a - b);
+  const kidsOf = (id: string): string[] => clusters.filter((c) => parentOf(c.id) === id).map((c) => c.id);
+  const get = (id: string): Edges => at.get(id) as Edges;
+  // Which sides of its parent a child stands at, and the margin it had there.
+  const sides = (kid: string, parent: string): Array<{ k: keyof Edges; margin: number }> => {
+    const [q, p] = [rectOf(kid), rectOf(parent)];
+    const [k0, p0] = [was.get(kid) as Edges, was.get(parent) as Edges];
+    const out: Array<{ k: keyof Edges; margin: number }> = [];
+    if (q.c0 === p.c0) out.push({ k: 'x0', margin: k0.x0 - p0.x0 });
+    if (q.c1 === p.c1) out.push({ k: 'x1', margin: p0.x1 - k0.x1 });
+    if (q.r0 === p.r0) out.push({ k: 'y0', margin: k0.y0 - p0.y0 });
+    if (q.r1 === p.r1) out.push({ k: 'y1', margin: p0.y1 - k0.y1 });
+    return out;
+  };
+  const grow = (id: string, k: keyof Edges, v: number): void => {
+    const e = get(id);
+    const low = k === 'x0' || k === 'y0';
+    at.set(id, { ...e, [k]: low ? Math.min(e[k], v) : Math.max(e[k], v) });
+  };
+  const alignLevel = (depth: number): void => {
+    const groups = new Map<string, string[]>();
+    for (const c of clusters) if (c.depth === depth) groups.set(parentOf(c.id) ?? '', [...(groups.get(parentOf(c.id) ?? '') ?? []), c.id]);
+    for (const group of groups.values()) {
+      const keys: Array<[keyof Edges, (q: CellRect) => number]> = [['x0', (q) => q.c0], ['x1', (q) => q.c1], ['y0', (q) => q.r0], ['y1', (q) => q.r1]];
+      for (const [k, cell] of keys) {
+        const low = k === 'x0' || k === 'y0';
+        const by = new Map<number, number>();
+        for (const id of group) {
+          const v = get(id)[k];
+          const c = cell(rectOf(id));
+          by.set(c, low ? Math.min(by.get(c) ?? v, v) : Math.max(by.get(c) ?? v, v));
+        }
+        for (const id of group) grow(id, k, by.get(cell(rectOf(id))) as number);
+      }
+    }
+  };
+  for (const depth of [...depths].reverse()) {
+    alignLevel(depth);
+    for (const c of clusters.filter((k) => k.depth === depth - 1)) {
+      for (const kid of kidsOf(c.id)) for (const { k, margin } of sides(kid, c.id)) grow(c.id, k, k === 'x0' || k === 'y0' ? get(kid)[k] - margin : get(kid)[k] + margin);
+    }
+  }
+  for (const depth of depths.slice(1)) {
+    for (const c of clusters.filter((k) => k.depth === depth)) {
+      const parent = parentOf(c.id);
+      if (parent === undefined || !depthOf.has(parent)) continue;
+      for (const { k, margin } of sides(c.id, parent)) grow(c.id, k, k === 'x0' || k === 'y0' ? get(parent)[k] + margin : get(parent)[k] - margin);
+    }
+    alignLevel(depth);
+  }
+  return clusters.map((c) => {
+    const e = get(c.id);
+    return { ...c, x: e.x0, y: e.y0, w: e.x1 - e.x0, h: e.y1 - e.y0 };
+  });
 }

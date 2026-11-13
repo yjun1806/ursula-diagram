@@ -12,7 +12,7 @@ const RUN = 16;
 const LANE = 16;
 /** Distance between two places a bent line may cross over at, and how far a line going round may stand out. */
 const STEP = 8;
-const ROUND = 40;
+const ROUND = 80;
 /** A last run shorter than this leaves the arrowhead on the corner. */
 const LAST_RUN = 24;
 /** Prices, in pixels: a bend, a crossing, a crossed border, a line touching another, a line beside another, a line along a border or over a name. */
@@ -30,6 +30,10 @@ const MIDDLE = 24;
 const CROWD = 2;
 /** What a line keeps from a border it runs along, and the size of the self loop. */
 const BORDER_NEAR = 12;
+/** The room a run likes beside a box or border it runs along, what its label keeps from them, and the price of a pixel short. */
+const ROOM = 32;
+const LABEL_CLEAR = 8;
+const ROOM_PRICE = 4;
 /** What a line keeps from the edge of the canvas. */
 const EDGE_ROOM = 8;
 const LOOP = 24;
@@ -284,6 +288,7 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
    */
   const ownCost = (pts: readonly Point[], i: number): { penalty: number; soft: number } | undefined => {
     const e = graph.edges[i] as { from: string; to: string };
+    const size = scene.labelOf(i);
     let cost = 0;
     let soft = 0;
     for (const r of runsOf(pts)) {
@@ -309,6 +314,17 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
         }
       }
       for (const n of names) if (hits(r, n, -4)) cost += ALONG;
+      // Room beside a box or a border it runs along: a lane's worth, or half its label and a gap when it is wider.
+      const want = Math.max(ROOM, r.h ? 0 : (size?.w ?? 0) / 2 + LABEL_CLEAR);
+      for (const { box } of boxes) {
+        const sides = r.h ? [box.y, box.y + box.h] : [box.x, box.x + box.w];
+        const [lo, hi] = r.h ? [box.x, box.x + box.w] : [box.y, box.y + box.h];
+        if (Math.min(hi, r.hi) - Math.max(lo, r.lo) <= 0.5) continue;
+        for (const c of sides) {
+          const d = Math.abs(c - r.c);
+          if (d > 0.5 && d < want) soft += (want - d) * ROOM_PRICE;
+        }
+      }
     }
     const last = segs(pts).at(-1);
     if (pts.length > 2 && last !== undefined && Math.abs(last[0].x - last[1].x) + Math.abs(last[0].y - last[1].y) < LAST_RUN) cost += HOOK;
@@ -459,7 +475,6 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
       // Lines that crowd a face nest round each other from that face; the middle of a gap is for the few.
       for (const s of shapes(pin.from, pin.to, loadTo > loadFrom, Math.max(loadFrom, loadTo) <= CROWD ? gapMids : undefined)) {
         const pts = s.pts.map((p) => ({ x: tidy(p.x), y: tidy(p.y) }));
-        if (pts.some((p) => p.x < EDGE_ROOM || p.y < EDGE_ROOM || p.x > scene.width - EDGE_ROOM || p.y > scene.height - EDGE_ROOM)) continue;
         const own = ownCost(pts, i);
         if (own === undefined) continue;
         let cost = own.penalty + own.soft + s.prefer + BEND * bendsOf(pts) + lengthOf(pts);

@@ -250,7 +250,9 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
     for (const b of anchored) for (const e of b.cells.keys()) itemOf.set(e, b);
     // The blocks stand first; then every element, the ones with more lines first, takes its partners.
     for (const x of anchored) if (!nodeIds.has(x.id)) commit(x, settle(x));
-    const elements = [...itemOf.keys()].sort((a, b) => degree(b) - degree(a) || rank(a) - rank(b));
+    // Only the lines inside this level order its elements: a line out of it says nothing about the columns in it.
+    const inside = (id: string): number => [...(mult.get(id) ?? [])].reduce((sum, [o, m]) => sum + (itemOf.has(o) ? m : 0), 0);
+    const elements = [...itemOf.keys()].sort((a, b) => inside(b) - inside(a) || (inside(a) > 0 ? degree(b) - degree(a) : 0) || rank(a) - rank(b));
     {
       for (const e of elements) {
         const x = itemOf.get(e) as Block;
