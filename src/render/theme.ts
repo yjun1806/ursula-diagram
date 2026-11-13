@@ -170,7 +170,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     chipBorder: false,
     chipHalo: false,
     accentEdges: false,
-    records: { rule: { token: 'border', width: 1 }, note: { fill: 'lane', line: 'border', width: 1 }, value: { token: 'fg', weight: 500 } },
+    records: { rule: { token: 'hair', width: 1 }, note: { fill: 'lane', line: 'border', width: 1 }, value: { token: 'fg', weight: 500 } },
   },
 };
 
@@ -215,7 +215,7 @@ export function flowRules(spec: ThemeSpec, font: string): string[] {
     ...(spec.accentEdges ? ['.ursula-edge--thick{stroke:$accent}', '.ursula-edge--branch{stroke:$accent}'] : []),
     `.ursula-edge--dotted{stroke-dasharray:${spec.dash}}`,
     `.ursula-arrow{${arrowRule('$line')}}`,
-    `.ursula-arrow--accent{${arrowRule('$accent')}}`,
+    `.ursula-arrow--accent{${arrowRule(spec.accentEdges ? '$accent' : '$line')}}`,
     ...(spec.chipHalo ? ['.ursula-edge-label-halo{fill:$halo}'] : []),
     `.ursula-edge-label-bg{fill:$chip-fill${spec.chipBorder ? ';stroke:$border;stroke-width:1' : ''}}`,
     '.ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}',

@@ -10,7 +10,7 @@ describe('svg', () => {
     expect(svg).toContain('ursula-edge--thick');
     expect(svg).toContain('ursula-edge--dotted');
     expect(svg).toContain('prefers-color-scheme: dark');
-    expect(svg).toContain('--ursula-accent');
+    expect(svg).toContain('--ursula-line');
     expect(svg).toContain('>paid<');
   });
 
