@@ -15,6 +15,8 @@ import { bodyLength, boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITC
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
+import { separateTwoWay } from './two-way.ts';
+import { arrangeLanes, laneBorders } from './lane-gaps.ts';
 import { refineLabels } from './label-spot.ts';
 import { crossings } from '../layout/check.ts';
 import { offCentreEnds } from './centre.ts';
@@ -611,8 +613,9 @@ export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptio
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
   if (!given.terminal || opts.gap !== undefined) {
     if (given.terminal) return withQuestions(source, layoutAt(source, given, opts), given, opts);
-    const [settled, ruler, redrawn] = settledSides(layoutAt(source, given, opts), given);
-    return withQuestions(source, refineLabels(opts.nested === true ? settled : applyTrunks(settled, source, ruler), ruler, redrawn), given, opts);
+    const [sided, ruler, redrawn] = settledSides(layoutAt(source, given, opts), given);
+    const settled = arrangeLanes(separateTwoWay(sided, ruler), ruler);
+    return withQuestions(source, refineLabels(opts.nested === true ? settled : applyTrunks(settled, source, ruler), ruler, redrawn, laneBorders(settled)), given, opts);
   }
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
