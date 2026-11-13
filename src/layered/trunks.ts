@@ -100,7 +100,7 @@ interface Drawn {
 }
 
 /** The points of every member as one trunk, or undefined when a member would run through a box. */
-function drawGroup(group: Member[], nodes: LayoutNode[], ruler: Ruler): Drawn | undefined {
+function drawGroup(group: Member[], nodes: LayoutNode[], ruler: Ruler, round: boolean): Drawn | undefined {
   const first = group[0] as Member;
   const { axis, d } = first;
   const c = other(axis);
@@ -116,8 +116,8 @@ function drawGroup(group: Member[], nodes: LayoutNode[], ruler: Ruler): Drawn | 
   const junction = at(axis, flow, t);
   // The line that runs straight on is the trunk's own; with none, the one nearest to it.
   const lead = group.reduce((a, b) => (Math.abs((b.pts.at(-1) as Point)[c] - t) < Math.abs((a.pts.at(-1) as Point)[c] - t) - EPS ? b : a));
-  // The other lines start so far before the split that their bend there is round.
-  const runIn = at(axis, flow - d * Math.min(2 * BEND, d * (flow - face[axis])), t);
+  // With round bends the other lines start so far before the split that their bend there is round; otherwise they start at the split, on a flat bar.
+  const runIn = round ? at(axis, flow - d * Math.min(2 * BEND, d * (flow - face[axis])), t) : junction;
   const points = new Map<number, Point[]>();
   for (const m of group) {
     const q = m.pts.at(-1) as Point;
@@ -175,12 +175,13 @@ export function applyTrunks(drawn: Layout, source: Graph, ruler: Ruler): Layout 
   let changed = false;
   for (const [key, all] of groups) {
     let group = all;
+    const round = source.edges[group[0]?.index ?? 0]?.trunk?.dot === true;
     let result: Drawn | undefined;
     // A member that cannot be drawn into the trunk is left as it was; the rest are tried again.
     while (group.length >= 2) {
-      result = drawGroup(group, drawn.nodes, ruler);
+      result = drawGroup(group, drawn.nodes, ruler, round);
       if (result !== undefined) break;
-      const worst = group.findIndex((m) => drawGroup(group.filter((x) => x !== m), drawn.nodes, ruler) !== undefined);
+      const worst = group.findIndex((m) => drawGroup(group.filter((x) => x !== m), drawn.nodes, ruler, round) !== undefined);
       group = worst < 0 ? [] : group.filter((_, i) => i !== worst);
     }
     if (result === undefined || group.length < 2) continue;
@@ -191,7 +192,7 @@ export function applyTrunks(drawn: Layout, source: Graph, ruler: Ruler): Layout 
       if (m === undefined || path === undefined) return edge;
       const lead = i === result?.lead;
       const points = m.reversed ? [...path].reverse() : path;
-      const trunk = { id: key, lead, ...(lead && source.edges[i]?.trunk?.dot === true ? { dot: result?.junction as Point } : {}) };
+      const trunk = { id: key, lead, ...(round ? {} : { square: true as const }), ...(lead && source.edges[i]?.trunk?.dot === true ? { dot: result?.junction as Point } : {}) };
       const { label: _label, ...rest } = edge;
       const label = labelOn(edge, path, result?.junction as Point, ruler);
       return {

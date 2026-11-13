@@ -320,7 +320,7 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint)
   const junction = edge.trunk?.dot;
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(points, paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
+    `d="${pathData(points, edge.trunk?.square ? 0 : paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
     (junction === undefined ? '' : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`)
   );
 }

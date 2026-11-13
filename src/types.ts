@@ -252,9 +252,9 @@ export interface LayoutEdge {
   /**
    * The line is one of several that leave a box together as a trunk. `id` is the same on all of them. `lead` is the one
    * that keeps the mark at the shared end (the others have none there). `dot` is the place of the dot where the trunk
-   * splits, on the lead only.
+   * splits, on the lead only. `square`: the branches leave a flat bar and are drawn without rounded bends.
    */
-  trunk?: { id: string; lead: boolean; dot?: Point };
+  trunk?: { id: string; lead: boolean; dot?: Point; square?: true };
 }
 
 export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'attach-overlap' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';
