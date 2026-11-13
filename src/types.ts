@@ -202,6 +202,10 @@ export interface GridSpec {
   /** Nodes without lines in one row of a cluster, and sibling clusters in one row. */
   shapeInRow: number;
   boundaryInRow: number;
+  /** Cells given outright, as they stand in the drawing: the placer keeps them instead of finding its own. */
+  cells?: Record<string, { r: number; c: number }>;
+  /** Per node: how many rows down from its cell it stands (a half for the middle of two rows). */
+  shift?: Record<string, number>;
 }
 
 export interface Point {

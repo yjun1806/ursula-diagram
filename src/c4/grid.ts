@@ -6,10 +6,12 @@ import { labelSize } from '../layout/labels.ts';
 import { withLegend } from '../layout/legend.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Graph, Layout, LayoutCluster, LayoutNode, Point } from '../types.ts';
-import type { Cell, CellRect } from './grid-place.ts';
+import type { Cell, CellRect, GridCells } from './grid-place.ts';
 import { placeCells } from './grid-place.ts';
 import { emptySpec, gridRows } from './grid-rows.ts';
 import { drawLines } from './grid-lines.ts';
+import { measureNodes } from '../layout/place.ts';
+import { ACTOR_H, ACTOR_W } from '../layout/records.ts';
 import type { Rect } from './grid-lines.ts';
 
 /** Gaps between cells: across, down, and around the drawing. */
@@ -44,10 +46,23 @@ const NAME_TOP = 12;
  * straight from middle to middle; the others leave and enter at the middle of a face, or spread on it 64 apart (closer
  * on a short face) and symmetric about the middle or beside the straight line that holds it.
  */
-export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+  // Boxes not measured yet (any type but C4) take the size the layered engine measures, the widest and the highest of
+  // them for all; an actor keeps the figure's own size and stands in the middle of its cell.
+  const own = new Map<string, { w: number; h: number }>();
+  let graph = given;
+  if (given.nodes.some((n) => n.box === undefined)) {
+    const size = measureNodes(given.nodes, [{ label: '' }], layeredRuler(ruler), given.direction !== 'LR');
+    const boxes = given.nodes.map((n, i) => ({ n, w: size.w[i] as number, h: size.h[i] as number })).filter((b) => b.n.shape !== 'actor');
+    const box = { w: Math.max(ACTOR_W, ...boxes.map((b) => b.w)), h: Math.max(ACTOR_H, ...boxes.map((b) => b.h)) };
+    for (const n of given.nodes) if (n.shape === 'actor') own.set(n.id, { w: ACTOR_W, h: ACTOR_H });
+    graph = { ...given, nodes: given.nodes.map((n) => ({ ...n, box })) };
+  }
   const spec = graph.grid ?? emptySpec(graph);
   const rows = gridRows(graph, spec);
-  const grid = placeCells(graph, spec, rows);
+  // Cells given outright stand as they are; otherwise a drawing that reads from left to right stands its rows as columns.
+  const given_ = spec.cells;
+  const grid: GridCells = given_ !== undefined ? givenCells(given_) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows);
   const bw = Math.max(1, ...graph.nodes.map((n) => n.box?.w ?? 0));
   const bh = Math.max(1, ...graph.nodes.map((n) => n.box?.h ?? 0));
   const clusters = graph.clusters ?? [];
@@ -195,10 +210,11 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
         rank: p.r,
         span: 1,
         row: p.c,
-        x: colX[p.c] as number,
-        y: rowY[p.r] as number,
-        w: bw,
-        h: bh,
+        // A box of its own size (an actor) stands in the middle of its cell.
+        x: (colX[p.c] as number) + (bw - (own.get(n.id)?.w ?? bw)) / 2,
+        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + (bh - (own.get(n.id)?.h ?? bh)) / 2,
+        w: own.get(n.id)?.w ?? bw,
+        h: own.get(n.id)?.h ?? bh,
         title: n.title,
         lines: n.lines,
         shape: n.shape,
@@ -227,7 +243,9 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
       const c = laidClusters.find((k) => k.id === id);
       return c === undefined ? undefined : { x: c.x + NAME_INSET, y: c.y + NAME_TOP, w: nameWidth(c.label), h: NAME - NAME_TOP };
     };
-    const { edges, diagnostics } = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf, ...(names ? { nameOf } : {}) });
+    const drawnLines = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf, ...(names ? { nameOf } : {}) });
+    const { diagnostics } = drawnLines;
+    const edges = trunked(graph, nodes, drawnLines.edges);
     return { width, height, nodes, laidClusters, colX, edges, diagnostics };
   };
   // A line down the first column of a cluster that runs over its name moves the columns inside right, as far as the name needs.
@@ -459,4 +477,91 @@ function alignSiblings(clusters: readonly LayoutCluster[], rectOf: (id: string) 
     const e = get(c.id);
     return { ...c, x: e.x0, y: e.y0, w: e.x1 - e.x0, h: e.y1 - e.y0 };
   });
+}
+
+/** The grid with its rows as columns and its columns as rows. */
+function transposed(g: GridCells): GridCells {
+  return {
+    cell: new Map([...g.cell].map(([id, p]) => [id, { r: p.c, c: p.r }])),
+    rect: new Map([...g.rect].map(([id, q]) => [id, { r0: q.c0, r1: q.c1, c0: q.r0, c1: q.r1 }])),
+    rows: g.columns,
+    columns: g.rows,
+  };
+}
+
+/** The grid of cells given outright. */
+function givenCells(cells: Record<string, { r: number; c: number }>): GridCells {
+  const all = Object.values(cells);
+  return { cell: new Map(Object.entries(cells)), rect: new Map(), rows: Math.max(0, ...all.map((p) => p.r)) + 1, columns: Math.max(0, ...all.map((p) => p.c)) + 1 };
+}
+
+/** How far right of the shared end the dot of a trunk stands. */
+const TRUNK = 48;
+const TRUNK_MIN = 24;
+const HAND = 12;
+
+/**
+ * Lines that ask for a trunk at one end (`trunk` on the graph edge) and whose other ends all stand in one column to the
+ * right: one run out of the middle of the right face of the shared box to a dot, then a branch to the middle of the left
+ * face of each other box. Other lines stay as drawn.
+ */
+function trunked(graph: Graph, nodes: readonly LayoutNode[], edges: Layout['edges']): Layout['edges'] {
+  const boxOf = new Map(nodes.map((n) => [n.id, n]));
+  const groups = new Map<string, number[]>();
+  graph.edges.forEach((e, i) => {
+    if (e.trunk === undefined) return;
+    const at = e.trunk.end === 'from' ? e.from : e.to;
+    const k = `${at}|${e.trunk.kind}`;
+    groups.set(k, [...(groups.get(k) ?? []), i]);
+  });
+  const out = [...edges];
+  for (const [k, list] of groups) {
+    const at = boxOf.get(k.slice(0, k.indexOf('|')));
+    if (at === undefined || list.length < 2) continue;
+    const ends = list.map((i) => {
+      const e = graph.edges[i] as Graph['edges'][number];
+      return boxOf.get(e.trunk?.end === 'from' ? e.to : e.from);
+    });
+    const run = trunkRun(at, ends as LayoutNode[]);
+    if (run === undefined) continue;
+    list.forEach((i, n) => {
+      const e = graph.edges[i] as Graph['edges'][number];
+      const dedup = (run.paths[n] as Point[]).filter((p, j, all) => j === 0 || p.x !== (all[j - 1] as Point).x || p.y !== (all[j - 1] as Point).y);
+      // A point in the middle of a straight run is no corner.
+      const way = dedup.filter((p, j, all) => {
+        const [a, b] = [all[j - 1], all[j + 1]];
+        return a === undefined || b === undefined || !((a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y));
+      });
+      const points = e.trunk?.end === 'from' ? way : [...way].reverse();
+      out[i] = { ...(out[i] as Layout['edges'][number]), points, trunk: { id: k, lead: n === 0, dot: run.dot } };
+    });
+  }
+  return out;
+}
+
+/**
+ * The paths of a trunk from `at` to `ends`: when the ends stand in one column to the right, out of the right face (clear
+ * of an actor's hand) to a dot and on into the middle of each left face; when they stand in one row below, out of the
+ * bottom face to a dot in the gap and on into the middle of each top face. Undefined when they stand otherwise.
+ */
+function trunkRun(at: LayoutNode, ends: readonly (LayoutNode | undefined)[]): { dot: Point; paths: Point[][] } | undefined {
+  if (ends.some((b) => b === undefined)) return undefined;
+  const bs = ends as LayoutNode[];
+  const first = bs[0] as LayoutNode;
+  if (bs.every((b) => b.x === first.x) && first.x > at.x + at.w) {
+    // An actor's line starts a little clear of its hand.
+    const x0 = at.x + at.w + (at.shape === 'actor' ? HAND : 0);
+    if (first.x - x0 < 2 * TRUNK_MIN) return undefined;
+    const y0 = at.y + at.h / 2;
+    const dot = { x: x0 + Math.min(TRUNK, (first.x - x0) / 2), y: y0 };
+    return { dot, paths: bs.map((b) => [{ x: x0, y: y0 }, dot, { x: dot.x, y: b.y + b.h / 2 }, { x: b.x, y: b.y + b.h / 2 }]) };
+  }
+  if (bs.every((b) => b.y === first.y) && first.y > at.y + at.h) {
+    const y0 = at.y + at.h;
+    if (first.y - y0 < 2 * TRUNK_MIN) return undefined;
+    const x0 = at.x + at.w / 2;
+    const dot = { x: x0, y: y0 + (first.y - y0) / 2 };
+    return { dot, paths: bs.map((b) => [{ x: x0, y: y0 }, dot, { x: b.x + b.w / 2, y: dot.y }, { x: b.x + b.w / 2, y: b.y }]) };
+  }
+  return undefined;
 }

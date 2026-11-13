@@ -12,7 +12,7 @@ const summary = (g: Graph): string => `Entity relationship diagram: ${g.nodes.le
 
 function pixels(src: string, opts: RenderOptions): Layout & { title: string } {
   const model = parseEr(src, opts.heading);
-  const laid = layout(model.graph, pixelRuler(), {
+  const laid = layout({ ...model.graph, placer: 'c4-grid' }, pixelRuler(), {
     legend: false,
     ...(opts.quality === undefined ? {} : { quality: opts.quality }),
     ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
