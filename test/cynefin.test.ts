@@ -375,3 +375,12 @@ describe('cynefin text', () => {
     expect(Math.max(...out.lines.map(cellWidth))).toBeLessThanOrEqual(24);
   });
 });
+
+describe('cynefin baselines', () => {
+  it('stands the title and the area names on their baselines', () => {
+    const l = layoutCynefin(parseCynefin(basic), pixelRuler());
+    const named = l.scene.items.filter((i): i is SceneText => i.kind === 'text' && (i.role?.includes('zone-name') === true || i.role?.includes('title') === true));
+    expect(named.length).toBeGreaterThan(0);
+    for (const t of named) expect(t.baseline).toBe('alphabetic');
+  });
+});
