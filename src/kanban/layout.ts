@@ -14,6 +14,8 @@ const CARD_PAD = 16;
 const MIN_INNER = 224;
 const LINE_H = 20;
 const TAG_GAP = 4;
+/** Room a tag adds to its text; the ruler measures the 11px tag text at 12px, which leaves some more. */
+const TAG_PAD = 12;
 const TAG_ROW = 24;
 const TAG_KEYS = ['ticket', 'assigned', 'priority'] as const;
 
@@ -30,7 +32,7 @@ export function ticketHref(base: string | undefined, ticket: string): string | u
 }
 
 export function layoutKanban(model: Kanban, ruler: Ruler, theme?: Theme): KanbanLayout {
-  const tagWidth = (text: string): number => ceilTo(ruler.textWidth(text, 'line') + 16);
+  const tagWidth = (text: string): number => ceilTo(ruler.textWidth(text, 'line') + TAG_PAD);
   const widestTag = Math.max(0, ...model.columns.flatMap((c) => c.cards.flatMap((card) => tagsOf(card).map((t) => tagWidth(t.text)))));
   const inner = Math.max(MIN_INNER, widestTag);
   const cardW = inner + 2 * CARD_PAD;
