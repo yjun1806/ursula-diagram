@@ -5,6 +5,7 @@ import type { Diagnostic, Direction, Graph, GraphEdge, GraphNode, Layout, Layout
 import type { LayoutOptions } from './index.ts';
 import { withLegend } from './legend.ts';
 import { crossingCount } from './check.ts';
+import { routeGlobally } from './global-route.ts';
 import { gridUp } from './place.ts';
 
 /** Space between a cluster box and what stands in it, and the extra line on top that holds the name. */
@@ -926,8 +927,37 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
   const on = drawn(true);
   const price = (l: Layout): number[] => [crossingCount(l.edges), l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0), l.edges.reduce((n, e) => n + segmentsOf(e.points).reduce((m, t) => m + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y), 0), 0)];
   const [a, b] = [price(on), price(off)];
-  for (let i = 0; i < 3; i++) if ((a[i] as number) !== (b[i] as number)) return (a[i] as number) < (b[i] as number) ? on : off;
-  return off;
+  const better = (x: number[], y: number[]): boolean => {
+    for (let i = 0; i < 3; i++) if ((x[i] as number) !== (y[i] as number)) return (x[i] as number) < (y[i] as number);
+    return false;
+  };
+  const chosen = better(a, b) ? on : off;
+  // A third drawing has every line routed once more in one pass over the finished drawing; it wins only when it is better still.
+  const once = ruler.terminal === true ? undefined : routedOnce(chosen, ruler);
+  return once !== undefined && better(price(once), price(chosen)) ? once : chosen;
+}
+
+/** The drawing with its lines routed in one pass over all of it, labels placed again; undefined when that changes nothing or leaves the canvas. */
+function routedOnce(layout: Layout, ruler: Ruler): Layout | undefined {
+  const box = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x, y: r.y, w: r.w, h: r.h });
+  const base = layout.legend?.base ?? layout;
+  const found = routeGlobally({
+    width: base.width,
+    height: base.height,
+    nodes: layout.nodes.map((n) => ({ id: n.id, ...box(n) })),
+    clusters: (layout.clusters ?? []).map((c) => ({ id: c.id, box: box(c), ...(c.name === undefined ? {} : { name: box(c.name) }) })),
+    edges: layout.edges.map((e) => ({ from: e.from, to: e.to, current: e.points, ...(e.invisible === true ? { keep: true } : {}) })),
+  });
+  const moved = new Set<number>();
+  const edges = layout.edges.map((e, i) => {
+    const points = found[i];
+    if (points === undefined) return e;
+    moved.add(i);
+    return { ...e, points };
+  });
+  if (moved.size === 0) return undefined;
+  const refined = refineLabels({ ...layout, edges }, layeredRuler(ruler), moved);
+  return withinCanvas(refined) === refined ? refined : undefined;
 }
 
 function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel, rows: ReadonlySet<string>, useExits: boolean): { layout: Layout; need: Set<string> } {
