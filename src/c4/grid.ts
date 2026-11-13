@@ -16,6 +16,9 @@ import type { Rect } from './grid-lines.ts';
 const GAP_X = 32;
 const GAP_Y = 64;
 const MARGIN = 24;
+/** What stands between two borders that face each other, and between a border and a box. */
+const BORDER_GAP = 24;
+const BOX_GAP = 48;
 /** Room a label keeps from the boxes on both sides of the gap it stands in. */
 const LABEL_ROOM = 16;
 /** What two labels of one pair keep between them. */
@@ -79,6 +82,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
    * clusters when `names` is set.
    */
   const drawn = (shiftOf: ReadonlyMap<string, number>, names: boolean) => {
+    // The width a long name needs beyond what the cluster holds, given half to each side so what it holds stays in the middle.
     const extraRight = new Map<string, number>();
     for (const c of clusters) {
       const q = grid.rect.get(c.id);
@@ -88,12 +92,15 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     }
     const inset = (id: string, side: 'l' | 'r' | 't' | 'b'): number => {
       const q = grid.rect.get(id) as CellRect;
-      const own = (side === 'l' ? PAD + (shiftOf.get(id) ?? 0) : side === 'r' ? PAD + (extraRight.get(id) ?? 0) : side === 't' ? PAD + NAME : PAD) + (inner.get(`${id}:${side}`) ?? 0);
+      const own = (side === 'l' ? PAD + (shiftOf.get(id) ?? 0) + (extraRight.get(id) ?? 0) / 2 : side === 'r' ? PAD + (extraRight.get(id) ?? 0) / 2 : side === 't' ? PAD + NAME : PAD) + (inner.get(`${id}:${side}`) ?? 0);
       const same = kidsOf(id).filter((k) => {
         const p = grid.rect.get(k) as CellRect;
         return side === 'l' ? p.c0 === q.c0 : side === 'r' ? p.c1 === q.c1 : side === 't' ? p.r0 === q.r0 : p.r1 === q.r1;
       });
-      return own + Math.max(0, ...same.map((k) => inset(k, side)));
+      // A child that does not start in the first column stands beside the name of its parent, not under it.
+      const nameFits = NAME_INSET + nameWidth(clusters.find((c) => c.id === id)?.label ?? id) + NAME_CLEAR <= PAD + bw;
+      const ownFor = (k: string): number => (side === 't' && nameFits && (grid.rect.get(k) as CellRect).c0 > q.c0 ? own - NAME : own);
+      return Math.max(own, ...same.map((k) => ownFor(k) + inset(k, side)));
     };
     const rects = [...grid.rect].map(([id, q]) => ({ id, q, l: inset(id, 'l'), r: inset(id, 'r'), t: inset(id, 't'), b: inset(id, 'b') }));
 
@@ -131,14 +138,18 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     const colGap: number[] = [];
     for (let k = 0; k <= grid.columns; k++) {
       let base = k === 0 || k === grid.columns ? MARGIN : GAP_X;
-      base = Math.max(base, labelRoom('across', k));
+      // What the lines need between the innermost borders: their labels.
+      const need = labelRoom('across', k);
+      base = Math.max(base, need);
       let most = 0;
+      let mostGap = 0;
       for (let r = 0; r < grid.rows; r++) {
         const left = Math.max(0, ...rects.filter((x) => x.q.c1 === k - 1 && x.q.r0 <= r && r <= x.q.r1).map((x) => x.r));
         const right = Math.max(0, ...rects.filter((x) => x.q.c0 === k && x.q.r0 <= r && r <= x.q.r1).map((x) => x.l));
+        if (left + right > most) mostGap = left > 0 && right > 0 ? BORDER_GAP : left + right > 0 ? BOX_GAP : 0;
         most = Math.max(most, left + right);
       }
-      colGap.push(base + most);
+      colGap.push(k === 0 || k === grid.columns ? base + most : Math.max(base, most + Math.max(mostGap, need)));
     }
     const rowGap: number[] = [];
     for (let k = 0; k <= grid.rows; k++) {
@@ -150,15 +161,18 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
         return a !== undefined && b !== undefined && a.c !== b.c && a.r !== b.r && Math.min(a.r, b.r) === k - 1;
       }).length;
       const labels = labelRoom('down', k);
-      base = Math.max(base, labels);
-      if (turning > 0) base = Math.max(base, 2 * TURN + LANE * Math.ceil(turning / 2) + (labels > 0 ? labels - 2 * LABEL_ROOM + LABEL_GAP : 0));
+      // What the lines need between the innermost borders: their labels, and the lanes of the lines that turn here.
+      const need = turning > 0 ? Math.max(labels, 2 * TURN + LANE * Math.ceil(turning / 2) + (labels > 0 ? labels - 2 * LABEL_ROOM + LABEL_GAP : 0)) : labels;
+      base = Math.max(base, need);
       let most = 0;
+      let mostGap = 0;
       for (let c = 0; c < grid.columns; c++) {
         const above = Math.max(0, ...rects.filter((x) => x.q.r1 === k - 1 && x.q.c0 <= c && c <= x.q.c1).map((x) => x.b));
         const below = Math.max(0, ...rects.filter((x) => x.q.r0 === k && x.q.c0 <= c && c <= x.q.c1).map((x) => x.t));
+        if (above + below > most) mostGap = above > 0 && below > 0 ? BORDER_GAP : above + below > 0 ? BOX_GAP : 0;
         most = Math.max(most, above + below);
       }
-      rowGap.push(base + most);
+      rowGap.push(k === 0 || k === grid.rows ? base + most : Math.max(base, most + Math.max(mostGap, need)));
     }
     const colX: number[] = [];
     for (let c = 0, x = 0; c < grid.columns; c++) {
@@ -206,7 +220,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
         return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + bh + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
       })
       .sort((a, b) => a.depth - b.depth || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-    const laidClusters = alignSiblings(placedClusters, (id) => grid.rect.get(id) as CellRect, (id) => parentOf.get(id));
+    const laidClusters = alignSiblings(placedClusters, (id) => grid.rect.get(id) as CellRect, (id) => parentOf.get(id), nodes.map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h, cluster: n.cluster })));
 
     // The name stands in the top left corner, two lines high.
     const nameOf = (id: string): { x: number; y: number; w: number; h: number } | undefined => {
@@ -359,7 +373,7 @@ function chipSize(text: string, ruler: Ruler): { w: number; h: number } {
  * its sides; then from the top down, a child at a side of its parent grows with it, keeping that margin, and its
  * siblings align again.
  */
-function alignSiblings(clusters: readonly LayoutCluster[], rectOf: (id: string) => CellRect, parentOf: (id: string) => string | undefined): LayoutCluster[] {
+function alignSiblings(clusters: readonly LayoutCluster[], rectOf: (id: string) => CellRect, parentOf: (id: string) => string | undefined, boxes: ReadonlyArray<Rect & { cluster?: string }> = []): LayoutCluster[] {
   type Edges = { x0: number; x1: number; y0: number; y1: number };
   const at = new Map<string, Edges>(clusters.map((c) => [c.id, { x0: c.x, x1: c.x + c.w, y0: c.y, y1: c.y + c.h }]));
   const was = new Map(at);
@@ -413,6 +427,31 @@ function alignSiblings(clusters: readonly LayoutCluster[], rectOf: (id: string) 
       for (const { k, margin } of sides(c.id, parent)) grow(c.id, k, k === 'x0' || k === 'y0' ? get(parent)[k] + margin : get(parent)[k] - margin);
     }
     alignLevel(depth);
+  }
+  // A boundary grown on one side only grows as far on the other, so what it holds stays in the middle: where that side
+  // is no side it shares with a sibling, keeps its margin in the parent, and keeps a border gap from what stands beside.
+  const within = (inner: string | undefined, outer: string): boolean => {
+    for (let at = inner; at !== undefined; at = parentOf(at)) if (at === outer) return true;
+    return false;
+  };
+  for (const depth of depths) {
+    for (const c of clusters.filter((k) => k.depth === depth)) {
+      const [now, before] = [get(c.id), was.get(c.id) as Edges];
+      const [left, right] = [before.x0 - now.x0, now.x1 - before.x1];
+      if (Math.abs(left - right) < 0.5) continue;
+      const k: keyof Edges = left < right ? 'x0' : 'x1';
+      const v = k === 'x0' ? before.x0 - right : before.x1 + left;
+      const q = rectOf(c.id);
+      const parent = parentOf(c.id);
+      const shared = clusters.some((o) => o.id !== c.id && parentOf(o.id) === parent && (k === 'x0' ? rectOf(o.id).c0 === q.c0 : rectOf(o.id).c1 === q.c1));
+      const room = parent === undefined || !depthOf.has(parent) ? true : k === 'x0' ? v >= get(parent).x0 + PAD : v <= get(parent).x1 - PAD;
+      const next = { ...now, [k]: v };
+      const clash = [
+        ...clusters.filter((o) => o.id !== c.id && !within(c.id, o.id) && !within(o.id, c.id)).map((o) => get(o.id)),
+        ...boxes.filter((b) => !within(b.cluster, c.id)).map((b) => ({ x0: b.x, x1: b.x + b.w, y0: b.y, y1: b.y + b.h })),
+      ].some((o) => o.x0 < next.x1 + BORDER_GAP && next.x0 < o.x1 + BORDER_GAP && o.y0 < next.y1 && next.y0 < o.y1);
+      if (!shared && room && !clash) at.set(c.id, next);
+    }
   }
   return clusters.map((c) => {
     const e = get(c.id);

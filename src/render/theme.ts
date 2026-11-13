@@ -168,6 +168,10 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
       zone: ['#fcfcfa', '#171614'],
       'box-in-lane': 'surface',
       'chip-fill': ['#f1f0ef', '#252422'],
+      // The fills of dashed boundaries by depth, a step each: lighter than a label chip so a chip still reads on them.
+      'tint-outer': ['#f8f7f5', '#1b1a18'],
+      'tint-mid': ['#f5f4f2', '#1e1d1b'],
+      'tint-inner': ['#f3f2f0', '#21201e'],
     },
     boxRadius: 10,
     boxBorder: 1.5,

@@ -185,9 +185,14 @@ function nameText(cluster: LayoutCluster): string {
   return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? ' ursula-zone-sub' : ''}" x="${num(x)}" y="${num(top + 12 + 16 * i)}">${escapeXml(l)}</text>`).join('');
 }
 
+/** The fill step of a dashed boundary: one a depth, the third for every deeper one. */
+function tintOf(cluster: LayoutCluster): 'tint-outer' | 'tint-mid' | 'tint-inner' {
+  return cluster.depth <= 1 ? 'tint-outer' : cluster.depth === 2 ? 'tint-mid' : 'tint-inner';
+}
+
 /** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands in the gap of the top row the lines leave. */
 function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
-  const look = cluster.style === 'dashed' ? ' ursula-zone--dashed' : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
+  const look = cluster.style === 'dashed' ? ` ursula-zone--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
   return (
     `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` +
     `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
@@ -200,7 +205,7 @@ function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
 function knockoutSvg(cluster: LayoutCluster): string {
   const name = cluster.name;
   if (!name?.knockout) return '';
-  const look = cluster.style === 'dashed' ? ' ursula-zone-knock--dashed' : cluster.depth % 2 === 0 ? ' ursula-zone-knock--plain' : '';
+  const look = cluster.style === 'dashed' ? ` ursula-zone-knock--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? ' ursula-zone-knock--plain' : '';
   return `<g class="ursula-cluster-name" data-cluster="${escapeXml(cluster.id)}"><rect class="ursula-zone-knock${look}" x="${num(name.x - 4)}" y="${num(name.y - 2)}" width="${num(name.w + 8)}" height="${num(name.h + 4)}"/>${nameText(cluster)}</g>`;
 }
 
@@ -221,6 +226,10 @@ function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[
     '.ursula-zone--plain{fill:$zone}',
     ...(clusters.some((c) => c.style === 'dashed')
       ? [`.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
+      : []),
+    // A theme with fills by depth fills the dashed boundaries with them, a knockout of a name too.
+    ...(clusters.some((c) => c.style === 'dashed') && 'tint-outer' in THEME_SPECS[theme].tokens
+      ? (['tint-outer', 'tint-mid', 'tint-inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--${t}{fill:$${t}}`, `.ursula-zone-knock--dashed.ursula-zone--${t}{fill:$${t}}`])
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
     ...(clusters.some((c) => c.name?.subtitle === true) ? ['.ursula-zone-sub{font-weight:400;opacity:.75}'] : []),

@@ -17,6 +17,8 @@ interface Ask {
   tier: number;
   step: number;
   index: number;
+  /** True when the line runs from `a` to `b` as written: `a` uses `b`. */
+  uses?: boolean;
 }
 
 export const emptySpec = (graph: Graph): GridSpec => ({
@@ -29,6 +31,11 @@ export const emptySpec = (graph: Graph): GridSpec => ({
   shapeInRow: 4,
   boundaryInRow: 2,
 });
+
+/** True when the arrowhead of a line stands at `id`: the line is drawn as used by its other end. */
+function pointsTo(e: Graph['edges'][number], id: string): boolean {
+  return id === e.to ? e.end !== 'none' : e.startEnd === 'arrow';
+}
 
 function asksOf(graph: Graph, spec: GridSpec): Ask[] {
   const nodes = new Set(graph.nodes.map((n) => n.id));
@@ -64,21 +71,29 @@ function asksOf(graph: Graph, spec: GridSpec): Ask[] {
     if (hint !== undefined) return hinted(e.from, e.to, hint, 0, step, index);
     if (starts.has(e.from) !== starts.has(e.to)) {
       const [a, b] = starts.has(e.from) ? [e.from, e.to] : [e.to, e.from];
-      asks.push({ kind: 'below', a, b, tier: 1, step, index });
+      asks.push({ kind: 'below', a, b, tier: 1, step, index, uses: pointsTo(e, b) });
       return;
     }
     const upper = spec.upper[index];
     if (upper !== undefined) {
       const [a, b] = upper === 'from' ? [e.from, e.to] : [e.to, e.from];
-      asks.push({ kind: 'below', a, b, tier: 2, step, index });
+      asks.push({ kind: 'below', a, b, tier: 2, step, index, uses: pointsTo(e, b) });
       return;
     }
-    asks.push({ kind: 'below', a: e.from, b: e.to, tier: 3, step, index });
+    asks.push({ kind: 'below', a: e.from, b: e.to, tier: 3, step, index, uses: pointsTo(e, e.to) });
   });
   spec.lays.forEach((l, k) => {
     if (nodes.has(l.from) && nodes.has(l.to) && l.from !== l.to) hinted(l.from, l.to, l.hint, 0, Infinity, graph.edges.length + k);
   });
-  return asks.sort((x, y) => x.tier - y.tier || x.step - y.step || x.index - y.index);
+  // Two ends of a line that one node above both uses stand side by side in its row below, the line across: what a node
+  // uses is one row, not a ladder. Only a line no hint, person or arrowhead placed.
+  const parents = (id: string): Set<string> => new Set(asks.filter((x) => x.kind === 'below' && x.uses === true && x.b === id).map((x) => x.a));
+  const level = asks.map((x): Ask => {
+    if (x.kind !== 'below' || x.tier < 3) return x;
+    const [pa, pb] = [parents(x.a), parents(x.b)];
+    return [...pa].some((p) => pb.has(p)) ? { ...x, kind: 'beside' } : x;
+  });
+  return level.sort((x, y) => x.tier - y.tier || x.step - y.step || x.index - y.index);
 }
 
 /**
