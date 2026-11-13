@@ -220,7 +220,7 @@ export function flowRules(spec: ThemeSpec, font: string): string[] {
     `.ursula{background:$bg;font-family:${font};font-size:12px}`,
     '.ursula-lane{fill:$zone;stroke:$hair;stroke-width:1}',
     '.ursula-lane--tint{fill:$lane}',
-    '.ursula-lane-label{fill:$muted;font-size:12px;font-weight:600}',
+    '.ursula-lane-label{fill:$fg;font-size:13px;font-weight:600}',
     `.ursula-node-box{fill:$surface;${stroke}}`,
     '.ursula-node--on-lane .ursula-node-box{fill:$box-in-lane}',
     `[data-role="start"] .ursula-node-box{fill:$start-fill${roleStroke}}`,

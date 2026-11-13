@@ -10,7 +10,7 @@ export const LINE_CLEAR = 12;
 /** Least gap a label keeps from another label. */
 export const LABEL_CLEAR = 8;
 /** Distance between two candidate places along a segment. */
-const SLIDE = 8;
+export const SLIDE = 8;
 /** Least gap a label keeps from the mark at an end of its line. */
 export const MARK_CLEAR = 8;
 const EPS = 1e-6;

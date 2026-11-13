@@ -17,6 +17,8 @@ import { settleBodies } from './bodies.ts';
 import { evenRecords } from './even-records.ts';
 import { placeEndLabels } from './end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
+import { BORDER_CLEAR } from './lane-gaps.ts';
+import { SLIDE } from './label-spot.ts';
 import { bodyLength, boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
@@ -944,11 +946,21 @@ export function route(given: Frame, l: Ladder, layers: number[][], start: number
     const s = labelSize(text, ruler);
     return (td ? s.w : s.h) + 2 * ruler.trackGap;
   };
+  // A label on a straight line sits across it with the line showing on both sides: the gap holds the label, a stretch of line on each side and the arrowhead.
+  const across = (text: string, style: LayoutEdge['style']): number => {
+    const s = labelSize(text, ruler);
+    return (td ? s.w : s.h) + 2 * lineBeside(style) + 2 * ARROW;
+  };
+  const named = f.graph.lanes.some((lane) => lane.label !== '');
   l.chains.forEach((c, ci) => {
-    const text = f.graph.edges[c.edge]?.label;
-    if (text === undefined || text === '') return;
+    const e = f.graph.edges[c.edge];
+    const text = e?.label;
+    if (e === undefined || text === undefined || text === '') return;
     const first = prep.items.find((it) => it.chain === ci);
-    if (first && !ruler.uniform) demand[first.band] = Math.max(demand[first.band] ?? 0, need(text));
+    const straight = first?.kind === 'piece' && first.track < 0 && first.xa === first.xb;
+    // Between two named lanes the label stands inside one of them: the gap between the lanes and the room the label keeps off both borders come on top.
+    const lanes = first !== undefined && named && l.layerLane[first.band - 1] !== l.layerLane[first.band] ? ruler.nodeGrid + 2 * (BORDER_CLEAR + SLIDE) : 0;
+    if (first && !ruler.uniform) demand[first.band] = Math.max(demand[first.band] ?? 0, straight ? across(text, e.style) + lanes : need(text));
   });
   let built = build(f, l, layers, start, plan, prep, demand);
   if (ruler.uniform) {

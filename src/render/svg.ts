@@ -714,7 +714,8 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth] as const));
   const dashed = new Set((layout.clusters ?? []).filter((c) => c.style === 'dashed').map((c) => c.id));
   const labelled = layout.lanes.filter((l) => l.label !== '');
-  const tinted = (lane: LayoutLane): boolean => labelled.length < 2 || lane === labelled[0];
+  // Named lanes take the light fill and the face of the page by turns, the first one filled.
+  const tinted = (lane: LayoutLane): boolean => labelled.indexOf(lane) % 2 === 0;
   const paint: Paint = {
     spec,
     roles: rolesOf(layout),
