@@ -168,7 +168,7 @@ end
 n1 -->|refer| m1
 n2 -->|transfer| m2`;
 
-  it('puts the label of a straight vertical cross-lane edge beside the line', () => {
+  it('puts the label of a straight vertical cross-lane edge on the line in pixels and beside it in a terminal', () => {
     for (const ruler of [pixelRuler(), cellRuler()]) {
       const l = layout(parse(src), ruler);
       const e = l.edges.find((x) => x.from === 'n1' && x.to === 'm1');
@@ -177,7 +177,7 @@ n2 -->|transfer| m2`;
       expect(label).toBeDefined();
       if (!e || !label) continue;
       const x = e.points[0]?.x ?? 0;
-      expect(label.x >= x || label.x + label.w <= x).toBe(true);
+      expect(ruler.terminal === true ? label.x >= x || label.x + label.w <= x : Math.abs(label.x + label.w / 2 - x) <= ruler.edgeGrid).toBe(true);
       expect(l.diagnostics.filter((d) => d.kind === 'label-overlap')).toEqual([]);
       expect(l.diagnostics.filter((d) => d.kind === 'label-tight')).toEqual([]);
     }

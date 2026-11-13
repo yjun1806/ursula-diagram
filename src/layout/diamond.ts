@@ -26,11 +26,11 @@ export function diamondWidth(ruler: Ruler, node: { title: string; lines: string[
   return Math.ceil((textW / (1 - textH / height) + PAD) / STEP - 1e-9) * STEP;
 }
 
-/** The node with the outline of its diamond, centred in its box. */
-export function withOutline(node: LayoutNode, ruler: Ruler): LayoutNode {
+/** The node with the outline of its diamond, centred in its box; `least` is the width the diamonds of the drawing share. */
+export function withOutline(node: LayoutNode, ruler: Ruler, least = 0): LayoutNode {
   if (!hasOutline(node.shape, ruler)) return node;
   const h = diamondHeight(node.h);
-  const w = diamondWidth(ruler, node, h);
+  const w = Math.max(diamondWidth(ruler, node, h), least);
   return { ...node, outline: { x: node.x + node.w / 2 - w / 2, y: node.y - DIAMOND_OVERHANG, w, h } };
 }
 

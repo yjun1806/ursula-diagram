@@ -1,6 +1,6 @@
 import type { Ruler } from '../metrics.ts';
 import { endFields } from '../edge-ends.ts';
-import type { Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../types.ts';
+import type { Compartment, Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../types.ts';
 import { crossings } from '../layout/check.ts';
 import { withOutline } from '../layout/diamond.ts';
 import type { LabelSize, Rect, Segment } from '../layout/labels.ts';
@@ -14,6 +14,7 @@ import { stats } from './stats.ts';
 import { settleVertices } from './vertex.ts';
 import { offCentreEnds } from './centre.ts';
 import { settleBodies } from './bodies.ts';
+import { evenRecords } from './even-records.ts';
 import { placeEndLabels } from './end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { bodyLength, boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
@@ -29,6 +30,10 @@ export interface Frame {
   gutter: number;
   /** Natural extent of every real node along the layer axis. */
   layerExt: number[];
+  /** Width every real node was measured at; the diamonds of a drawing are drawn at the shared width of their kind. */
+  measured?: number[];
+  /** Compartments a box is drawn with when they differ from the ones it was given (padded to the height of the boxes of its rank). */
+  compartments?: ReadonlyMap<number, Compartment[]>;
   /** Own extent of a real node along the order axis when it is shorter than its slot (a box divided into compartments); it stands in the middle of the slot. */
   bodyLen?: Array<number | undefined>;
   /** Order-axis extent beyond which the drawing counts as overflowing. */
@@ -683,6 +688,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     if (i >= l.realCount) return;
     const layer = l.nodes[i]?.layer ?? 0;
     if (n.box !== undefined) boxLayer.add(layer);
+    // Down the page, a plain box narrower than the widest box of its layer keeps its own width and stands in the middle.
+    if (td && !ruler.uniform && n.box === undefined && n.compartments === undefined && (f.layerExt[i] ?? 0) < (thick[layer] ?? 0)) boxLayer.add(layer);
     if (n.compartments !== undefined && !ruler.uniform) {
       boxLayer.add(layer);
       flush.add(layer);
@@ -723,8 +730,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       title: n.title,
       lines: n.lines,
       shape: n.shape,
-      ...(n.compartments === undefined ? {} : { compartments: n.compartments }),
-    }, ruler);
+      ...(n.compartments === undefined ? {} : { compartments: f.compartments?.get(i) ?? n.compartments }),
+    }, ruler, f.measured?.[i] ?? 0);
   });
   const rects: Rect[] = nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
@@ -827,7 +834,7 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     let mine = (edgeSegs[ei] as Segment[]).slice().sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
     // Pixels: a label on a stretch of line that cannot keep a line visible on both sides moves to a longer stretch.
     if (!ruler.uniform) {
-      const roomy = (s: Segment): boolean => s[0].y !== s[1].y || Math.abs(s[1].x - s[0].x) >= size.w + 2 * lineBeside('normal');
+      const roomy = (s: Segment): boolean => Math.abs(s[1].x - s[0].x) + Math.abs(s[1].y - s[0].y) >= (s[0].y === s[1].y ? size.w : size.h) + 2 * lineBeside('normal');
       mine = [...mine.filter(roomy), ...mine.filter((s) => !roomy(s))];
     }
     let best: ReturnType<typeof placeLabel> | undefined;
@@ -928,8 +935,9 @@ function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => n
  * Stage 5: coordinates, ports and routes. No path search: every edge is a vertical, a jog on a track of the
  * band it crosses, a straight segment between neighbours, or a U through the band above or below its layer.
  */
-export function route(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
+export function route(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
   stats.draws++;
+  const f = evenRecords(given, l, start);
   const prep = prepare(f, l, layers, start, plan);
   const demand = new Array<number>(layers.length + 1).fill(0);
   const { ruler, td } = f;

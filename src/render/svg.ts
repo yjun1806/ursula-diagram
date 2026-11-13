@@ -527,6 +527,7 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
       const y = num(first + k * COMPARTMENT_LINE);
       const row = cell.columns?.[k];
       if (row === undefined) {
+        if (line === '') return;
         const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
         parts.push(`<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${y}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(line)}</text>`);
         return;

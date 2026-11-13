@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { pixelRuler } from '../src/index.ts';
+import { cellRuler, pixelRuler } from '../src/index.ts';
 import { placeLabel } from '../src/layout/labels.ts';
 
 const ruler = pixelRuler();
 const size = { w: 40, h: 20 };
 
 describe('placeLabel', () => {
-  it('sits beside a vertical segment and not on it', () => {
+  it('sits on a vertical segment, centred on it, in pixels', () => {
     const placed = placeLabel([{ x: 100, y: 0 }, { x: 100, y: 120 }], size, [], [], ruler);
     expect(placed.overlap).toBe(false);
-    expect(placed.rect.x >= 100 || placed.rect.x + placed.rect.w <= 100).toBe(true);
+    expect(placed.rect.x + placed.rect.w / 2).toBe(100);
+  });
+
+  it('sits beside a vertical segment and not on it in a terminal', () => {
+    const placed = placeLabel([{ x: 20, y: 0 }, { x: 20, y: 12 }], { w: 6, h: 1 }, [], [], cellRuler());
+    expect(placed.overlap).toBe(false);
+    expect(placed.rect.x >= 20 || placed.rect.x + placed.rect.w <= 20).toBe(true);
   });
 
   it('sits on a horizontal segment when the space is free', () => {

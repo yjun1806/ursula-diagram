@@ -150,6 +150,34 @@ export interface Measure {
   gutter: number;
 }
 
+/** Shapes that keep a size of their own and are never made to match each other. */
+const OWN_SIZED = new Set<NodeShape | undefined>(['start-dot', 'end-dot', 'bar', 'actor']);
+
+/**
+ * One width per kind of box: boxes of one kind (a plain box and a rounded box count as one kind, boxes divided into
+ * compartments as another, each other shape on its own) take the width of the widest of them that is at most
+ * `ruler.shareWithin` times as wide as the median of the kind. Terminal drawings and rulers without it keep their own sizes.
+ */
+function sharedWidths(w: number[], nodes: ReadonlyArray<{ shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined }>, ruler: Ruler): number[] {
+  const within = ruler.shareWithin;
+  if (ruler.uniform || within === undefined) return w;
+  const kinds = new Map<string, number[]>();
+  nodes.forEach((n, i) => {
+    if (OWN_SIZED.has(n.shape)) return;
+    const plain = n.shape === undefined || n.shape === 'round' ? 'rect' : n.shape;
+    const key = (n.compartments?.length ?? 0) > 0 ? `record:${n.shape ?? ''}` : plain;
+    kinds.set(key, [...(kinds.get(key) ?? []), i]);
+  });
+  const out = [...w];
+  for (const members of kinds.values()) {
+    const widths = members.map((i) => w[i] as number).sort((a, b) => a - b);
+    const median = widths[Math.floor((widths.length - 1) / 2)] ?? 0;
+    const shared = widths.filter((v) => v <= within * median).pop() ?? 0;
+    for (const i of members) if ((w[i] as number) <= within * median) out[i] = shared;
+  }
+  return out;
+}
+
 /** Sizes that depend on the text alone, never on where a node is placed. */
 export function measureNodes(
   nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined; box?: { w: number; h: number } | undefined }>,
@@ -184,7 +212,7 @@ export function measureNodes(
       h: heights[i] as number,
     };
   });
-  const w = content.map((c) => snapW(c.w));
+  const w = sharedWidths(content.map((c) => snapW(c.w)), nodes, ruler);
   const sorted = [...w].sort((a, b) => a - b);
   // A box given from outside has that size; its text still counts for the shared width, as it would in any other box.
   const sizedW = w.map((v, i) => { const box = nodes[i]?.box; return box === undefined ? v : snapW(box.w); });
