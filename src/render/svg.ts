@@ -176,13 +176,14 @@ function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeS
   );
 }
 
-/** The text of a cluster name: its first line stands 12 below the top of `name`, the others 16 further each. */
+/** The text of a cluster name: its first line stands 12 below the top of `name`, the others 16 further each, a subtitle 18. */
 function nameText(cluster: LayoutCluster): string {
   const name = cluster.name;
   const x = name?.x ?? cluster.x + CLUSTER_NAME_INSET;
   const top = name?.y ?? cluster.y + 12;
   const lines = name?.lines ?? [cluster.label];
-  return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? ' ursula-zone-sub' : ''}" x="${num(x)}" y="${num(top + 12 + 16 * i)}">${escapeXml(l)}</text>`).join('');
+  const step = name?.subtitle === true ? 18 : 16;
+  return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? ' ursula-zone-sub' : ''}" x="${num(x)}" y="${num(top + 12 + step * i)}">${escapeXml(l)}</text>`).join('');
 }
 
 /** The look of a dashed boundary by depth: the outermost, then the even and the odd depths by turns. */
@@ -220,10 +221,15 @@ function knockoutSvg(cluster: LayoutCluster): string {
 }
 
 /** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene theme. */
-/** The rules of what only a C4 drawing has: the pill of a kind and the technology of a relation. */
-function faceRules(layout: Layout, spec: ThemeSpec): string[] {
+/**
+ * The rules of what only a C4 drawing has: the pill of a kind and the technology of a relation. On `band` a boundary
+ * name stands in ink over its muted subtitle, and the description of an element is muted under its name.
+ */
+function faceRules(layout: Layout, spec: ThemeSpec, theme: Theme): string[] {
+  const faced = layout.nodes.some((n) => n.compartments?.some((c) => c.face === true));
   return [
-    ...(layout.nodes.some((n) => n.compartments?.some((c) => c.face === true)) && !spec.headBand ? ['.ursula-cell-pill{fill:$hair}'] : []),
+    ...(faced && !spec.headBand ? ['.ursula-cell-pill{fill:$hair}'] : []),
+    ...(faced && theme === 'band' ? ['.ursula-zone-name{fill:$fg;font-size:13px}', '.ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}', '.ursula-cell-body{fill:$muted}'] : []),
     ...(layout.edges.some((e) => e.label?.text.includes('\u2003')) ? ['.ursula-edge-label-tech{font-weight:400;opacity:.7}'] : []),
   ];
 }
@@ -717,7 +723,8 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
       ...layout.nodes.filter((n) => n.cluster !== undefined && !dashed.has(n.cluster) && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id),
     ]),
   };
-  const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
+  // A boundary drawn as a dashed outline stands out to the left of its boxes: the title starts at its border.
+  const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), ...(layout.clusters ?? []).filter((c) => c.style === 'dashed').map((c) => c.x), layout.width);
   const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
   const h = num(layout.height + rowH);
   // A colour the flow theme does not have (the dashed zone's stroke) comes from the scene theme of the same name.
@@ -727,7 +734,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...faceRules(layout, spec), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...faceRules(layout, spec, theme), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
