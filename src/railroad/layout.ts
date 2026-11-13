@@ -22,7 +22,7 @@ const RULE_GAP = 40;
 const RAIL_CLEAR = 24;
 /** Where the vertical piece of a fork stands from the block edge, and the room a block keeps on each side. */
 const FORK_X = 16;
-const BLOCK_PAD = 40;
+const BLOCK_PAD = 48;
 /** A zero-or-more loop stands its vertical rails this far inside the skip rails, so the two never share a line. */
 const LOOP_INSET = 32;
 /** Extra room on the left of an ordered choice for the order numbers. */
