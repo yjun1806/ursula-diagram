@@ -183,7 +183,34 @@ function stadiumThickness(graph: Graph, ruler: Ruler, td: boolean): number {
   return ruler.uniform || td || !graph.nodes.some((n) => n.shape === 'stadium') ? 0 : measureNodes(graph.nodes, graph.lanes, ruler, td).contentH;
 }
 
+/** Identity numbers for the graphs and functions a placement's inputs hold, so that a key tells them apart without spelling them out. */
+const identities = new WeakMap<object, number>();
+let nextIdentity = 0;
+const identity = (o: object): number => {
+  let id = identities.get(o);
+  if (id === undefined) identities.set(o, (id = nextIdentity++));
+  return id;
+};
+const keyPart = (_: string, v: unknown): unknown => (typeof v === 'function' ? `#f${identity(v)}` : v instanceof Map ? ['#M', [...v]] : v instanceof Set ? ['#S', [...v]] : v);
+
+/** Placements already made for a graph, by the key of their inputs: candidates and refinements ask for one placement more than once. */
+const placedFor = new WeakMap<Graph, Map<string, Placed>>();
+
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
+  const key = `${identity(graph)}|${JSON.stringify([ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given], keyPart)}`;
+  let made = placedFor.get(graph);
+  if (made === undefined) placedFor.set(graph, (made = new Map()));
+  const hit = made.get(key);
+  if (hit !== undefined) {
+    stats.placements++;
+    return hit;
+  }
+  const out = placeOnce(graph, ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given);
+  made.set(key, out);
+  return out;
+}
+
+function placeOnce(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const degreeOf = graph.nodes.map(() => 0);
   for (const e of graph.edges) {
