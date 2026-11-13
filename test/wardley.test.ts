@@ -379,3 +379,60 @@ describe('wardley map label and mark placement', () => {
     expect(arrow.points[0]?.x ?? 0).toBeGreaterThan((bar.points[0]?.x ?? 0) + 2);
   });
 });
+
+describe('wardley evolve lines, names and notes', () => {
+  const TEA = `wardley-beta
+title Tea Shop
+size [1100, 800]
+
+anchor Business [0.95, 0.63]
+component Cup of Tea [0.79, 0.61] label [19, -4]
+component Hot Water [0.52, 0.80]
+component Kettle [0.43, 0.35] label [-57, 4]
+component Power [0.1, 0.7] label [-27, 20]
+
+Business -> Cup of Tea
+Cup of Tea -> Hot Water
+Hot Water -> Kettle
+Kettle -> Power
+
+evolve Kettle 0.62
+evolve Power 0.89
+
+note "Standardising power allows Kettles to evolve faster" [0.30, 0.49]
+note "Hot water is obvious and well known" [0.48, 0.80]
+`;
+  const l = layoutWardley(parseWardley(TEA), ruler);
+  const node = (name: string) => l.nodes.find((n) => n.name === name);
+
+  it('draws an evolve line solid from the component, with a ring on the component', () => {
+    for (const name of ['Kettle', 'Power']) {
+      const n = node(name);
+      const line = l.scene.items.find((i) => i.kind === 'line' && i.data?.evolve === name);
+      const ring = l.scene.items.find((i) => i.kind === 'circle' && i.role.includes('port') && i.data?.evolve === name);
+      if (n === undefined || line?.kind !== 'line' || ring?.kind !== 'circle') throw new Error(`${name} not drawn`);
+      expect(line.role).not.toContain('edge--pending');
+      expect(line.points[0]).toEqual({ x: n.cx, y: n.cy });
+      expect([ring.cx, ring.cy, ring.r]).toEqual([n.cx, n.cy, 4]);
+    }
+  });
+
+  it('centres a name under its point when the offset runs the text across the point, and reads the offset y as a baseline', () => {
+    const power = node('Power');
+    const kettle = node('Kettle');
+    expect(power?.label.side).toBe('below');
+    expect(((power?.label.x0 ?? 0) + (power?.label.x1 ?? 0)) / 2).toBeCloseTo(power?.cx ?? NaN);
+    expect(kettle?.label.side).toBe('left');
+    expect(((kettle?.label.y0 ?? 0) + (kettle?.label.y1 ?? 0)) / 2).toBeCloseTo(kettle?.cy ?? NaN);
+  });
+
+  it('makes a note as wide as its text and wraps it into even lines only where one line does not fit', () => {
+    const [long, hot] = l.notes;
+    expect(long?.lines).toEqual(['Standardising power allows Kettles to evolve faster']);
+    expect(hot?.lines).toEqual(['Hot water is obvious', 'and well known']);
+    for (const note of l.notes) {
+      const texts = l.scene.items.filter((i) => i.kind === 'text' && note.lines.includes(i.text));
+      for (const t of texts) expect(t.kind === 'text' && t.anchor === 'middle' && t.x === (note.box.x0 + note.box.x1) / 2).toBe(true);
+    }
+  });
+});

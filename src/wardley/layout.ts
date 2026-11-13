@@ -22,7 +22,12 @@ const EVOLVE_R = 5;
 const RING_R = 9;
 const MARKER_R = 9;
 const NOTE_PAD = 12;
+/** The narrowest a note's text is wrapped to. */
 const NOTE_WRAP = 156;
+/** Radius of the ring on a component that evolves, where its evolve line starts. */
+const PORT_R = 4;
+/** The baseline a label offset names stands this far below the middle of the text. */
+const BASELINE_DROP = 4;
 const FORCE_W = 64;
 const FORCE_H = 24;
 const PIPE_PAD = 12;
@@ -96,6 +101,21 @@ function shortened(from: Point, to: Point, by: number): Point {
   const len = Math.hypot(to.x - from.x, to.y - from.y);
   if (len <= by + 1) return to;
   return { x: to.x - ((to.x - from.x) / len) * by, y: to.y - ((to.y - from.y) / len) * by };
+}
+
+/**
+ * The ways a note's text can be wrapped, fewest lines first, up to as many lines as wrapping it to `NOTE_WRAP` takes:
+ * each one as narrow as it can be for its number of lines, so the lines are evenly filled.
+ */
+function noteWraps(note: string, text: (s: string) => number): string[][] {
+  const most = wrapWords(note, NOTE_WRAP, text, { blank: true }).length;
+  const byCount = new Map<number, string[]>();
+  for (let limit = Math.ceil(text(note)); limit > 0; limit -= 4) {
+    const lines = wrapWords(note, limit, text, { blank: true, longWord: 'keep' });
+    if (lines.length > most) break;
+    byCount.set(lines.length, lines);
+  }
+  return [...byCount.keys()].sort((a, b) => a - b).map((k) => byCount.get(k) ?? []);
 }
 
 /** Computes the scene of a Wardley map; the theme sets the radius of a component's dot. */
@@ -202,14 +222,19 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
 
   // Evolution arrows run along the row of the component to the evolved place, which is a hollow circle.
   const evolveItems: SceneItem[] = [];
+  const ports: SceneItem[] = [];
   for (const e of map.evolves) {
     const n = at(e.name);
     const tx = xOf(e.target);
     const dir = tx >= n.cx ? 1 : -1;
-    const clear = n.reach + (dir > 0 && n.inertia ? INERTIA_REACH : 0);
-    const start = { x: n.cx + dir * (clear + ARROW_GAP), y: n.cy };
+    // The line leaves the component itself, or the far side of its inertia bar, with a ring where it starts.
+    const barred = dir > 0 && n.inertia;
+    const start = { x: barred ? n.cx + n.reach + INERTIA_REACH + ARROW_GAP : n.cx, y: n.cy };
     const tip = { x: tx - dir * (EVOLVE_R + 4), y: n.cy };
-    if ((tip.x - start.x) * dir > 20) evolveItems.push({ kind: 'line', points: [start, tip], role: ['edge', 'edge--pending', 'edge--arrow'], data: { evolve: e.name } });
+    if ((tip.x - start.x) * dir > 20 + (barred ? 0 : n.reach)) {
+      evolveItems.push({ kind: 'line', points: [start, tip], role: ['edge', 'edge--arrow'], data: { evolve: e.name } });
+      ports.push({ kind: 'circle', cx: start.x, cy: start.y, r: PORT_R, role: ['port'], data: { evolve: e.name } });
+    }
     evolveItems.push({ kind: 'circle', cx: tx, cy: n.cy, r: EVOLVE_R, role: ['end-open'], data: { evolve: e.name } });
     samples.push(...samplesOf({ x: n.cx, y: n.cy }, { x: tx, y: n.cy }));
     fixed.push({ x0: tx - EVOLVE_R, x1: tx + EVOLVE_R, y0: n.cy - EVOLVE_R, y1: n.cy + EVOLVE_R });
@@ -311,10 +336,13 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
   }
 
   // Names of components: an asked-for side first, then right, left, below and above, taking the first that touches nothing.
-  const sidesFor = (offset: WardleyNode['labelOffset']): LabelSide[] => {
+  // An offset puts the start of the text `dx` from the point with its baseline `dy` below it: a text that would then
+  // run across the point is centred under it (or over it), any other one stands at the side it falls on.
+  const sidesFor = (offset: WardleyNode['labelOffset'], w: number): LabelSide[] => {
     const base: LabelSide[] = ['right', 'left', 'below', 'above'];
     if (offset === undefined || offset.dx === 0) return base;
-    const asked: LabelSide = offset.dx < 0 ? 'left' : 'right';
+    const across = offset.dx < 0 && offset.dx + w > 0;
+    const asked: LabelSide = across ? (offset.dy < 0 ? 'above' : 'below') : offset.dx < 0 ? 'left' : 'right';
     return [asked, ...base.filter((s) => s !== asked)];
   };
   const pictureBox = (): Box => ({ x0: 16, x1: width - 16, y0: 16, y1: height - 16 });
@@ -333,16 +361,17 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
       return;
     }
     const rightReach = n.reach + (n.inertia ? 8 : 0);
-    const dy = src.labelOffset?.dy ?? 0;
+    const dy = (src.labelOffset?.dy ?? 0) - BASELINE_DROP;
+    const sides = sidesFor(src.labelOffset, w);
     const boxOf = (side: LabelSide): Box => {
-      const shift = side === sidesFor(src.labelOffset)[0] ? dy : 0;
+      const shift = side === sides[0] && src.labelOffset !== undefined ? dy : 0;
       if (side === 'right') return anchoredBox(n.cx + rightReach + LABEL_GAP, n.cy + shift, w, 'start', LINE_H);
       if (side === 'left') return anchoredBox(n.cx - n.reach - LABEL_GAP, n.cy + shift, w, 'end', LINE_H);
       if (side === 'below') return anchoredBox(n.cx, n.cy + n.reach + LABEL_GAP + LINE_H / 2, w, 'middle', LINE_H);
       return anchoredBox(n.cx, n.cy - n.reach - LABEL_GAP - LINE_H / 2, w, 'middle', LINE_H);
     };
     const ctx = ctxNow();
-    const pick = pickLeastClash(sidesFor(src.labelOffset), boxOf, (b) => clashCost(b, ctx) + stageLineCost(b));
+    const pick = pickLeastClash(sides, boxOf, (b) => clashCost(b, ctx) + stageLineCost(b));
     const side = pick?.candidate ?? 'right';
     const box = pick?.box ?? boxOf('right');
     n.label = { ...box, side, text: n.name };
@@ -361,32 +390,42 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
     return { f, box };
   });
 
-  // Notes sit with their left edge on the asked place and move sideways until clear of lines, dots and names.
+  // Notes sit with their left edge on the asked place and move sideways until clear of lines, dots and names. A note is
+  // as wide as its text on one line; it wraps into more, evenly filled lines only when that lets it stand nearer the place.
   const noteItems: SceneItem[] = [];
   const notes: PlacedNote[] = [];
   for (const nt of map.notes) {
-    const lines = wrapWords(nt.text, NOTE_WRAP, text, { blank: true });
-    const w = ceilTo(Math.max(...lines.map(text)) + 2 * NOTE_PAD);
-    const h = lines.length * LINE_H + LINE_H;
     const x = xOf(nt.evolution);
     const y = yOf(nt.visibility);
-    // Candidates by distance from the asked place: sideways with the left edge or the right edge on it, and a little up or down.
-    const shifts: Array<{ s: number; dy: number; dist: number }> = [];
-    for (let t = 0; t <= plotW; t += 4) {
-      for (let dy = -64; dy <= 64; dy += 8) {
-        shifts.push({ s: t, dy, dist: Math.hypot(t, dy) }, { s: -t - w, dy, dist: Math.hypot(t, dy) + 0.5 });
-      }
-    }
-    shifts.sort((a, b) => a.dist - b.dist);
     const room = 8;
     const ctx: ClashContext = { bounds: inflate({ x0: plotX, x1: plotX + plotW, y0: top, y1: bottom }, room), fixed, placed, samples };
-    const boxOf = (c: { s: number; dy: number }): Box => ({ x0: x + c.s, x1: x + c.s + w, y0: y + c.dy - h / 2, y1: y + c.dy + h / 2 });
-    const pick = pickLeastClash(shifts, (c) => inflate(boxOf(c), room), (b) => clashCost(b, ctx));
-    const box = boxOf(pick?.candidate ?? { s: 0, dy: 0 });
+    let best: { lines: string[]; box: Box; dist: number } | undefined;
+    for (const lines of noteWraps(nt.text, text)) {
+      const w = ceilTo(Math.max(...lines.map(text)) + 2 * NOTE_PAD);
+      const h = lines.length * LINE_H + LINE_H;
+      // Candidates by distance from the asked place: sideways with the left edge or the right edge on it, and a little up or down.
+      const shifts: Array<{ s: number; dy: number; dist: number }> = [];
+      for (let t = 0; t <= plotW; t += 4) {
+        for (let dy = -64; dy <= 64; dy += 8) {
+          shifts.push({ s: t, dy, dist: Math.hypot(t, dy) }, { s: -t - w, dy, dist: Math.hypot(t, dy) + 0.5 });
+        }
+      }
+      shifts.sort((a, b) => a.dist - b.dist);
+      const boxOf = (c: { s: number; dy: number }): Box => ({ x0: x + c.s, x1: x + c.s + w, y0: y + c.dy - h / 2, y1: y + c.dy + h / 2 });
+      const pick = pickLeastClash(shifts, (c) => inflate(boxOf(c), room), (b) => clashCost(b, ctx));
+      const chosen = pick?.candidate ?? { s: 0, dy: 0, dist: Infinity };
+      const free = clashCost(inflate(boxOf(chosen), room), ctx) === 0;
+      const dist = free ? chosen.dist : Infinity;
+      if (best === undefined || dist < best.dist) best = { lines, box: boxOf(chosen), dist };
+      if (dist === 0) break;
+    }
+    if (best === undefined) continue;
+    const { lines, box } = best;
     placed.push(box);
     notes.push({ text: nt.text, box, lines });
-    noteItems.push({ kind: 'box', style: 'note', x: box.x0, y: box.y0, w, h, role: ['note'] });
-    lines.forEach((l, i) => noteItems.push({ kind: 'text', x: box.x0 + NOTE_PAD, y: box.y0 + LINE_H + i * LINE_H, text: l, anchor: 'start', role: ['sub'] }));
+    noteItems.push({ kind: 'box', style: 'note', x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0, role: ['note'] });
+    const cx = (box.x0 + box.x1) / 2;
+    lines.forEach((l, i) => noteItems.push({ kind: 'text', x: cx, y: box.y0 + LINE_H + i * LINE_H, text: l, anchor: 'middle', role: ['sub'] }));
   }
 
   // Text on a link sits on it, on the first point along it that touches no name.
@@ -429,7 +468,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
     }
     if (n.inertia) items.push({ kind: 'line', points: [{ x: cx + n.reach + 6, y: cy - 10 }, { x: cx + n.reach + 6, y: cy + 10 }], role: ['mark-line'], data: { inertia: n.name } });
   }
-  items.push(...evolveItems.filter((it) => it.kind === 'circle'), ...annItems);
+  items.push(...evolveItems.filter((it) => it.kind === 'circle'), ...ports, ...annItems);
   for (const n of nodes) {
     const l = n.label;
     const anchor = anchorOfSide(l.side);
