@@ -261,6 +261,19 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
         // Its partners not placed yet, best first: more lines with it, fewer lines of their own, written earlier.
         const open = [...(mult.get(e) ?? new Map<string, number>())].filter(([p]) => itemOf.has(p) && !done.has(itemOf.get(p) as Block));
         open.sort(([p, m], [q, n]) => n - m || degree(p) - m - (degree(q) - n) || rank(p) - rank(q));
+        // Of three or more partners that stand in one row, the middle one written stands right under or over it.
+        const sameRow = new Map<number, string[]>();
+        for (const [p] of open) {
+          const r = rows.row.get(p);
+          if (r !== undefined) sameRow.set(r, [...(sameRow.get(r) ?? []), p]);
+        }
+        for (const list of sameRow.values()) {
+          if (list.length < 3) continue;
+          const middle = [...list].sort((a, b) => rank(a) - rank(b))[Math.floor((list.length - 1) / 2)] as string;
+          const at = open.findIndex(([p]) => p === middle);
+          const first = open.findIndex(([p]) => list.includes(p));
+          if (at > first) open.splice(first, 0, ...open.splice(at, 1));
+        }
         // One partner above and one below in its own column.
         for (const dir of ['up', 'down'] as const) {
           if (partner[dir].has(e)) continue;
