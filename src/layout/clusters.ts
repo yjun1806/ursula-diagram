@@ -916,11 +916,44 @@ function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { 
  * border is drawn between the outermost boxes it joins; inside, it goes on from the border to its node.
  */
 export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
-  const usual = chooseDrawing(graph, ruler, opts, draw);
-  if (opts.clusterExits !== undefined || opts.nestedSpread !== undefined || ruler.terminal === true) return usual;
+  // The levels are drawn the same whichever way the lines are put together afterwards, so each level is drawn once per setting.
+  const levels = remembered(draw);
+  if (opts.clusterExits !== undefined || opts.nestedSpread !== undefined || ruler.terminal === true) return chooseDrawing(graph, ruler, opts, levels);
+  const probe = { wins: false };
+  const usual = chooseDrawing(graph, ruler, { ...opts, spreadProbe: probe }, levels);
+  // Without a level where the spread drawing would be taken, drawing with it on gives the same drawing.
+  if (!probe.wins) return usual;
   // The levels inside the boxes may also take the spread drawing; it is judged here, on the joined drawings, because a level alone cannot tell what the lines will do once they reach the boxes.
-  const spread = chooseDrawing(graph, ruler, { ...opts, nestedSpread: true }, draw);
-  return better(priceOf(spread), priceOf(usual)) ? spread : usual;
+  const spread = chooseDrawing(graph, ruler, { ...opts, nestedSpread: true }, levels);
+  const [x, y] = [priceOf(spread), priceOf(usual)];
+  if (better(x, y)) return spread;
+  // On a tie the drawing whose nodes of one layer stand in one column is kept.
+  return tied(x, y) && columns(spread) > columns(usual) ? spread : usual;
+}
+
+/** Equal crossings and bends, and lengths within 1% of each other. */
+const tied = (x: number[], y: number[]): boolean => x[0] === y[0] && x[1] === y[1] && Math.abs((x[2] as number) - (y[2] as number)) <= 0.01 * Math.min(x[2] as number, y[2] as number);
+
+/** Pairs of nodes that stand in one layer of the drawing, the centres level along the reading direction. */
+function columns(l: Layout): number {
+  const along = l.direction === 'LR' || l.direction === 'RL' ? (n: LayoutNode): number => n.x + n.w / 2 : (n: LayoutNode): number => n.y + n.h / 2;
+  let pairs = 0;
+  for (let i = 0; i < l.nodes.length; i++) for (let j = i + 1; j < l.nodes.length; j++) if (Math.abs(along(l.nodes[i] as LayoutNode) - along(l.nodes[j] as LayoutNode)) < 0.5) pairs++;
+  return pairs;
+}
+
+/** `draw` that keeps what it drew: the same level asked for again is not drawn again. */
+function remembered(draw: DrawLevel): DrawLevel {
+  const seen = new Map<string, Layout>();
+  return (g, r, o) => {
+    const { spreadProbe: _probe, ...rest } = o;
+    const key = JSON.stringify([g, rest]);
+    const hit = seen.get(key);
+    if (hit !== undefined) return hit;
+    const drawn = draw(g, r, o);
+    seen.set(key, drawn);
+    return drawn;
+  };
 }
 
 const priceOf = (l: Layout): number[] => [crossingCount(l.edges), l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0), l.edges.reduce((n, e) => n + segmentsOf(e.points).reduce((m, t) => m + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y), 0), 0)];
