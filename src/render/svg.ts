@@ -317,9 +317,11 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint)
   const endId = endMarkerId(end, accent, false);
   const startId = endMarkerId(start, accent, true);
   const points = trimStart(trimmedPoints(edge, nodes), endTrim(start, paint.spec));
+  const junction = edge.trunk?.dot;
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(points, paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>`
+    `d="${pathData(points, paint.spec.bend, endTrim(end, paint.spec))}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
+    (junction === undefined ? '' : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`)
   );
 }
 
@@ -350,6 +352,7 @@ function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: st
   };
   for (const edge of layout.edges) {
     if (edge.invisible) continue;
+    if (edge.trunk?.dot !== undefined) rules = true;
     const accent = accented(edge, paint);
     want(edge.end ?? 'arrow', accent, false);
     want(edge.startEnd ?? 'none', accent, true);

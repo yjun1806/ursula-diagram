@@ -59,7 +59,7 @@ export function requirementGraph(model: RequirementModel, ruler: Ruler): Graph {
     to: r.to,
     label: `<<${r.type}>>`,
     style: 'normal',
-    ...(r.type === 'contains' ? { startEnd: 'circle-plus', end: 'none' } : { end: 'arrow' }),
+    ...(r.type === 'contains' ? { startEnd: 'circle-plus', end: 'none', trunk: { end: 'from' as const, kind: 'contains' } } : { end: 'arrow' }),
   }));
   return { direction, ...(mirror === undefined ? {} : { mirror }), ignored: model.ignored, lanes: [LANE], nodes, edges };
 }

@@ -21,6 +21,7 @@ export function mirrorLayout(layout: Layout, how: 'RL' | 'BT', base: { width: nu
   const edges = layout.edges.map((edge): LayoutEdge => ({
     ...edge,
     points: edge.points.map(flipPoint),
+    ...(edge.trunk?.dot ? { trunk: { ...edge.trunk, dot: flipPoint(edge.trunk.dot) } } : {}),
     ...(edge.label ? { label: flipBox(edge.label) } : {}),
     ...(edge.startLabel ? { startLabel: flipBox(edge.startLabel) } : {}),
     ...(edge.endLabel ? { endLabel: flipBox(edge.endLabel) } : {}),

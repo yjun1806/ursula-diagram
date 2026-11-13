@@ -32,6 +32,7 @@ import type { Variant } from './choose.ts';
 import { CANDIDATES, FOLDED, pickBest, score, spreadWins } from './choose.ts';
 import { directionsOf, mixedSideEnds } from './sides.ts';
 import { stats } from './stats.ts';
+import { applyTrunks } from './trunks.ts';
 
 export interface LayeredOptions {
   /** Whether bands run alongside the reading direction or cross it; chosen from the graph when 'auto'. */
@@ -589,7 +590,11 @@ function stackGaps(source: Graph): number[] {
 
 export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptions = {}): Layout {
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
-  if (!given.terminal || opts.gap !== undefined) return withQuestions(source, given.terminal ? layoutAt(source, given, opts) : refineLabels(...settledSides(layoutAt(source, given, opts), given)), given, opts);
+  if (!given.terminal || opts.gap !== undefined) {
+    if (given.terminal) return withQuestions(source, layoutAt(source, given, opts), given, opts);
+    const [settled, ruler, redrawn] = settledSides(layoutAt(source, given, opts), given);
+    return withQuestions(source, refineLabels(opts.nested === true ? settled : applyTrunks(settled, source, ruler), ruler, redrawn), given, opts);
+  }
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
   const limit = opts.maxWidth;

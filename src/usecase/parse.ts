@@ -515,6 +515,13 @@ export function parseUsecase(src: string): UsecaseModel {
       ...(!actor && e.rect && stereo.length > 0 ? { compartments: [headOf(all, stereo.length)] } : {}),
     });
   }
+  // Lines from one actor to use cases that end alike share a trunk that splits at a dot, when no mark stands at the actor.
+  const trunked = (l: Link): GraphEdge => {
+    const actorEnd = kindOf(l.from) === 'actor' ? 'from' : kindOf(l.to) === 'actor' ? 'to' : undefined;
+    const mark = actorEnd === 'from' ? l.edge.startEnd : l.edge.end;
+    const plain = mark === undefined || mark === 'none';
+    return l.kind === 'association' && actorEnd !== undefined && plain && isUsecase(actorEnd === 'from' ? l.to : l.from) ? { ...l.edge, trunk: { end: actorEnd, kind: `actor|${l.edge.end ?? 'arrow'}`, dot: true } } : l.edge;
+  };
   const noteEdges: GraphEdge[] = [];
   for (const n of notes) {
     let id = `${n.target}__note`;
@@ -540,7 +547,7 @@ export function parseUsecase(src: string): UsecaseModel {
     lanes: [LANE],
     ...(clusters.length === 0 ? {} : { clusters }),
     nodes,
-    edges: [...links.map((l) => l.edge), ...noteEdges],
+    edges: [...links.map(trunked), ...noteEdges],
   };
   return { graph, meta, packages, ...(accTitle === undefined || accTitle === '' ? {} : { accTitle }), ...(accDescr === undefined ? {} : { accDescr }) };
 }
