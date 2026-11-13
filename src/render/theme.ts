@@ -168,13 +168,15 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
       zone: ['#fcfcfa', '#171614'],
       'box-in-lane': 'surface',
       'chip-fill': ['#f1f0ef', '#252422'],
-      // The fills of dashed boundaries by depth, a step each, and the chip of a label on each: a step past the fill it sits on.
+      // The boundaries of a C4 drawing by depth: the outermost a light fill in dashes, then by turns the page face in a
+      // thin solid line and a lighter fill in a hairline, so that depth reads without the drawing growing dark. A label
+      // chip on a fill takes a step past it.
       'tint-outer': ['#f4f3f1', '#1e1d1b'],
-      'tint-mid': ['#ebeae8', '#262523'],
-      'tint-inner': ['#e3e2e0', '#2e2d2b'],
+      'tint-mid': ['#fcfcfa', '#171614'],
+      'tint-inner': ['#f6f5f3', '#1c1b19'],
       'chip-outer': ['#ebeae8', '#262523'],
-      'chip-mid': ['#e3e2e0', '#2e2d2b'],
-      'chip-inner': ['#dbdad8', '#363533'],
+      'chip-mid': ['#f1f0ef', '#252422'],
+      'chip-inner': ['#ebeae8', '#262523'],
     },
     boxRadius: 10,
     boxBorder: 1.5,
