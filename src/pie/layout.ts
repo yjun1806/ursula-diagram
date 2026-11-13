@@ -7,12 +7,11 @@ import type { Pie } from './model.ts';
 export const RADIUS = 160;
 const GAP = 3;
 const CORNER = 4;
-/** The guide starts this far outside the circle and bends at `ELBOW`. */
+/** The guide runs straight out from the circle, from `LEAD` to at least `ELBOW` outside it. */
 const LEAD = 4;
 const ELBOW = 16;
-/** Distance from the bend to the text, and the last stretch of the guide. */
-const TEXT_GAP = 12;
-const TAIL = 6;
+/** Distance from the end of the guide to the text. */
+const TEXT_GAP = 6;
 const LINE = 16;
 const BLOCK = 2 * LINE;
 const LABEL_GAP = 4;
@@ -24,6 +23,8 @@ const MARGIN = 40;
 const TITLE_SIZE = 15;
 const TITLE_LINE = 18;
 const TITLE_GAP = 24;
+/** Space under the title when a label, not the circle, is the topmost thing; the label's line height adds its own. */
+const TITLE_GAP_LABEL = 12;
 const PANEL_INSET = 16;
 const SERIES = 8;
 
@@ -170,7 +171,8 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   const innerW = Math.max(bodyW, titleW);
   const bodyLeft = MARGIN + (innerW - bodyW) / 2;
   const cx = ceilTo(bodyLeft - minX);
-  const top = MARGIN + (pie.title === undefined ? 0 : TITLE_LINE + TITLE_GAP);
+  const titleGap = minY < -RADIUS ? TITLE_GAP_LABEL : TITLE_GAP;
+  const top = MARGIN + (pie.title === undefined ? 0 : TITLE_LINE + titleGap);
   const cy = ceilTo(top - minY);
   const width = ceilTo(Math.max(cx + maxX, MARGIN + titleW) + MARGIN);
   const height = ceilTo(cy + maxY + MARGIN);
@@ -198,18 +200,17 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   for (const d of drafts) {
     const slice = pie.slices[d.index];
     if (slice === undefined) continue;
-    let end: { x: number; y: number };
-    if (d.anchor === 'middle') {
-      end = { x: d.x, y: d.vertical === -1 ? d.top + BLOCK + TAIL : d.top - TAIL };
-    } else {
-      end = { x: d.x - d.side * TAIL, y: d.top + LINE / 2 };
-    }
+    // A label pushed away from its slice gets a longer guide, still straight out from the centre, to `TEXT_GAP` short of it.
+    const reach =
+      d.anchor === 'middle'
+        ? (d.vertical === -1 ? d.top + BLOCK + TEXT_GAP : d.top - TEXT_GAP) / d.bend.y
+        : (Math.abs(d.x) - TEXT_GAP) / Math.abs(d.bend.x);
+    const k = Math.max(1, reach);
     items.push({
       kind: 'line',
       points: [
         { x: cx + d.start.x, y: cy + d.start.y },
-        { x: cx + d.bend.x, y: cy + d.bend.y },
-        { x: cx + end.x, y: cy + end.y },
+        { x: cx + d.bend.x * k, y: cy + d.bend.y * k },
       ],
       role: ['guide'],
       radius: 0,
