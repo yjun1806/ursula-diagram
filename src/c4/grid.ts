@@ -25,6 +25,8 @@ const BOX_GAP = 48;
 const LABEL_ROOM = 16;
 /** What two labels of one pair keep between them. */
 const LABEL_GAP = 8;
+/** The room a mark at the end of a line takes beside its label. */
+const MARK_ROOM = 16;
 /** How far the loop of a box with itself stands out of it. */
 const LOOP = 24;
 /** What a bent line runs out of a face before it turns, and the distance between two lanes of a gap. */
@@ -65,7 +67,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
   const rows = gridRows(graph, spec);
   // Cells given outright stand as they are; otherwise a drawing that reads from left to right stands its rows as columns.
   const given_ = spec.cells;
-  const grid: GridCells = given_ !== undefined ? givenCells(given_) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows);
+  const grid: GridCells = overTrunks(graph, given_ !== undefined ? givenCells(given_) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows));
   const bw = Math.max(1, ...graph.nodes.map((n) => n.box?.w ?? 0));
   const bh = Math.max(1, ...graph.nodes.map((n) => n.box?.h ?? 0));
   const rowH = Array.from({ length: grid.rows }, (_, r) => {
@@ -152,7 +154,9 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         const [lo, hi] = axis === 'across' ? (a.c1 < b.c0 ? [a.c1, b.c0] : [b.c1, a.c0]) : a.r1 < b.r0 ? [a.r1, b.r0] : [b.r1, a.r0];
         if (!level || hi !== lo + 1 || hi !== k) return;
         const pair = [e.from, e.to].sort().join('\u0000');
-        sum.set(pair, [...(sum.get(pair) ?? []), axis === 'across' ? size.w : size.h]);
+        // A mark at an end of the line (a crow's foot, a diamond) takes room of its own beside the label.
+        const marks = [e.end, e.startEnd].filter((m) => m !== undefined && m !== 'none' && m !== 'arrow').length * MARK_ROOM;
+        sum.set(pair, [...(sum.get(pair) ?? []), (axis === 'across' ? size.w : size.h) + marks]);
       });
       return Math.max(loops, ...[...sum.values()].map((l) => l.reduce((t, v) => t + v, 0) + (l.length - 1) * LABEL_GAP + 2 * LABEL_ROOM));
     };
@@ -175,7 +179,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     }
     const rowGap: number[] = [];
     for (let k = 0; k <= grid.rows; k++) {
-      let base = k === 0 || k === grid.rows ? MARGIN : GAP_Y;
+      let base = k === 0 || k === grid.rows ? MARGIN : (spec.rowGaps?.[k] ?? GAP_Y);
       // A bent line turns in the gap under its upper end, half of them to each side: each keeps a lane of its own,
       // beside the labels that stand in the gap.
       const turning = graph.edges.filter((e) => {
@@ -219,7 +223,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         row: p.c,
         // A box of its own size (an actor) stands in the middle of its cell.
         x: (colX[p.c] as number) + (bw - (own.get(n.id)?.w ?? bw)) / 2,
-        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + (n.shape === 'actor' ? ((rowH[p.r] as number) - ACTOR_H) / 2 : 0),
+        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + ((rowH[p.r] as number) - (own.get(n.id)?.h ?? bh)) / 2,
         w: own.get(n.id)?.w ?? bw,
         h: own.get(n.id)?.h ?? bh,
         title: n.title,
@@ -593,4 +597,28 @@ function trunkRun(at: LayoutNode, ends: readonly (LayoutNode | undefined)[]): { 
 /** True when the run from `a` to `b` passes through the inside of `r`. */
 function crossesRect(a: Point, b: Point, r: { x: number; y: number; w: number; h: number }): boolean {
   return Math.max(a.x, b.x) > r.x + 1 && Math.min(a.x, b.x) < r.x + r.w - 1 && Math.max(a.y, b.y) > r.y + 1 && Math.min(a.y, b.y) < r.y + r.h - 1;
+}
+
+/**
+ * A box whose only lines are one trunk to boxes that stand in one row below it moves over the middle of them, when that
+ * cell is free and the middle falls on a column: the trunk then splits evenly to both sides.
+ */
+function overTrunks(graph: Graph, g: GridCells): GridCells {
+  const cell = new Map(g.cell);
+  for (const n of graph.nodes) {
+    const mine = graph.edges.filter((e) => e.from === n.id || e.to === n.id);
+    const trunk = mine.filter((e) => e.trunk !== undefined && (e.trunk.end === 'from' ? e.from : e.to) === n.id);
+    if (trunk.length < 2 || trunk.length !== mine.length) continue;
+    const at = cell.get(n.id);
+    const ends = trunk.map((e) => cell.get(e.from === n.id ? e.to : e.from));
+    if (at === undefined || ends.some((p) => p === undefined)) continue;
+    const ps = ends as Cell[];
+    const r = (ps[0] as Cell).r;
+    if (ps.some((p) => p.r !== r) || r <= at.r) continue;
+    const mid = (Math.min(...ps.map((p) => p.c)) + Math.max(...ps.map((p) => p.c))) / 2;
+    if (!Number.isInteger(mid) || mid === at.c) continue;
+    if ([...cell.values()].some((p) => p.r === at.r && p.c === mid) || [...g.rect.values()].some((q) => q.r0 <= at.r && at.r <= q.r1 && q.c0 <= mid && mid <= q.c1)) continue;
+    cell.set(n.id, { r: at.r, c: mid });
+  }
+  return { ...g, cell };
 }

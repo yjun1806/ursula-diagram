@@ -54,6 +54,6 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseEr(src, opts.heading);
-    return layout(model.graph, mode === 'text' ? cellRuler() : pixelRuler(), { legend: false, ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }) });
+    return mode === 'text' ? layout(model.graph, cellRuler(), { legend: false, ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }) }) : pixels(src, opts);
   },
 });

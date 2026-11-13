@@ -206,6 +206,8 @@ export interface GridSpec {
   cells?: Record<string, { r: number; c: number }>;
   /** Per node: how many rows down from its cell it stands (a half for the middle of two rows). */
   shift?: Record<string, number>;
+  /** Per row from the second: the gap above it, when it differs from the usual one. */
+  rowGaps?: Record<number, number>;
 }
 
 export interface Point {
