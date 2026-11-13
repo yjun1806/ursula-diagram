@@ -4,6 +4,7 @@ import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { TimelineModel } from './model.ts';
 import { pixelWidth, wrapLines } from './wrap.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 24;
 const BOX_MIN = 152;
@@ -385,7 +386,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multic
 }
 
 /** Places a timeline: periods on an axis as dots, events stacked below (or beside) them, sections as zones. */
-export function layoutTimeline(model: TimelineModel, ruler: Ruler, theme: Theme = 'solid', opts: TimelineLayoutOptions = {}): TimelineLayout {
+export function layoutTimeline(model: TimelineModel, ruler: Ruler, theme: Theme = DEFAULT_THEME, opts: TimelineLayoutOptions = {}): TimelineLayout {
   const multicolor = opts.multicolor ?? true;
   return model.direction === 'TD' ? layoutVertical(model, ruler, theme, multicolor) : layoutHorizontal(model, ruler, theme, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT, multicolor);
 }

@@ -4,6 +4,7 @@ import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { IconSettings, TreeItem, TreeView } from './parse.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Height of a row and the margin around the drawing. */
 export const ROW = 28;
@@ -88,7 +89,7 @@ function indentOf(tree: TreeView): number {
 }
 
 /** Places each item on its own row and draws the guides from a parent down to its children. */
-export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = 'solid'): TreeViewLayout {
+export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = DEFAULT_THEME): TreeViewLayout {
   const { items } = tree;
   const indent = indentOf(tree);
   const bend = SCENE_THEME_SPECS[theme].bend / 2;

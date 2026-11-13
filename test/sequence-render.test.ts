@@ -68,13 +68,13 @@ describe('sequence svg', () => {
 
   it('writes the theme on the root, the card shadow only in the card theme, and edge--msg on every message line', () => {
     const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b';
-    for (const theme of ['solid', 'outline', 'card'] as const) {
+    for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
       const out = body(render(src, { theme, legend: false }));
       expect(out).toContain(`data-theme="${theme}"`);
       expect(out.includes('filter="url(#ursula-shadow)"')).toBe(theme === 'card');
       expect(out.match(/class="ursula-edge ursula-edge--msg ursula-edge--arrow/g)).toHaveLength(2);
     }
-    expect(render(src)).toContain('data-theme="solid"');
+    expect(render(src)).toContain('data-theme="band"');
   });
 
   it('draws the reply dashed and the ports that only the card theme shows', () => {
@@ -176,7 +176,7 @@ describe('sequence svg stays as committed', () => {
     it(`renders ${name}-sequence.mmd to the committed svg`, () => {
       const src = readFileSync(new URL(`../examples/${name}-sequence.mmd`, import.meta.url), 'utf8');
       const svg = readFileSync(new URL(`../examples/${name}-sequence.svg`, import.meta.url), 'utf8');
-      expect(`${render(src)}\n`).toBe(svg);
+      expect(`${render(src, { theme: 'solid' })}\n`).toBe(svg);
     });
   }
 });

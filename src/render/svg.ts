@@ -5,7 +5,7 @@ import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
-import { arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
+import { DEFAULT_THEME, arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutCluster, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
@@ -629,7 +629,7 @@ function legendSvg(legend: Legend, margin: number, spec: ThemeSpec): string {
 }
 
 export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
-  const theme = opts.theme ?? 'solid';
+  const theme = opts.theme ?? DEFAULT_THEME;
   const spec = THEME_SPECS[theme];
   if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${Object.keys(THEME_SPECS).join(', ')}.`, 'theme');
   const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);

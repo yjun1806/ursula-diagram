@@ -7,6 +7,7 @@ import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Sourcing, WardleyMap, WardleyNode } from './parse.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 40;
 const TOP_TITLE = 80;
@@ -98,7 +99,7 @@ function shortened(from: Point, to: Point, by: number): Point {
 }
 
 /** Computes the scene of a Wardley map; the theme sets the radius of a component's dot. */
-export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = 'solid'): WardleyLayout {
+export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFAULT_THEME): WardleyLayout {
   const spec = SCENE_THEME_SPECS[theme];
   const dot = spec.dotRadius;
   const text = (s: string): number => ruler.textWidth(s, 'line');

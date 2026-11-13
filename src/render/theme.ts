@@ -1,6 +1,8 @@
-export type Theme = 'solid' | 'outline' | 'card';
+export type Theme = 'solid' | 'outline' | 'card' | 'band';
 
-export const THEMES = ['solid', 'outline', 'card'] as const;
+export const THEMES = ['solid', 'outline', 'card', 'band'] as const;
+
+export const DEFAULT_THEME: Theme = 'band';
 
 type Pair = readonly [string, string];
 
@@ -25,6 +27,8 @@ export interface ThemeSpec {
   chipBorder: boolean;
   /** Whether edge labels have a rim of the background colour around them. */
   chipHalo: boolean;
+  /** Whether thick and branch edges and their labels take the accent colour. */
+  accentEdges: boolean;
   /** Boxes divided by rules, notes and the small texts at the ends of lines. */
   records: {
     /** Colour token and width of the rule between two compartments; a rule of the page colour is a gap. */
@@ -73,6 +77,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: false,
     chipBorder: false,
     chipHalo: true,
+    accentEdges: true,
     records: { rule: { token: 'zone', width: 2 }, note: { fill: 'zone', line: 'hair', width: 2 }, value: { token: 'accent-ink', weight: 600 } },
   },
   outline: {
@@ -101,6 +106,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: false,
     chipBorder: true,
     chipHalo: false,
+    accentEdges: true,
     records: { rule: { token: 'hair', width: 1 }, note: { fill: 'lane', line: 'hair', width: 1 }, value: { token: 'fg', weight: 500 } },
   },
   card: {
@@ -129,7 +135,42 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     shadow: true,
     chipBorder: false,
     chipHalo: false,
+    accentEdges: true,
     records: { rule: { token: 'hair', width: 1 }, note: { fill: 'lane', line: 'hair', width: 0 }, value: { token: 'fg', weight: 600 } },
+  },
+  band: {
+    tokens: {
+      fg: ['#201f1e', '#efeeec'],
+      muted: ['#5b5b59', '#b2b1af'],
+      accent: ['#82641c', '#dab975'],
+      'accent-ink': 'accent',
+      'on-accent': ['#201f1e', '#171614'],
+      hair: ['#e2e1e0', '#2c2b2a'],
+      bg: ['transparent', 'transparent'],
+      surface: ['#fcfcfa', '#171614'],
+      border: ['#484846', '#bebdbb'],
+      'start-fill': ['#e5c37a', '#dab975'],
+      'start-ink': 'on-accent',
+      'decision-fill': 'surface',
+      'decision-ink': 'fg',
+      line: ['#565554', '#a5a4a2'],
+      lane: ['#efeeed', '#252422'],
+      zone: ['#fcfcfa', '#171614'],
+      'box-in-lane': 'surface',
+      'chip-fill': ['#f1f0ef', '#252422'],
+    },
+    boxRadius: 10,
+    boxBorder: 1.5,
+    roleBorder: false,
+    lineWidth: 1.5,
+    dash: '5 4',
+    bend: 8,
+    arrow: { kind: 'filled', length: 9, width: 9 },
+    shadow: false,
+    chipBorder: false,
+    chipHalo: false,
+    accentEdges: false,
+    records: { rule: { token: 'border', width: 1 }, note: { fill: 'lane', line: 'border', width: 1 }, value: { token: 'fg', weight: 500 } },
   },
 };
 
@@ -171,16 +212,14 @@ export function flowRules(spec: ThemeSpec, font: string): string[] {
     '[data-role="decision"] .ursula-node-title{fill:$decision-ink}',
     '[data-role="decision"] .ursula-node-line{fill:$decision-ink;fill-opacity:.8}',
     `.ursula-edge{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round;stroke-linejoin:round}`,
-    '.ursula-edge--thick{stroke:$accent}',
-    '.ursula-edge--branch{stroke:$accent}',
+    ...(spec.accentEdges ? ['.ursula-edge--thick{stroke:$accent}', '.ursula-edge--branch{stroke:$accent}'] : []),
     `.ursula-edge--dotted{stroke-dasharray:${spec.dash}}`,
     `.ursula-arrow{${arrowRule('$line')}}`,
     `.ursula-arrow--accent{${arrowRule('$accent')}}`,
     ...(spec.chipHalo ? ['.ursula-edge-label-halo{fill:$halo}'] : []),
     `.ursula-edge-label-bg{fill:$chip-fill${spec.chipBorder ? ';stroke:$border;stroke-width:1' : ''}}`,
     '.ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}',
-    '.ursula-edge-label--thick{fill:$accent}',
-    '.ursula-edge-label--branch{fill:$accent}',
+    ...(spec.accentEdges ? ['.ursula-edge-label--thick{fill:$accent}', '.ursula-edge-label--branch{fill:$accent}'] : []),
     '.ursula-legend-rule{stroke:$hair;stroke-width:1}',
     '.ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}',
   ];

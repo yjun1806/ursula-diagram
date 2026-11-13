@@ -5,6 +5,7 @@ import type { Theme } from '../render/theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import { displayOrder } from './model.ts';
 import type { Commit, GitGraph } from './model.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Distance between neighbouring commits along the time axis, and between neighbouring branch lines. */
 const STEP = 96;
@@ -86,7 +87,7 @@ const TEXT_HALF = 8;
  * Lays out the graph. A fork or merge curve that would cross the id or tag of a commit it can move away from starts
  * (fork) or ends (merge) one step later or earlier, along an empty column added for it, up to `MAX_DELAY` steps.
  */
-export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = 'solid'): GitLayout {
+export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = DEFAULT_THEME): GitLayout {
   const delays = new Map<string, number>();
   for (;;) {
     const { layout, hits } = buildGit(graph, ruler, theme, delays);

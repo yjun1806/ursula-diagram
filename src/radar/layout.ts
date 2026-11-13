@@ -10,6 +10,7 @@ import type { Theme } from '../render/theme.ts';
 import { UrsulaError } from '../types.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Radar } from './model.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Distance from the centre to the outer end of an axis. */
 export const RADIUS = 200;
@@ -115,7 +116,7 @@ export function radarScale(model: Radar): { min: number; max: number; rings: num
 }
 
 /** Places a radar chart: axes clockwise from 12 o'clock, rings, one polygon per curve, value labels and a legend. */
-export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = 'solid'): RadarLayout {
+export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_THEME): RadarLayout {
   const spec = SCENE_THEME_SPECS[theme];
   const n = model.axes.length;
   const R = RADIUS;

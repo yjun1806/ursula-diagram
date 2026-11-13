@@ -45,7 +45,7 @@ describe('timeline render', () => {
         const svg = render(renderSrc(name), { theme });
         expect(svg).toContain(`data-theme="${theme}"`);
       }
-      expect(render(renderSrc(name))).toContain('data-theme="solid"');
+      expect(render(renderSrc(name))).toContain('data-theme="band"');
     });
   }
 });

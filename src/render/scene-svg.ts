@@ -2,7 +2,7 @@ import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
 import type { Arrow, SceneThemeSpec } from './scene-theme.ts';
 import { escapeXml, num, pathData } from './svg.ts';
-import { SHADOW_FILTER, THEMES } from './theme.ts';
+import { DEFAULT_THEME, SHADOW_FILTER, THEMES } from './theme.ts';
 import type { Theme } from './theme.ts';
 import { UrsulaError } from '../types.ts';
 import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
@@ -313,7 +313,7 @@ function contentLeft(scene: Scene): number {
 
 /** Draws a scene in one of the three themes; the colours are variables with dark values for `prefers-color-scheme`. */
 export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: Theme; drawTitle?: string } = {}): string {
-  const theme = opts.theme ?? scene.theme ?? 'solid';
+  const theme = opts.theme ?? scene.theme ?? DEFAULT_THEME;
   const spec = SCENE_THEME_SPECS[theme];
   if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${THEMES.join(', ')}.`, 'theme');
   const heading = opts.drawTitle === undefined || opts.drawTitle === '' ? undefined : opts.drawTitle;

@@ -7,6 +7,7 @@ import { layoutTimeline } from './layout.ts';
 import { parseTimeline } from './parse.ts';
 import { layoutTimelineText } from './text.ts';
 import type { TimelineLayoutOptions } from './layout.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Layout options from the render options: the width limit and `config.timeline.disableMulticolor`. */
 function layoutOptions(opts: { maxWidth?: number; config?: unknown }): TimelineLayoutOptions {
@@ -20,7 +21,7 @@ registerFrontEnd({
   name: 'timeline',
   headers: ['timeline'],
   svg(src, opts) {
-    const theme = opts.theme ?? 'solid';
+    const theme = opts.theme ?? DEFAULT_THEME;
     const layout = layoutTimeline(parseTimeline(src, opts.heading), pixelRuler(), theme, layoutOptions(opts));
     return renderThemedScene(layout.scene, { theme, ...(opts.title === undefined ? {} : { title: opts.title }) });
   },
@@ -33,6 +34,6 @@ registerFrontEnd({
   json(src, mode, opts) {
     const model = parseTimeline(src, opts.heading);
     if (mode === 'text') return { model, lines: layoutTimelineText(model, opts.maxWidth) };
-    return layoutTimeline(model, pixelRuler(), opts.theme ?? 'solid', layoutOptions(opts));
+    return layoutTimeline(model, pixelRuler(), opts.theme ?? DEFAULT_THEME, layoutOptions(opts));
   },
 });

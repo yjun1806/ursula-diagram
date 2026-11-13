@@ -135,8 +135,8 @@ describe('xychart examples', () => {
       });
     }
   }
-  it('draws solid when no theme is given', () => {
-    expect(render(MONTHS)).toContain('data-theme="solid"');
+  it('draws band when no theme is given', () => {
+    expect(render(MONTHS)).toContain('data-theme="band"');
   });
 });
 

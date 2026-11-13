@@ -87,8 +87,8 @@ describe('themed scene', () => {
     }
   });
 
-  it('takes the theme from the option, then the scene, then solid', () => {
-    expect(renderThemedScene(scene)).toContain('data-theme="solid"');
+  it('takes the theme from the option, then the scene, then band', () => {
+    expect(renderThemedScene(scene)).toContain('data-theme="band"');
     expect(renderThemedScene({ ...scene, theme: 'outline' })).toContain('data-theme="outline"');
     expect(renderThemedScene({ ...scene, theme: 'outline' }, { theme: 'card' })).toContain('data-theme="card"');
   });
@@ -108,7 +108,7 @@ describe('themed scene', () => {
   });
 
   it('styles a series tint written as two roles and as one', () => {
-    const css = renderThemedScene(scene).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
+    const css = renderThemedScene(scene, { theme: 'solid' }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
     expect(css).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
   });
 

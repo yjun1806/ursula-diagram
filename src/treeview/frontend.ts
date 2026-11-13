@@ -10,6 +10,7 @@ import { parseTreeView } from './parse.ts';
 import type { IconSettings, TreeView } from './parse.ts';
 import { layoutTreeViewText } from './text.ts';
 import { titledLines, titledSpans } from '../front/title.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 type Config = Record<string, FrontValue>;
 /** Options as the registry hands them over: the render options plus the front-matter `config`. */
@@ -34,7 +35,7 @@ export const treeViewFrontEnd: FrontEnd = {
   name: 'treeview',
   headers: ['treeView-beta', 'treeView'],
   svg(src, opts: Opts) {
-    const theme = opts.theme ?? 'solid';
+    const theme = opts.theme ?? DEFAULT_THEME;
     const { scene } = layoutTreeView(read(src, opts.config), pixelRuler(), theme);
     const title = opts.title ?? opts.heading;
     return renderThemedScene(scene, { theme, ...(title === undefined ? {} : { title }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
@@ -47,7 +48,7 @@ export const treeViewFrontEnd: FrontEnd = {
   },
   json(src, mode, opts: Opts) {
     const tree = read(src, opts.config);
-    return { tree, ...layoutTreeView(tree, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme ?? 'solid') };
+    return { tree, ...layoutTreeView(tree, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme ?? DEFAULT_THEME) };
   },
 };
 

@@ -7,6 +7,7 @@ import { wrapWords } from '../text/wrap.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 40;
 const DEFAULT_PLOT = 448;
@@ -70,7 +71,7 @@ function inside(inner: Rect, outer: Rect): boolean {
 }
 
 /** Computes the scene of a quadrant chart; the theme sets the default point radius. */
-export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme = 'solid'): QuadrantLayout {
+export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme = DEFAULT_THEME): QuadrantLayout {
   const body = (s: string): number => ruler.textWidth(s, 'line') * WEIGHT;
   const name = (s: string): number => ruler.textWidth(s, 'title') * WEIGHT;
   const plain = (s: string): number => ruler.textWidth(s, 'line');
