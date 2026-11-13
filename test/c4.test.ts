@@ -287,13 +287,27 @@ describe('c4 reading', () => {
     expect(node?.kind).toContain('Google Chrome');
   });
 
-  it('builds a box with a head holding the tag over the name, and a body, for each element', () => {
+  it('builds one face with no rules for each element: the macro word in a pill, the name, then the description', () => {
     const g = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler());
     const node = g.nodes.find((n) => n.id === 'SystemE');
-    expect(node?.compartments?.map((c) => c.lines[0])).toEqual(['[External System Database]', expect.any(String)]);
-    expect(node?.compartments?.[0]?.lines).toEqual(['[External System Database]', 'Mainframe Banking System']);
-    expect(node?.compartments?.[0]?.lineEmphasis).toEqual(['tag', 'title']);
+    expect(node?.compartments).toHaveLength(1);
+    expect(node?.compartments?.[0]?.face).toBe(true);
+    expect(node?.compartments?.[0]?.lines.slice(0, 2)).toEqual(['SystemDb_Ext', 'Mainframe Banking System']);
+    expect(node?.compartments?.[0]?.lineEmphasis?.slice(0, 3)).toEqual(['tag', 'title', 'body']);
     expect(g.clusters?.find((c) => c.id === 'b0')?.label).toBe('BankBoundary0 · Enterprise_Boundary');
+  });
+
+  it('writes the technology of a relation after an em space, without brackets, and every boundary as name and subtitle', () => {
+    const g = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler());
+    expect(g.edges.find((e) => e.label?.startsWith('Sends e-mails'))?.label).toBe('Sends e-mails\u2003SMTP');
+    expect(g.clusters?.every((c) => c.subtitled === true)).toBe(true);
+  });
+
+  it('draws the kind in a pill, the technology of a relation in a span of its own and the type of a boundary under its name', () => {
+    const svg = render(EXAMPLES[0] as string);
+    expect(svg).toContain('class="ursula-cell-pill"');
+    expect(svg).toContain('<tspan class="ursula-edge-label-tech" role="note">');
+    expect(svg).toContain('ursula-zone-name ursula-zone-sub');
   });
 
   it('draws a back relation along its arrow', () => {
@@ -308,7 +322,7 @@ describe('c4 layout', () => {
     it(`example ${i + 1}: boxes stay inside the drawing, wrapped text fits 200px`, () => {
       const ruler = pixelRuler();
       const g = c4Graph(parseC4(src), ruler);
-      for (const n of g.nodes) for (const c of n.compartments ?? []) if (c.emphasis === 'body') for (const l of c.lines) expect(ruler.textWidth(l, 'line')).toBeLessThanOrEqual(200);
+      for (const n of g.nodes) for (const c of n.compartments ?? []) c.lines.forEach((l, k) => { if (c.lineEmphasis?.[k] === 'body') expect(ruler.textWidth(l, 'line')).toBeLessThanOrEqual(200); });
       const laid = layout(g, ruler);
       for (const n of laid.nodes) {
         expect(n.x).toBeGreaterThanOrEqual(0);
@@ -344,9 +358,9 @@ describe('c4 shapes, boundaries and sizes', () => {
     expect(shapeOf(EXAMPLES[3] as string, 'db')).toBe('cylinder');
   });
 
-  it('keeps the kind in the tag of a cylinder', () => {
+  it('writes the macro word of a cylinder as its kind', () => {
     const node = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler()).nodes.find((n) => n.id === 'SystemE');
-    expect(node?.compartments?.[0]?.lines[0]).toBe('[External System Database]');
+    expect(node?.compartments?.[0]?.lines[0]).toBe('SystemDb_Ext');
   });
 
   it('marks every boundary and deployment node as a dashed zone', () => {
@@ -476,7 +490,7 @@ describe('c4 boundaries keep their size and lines keep off their names', () => {
     const inside = [...laid.nodes.filter((n) => ['SystemE', 'SystemC', 'SystemD'].includes(n.id)), box('b2'), box('b3')];
     const top = Math.min(...inside.map((r) => r.y));
     const bottom = Math.max(...inside.map((r) => r.y + r.h));
-    expect(box('b1').h).toBeLessThanOrEqual(bottom - top + 2 * CLUSTER_PAD + CLUSTER_NAME_ROW);
+    expect(box('b1').h).toBeLessThanOrEqual(bottom - top + 2 * CLUSTER_PAD + CLUSTER_NAME_ROW + CLUSTER_NAME_LINE);
   });
 
   it('keeps every line off the name of every boundary, which stands in a gap of the top row', () => {

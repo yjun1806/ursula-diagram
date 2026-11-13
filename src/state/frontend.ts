@@ -6,6 +6,7 @@ import { renderSvg } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
 import type { Layout } from '../types.ts';
 import { parseState } from './parse.ts';
+import { titledLines } from '../front/title.ts';
 
 type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'>;
 
@@ -29,10 +30,10 @@ registerFrontEnd({
   svg(src, opts) {
     const { layout: laid, title } = drawn(src, pixelRuler(), opts);
     const name = opts.title ?? title ?? opts.heading;
-    return renderSvg(laid, { ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(opts.node === undefined ? {} : { node: opts.node }), ...(name === undefined ? {} : { title: name }) });
+    return renderSvg(laid, { ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(opts.node === undefined ? {} : { node: opts.node }), ...(name === undefined ? {} : { title: name }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
-    return renderTextLayout(drawn(src, cellRuler(), { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }).layout);
+    return titledLines(renderTextLayout(drawn(src, cellRuler(), { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return drawn(src, mode === 'text' ? cellRuler() : pixelRuler(), opts).layout;

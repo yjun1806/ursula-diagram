@@ -9,6 +9,7 @@ import { layoutTreeView } from './layout.ts';
 import { parseTreeView } from './parse.ts';
 import type { IconSettings, TreeView } from './parse.ts';
 import { layoutTreeViewText } from './text.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 type Config = Record<string, FrontValue>;
 /** Options as the registry hands them over: the render options plus the front-matter `config`. */
@@ -36,13 +37,13 @@ export const treeViewFrontEnd: FrontEnd = {
     const theme = opts.theme ?? 'solid';
     const { scene } = layoutTreeView(read(src, opts.config), pixelRuler(), theme);
     const title = opts.title ?? opts.heading;
-    return renderThemedScene(scene, { theme, ...(title === undefined ? {} : { title }) });
+    return renderThemedScene(scene, { theme, ...(title === undefined ? {} : { title }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
-  textLines(src, maxWidth) {
-    return layoutTreeViewText(parseTreeView(src), maxWidth).map(joinSpans);
+  textLines(src, maxWidth, opts) {
+    return titledLines(layoutTreeViewText(parseTreeView(src), maxWidth).map(joinSpans), opts.heading, maxWidth);
   },
-  textSpans(src, maxWidth) {
-    return layoutTreeViewText(parseTreeView(src), maxWidth);
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(layoutTreeViewText(parseTreeView(src), maxWidth), opts.heading, maxWidth);
   },
   json(src, mode, opts: Opts) {
     const tree = read(src, opts.config);

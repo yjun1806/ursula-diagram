@@ -6,6 +6,7 @@ import { joinSpans } from '../text/terminal.ts';
 import { layoutKanban } from './layout.ts';
 import { parseKanban } from './parse.ts';
 import { layoutKanbanText } from './text.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 /** The `kanban.ticketBaseUrl` setting of the options' `config`; a value that is not a string is ignored. */
 function ticketBaseUrlOf(opts: object): string | undefined {
@@ -27,14 +28,15 @@ registerFrontEnd({
       renderThemedScene(layout.scene, {
         ...(opts.title === undefined ? {} : { title: opts.title }),
         ...(opts.theme === undefined ? {} : { theme: opts.theme }),
+        ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }),
       }),
     );
   },
   textLines(src, maxWidth, opts) {
-    return layoutKanbanText(parseKanban(src, ticketBaseUrlOf(opts)), maxWidth).map(joinSpans);
+    return titledLines(layoutKanbanText(parseKanban(src, ticketBaseUrlOf(opts)), maxWidth).map(joinSpans), opts.heading, maxWidth);
   },
   textSpans(src, maxWidth, opts) {
-    return layoutKanbanText(parseKanban(src, ticketBaseUrlOf(opts)), maxWidth);
+    return titledSpans(layoutKanbanText(parseKanban(src, ticketBaseUrlOf(opts)), maxWidth), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseKanban(src, ticketBaseUrlOf(opts));

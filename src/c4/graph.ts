@@ -14,14 +14,8 @@ const MAX_ROW = 4;
 
 const LANE = { id: '_', label: '' };
 
-const ROLE_NAMES: Readonly<Record<C4Element['role'], string>> = { person: 'Person', system: 'System', container: 'Container', component: 'Component' };
-const STORE_NAMES = { db: 'Database', queue: 'Queue' } as const;
-
-/** The tag of an element: its kind in words (`External System`, `Container Database`). */
-export function elementTag(e: Pick<C4Element, 'role' | 'store' | 'external'>): string {
-  const kind = [ROLE_NAMES[e.role], e.store === undefined ? '' : STORE_NAMES[e.store]].filter((p) => p !== '').join(' ');
-  return `[${e.external ? 'External ' : ''}${kind}]`;
-}
+/** Written between a relation's text and its technology: an em space, which the drawing paints as a fainter span. */
+export const TECH_SEPARATOR = '\u2003';
 
 function wrap(text: string, ruler: Ruler): string[] {
   const width = (s: string): number => ruler.textWidth(s, 'line');
@@ -30,11 +24,17 @@ function wrap(text: string, ruler: Ruler): string[] {
 }
 
 function compartmentsOf(e: C4Element, ruler: Ruler): Compartment[] {
-  const body = [...(e.tech === undefined ? [] : wrap(`[${e.tech}]`, ruler)), ...(e.descr === undefined ? [] : wrap(e.descr, ruler))];
   const name = e.label.split('\n').map((l) => l.trim());
+  const tech = e.tech === undefined ? [] : wrap(e.tech, ruler);
+  const descr = e.descr === undefined ? [] : wrap(e.descr, ruler);
   return [
-    { lines: [elementTag(e), ...name], lineEmphasis: ['tag', ...name.map((): 'title' => 'title')], align: 'center', emphasis: 'title' },
-    ...(body.length === 0 ? [] : [{ lines: body, align: 'center', emphasis: 'body' } satisfies Compartment]),
+    {
+      lines: [e.macro, ...name, ...tech, ...descr],
+      lineEmphasis: ['tag', ...name.map((): 'title' => 'title'), ...tech.map((): 'tag' => 'tag'), ...descr.map((): 'body' => 'body')],
+      align: 'center',
+      emphasis: 'body',
+      face: true,
+    },
   ];
 }
 
@@ -64,13 +64,13 @@ function sharedBox(nodes: readonly GraphNode[], ruler: Ruler): GraphNode[] {
   return nodes.map((n) => ({ ...n, box }));
 }
 
-/** The name of a boundary with what it is (`BankBoundary · Enterprise_Boundary`, `Web Browser · Apache Tomcat 8.x`). */
+/** The name of a boundary with what it is, split into two lines by the layout (`BankBoundary · Enterprise_Boundary`, `Web Browser · Apache Tomcat 8.x`). */
 function clusterLabel(label: string, kind: string, descr: string | undefined): string {
   return [label, kind, descr].filter((p): p is string => p !== undefined && p !== '').map((p) => p.replace(/\s*\n\s*/g, ' ')).join(' · ');
 }
 
 /**
- * The drawing graph of a C4 model: one node per element (a box divided into its tag, its name and its technology and
+ * The drawing graph of a C4 model: one node per element (a face of its kind, its name, its technology and its
  * description), one dashed cluster per boundary or deployment node, and one line per relation. Every element box has the
  * width of the widest and the height of the highest. A line into a person from anything else is laid out from the person,
  * so that persons stand above what they use and what reaches them; its arrowhead stays at the person.
@@ -93,11 +93,12 @@ export function c4Graph(model: C4Model, ruler: Ruler): Graph {
     id: b.alias,
     label: clusterLabel(b.label, b.kind, b.descr),
     style: 'dashed' as const,
+    subtitled: true as const,
     ...(directCount.get(b.alias) !== undefined && (directCount.get(b.alias) ?? 0) <= MAX_ROW ? { direction: 'LR' as const } : {}),
     ...(b.parent === undefined ? {} : { parent: b.parent }),
   }));
   const edges: GraphEdge[] = model.rels.map((r): GraphEdge => {
-    const text = [r.index === undefined ? '' : `${r.index}.`, r.label, r.tech === undefined ? '' : `[${r.tech}]`].filter((p) => p !== '').join(' ');
+    const text = [r.index === undefined ? '' : `${r.index}.`, r.label, r.tech === undefined ? '' : `${TECH_SEPARATOR}${r.tech}`].filter((p) => p !== '').join(' ').replace(` ${TECH_SEPARATOR}`, TECH_SEPARATOR);
     const base = { style: 'normal' as const, ...(text === '' ? {} : { label: text }) };
     // `Rel_Back` has its arrowhead at the first element; the line is stored from the second so that it reads along the arrow.
     const edge: GraphEdge =
@@ -106,5 +107,5 @@ export function c4Graph(model: C4Model, ruler: Ruler): Graph {
         : { from: r.from, to: r.to, ...base, end: 'arrow', ...(r.heads === 'both' ? { startEnd: 'arrow' as const } : {}) };
     return person.has(edge.to) && !person.has(edge.from) ? reversed(edge) : edge;
   });
-  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored };
+  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored, gaps: { flow: 96, join: 48 } };
 }
