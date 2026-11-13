@@ -79,6 +79,10 @@ registerFrontEnd({
  * actors in the first column, each in the middle of its use cases, and the use cases in the second, grouped by actor in
  * the order written. Undefined for any other drawing, which keeps the layered engine.
  */
+/** The gap between two use cases of one actor, and between the use cases of two actors. */
+const TOGETHER = 24;
+const APART = 48;
+
 function actorColumns(model: UsecaseModel): GridSpec | undefined {
   const g = model.graph;
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
@@ -88,14 +92,18 @@ function actorColumns(model: UsecaseModel): GridSpec | undefined {
   const cells: Record<string, { r: number; c: number }> = {};
   const shift: Record<string, number> = {};
   let row = 0;
+  // The use cases of one actor stand close; a wider gap parts the actors.
+  const rowGaps: Record<number, number> = {};
   for (const a of g.nodes.filter((n) => kind(n.id) === 'actor')) {
     const mine = g.edges.flatMap((e) => (e.from === a.id ? [e.to] : e.to === a.id ? [e.from] : [])).filter((u) => cells[u] === undefined);
     const first = row;
+    if (first > 0) rowGaps[first] = APART;
+    for (let k = first + 1; k < first + new Set(mine).size; k++) rowGaps[k] = TOGETHER;
     for (const u of [...new Set(mine)]) cells[u] = { r: row++, c: 1 };
     cells[a.id] = { r: first, c: 0 };
     shift[a.id] = Math.max(0, row - first - 1) / 2;
     if (row === first) row++;
   }
   for (const u of g.nodes.filter((n) => cells[n.id] === undefined)) cells[u.id] = { r: row++, c: 1 };
-  return { ...emptySpec(g), cells, shift };
+  return { ...emptySpec(g), cells, shift, rowGaps };
 }

@@ -1,3 +1,4 @@
+import { withinCanvas } from '../layout/clusters.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import { hits, overlap, properCross, segs } from './elbows.ts';
@@ -63,6 +64,7 @@ export function separateTwoWay(layout: Layout, ruler: Ruler): Layout {
   const { nodes } = layout;
   const edges = [...layout.edges];
   const byId = new Map(nodes.map((n) => [n.id, n] as const));
+  const unnamed = layout.lanes.length <= 1 && (layout.lanes[0]?.label ?? '') === '';
   edges.forEach((e, i) => {
     const u = byId.get(e.from);
     const v = byId.get(e.to);
@@ -71,11 +73,13 @@ export function separateTwoWay(layout: Layout, ruler: Ruler): Layout {
     if (!pair || u.lane !== v.lane) return;
     const faces: Face[] = vertical(e) ? ['left', 'right'] : ['top', 'bottom'];
     const mates = nodes.filter((n) => n.lane === u.lane);
+    // A lane with no name draws no box: the line may run out past its padding, and the drawing grows to hold it.
+    const pad = unnamed ? Math.max(ruler.lanePad, AWAY + ruler.trackGap) : ruler.lanePad;
     const room = {
-      x0: Math.min(...mates.map((n) => n.x)) - ruler.lanePad,
-      x1: Math.max(...mates.map((n) => n.x + n.w)) + ruler.lanePad,
-      y0: Math.min(...mates.map((n) => n.y)) - ruler.lanePad,
-      y1: Math.max(...mates.map((n) => n.y + n.h)) + ruler.lanePad,
+      x0: Math.min(...mates.map((n) => n.x)) - pad,
+      x1: Math.max(...mates.map((n) => n.x + n.w)) + pad,
+      y0: Math.min(...mates.map((n) => n.y)) - pad,
+      y1: Math.max(...mates.map((n) => n.y + n.h)) + pad,
     };
     for (const face of faces) {
       const taken = edges.some((f, j) => j !== i && f.points.length > 0 && [f.points[0] as Point, f.points[f.points.length - 1] as Point].some((p) => onFace(p, u, face) || onFace(p, v, face)));
@@ -90,5 +94,6 @@ export function separateTwoWay(layout: Layout, ruler: Ruler): Layout {
       return;
     }
   });
-  return { ...layout, edges };
+  const moved = { ...layout, edges };
+  return unnamed && edges.some((e, i) => e !== layout.edges[i]) ? withinCanvas(moved) : moved;
 }
