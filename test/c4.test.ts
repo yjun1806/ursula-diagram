@@ -268,7 +268,26 @@ describe('c4 reading', () => {
       ['SystemC', 'customerA', 'end'],
     ]);
     expect(m.rels[2]?.tech).toBe('SMTP');
-    expect(m.ignored).toContain('UpdateLayoutConfig');
+    expect(m.config).toEqual({ shapeInRow: 3, boundaryInRow: 1 });
+    expect(m.ignored).not.toContain('UpdateLayoutConfig');
+  });
+
+  it('keeps the direction hints of relations and the places asked for without a line', () => {
+    const m = parseC4('C4Context\n  System(a, "A")\n  System(b, "B")\n  System(c, "C")\n  Rel_U(a, b, "x")\n  Rel_Neighbor(b, c, "y")\n  BiRel_Left(a, c, "z")\n  Rel(c, a, "w")\n  Lay_D(a, c)');
+    expect(m.rels.map((r) => r.hint)).toEqual(['up', 'right', 'left', undefined]);
+    expect(m.lays).toEqual([{ from: 'a', to: 'c', hint: 'down', line: 9 }]);
+    expect(m.ignored).toEqual([]);
+    expect(m.config).toEqual({ shapeInRow: 4, boundaryInRow: 2 });
+  });
+
+  it('turns the hint and the first-written end with a line it lays out from the other end', () => {
+    const g = c4Graph(parseC4('C4Context\n  Person(p, "P")\n  System(s, "S")\n  System(t, "T")\n  Rel_D(s, p, "x")\n  Rel_Back(s, t, "y")\n  BiRel(t, s, "z")'), pixelRuler());
+    expect(g.placer).toBe('c4-grid');
+    expect(g.edges.map((e) => [e.from, e.to])).toEqual([['p', 's'], ['t', 's'], ['t', 's']]);
+    expect(g.grid?.hints).toEqual(['up', undefined, undefined]);
+    expect(g.grid?.upper).toEqual([undefined, 'to', 'from']);
+    expect(g.grid?.starts).toEqual(['p']);
+    expect(g.grid?.order).toEqual(['p', 's', 't']);
   });
 
   it('reads technology and description of a container and the back relation', () => {

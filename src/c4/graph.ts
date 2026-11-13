@@ -2,7 +2,7 @@ import { layeredRuler } from '../layered/index.ts';
 import { measureNodes } from '../layout/place.ts';
 import type { Ruler } from '../metrics.ts';
 import { wrapWords } from '../text/wrap.ts';
-import type { Compartment, Graph, GraphCluster, GraphEdge, GraphNode, NodeShape } from '../types.ts';
+import type { Compartment, Graph, GraphCluster, GraphEdge, GraphNode, GridHint, GridSpec, NodeShape } from '../types.ts';
 import type { C4Element, C4Model } from './parse.ts';
 
 /** Width of the text of a description in pixels, and in terminal cells. */
@@ -43,6 +43,8 @@ function shapeOf(e: C4Element): NodeShape {
   if (e.role === 'person') return 'round';
   return e.store === 'db' ? 'cylinder' : 'rect';
 }
+
+const FLIPPED: Readonly<Record<GridHint, GridHint>> = { up: 'down', down: 'up', left: 'right', right: 'left' };
 
 /** The ends of a line swapped, with what sits at each end. */
 function reversed(e: GraphEdge): GraphEdge {
@@ -97,15 +99,31 @@ export function c4Graph(model: C4Model, ruler: Ruler): Graph {
     ...(directCount.get(b.alias) !== undefined && (directCount.get(b.alias) ?? 0) <= MAX_ROW ? { direction: 'LR' as const } : {}),
     ...(b.parent === undefined ? {} : { parent: b.parent }),
   }));
+  const spec: GridSpec = {
+    hints: [],
+    upper: [],
+    steps: [],
+    lays: model.lays.map((l) => ({ from: l.from, to: l.to, hint: l.hint })),
+    starts: [...person],
+    order: [...model.elements, ...model.boundaries].sort((a, b) => a.line - b.line).map((e) => e.alias),
+    shapeInRow: model.config.shapeInRow,
+    boundaryInRow: model.config.boundaryInRow,
+  };
   const edges: GraphEdge[] = model.rels.map((r): GraphEdge => {
     const text = [r.index === undefined ? '' : `${r.index}.`, r.label, r.tech === undefined ? '' : `${TECH_SEPARATOR}${r.tech}`].filter((p) => p !== '').join(' ').replace(` ${TECH_SEPARATOR}`, TECH_SEPARATOR);
     const base = { style: 'normal' as const, ...(text === '' ? {} : { label: text }) };
     // `Rel_Back` has its arrowhead at the first element; the line is stored from the second so that it reads along the arrow.
-    const edge: GraphEdge =
-      r.heads === 'start'
-        ? { from: r.to, to: r.from, ...base, end: 'arrow' }
-        : { from: r.from, to: r.to, ...base, end: 'arrow', ...(r.heads === 'both' ? { startEnd: 'arrow' as const } : {}) };
-    return person.has(edge.to) && !person.has(edge.from) ? reversed(edge) : edge;
+    const back = r.heads === 'start';
+    const edge: GraphEdge = back
+      ? { from: r.to, to: r.from, ...base, end: 'arrow' }
+      : { from: r.from, to: r.to, ...base, end: 'arrow', ...(r.heads === 'both' ? { startEnd: 'arrow' as const } : {}) };
+    const flip = person.has(edge.to) && !person.has(edge.from);
+    // The hint and the first-written end are read on the relation as written; they follow the line when its ends are swapped.
+    const swapped = back !== flip;
+    spec.hints.push(r.hint === undefined ? undefined : swapped ? FLIPPED[r.hint] : r.hint);
+    spec.upper.push(r.heads === 'end' ? undefined : swapped ? 'to' : 'from');
+    spec.steps.push(r.index);
+    return flip ? reversed(edge) : edge;
   });
-  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored, gaps: { flow: 96, join: 48 } };
+  return { direction: 'TD', lanes: [LANE], clusters, nodes, edges, ignored: model.ignored, gaps: { flow: 96, join: 48 }, placer: 'c4-grid', grid: spec };
 }

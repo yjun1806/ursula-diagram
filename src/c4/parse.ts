@@ -43,7 +43,25 @@ export interface C4Rel {
   heads: 'end' | 'both' | 'start';
   /** Index of a step, from `RelIndex`; absent for the other relations. */
   index?: number;
+  /** Where the second element stands from the first (`Rel_D`, `Rel_Left`; `Rel_Neighbor` is `right`); absent without a hint. */
+  hint?: C4Hint;
   line: number;
+}
+
+export type C4Hint = 'up' | 'down' | 'left' | 'right';
+
+/** A place asked for without a line (`Lay_D(a, b)`: b below a). */
+export interface C4Lay {
+  from: string;
+  to: string;
+  hint: C4Hint;
+  line: number;
+}
+
+/** `UpdateLayoutConfig`: elements without relations in one row of a boundary, and sibling boundaries in one row. */
+export interface C4LayoutConfig {
+  shapeInRow: number;
+  boundaryInRow: number;
 }
 
 export interface C4Model {
@@ -53,6 +71,8 @@ export interface C4Model {
   elements: C4Element[];
   boundaries: C4Boundary[];
   rels: C4Rel[];
+  lays: C4Lay[];
+  config: C4LayoutConfig;
   /** Statements that were read and left out of the drawing. */
   ignored: string[];
 }
@@ -69,6 +89,8 @@ const ELEMENT = /^(Person|System|Container|Component)(Db|Queue)?(_Ext)?$/;
 const BOUNDARY_KINDS = new Set(['Boundary', 'Enterprise_Boundary', 'System_Boundary', 'Container_Boundary']);
 const NODE = /^(Deployment_Node|Node)(_L|_R)?$/;
 const REL = /^(Rel|BiRel)(_Up|_Down|_Left|_Right|_U|_D|_L|_R|_Back|_Neighbor)?$/;
+const LAY = /^Lay_(Up|Down|Left|Right|U|D|L|R)$/;
+const HINTS: Readonly<Record<string, C4Hint>> = { U: 'up', Up: 'up', D: 'down', Down: 'down', L: 'left', Left: 'left', R: 'right', Right: 'right', Neighbor: 'right' };
 /** Styling, layout and legend statements: read and left out. */
 const IGNORED = /^(Update[A-Za-z]*|Add[A-Za-z]*|Rewrite[A-Za-z]*|Lay_[A-Za-z]+|SHOW_[A-Z_]+|HIDE_[A-Z_]+|LAYOUT_[A-Z_]+|Legend[A-Za-z]*|SetPropertyHeader|WithoutPropertyHeader)$/;
 
@@ -128,7 +150,7 @@ const stripComment = (line: string): string => {
 /** Reads a C4 diagram; a statement that is not C4 is an error, a styling or layout statement is left out. */
 export function parseC4(src: string): C4Model {
   const rows = src.split(/\r?\n/);
-  const model: C4Model = { type: 'context', elements: [], boundaries: [], rels: [], ignored: [] };
+  const model: C4Model = { type: 'context', elements: [], boundaries: [], rels: [], lays: [], config: { shapeInRow: 4, boundaryInRow: 2 }, ignored: [] };
   const access = createAccessibilityReader();
   const open: Array<{ alias: string; line: number }> = [];
   const aliases = new Set<string>();
@@ -226,6 +248,7 @@ export function parseC4(src: string): C4Model {
       steps += 1;
       const suffix = rel?.[2];
       const heads = rel?.[1] === 'BiRel' ? 'both' : suffix === '_Back' ? 'start' : 'end';
+      const hint = suffix === undefined ? undefined : HINTS[suffix.slice(1)];
       model.rels.push({
         from,
         to,
@@ -233,10 +256,28 @@ export function parseC4(src: string): C4Model {
         ...(tech === undefined || tech === '' ? {} : { tech }),
         heads,
         ...(name === 'RelIndex' ? { index: index ?? steps } : {}),
+        ...(hint === undefined ? {} : { hint }),
         line,
       });
-      if (suffix !== undefined && suffix !== '_Back') model.ignored.push(`${name} (direction hint)`);
       if (call.opens) fail(`'${name}' does not open a block`, line);
+      return;
+    }
+
+    const lay = LAY.exec(name);
+    if (lay !== null) {
+      const [from = '', to = ''] = positional(call.args);
+      for (const end of [from, to]) if (!aliases.has(end)) fail(`'${end}' is not defined`, line);
+      model.lays.push({ from, to, hint: HINTS[lay[1] as string] as C4Hint, line });
+      return;
+    }
+
+    if (name === 'UpdateLayoutConfig') {
+      for (const arg of call.args) {
+        const set = /^\$(c4ShapeInRow|c4BoundaryInRow)\s*=\s*"?(\d+)"?$/.exec(arg.trim());
+        if (set === null || Number(set[2]) < 1) continue;
+        if (set[1] === 'c4ShapeInRow') model.config.shapeInRow = Number(set[2]);
+        else model.config.boundaryInRow = Number(set[2]);
+      }
       return;
     }
 

@@ -14,8 +14,19 @@ export interface RouteInput {
   nodes: Array<Box & { id: string }>;
   /** `name` is the box of the written name: no line passes through it. */
   clusters: Array<{ id: string; box: Box; name?: Box }>;
-  /** `current` is the line as it is drawn; it stays when the edge cannot be routed here or when `keep` is set. */
-  edges: Array<{ from: string; to: string; current: Point[]; keep?: boolean }>;
+  /**
+   * `current` is the line as it is drawn; it stays when the edge cannot be routed here or when `keep` is set. `pin`, when
+   * set, gives the only place on each end's face the line may leave or enter by: no other port is offered, and an edge
+   * that finds no line between its pins keeps `current`.
+   */
+  edges: Array<{ from: string; to: string; current: Point[]; keep?: boolean; pin?: { from: Pin; to: Pin } }>;
+}
+
+/** A place on a face of a box: `d` is the direction out of the face (0 right, 1 down, 2 left, 3 up). */
+export interface Pin {
+  x: number;
+  y: number;
+  d: 0 | 1 | 2 | 3;
 }
 
 const EPS = 1e-6;
@@ -188,6 +199,8 @@ function portsOf(box: Box, other: Box, degree: number): Port[] {
   return out;
 }
 
+const pinPort = (p: Pin): Port => ({ px: p.x, py: p.y, sx: p.x + (DX[p.d] as number) * STUB, sy: p.y + (DY[p.d] as number) * STUB, d: p.d, preferred: true, off: 0 });
+
 const enters = (box: Box, other: Box): boolean => other.x >= box.x - EPS && other.y >= box.y - EPS && other.x + other.w <= box.x + box.w + EPS && other.y + other.h <= box.y + box.h + EPS;
 
 /**
@@ -212,6 +225,8 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
     fromId: string;
     toId: string;
     distance: number;
+    /** The ports are the pins of the edge and no others. */
+    pinned?: boolean;
   }
   const degree = new Map<string, number>();
   for (const e of input.edges) for (const id of [e.from, e.to]) degree.set(id, (degree.get(id) ?? 0) + 1);
@@ -226,7 +241,8 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
       return;
     }
     const distance = Math.abs(a.box.x + a.box.w / 2 - (b.box.x + b.box.w / 2)) + Math.abs(a.box.y + a.box.h / 2 - (b.box.y + b.box.h / 2));
-    jobs.push({ index, fromId: e.from, toId: e.to, fromBox: a.box, toBox: b.box, from: portsOf(a.box, b.box, degree.get(e.from) ?? 1), to: portsOf(b.box, a.box, degree.get(e.to) ?? 1), distance });
+    const pinned = e.pin === undefined ? {} : { pinned: true, from: [pinPort(e.pin.from)], to: [pinPort(e.pin.to)] };
+    jobs.push({ index, fromId: e.from, toId: e.to, fromBox: a.box, toBox: b.box, from: portsOf(a.box, b.box, degree.get(e.from) ?? 1), to: portsOf(b.box, a.box, degree.get(e.to) ?? 1), distance, ...pinned });
   });
   const fixed = new Set(paths.flatMap((p, i) => (p === undefined ? [] : [i])));
   const results: Array<Point[] | undefined> = input.edges.map(() => undefined);
@@ -277,6 +293,7 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
   const gy = merged(ys.filter((v) => v >= EDGE_ROOM - EPS && v <= height - EDGE_ROOM + EPS));
   // A face pointing at the other end can also be left or entered level with any line of the grid, so that a line can run straight down the side of a box.
   for (const job of jobs) {
+    if (job.pinned === true) continue;
     for (const [ports, box] of [[job.from, job.fromBox], [job.to, job.toBox]] as const) {
       const extra: Port[] = [];
       for (const d of [0, 1, 2, 3]) {

@@ -176,6 +176,32 @@ export interface Graph {
    * (`rankGap`), `join` the gap between the boxes that join the first rank of a level of clusters (`joinGap`). A terminal drawing keeps its own.
    */
   gaps?: { flow?: number; join?: number };
+  /** Set when a pixel drawing is placed by a placer of its own instead of the layered engine: `c4-grid` puts every box on one grid of rows and columns (see `grid`). A terminal drawing ignores it. */
+  placer?: 'c4-grid';
+  /** What the `c4-grid` placer reads besides the graph. */
+  grid?: GridSpec;
+}
+
+/** Where one element stands from another: `to` above (`up`), below, left of or right of `from`. */
+export type GridHint = 'up' | 'down' | 'left' | 'right';
+
+/** Placement settings of the `c4-grid` placer. */
+export interface GridSpec {
+  /** Per edge, by index: where `to` stands from `from`, as the source asked. */
+  hints: Array<GridHint | undefined>;
+  /** Per edge, by index: the end that stands above when nothing else decides, set on a line with arrowheads that do not tell (`BiRel`, `Rel_Back`): the first one written. */
+  upper: Array<'from' | 'to' | undefined>;
+  /** Per edge, by index: the step of a dynamic diagram; the rows follow the steps before the order of writing. */
+  steps: Array<number | undefined>;
+  /** Places asked for without a line. */
+  lays: Array<{ from: string; to: string; hint: GridHint }>;
+  /** Ids of the nodes that stand on the start side of their lines (persons). */
+  starts: string[];
+  /** Ids of nodes and clusters in the order they are written. */
+  order: string[];
+  /** Nodes without lines in one row of a cluster, and sibling clusters in one row. */
+  shapeInRow: number;
+  boundaryInRow: number;
 }
 
 export interface Point {
