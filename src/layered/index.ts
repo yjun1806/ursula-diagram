@@ -609,7 +609,9 @@ function stackGaps(source: Graph): number[] {
   return [first, first + 2, first + 4];
 }
 
-export function layoutLayered(source: Graph, given: Ruler, options: LayeredOptions = {}): Layout {
+export function layoutLayered(source: Graph, ruled: Ruler, options: LayeredOptions = {}): Layout {
+  // A drawing in one lane with no name draws no lane box: the drawing's margin alone keeps its boxes from the edge.
+  const given: Ruler = !ruled.terminal && source.lanes.length === 1 && (source.lanes[0]?.label ?? '') === '' && options.nested !== true ? { ...ruled, lanePad: ruled.trackGap } : ruled;
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
   if (!given.terminal || opts.gap !== undefined) {
     if (given.terminal) return withQuestions(source, layoutAt(source, given, opts), given, opts);
