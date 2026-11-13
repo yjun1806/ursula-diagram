@@ -5,6 +5,8 @@ import { cellRuler, pixelRuler } from '../src/metrics.ts';
 import { c4Graph } from '../src/c4/graph.ts';
 import { parseC4 } from '../src/c4/parse.ts';
 import { recordHeight, recordWidth } from '../src/layout/records.ts';
+import { CLUSTER_NAME_INSET, CLUSTER_NAME_LINE, CLUSTER_NAME_ROW, CLUSTER_PAD } from '../src/layout/clusters.ts';
+import { crossesInterior, segmentsOf } from './helpers.ts';
 
 const EXAMPLES: string[] = [
   // 01-c4-diagrams
@@ -461,5 +463,76 @@ describe('c4 boundaries without lines inside are grids', () => {
   it('puts the two systems of a boundary side by side', () => {
     expect(node('SystemA').y).toBe(node('SystemB').y);
     expect(node('SystemF').y).toBe(node('SystemG').y);
+  });
+});
+
+describe('c4 boundaries keep their size and lines keep off their names', () => {
+  const ruler = pixelRuler();
+  const laid = layout(c4Graph(parseC4(EXAMPLES[1] as string), ruler), ruler);
+  const node = (id: string) => laid.nodes.find((n) => n.id === id) as (typeof laid.nodes)[number];
+  const box = (id: string) => (laid.clusters ?? []).find((c) => c.id === id) as NonNullable<typeof laid.clusters>[number];
+
+  it('does not stretch a boundary for the line ends on its sides', () => {
+    const inside = [...laid.nodes.filter((n) => ['SystemE', 'SystemC', 'SystemD'].includes(n.id)), box('b2'), box('b3')];
+    const top = Math.min(...inside.map((r) => r.y));
+    const bottom = Math.max(...inside.map((r) => r.y + r.h));
+    expect(box('b1').h).toBeLessThanOrEqual(bottom - top + 2 * CLUSTER_PAD + CLUSTER_NAME_ROW);
+  });
+
+  it('keeps every line off the name of every boundary, which stands in a gap of the top row', () => {
+    for (const c of laid.clusters ?? []) {
+      const name = c.name as NonNullable<typeof c.name>;
+      expect(name.knockout, c.id).toBeFalsy();
+      expect(name.lines.join(' \u00b7 ')).toBe(c.label);
+      for (const e of laid.edges) for (const s of segmentsOf(e)) expect(crossesInterior(s, name), `${e.from} -> ${e.to} through the name of ${c.id}`).toBe(false);
+    }
+  });
+
+  it('puts the name of BankBoundary right of the lines that cross its top row when it has no room at the left', () => {
+    const c = box('b1');
+    const name = c.name as NonNullable<typeof c.name>;
+    expect(name.x).toBeGreaterThanOrEqual(c.x + CLUSTER_NAME_INSET);
+    expect(name.y).toBe(c.y + 12);
+  });
+
+  it('lets a line leave a node inside a boundary on the side that faces the node outside', () => {
+    // The e-mail system is below and to the right of the customer: its line goes up first.
+    const e = laid.edges.find((v) => [v.from, v.to].sort().join() === ['SystemC', 'customerA'].sort().join()) as (typeof laid.edges)[number];
+    const points = e.from === 'SystemC' ? e.points : [...e.points].reverse();
+    const [start, next] = points as [{ x: number; y: number }, { x: number; y: number }];
+    expect(start.y).toBeCloseTo(node('SystemC').y, 4);
+    expect(next.y).toBeLessThan(start.y);
+  });
+});
+
+describe('c4 boundary names in a narrow boundary', () => {
+  const ruler = pixelRuler();
+  const laid = layout(c4Graph(parseC4(EXAMPLES[5] as string), ruler), ruler);
+  const rect = (c: NonNullable<typeof laid.clusters>[number]) => c.name as NonNullable<typeof c.name>;
+
+  it('writes a name that does not fit on one line as the name and its type on two, and makes the row one line taller', () => {
+    const two = (laid.clusters ?? []).filter((c) => rect(c).lines.length === 2);
+    expect(two.length).toBeGreaterThan(0);
+    for (const c of two) {
+      expect(rect(c).lines.join(' \u00b7 ')).toBe(c.label);
+      expect(rect(c).h).toBe(2 * CLUSTER_NAME_LINE);
+      const inside = [...laid.nodes.filter((n) => n.cluster === c.id)];
+      for (const n of inside) expect(n.y).toBeGreaterThanOrEqual(c.y + CLUSTER_NAME_ROW + CLUSTER_NAME_LINE);
+    }
+  });
+
+  it('draws a name over a knockout only where a line has to pass behind it, and nowhere else crosses a name', () => {
+    for (const c of laid.clusters ?? []) {
+      const name = rect(c);
+      const hits = laid.edges.flatMap((e) => segmentsOf(e)).filter((s) => crossesInterior(s, name)).length;
+      if (name.knockout) expect(hits, c.id).toBeGreaterThan(0);
+      else expect(hits, c.id).toBe(0);
+    }
+  });
+
+  it('writes the knockout name into the svg after the lines', () => {
+    const svg = render(EXAMPLES[5] as string);
+    const knocked = (laid.clusters ?? []).filter((c) => rect(c).knockout);
+    if (knocked.length > 0) expect(svg.indexOf('ursula-zone-knock')).toBeGreaterThan(svg.indexOf('ursula-edge'));
   });
 });

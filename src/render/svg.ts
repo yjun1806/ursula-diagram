@@ -173,15 +173,32 @@ function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeS
   );
 }
 
-/** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands at the top left. */
+/** The text of a cluster name: its first line stands 12 below the top of `name`, the others 16 further each. */
+function nameText(cluster: LayoutCluster): string {
+  const name = cluster.name;
+  const x = name?.x ?? cluster.x + CLUSTER_NAME_INSET;
+  const top = name?.y ?? cluster.y + 12;
+  const lines = name?.lines ?? [cluster.label];
+  return lines.map((l, i) => `<text class="ursula-zone-name" x="${num(x)}" y="${num(top + 12 + 16 * i)}">${escapeXml(l)}</text>`).join('');
+}
+
+/** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands in the gap of the top row the lines leave. */
 function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
   const look = cluster.style === 'dashed' ? ' ursula-zone--dashed' : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
   return (
     `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` +
     `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
-    `<text class="ursula-zone-name" x="${num(cluster.x + CLUSTER_NAME_INSET)}" y="${num(cluster.y + 24)}">${escapeXml(cluster.label)}</text>` +
+    (cluster.name?.knockout ? '' : nameText(cluster)) +
     '</g>'
   );
+}
+
+/** A name a line passes behind: drawn over the lines on a knockout of the fill, so that the line is seen to stop at it. */
+function knockoutSvg(cluster: LayoutCluster): string {
+  const name = cluster.name;
+  if (!name?.knockout) return '';
+  const look = cluster.style === 'dashed' ? ' ursula-zone-knock--dashed' : cluster.depth % 2 === 0 ? ' ursula-zone-knock--plain' : '';
+  return `<g class="ursula-cluster-name" data-cluster="${escapeXml(cluster.id)}"><rect class="ursula-zone-knock${look}" x="${num(name.x - 4)}" y="${num(name.y - 2)}" width="${num(name.w + 8)}" height="${num(name.h + 4)}"/>${nameText(cluster)}</g>`;
 }
 
 /** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene theme. */
@@ -195,6 +212,7 @@ function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[
       ? [`.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
+    ...(clusters.some((c) => c.name?.knockout) ? ['.ursula-zone-knock{fill:$lane}', '.ursula-zone-knock--plain{fill:$zone}', '.ursula-zone-knock--dashed{fill:$zone}'] : []),
   ];
 }
 
@@ -613,6 +631,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
+    ...(layout.clusters ?? []).map(knockoutSvg),
     ...layout.edges.map((e) => labelSvg(e, paint)),
     ...layout.edges.map(endLabelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),

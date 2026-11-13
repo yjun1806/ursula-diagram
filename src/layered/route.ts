@@ -197,13 +197,15 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const margin = marginOf(ruler);
   const origin = margin + f.gutter + ruler.lanePad;
   // A drawing never starts further than its margin from the edge, whatever the placement before it left.
-  const first = Math.min(...start);
   const real = (n: number): boolean => n < l.realCount;
   const slot = (n: number): number => boxLength(l.nodes[n]?.units ?? 2, unit, gap);
   const len = (n: number): number => {
     const own = real(n) ? f.bodyLen?.[n] : undefined;
     return own === undefined ? slot(n) : bodyLength(own, slot(n));
   };
+  // A box of a cluster stands in the middle of its slots like any body, but the room its size leaves over before the first box is not drawn.
+  const boxed = (n: number): boolean => real(n) && f.graph.nodes[n]?.box !== undefined;
+  const first = Math.min(...start.map((v, n) => v + (boxed(n) ? (slot(n) - len(n)) / 2 / unit : 0)));
   const nodeO = (n: number): number => origin + ((start[n] ?? 0) - (Number.isFinite(first) ? first : 0)) * unit + (slot(n) - len(n)) / 2;
   // Lines that share a gap are drawn a track gap apart, in layer order, around the middle of the gap.
   const shift = new Float64Array(l.nodes.length);
@@ -268,7 +270,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     const near = custom[key(n, side)];
     const origin = nodeO(n);
     const out: number[] = [];
-    for (const o of faceOffsets(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), step, sideCount[key(n, side)] ?? 0, ruler.uniform === true)) {
+    for (const o of faceOffsets(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), step, sideCount[key(n, side)] ?? 0, ruler.uniform === true, f.graph.nodes[n]?.box !== undefined)) {
       const x = origin + o;
       if (set?.includes(rk(x))) continue;
       if (near?.some((c) => Math.abs(c - x) < PORT_APART - EPS)) continue;
@@ -914,7 +916,8 @@ function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => n
   const margin = marginOf(f.ruler);
   let end = 0;
   for (const n of l.nodes) {
-    const right = n.idx < l.realCount ? nodeO(n.idx) + boxLength(n.units, f.unit, f.gap) : centre(n.idx);
+    const own = n.idx < l.realCount && f.graph.nodes[n.idx]?.box !== undefined ? f.bodyLen?.[n.idx] : undefined;
+    const right = n.idx < l.realCount ? nodeO(n.idx) + (own === undefined ? boxLength(n.units, f.unit, f.gap) : bodyLength(own, boxLength(n.units, f.unit, f.gap))) : centre(n.idx);
     end = Math.max(end, right);
   }
   void start;

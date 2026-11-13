@@ -104,7 +104,8 @@ function geometry(ruler: Ruler, unit: number, gap: number): PortGeometry {
  * (pixels): such a box keeps its height and stands in the middle of its slot instead of filling it.
  */
 function bodyLengths(graph: Graph, ruler: Ruler, td: boolean): Array<number | undefined> {
-  return graph.nodes.map((n) => (td && !ruler.uniform && hasCompartments(n) ? ownSize(n, td, ruler)?.h : undefined));
+  // A box of a cluster keeps the size it was given along the order axis too, in the middle of the slots it takes.
+  return graph.nodes.map((n) => (n.box !== undefined && !ruler.uniform ? (td ? n.box.h : n.box.w) : td && !ruler.uniform && hasCompartments(n) ? ownSize(n, td, ruler)?.h : undefined));
 }
 
 /** Boxes up to 15% wider than the middle one share its place size: a box a few pixels wider does not take two places. */
@@ -190,7 +191,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
     leftToRight(ladder, layers);
     for (const node of ladder.nodes) if (node.idx < ladder.realCount) node.units = units[node.idx] ?? 2;
     const plan = planFlat(ladder, layers, ruler);
-    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across);
+    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across, graph.nodes.map((n, i) => (n.box === undefined ? undefined : bodies[i])));
     const need = portDemand(ladder, plan);
     const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), body: (n) => { const own = bodies[n]; return own === undefined ? undefined : bodyLength(own, boxLength(ladder.nodes[n]?.units ?? 2, unit, gap)); }, squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
     return {
@@ -440,7 +441,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
       // Wider gaps coarsen the port lattice: stop when a box would lose a port an edge needs.
       const need = portDemand(placed.ladder, placed.plan);
       const across = stadiumThickness(graph, r, td);
-      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && lacksRoom(graph.nodes[n.idx]?.shape, td, boxLength(n.units, u, gap), portStep(u, r), across, r.uniform === true, need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
+      if (placed.ladder.nodes.some((n) => n.idx < placed.ladder.realCount && graph.nodes[n.idx]?.box === undefined && lacksRoom(graph.nodes[n.idx]?.shape, td, boxLength(n.units, u, gap), portStep(u, r), across, r.uniform === true, need[n.idx]?.up ?? 0, need[n.idx]?.down ?? 0))) break;
       const wider = draw(r);
       if (total(wider) > room) break;
       const now = tightPasses(wider);

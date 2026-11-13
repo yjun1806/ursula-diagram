@@ -37,14 +37,30 @@ export function evenOffsets(length: number, step: number): number[] {
   return out;
 }
 
+/** Distance between two ports on a side that is crowded beyond the lattice: the least two line ends may stand apart. */
+export const DENSE_PITCH = 8;
+
+/** Offsets from the start of a side at DENSE_PITCH from one another, centred, at least CORNER_CLEAR from both ends. */
+export function denseOffsets(length: number): number[] {
+  const each = Math.max(0, Math.floor((length / 2 - CORNER_CLEAR + 1e-6) / DENSE_PITCH));
+  const out: number[] = [];
+  for (let j = -each; j <= each; j++) out.push(length / 2 + j * DENSE_PITCH);
+  return out;
+}
+
 /** How many ports a side of this length holds: the lattice of whole steps, or the dense one where that holds more (never in a terminal). */
 export const portRoom = (length: number, step: number, terminal: boolean): number =>
   Math.max(portOffsets(length, step).length, terminal ? 0 : evenOffsets(length, step).length);
 
 /** The lattice a side takes for `count` ports: whole steps when that holds them, else the dense one when that does, else whole steps (the box has to grow). */
-export function sideOffsets(length: number, step: number, count: number, terminal: boolean): number[] {
+export function sideOffsets(length: number, step: number, count: number, terminal: boolean, crowded = false): number[] {
   const odd = portOffsets(length, step);
   if (terminal || odd.length >= count) return odd;
+  // A box that keeps its size spaces its ports DENSE_PITCH apart, not closer, rather than grow.
+  if (crowded) {
+    const dense = denseOffsets(length);
+    return dense.length >= count ? dense : odd;
+  }
   const even = evenOffsets(length, step);
   return even.length >= count ? even : odd;
 }
@@ -113,9 +129,9 @@ export const centreOnly = (shape: NodeShape | undefined, face: Face): boolean =>
 const within = (offsets: number[], length: number, reach: number): number[] => offsets.filter((o) => Math.abs(o - length / 2) <= reach + 1e-6);
 
 /** The ports of a face that are on the lattice and inside the reach of its shape (never none: the middle always serves). */
-export function faceOffsets(shape: NodeShape | undefined, face: Face, length: number, across: number, step: number, count: number, terminal: boolean): number[] {
+export function faceOffsets(shape: NodeShape | undefined, face: Face, length: number, across: number, step: number, count: number, terminal: boolean, crowded = false): number[] {
   const reach = faceReach(shape, face, length, across, terminal);
-  if (reach === Infinity) return sideOffsets(length, step, count, terminal);
+  if (reach === Infinity) return sideOffsets(length, step, count, terminal, crowded);
   if (reach === 0) return [length / 2];
   const odd = within(portOffsets(length, step), length, reach);
   if (odd.length >= count) return odd;
@@ -210,12 +226,18 @@ export function portDemand(l: Ladder, plan: Map<number, FlatPlan>): Array<{ up: 
 }
 
 /** Widens real nodes by whole pairs of slot units until their sides hold the ports that edges need. */
-export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number, terminal: boolean, shapes: readonly NodeShape[], td: boolean, across: number): void {
+export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number, terminal: boolean, shapes: readonly NodeShape[], td: boolean, across: number, given: ReadonlyArray<number | undefined> = []): void {
   const need = portDemand(l, plan);
   for (const n of l.nodes) {
     if (n.idx >= l.realCount) continue;
     const up = need[n.idx]?.up ?? 0;
     const down = need[n.idx]?.down ?? 0;
+    // A box of a given size keeps it: its line ends stand DENSE_PITCH apart, and it grows only when they do not fit even so.
+    const own = given[n.idx];
+    if (own !== undefined) {
+      while (denseOffsets(bodyLength(own, boxLength(n.units, unit, gap))).length < Math.max(up, down) && n.units < 40) n.units += 2;
+      continue;
+    }
     while (lacksRoom(shapes[n.idx], td, boxLength(n.units, unit, gap), step, across, terminal, up, down) && n.units < 40) n.units += 2;
   }
 }

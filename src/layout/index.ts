@@ -46,6 +46,8 @@ export interface LayoutOptions extends SolveOptions {
   refine?: boolean;
   /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
   nested?: boolean;
+  /** Clusters only: `true` or `false` forces the straight exits of lines from clusters, the crossing order along a border and the ordering of ports on or off; absent, both are drawn and the one with fewer crossings, then bends, then length is kept (a tie keeps them off). */
+  clusterExits?: boolean;
 }
 
 export type { LegendOption } from './legend.ts';

@@ -289,7 +289,7 @@ describe('levels with lines inside keep the layered engine', () => {
     const l = layout(parse('flowchart TB\n  subgraph outer\n    subgraph inner\n      a-->b\n      b-->c\n    end\n    d-->a\n  end\n  e-->d'), pixelRuler());
     const at = (id: string) => l.nodes.find((n) => n.id === id) as Layout['nodes'][number];
     const box = (id: string) => (l.clusters ?? []).find((c) => c.id === id) as LayoutCluster;
-    expect([at('a'), at('b'), at('c'), at('d'), at('e')].map((n) => [n.x, n.y, n.w, n.h])).toEqual([[100, 368, 40, 48], [100, 464, 40, 48], [100, 560, 40, 48], [96, 208, 40, 48], [96, 48, 40, 48]]);
-    expect([box('outer'), box('inner')].map((c) => [c.x, c.y, c.w, c.h])).toEqual([[48, 144, 144, 528], [72, 304, 96, 336]]);
+    expect([at('a'), at('b'), at('c'), at('d'), at('e')].map((n) => [n.x, n.y, n.w, n.h])).toEqual([[100, 372, 40, 48], [100, 468, 40, 48], [100, 564, 40, 48], [96, 212, 40, 48], [96, 48, 40, 48]]);
+    expect([box('outer'), box('inner')].map((c) => [c.x, c.y, c.w, c.h])).toEqual([[48, 152, 144, 512], [72, 316, 96, 320]]);
   });
 });
