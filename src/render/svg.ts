@@ -4,6 +4,7 @@ import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, compartmentHe
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
 import { SCENE_THEME_SPECS } from './scene-theme.ts';
+import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
 import type { Theme, ThemeSpec } from './theme.ts';
 import { UrsulaError } from '../types.ts';
@@ -24,6 +25,8 @@ export interface SvgOptions {
   title?: string;
   /** Re-captions the legend of the layout, or removes it with `false`. Flowcharts read the edge styles, sequence diagrams the message kinds. */
   legend?: false | Partial<Record<EdgeStyle | LegendKind, string>>;
+  /** Title drawn above the drawing, left-aligned with its content; the canvas grows by one title row. Absent draws none. */
+  drawTitle?: string;
   /** Look of a flowchart: filled boxes (`solid`, the default), outlined boxes (`outline`) or cards with a shadow (`card`). */
   theme?: Theme;
 }
@@ -601,8 +604,8 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const spec = THEME_SPECS[theme];
   if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${Object.keys(THEME_SPECS).join(', ')}.`, 'theme');
   const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);
-  const w = num(layout.width);
-  const h = num(layout.height);
+  const heading = opts.drawTitle === undefined || opts.drawTitle === '' ? undefined : opts.drawTitle;
+  const rowH = heading === undefined ? 0 : TITLE_ROW;
   const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
   const byId = new Map(layout.nodes.map((n) => [n.id, n] as const));
   const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth] as const));
@@ -618,6 +621,8 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ]),
   };
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), layout.width);
+  const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
+  const h = num(layout.height + rowH);
   // A colour the flow theme does not have (the dashed zone's stroke) comes from the scene theme of the same name.
   const scene = SCENE_THEME_SPECS[theme].colors;
   const lookup: Lookup = (name, mode) => (spec.tokens[name] === undefined && scene[name] !== undefined ? `var(--ursula-${name},${scene[name][mode]})` : tokenVar(spec, name, mode));
@@ -625,8 +630,9 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : [])], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
+    ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
     ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
     ...layout.edges.map((e) => edgeSvg(e, byId, paint)),
@@ -635,6 +641,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...layout.edges.map((e) => labelSvg(e, paint)),
     ...layout.edges.map(endLabelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),
+    ...(heading === undefined ? [] : ['</g>']),
     '</svg>',
   ].join('');
 }

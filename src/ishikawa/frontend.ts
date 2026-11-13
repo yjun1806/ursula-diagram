@@ -5,6 +5,7 @@ import { joinSpans } from '../text/terminal.ts';
 import { layoutIshikawa } from './layout.ts';
 import { parseIshikawa } from './parse.ts';
 import { layoutIshikawaText } from './text.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 registerFrontEnd({
   name: 'ishikawa',
@@ -16,11 +17,11 @@ registerFrontEnd({
       ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
-  textLines(src, maxWidth) {
-    return layoutIshikawaText(parseIshikawa(src), maxWidth).map(joinSpans);
+  textLines(src, maxWidth, opts) {
+    return titledLines(layoutIshikawaText(parseIshikawa(src), maxWidth).map(joinSpans), opts.heading, maxWidth);
   },
-  textSpans(src, maxWidth) {
-    return layoutIshikawaText(parseIshikawa(src), maxWidth);
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(layoutIshikawaText(parseIshikawa(src), maxWidth), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseIshikawa(src);

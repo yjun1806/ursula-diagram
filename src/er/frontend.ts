@@ -6,6 +6,7 @@ import { renderSvg } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
 import type { Graph, Layout } from '../types.ts';
 import { parseEr } from './parse.ts';
+import { titledLines } from '../front/title.ts';
 
 const summary = (g: Graph): string => `Entity relationship diagram: ${g.nodes.length} entities, ${g.edges.length} relationships`;
 
@@ -46,10 +47,10 @@ registerFrontEnd({
   headers: ['erDiagram'],
   svg(src, opts) {
     const { title, ...laid } = pixels(src, opts);
-    return renderSvg(laid, { title, legend: false, ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderSvg(laid, { title, legend: false, ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
-    return terminal(src, maxWidth, opts);
+    return titledLines(terminal(src, maxWidth, opts), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseEr(src, opts.heading);

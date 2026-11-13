@@ -9,6 +9,7 @@ import { renderTextLayout } from '../render/text.ts';
 import type { LayoutNode } from '../types.ts';
 import type { UsecaseModel } from './model.ts';
 import { parseUsecase } from './parse.ts';
+import { titledLines } from '../front/title.ts';
 
 const num = (n: number): string => String(Math.round(n * 100) / 100);
 
@@ -58,12 +59,12 @@ registerFrontEnd({
   svg(src, opts) {
     const model = parseUsecase(src);
     const title = opts.title ?? model.accTitle ?? opts.heading ?? summary(model);
-    const svg = renderSvg(laidOut(model, opts, false), { ...opts, title, node: nodeHook(model), legend: false });
+    const svg = renderSvg(laidOut(model, opts, false), { ...opts, title, node: nodeHook(model), legend: false, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
     return withDescription(svg, model.accDescr);
   },
   textLines(src, maxWidth, opts) {
     const model = parseUsecase(src);
-    return renderTextLayout(laidOut(model, { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }, true));
+    return titledLines(renderTextLayout(laidOut(model, { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }, true)), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseUsecase(src);

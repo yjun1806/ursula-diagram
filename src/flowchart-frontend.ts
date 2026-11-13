@@ -9,6 +9,7 @@ import { cellWidth } from './metrics.ts';
 import type { Detail } from './text-detail.ts';
 import { descriptionList, innerWidth, innerWidths, titlesOnly, wrapGraph } from './text-detail.ts';
 import type { Graph, Layout } from './types.ts';
+import { titledLines } from './front/title.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
@@ -154,10 +155,10 @@ registerFrontEnd({
   headers: ['flowchart', 'graph', 'swimlane-beta'],
   svg(src, opts) {
     const { maxWidth, legend, engine, composition, quality, ...svgOpts } = opts;
-    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition, ...(quality === undefined ? {} : { quality }) })), svgOpts);
+    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition, ...(quality === undefined ? {} : { quality }) })), { ...svgOpts, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
-    return drawText(src, maxWidth, opts).lines;
+    return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(parse(src), mode === 'text' ? cellRuler() : pixelRuler(), layoutOptions(opts));
