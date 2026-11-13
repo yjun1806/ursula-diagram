@@ -9,11 +9,15 @@ import { valueText } from './model.ts';
 import type { Sankey } from './model.ts';
 
 const MARGIN = 24;
-const NODE_W = 12;
-const NODE_PAD = 16;
+const NODE_W = 16;
+const NODE_PAD = 24;
 /** A label above a node stands in the gap between two nodes, so a gap is never narrower than a label line. */
 const LABEL_H = 16;
 const LABEL_GAP = 8;
+/** Clear space between a label above the topmost node of a middle column and that node. */
+const LABEL_CLEAR = 12;
+/** Space between a node's name and its value. */
+const VALUE_GAP = 6;
 const TARGET_W = 840;
 const MIN_PLOT_H = 400;
 const MIN_STEP = 64;
@@ -42,7 +46,7 @@ export interface PlacedSankeyNode {
   w: number;
   h: number;
   /** Where the name and the value are written and the box both take. */
-  label: { side: 'left' | 'right' | 'above'; nameX: number; y: number; nameAnchor: 'start' | 'end'; box: Box };
+  label: { side: 'left' | 'right' | 'above'; nameX: number; y: number; nameAnchor: 'start' | 'middle' | 'end'; box: Box };
 }
 
 export interface PlacedBand {
@@ -147,7 +151,7 @@ export function crossingWeight(lines: Centreline[]): number {
 export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const count = map.nodes.length;
   const nodeW = map.nodeWidth ?? NODE_W;
-  const pad = Math.max(NODE_PAD, map.nodePadding ?? NODE_PAD);
+  const pad = Math.max(LABEL_H, map.nodePadding ?? NODE_PAD);
   const column = columnsOf(map);
   const columns = Math.max(...column) + 1;
 
@@ -171,7 +175,10 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const height = value.map((v) => v * scale);
 
   const titleBlock = map.title === undefined ? 0 : TITLE_H + TITLE_GAP;
-  const plotTop = MARGIN + titleBlock + (columns >= 3 ? LABEL_H : 0);
+  // A middle column that fills the plot puts its first label above the plot top, `LABEL_CLEAR` off the node.
+  const colH = (c: number[]): number => c.reduce((a, i) => a + (height[i] ?? 0), 0) + pad * Math.max(0, c.length - 1);
+  const middleFull = order.slice(1, -1).some((c) => colH(c) >= plotH - 1e-6);
+  const plotTop = MARGIN + titleBlock + (columns >= 3 ? LABEL_H : 0) + (middleFull ? LABEL_CLEAR : 0);
 
   // Centre lines of every band for an order, one unit of x per column; the bands stack at a node in the order of the other end.
   const linesOf = (ord: number[][]): Centreline[] => {
@@ -260,7 +267,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   const labelW = (i: number): number => {
     const s = shown[i];
     if (s === undefined) return 0;
-    return s.nameW + ('hide' in s ? 0 : numW(` ${s.text}`));
+    return s.nameW + ('hide' in s ? 0 : VALUE_GAP + numW(s.text));
   };
   const widest = (c: number): number => Math.max(0, ...(order[c] ?? []).map(labelW));
   const left = ceilTo(MARGIN + widest(0) + LABEL_GAP);
@@ -285,7 +292,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
       let box: Box;
       let nameX: number;
       let cy = y + h / 2;
-      let nameAnchor: 'start' | 'end' = 'start';
+      let nameAnchor: 'start' | 'middle' | 'end' = 'start';
       if (c === 0) {
         side = 'left';
         const right = x - LABEL_GAP;
@@ -299,10 +306,14 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
         box = { x0: start, x1: start + w, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
       } else {
         side = 'above';
+        // Centred on the node: the topmost one keeps `LABEL_CLEAR` off it, a lower one sits in the middle of the gap.
+        const first = (order[c] ?? [])[0] === i;
+        const bottom = y - (first ? LABEL_CLEAR : (pad - LABEL_H) / 2);
         const start = x + nodeW / 2 - w / 2;
-        cy = y - LABEL_H / 2;
-        nameX = start;
-        box = { x0: start, x1: start + w, y0: y - LABEL_H, y1: y };
+        cy = bottom - LABEL_H / 2;
+        nameX = x + nodeW / 2;
+        nameAnchor = 'middle';
+        box = { x0: start, x1: start + w, y0: bottom - LABEL_H, y1: bottom };
       }
       return { name: nd.name, value: value[i] ?? 0, valueText: hasValue ? s.text : valueText(value[i] ?? 0), column: c, series: seriesOf(i, nd.name), x, y, w: nodeW, h, label: { side, nameX, y: cy, nameAnchor, box } };
     });
@@ -378,9 +389,8 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
   for (const n of placed) {
     const anchor = n.label.nameAnchor;
     const role = map.outlined ? ['name', 'tick--halo'] : ['name'];
-    const value = ` ${n.valueText}`;
     const text = map.showValues
-      ? { text: `${n.name}${value}`, spans: [{ text: n.name }, { text: value, role: map.outlined ? ['value'] : ['value', 'value--plain'] }] }
+      ? { text: `${n.name} ${n.valueText}`, spans: [{ text: n.name }, { text: n.valueText, dx: VALUE_GAP, role: map.outlined ? ['value'] : ['value', 'value--plain'] }] }
       : { text: n.name };
     items.push({ kind: 'text', x: round2(n.label.nameX), y: round2(n.label.y), ...text, anchor, role, data: { node: n.name } });
   }

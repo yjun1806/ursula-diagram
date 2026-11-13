@@ -369,8 +369,8 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     zoneRadius: 18,
     bend: 8,
     lineWidth: 1.5,
-    barWidth: 32,
-    barTop: 8,
+    barWidth: 40,
+    barTop: 14,
     dataWidth: 2.5,
     dotRadius: 3.5,
     neutralDotRadius: 4,
@@ -379,8 +379,8 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     headBand: true,
     plainTimeline: true,
     peakBar: true,
-    interpolation: 'linear',
-    valueLabel: 'outside',
+    interpolation: 'monotone',
+    valueLabel: 'inside',
   },
   card: {
     colors: {

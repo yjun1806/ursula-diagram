@@ -1,5 +1,5 @@
 import { trimmedNumber } from '../chart/format.ts';
-import { ceilTo, FLOAT_NOISE } from '../chart/grid.ts';
+import { ceilTo, FLOAT_NOISE, floorTo } from '../chart/grid.ts';
 import { anchoredBox, boxesOverlap } from '../chart/label-place.ts';
 import type { Box, TextAnchor } from '../chart/label-place.ts';
 import { niceTicks } from '../chart/ticks.ts';
@@ -19,7 +19,7 @@ const TEXT_H = 16;
 const LABEL_GAP = 16;
 const NAME_GAP = 16;
 const SWATCH = 12;
-const LEGEND_GAP = 24;
+const LEGEND_GAP = 30;
 
 type Anchor = TextAnchor;
 
@@ -217,7 +217,8 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_T
 
   const titleW = model.title === undefined ? 0 : (ruler.textWidth(model.title, 'title') * 15) / 13;
   const legendOn = model.showLegend && model.curves.length > 0;
-  let width = ceilTo(2 * (Math.max(-minX, maxX) + MARGIN), 8);
+  // Text widths are estimated a little wide, so the half width and the centre round down to the grid rather than up.
+  let width = 2 * floorTo(Math.max(-minX, maxX) + MARGIN, 4, FLOAT_NOISE);
   width = Math.max(width, ceilTo(titleW + 2 * MARGIN, 8, FLOAT_NOISE));
   const itemW = model.curves.map((c) => SWATCH + 8 + textW(c.label, 12));
   const rowsOf = (avail: number): number[][] => {
@@ -241,7 +242,7 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_T
 
   const titleY = 52;
   const cx = width / 2;
-  const cy = ceilTo((model.title === undefined ? MARGIN : titleY + 10 + 12) - minY, 4, FLOAT_NOISE);
+  const cy = floorTo((model.title === undefined ? MARGIN : titleY + 10 + 12) - minY, 4, FLOAT_NOISE);
   const contentBottom = cy + maxY;
   const legendTop = ceilTo(contentBottom + 16, 4, FLOAT_NOISE);
   const legendBottom = legendTop + (legendRows.length > 0 ? legendRows.length * 24 - 8 : 0);

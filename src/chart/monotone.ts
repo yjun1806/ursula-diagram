@@ -56,3 +56,25 @@ export function monotonePath(points: readonly Point[]): string {
   }
   return d;
 }
+
+/** Points about every 3px along `path` as `monotonePath` writes it (one move, then cubic segments). */
+export function pathSamples(path: string): Point[] {
+  const nums = (path.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+  const samples: Point[] = [];
+  let from: Point = { x: nums[0] ?? 0, y: nums[1] ?? 0 };
+  const line = /L/.test(path);
+  for (let k = 2; k + (line ? 1 : 5) < nums.length; k += line ? 2 : 6) {
+    const [c1x = 0, c1y = 0, c2x = 0, c2y = 0, ex = 0, ey = 0] = line ? [from.x, from.y, nums[k] ?? 0, nums[k + 1] ?? 0, nums[k] ?? 0, nums[k + 1] ?? 0] : nums.slice(k, k + 6);
+    const steps = Math.max(1, Math.ceil(Math.hypot(ex - from.x, ey - from.y) / 3));
+    for (let t = 0; t <= steps; t++) {
+      const u = t / steps;
+      const v = 1 - u;
+      samples.push({
+        x: v * v * v * from.x + 3 * v * v * u * c1x + 3 * v * u * u * c2x + u * u * u * ex,
+        y: v * v * v * from.y + 3 * v * v * u * c1y + 3 * v * u * u * c2y + u * u * u * ey,
+      });
+    }
+    from = { x: ex, y: ey };
+  }
+  return samples;
+}

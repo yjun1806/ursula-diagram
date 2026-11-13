@@ -2,7 +2,7 @@ import { trimmedNumber } from '../chart/format.ts';
 import { ceilTo, FLOAT_NOISE, floorTo, GRID, round2 } from '../chart/grid.ts';
 import { anchoredBox, clashCost, pickLeastClash, trendAt } from '../chart/label-place.ts';
 import type { Box, TextAnchor } from '../chart/label-place.ts';
-import { monotonePath } from '../chart/monotone.ts';
+import { monotonePath, pathSamples } from '../chart/monotone.ts';
 import { niceTicks } from '../chart/ticks.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
@@ -414,6 +414,10 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       (marks[li]?.at ?? []).filter((p): p is Point => p !== undefined).map((p) => ({ x0: p.x - spec.dotRadius, x1: p.x + spec.dotRadius, y0: p.y - spec.dotRadius, y1: p.y + spec.dotRadius })),
     );
     const lineSamples: Point[] = polylines.flatMap((pts) => {
+      if (spec.interpolation === 'monotone' && pts.length >= 2) {
+        if (!horizontal) return pathSamples(monotonePath(pts));
+        return pathSamples(monotonePath(pts.map((p) => ({ x: p.y, y: p.x })))).map((p) => ({ x: p.y, y: p.x }));
+      }
       const out: Point[] = [];
       for (let j = 1; j < pts.length; j++) {
         const a = pts[j - 1];
@@ -454,7 +458,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     if (showValues || hasPointLabels) {
       // text labels of line points first, then the values
       const pointLabels: { job: LabelJob; w: number }[] = [];
-      const valueJobs: { job: LabelJob; w: number; roles: string[]; inner?: Candidate[] }[] = [];
+      const valueJobs: { job: LabelJob; w: number; roles: string[]; inner?: Candidate[]; ownLine?: boolean }[] = [];
       const lineJobs = new Map<string, true>();
       const sideOf = (s: XySeries, i: number): [-1 | 0 | 1, -1 | 0 | 1] => {
         const trend = trendAt(s.points[i]?.value ?? 0, s.points[i - 1]?.value, s.points[i + 1]?.value);
@@ -490,22 +494,24 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           const wantOutside = cfg.showDataLabelOutsideBar === true;
           const wantInside = cfg.showDataLabelOutsideBar !== true && (cfg.showDataLabel === true || spec.valueLabel === 'inside');
           const thickness = horizontal ? r.box.y1 - r.box.y0 : r.box.x1 - r.box.x0;
-          const fits = !strongBars && (horizontal ? r.len >= w + 24 : r.len >= 24 && thickness >= w + 8);
+          const fits = !strongBars && (horizontal ? r.len >= w + 24 : r.len >= 24 && thickness >= w + 2);
           const tip: Point = horizontal ? { x: r.end, y: r.centre } : { x: r.centre, y: r.end };
           const off = hasLine ? Math.round(spec.dotRadius + 4) : 4;
           const job: LabelJob = { text: p.raw, p: tip, cat: i, side: [0, 1], off, kind: 'bar' };
           if (!wantOutside && wantInside && fits) {
             const inner: Candidate[] = [0, 12, 24, 36].map((k) => (horizontal ? { x: r.end - 12 - k, y: r.centre, anchor: 'end' } : { x: r.centre, y: r.end + 20 + k, anchor: 'middle' }));
-            valueJobs.push({ job, w, roles: ['value', 'value--plain'], inner });
+            // the line of the same series meets the bar only at its dot, so it does not push the value down
+            valueJobs.push({ job, w, roles: ['value', 'value--plain'], inner, ownLine: hasLine && single });
           } else valueJobs.push({ job, w, roles: ['value'] });
         });
       });
       for (const { job, w } of pointLabels) place(job, ['label', 'tick--halo'], w);
-      for (const { job, w, roles, inner } of valueJobs) {
+      for (const { job, w, roles, inner, ownLine } of valueJobs) {
         const fit = inner?.find((c) => {
           const box = boxOf(c.x, c.y, w, c.anchor);
           const within = horizontal ? box.x0 >= base + 2 : box.y1 <= base - 2;
-          return within && clash(box) === 0;
+          const cost = ownLine === true ? clashCost(box, { bounds, fixed: fixedObstacles, placed, samples: [] }) : clash(box);
+          return within && cost === 0;
         });
         if (fit) {
           placed.push(boxOf(fit.x, fit.y, w, fit.anchor));

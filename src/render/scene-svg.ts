@@ -227,7 +227,8 @@ function spanSvg(span: SceneTextSpan): string {
   const weight = span.weight === undefined ? '' : ` font-weight="${span.weight}"`;
   const slant = span.italic === true ? ' font-style="italic"' : '';
   const cls = span.role === undefined || span.role.length === 0 ? '' : ` class="${classOf(span.role)}"`;
-  return `<tspan${weight}${slant}${cls}>${escapeXml(span.text)}</tspan>`;
+  const dx = span.dx === undefined ? '' : ` dx="${num(span.dx)}"`;
+  return `<tspan${weight}${slant}${cls}${dx}>${escapeXml(span.text)}</tspan>`;
 }
 
 function textSvg(item: SceneText): string {

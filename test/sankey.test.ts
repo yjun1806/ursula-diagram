@@ -167,7 +167,7 @@ function textBoxes(items: readonly (SceneText | SceneBox | { kind: string })[]):
     const w =
       t.spans === undefined
         ? ruler.textWidth(t.text, 'title')
-        : t.spans.reduce((a, sp) => a + ruler.textWidth(sp.text, sp.role?.includes('value') === true ? 'line' : 'title'), 0);
+        : t.spans.reduce((a, sp) => a + (sp.dx ?? 0) + ruler.textWidth(sp.text, sp.role?.includes('value') === true ? 'line' : 'title'), 0);
     return [{ text: t.text, box: anchoredBox(t.x, t.y, w, t.anchor ?? 'start', 16) }];
   });
 }
@@ -368,7 +368,7 @@ describe('sankey: layout', () => {
   it('keeps the gap between nodes of a column and colours bands by the end with fewer links', () => {
     const l = layoutOf(IDEAL);
     const col2 = l.nodes.filter((n) => n.column === 2).sort((a, b) => a.y - b.y);
-    for (let i = 1; i < col2.length; i++) expect((col2[i]?.y ?? 0) - ((col2[i - 1]?.y ?? 0) + (col2[i - 1]?.h ?? 0))).toBeCloseTo(16, 5);
+    for (let i = 1; i < col2.length; i++) expect((col2[i]?.y ?? 0) - ((col2[i - 1]?.y ?? 0) + (col2[i - 1]?.h ?? 0))).toBeCloseTo(24, 5);
     expect(l.bands[0]?.series).toBe(l.nodes[0]?.series);
     expect(l.bands[2]?.series).toBe(l.nodes.find((n) => n.name === 'Rent')?.series);
   });
@@ -408,7 +408,7 @@ describe('sankey: text', () => {
 });
 
 describe('sankey: node label', () => {
-  it('writes name and value as two spans of one text, one space apart, and sizes the label box by their widths', () => {
+  it('writes name and value as two spans of one text, 6px apart, and sizes the label box by their widths', () => {
     const lay = layoutOf(EXAMPLES['basic'] ?? '');
     const texts = lay.scene.items.filter((i): i is SceneText => i.kind === 'text' && i.data?.['node'] !== undefined);
     expect(texts).toHaveLength(lay.nodes.length);
@@ -416,11 +416,12 @@ describe('sankey: node label', () => {
       const t = texts.find((x) => x.data?.['node'] === n.name);
       expect(t?.text).toBe(`${n.name} ${n.valueText}`);
       expect(t?.spans?.[0]?.text).toBe(n.name);
-      expect(t?.spans?.[1]?.text).toBe(` ${n.valueText}`);
+      expect(t?.spans?.[1]?.text).toBe(n.valueText);
+      expect(t?.spans?.[1]?.dx).toBe(6);
       expect(t?.spans?.[1]?.role).toContain('value');
-      const w = ruler.textWidth(n.name, 'title') + ruler.textWidth(` ${n.valueText}`, 'line');
+      const w = ruler.textWidth(n.name, 'title') + 6 + ruler.textWidth(n.valueText, 'line');
       expect(n.label.box.x1 - n.label.box.x0).toBeCloseTo(w, 6);
     }
-    expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<text class="ursula-name ursula-(start|end|middle)"[^>]*><tspan>[^<]+<\/tspan><tspan class="ursula-value ursula-value--plain"> [0-9]/u);
+    expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<text class="ursula-name ursula-(start|end|middle)"[^>]*><tspan>[^<]+<\/tspan><tspan class="ursula-value ursula-value--plain" dx="6">[0-9]/u);
   });
 });
