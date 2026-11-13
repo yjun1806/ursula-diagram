@@ -4,6 +4,7 @@ import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Direction, Graph, GraphEdge, GraphNode, Layout, LayoutCluster, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { LayoutOptions } from './index.ts';
 import { withLegend } from './legend.ts';
+import { crossingCount } from './check.ts';
 import { gridUp } from './place.ts';
 
 /** Space between a cluster box and what stands in it, and the extra line on top that holds the name. */
@@ -881,7 +882,8 @@ function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { 
         if (a.y >= c.y - EPS && a.y <= c.y + row + EPS && Math.max(a.x, b.x) > c.x && Math.min(a.x, b.x) < c.x + c.w) taken.push([Math.min(a.x, b.x) - NAME_GAP, Math.max(a.x, b.x) + NAME_GAP]);
       } else if (a.x > c.x && a.x < c.x + c.w && Math.max(a.y, b.y) > c.y && Math.min(a.y, b.y) < c.y + row) taken.push([a.x - NAME_GAP, a.x + NAME_GAP]);
     }
-    for (const t of labels) if (t.y < c.y + row && t.y + t.h > c.y && t.x + t.w > c.x && t.x < c.x + c.w) taken.push([t.x - NAME_GAP, t.x + t.w + NAME_GAP]);
+    // A label counts where it reaches the text of the name, not where it only reaches over the border.
+    for (const t of labels) if (t.y < c.y + NAME_FONT + row - CLUSTER_NAME_ROW + 16 && t.y + t.h > c.y + NAME_FONT && t.x + t.w > c.x && t.x < c.x + c.w) taken.push([t.x - NAME_GAP, t.x + t.w + NAME_GAP]);
     const gaps = gapsOf(c.x, c.x + c.w, taken);
     const at = (lines: string[]): { x: number; w: number } | undefined => {
       const w = Math.max(...lines.map((l) => ruler.textWidth(l, 'lane')));
@@ -915,11 +917,21 @@ function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { 
  */
 export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
   // Drawn once with every name on one line; the clusters whose name has no room there get a taller name row, and the drawing is made once more.
-  const first = layoutPass(graph, ruler, opts, draw, new Set());
-  return first.need.size === 0 ? first.layout : layoutPass(graph, ruler, opts, draw, first.need).layout;
+  const drawn = (exits: boolean): Layout => {
+    const first = layoutPass(graph, ruler, opts, draw, new Set(), exits);
+    return first.need.size === 0 ? first.layout : layoutPass(graph, ruler, opts, draw, first.need, exits).layout;
+  };
+  if (opts.clusterExits !== undefined) return drawn(opts.clusterExits);
+  // The straight exits are kept only when the whole drawing is better with them: fewer crossings, then fewer bends, then shorter lines.
+  const off = drawn(false);
+  const on = drawn(true);
+  const price = (l: Layout): number[] => [crossingCount(l.edges), l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0), l.edges.reduce((n, e) => n + segmentsOf(e.points).reduce((m, t) => m + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y), 0), 0)];
+  const [a, b] = [price(on), price(off)];
+  for (let i = 0; i < 3; i++) if ((a[i] as number) !== (b[i] as number)) return (a[i] as number) < (b[i] as number) ? on : off;
+  return off;
 }
 
-function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel, rows: ReadonlySet<string>): { layout: Layout; need: Set<string> } {
+function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel, rows: ReadonlySet<string>, useExits: boolean): { layout: Layout; need: Set<string> } {
   const tree = treeOf(graph);
   const plan: Plan = { graph, ruler, opts, draw, tree, edges: placeEdges(graph, tree), home: (graph.lanes[0] ?? { id: '_' }).id, rows };
   const top = buildLevel(plan, '', graph.direction, graph.mirror);
@@ -968,7 +980,7 @@ function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawL
   }
   const direct = new Map<string, Point[]>();
   const exits: Exit[] = [];
-  for (const r of plan.edges) {
+  for (const r of useExits ? plan.edges : []) {
     for (const end of ['from', 'to'] as const) {
       const piece = acc.pieces.get(r.index);
       if (piece === undefined || piece.invisible || piece.points.length < 2 || r[end] === r.edge[end]) continue;
