@@ -138,9 +138,8 @@ function segmentHits(seg: Segment, r: Rect): boolean {
 
 /**
  * Places a label next to its own edge, in space that holds no node, no other label and no
- * segment of another edge. A label on a vertical segment sits beside the line, as close to the
- * middle of the segment as it fits; a label on a horizontal segment sits on the line (the label
- * box hides the stretch under it) and, failing that, beside it. When nothing is free the label
+ * segment of another edge. A label sits on the line, as close to the middle of the segment as it
+ * fits (the label box hides the stretch under it) and, failing that, beside it. When nothing is free the label
  * stays at the preferred spot and the overlap is reported.
  */
 export function placeLabel(
@@ -150,6 +149,7 @@ export function placeLabel(
   placed: Rect[],
   ruler: Ruler,
   foreign: Segment[] = [],
+  beside = false,
 ): Placed {
   const [p, q] = segment;
   const horizontal = p.y === q.y;
@@ -167,7 +167,9 @@ export function placeLabel(
     !nodes.some((n) => overlaps(r, n)) && !placed.some((o) => overlaps(r, o)) && !foreign.some((f) => segmentHits(f, r));
   const step = ruler.trackGap;
   const reach = Math.floor((hi - lo) / 2 / step);
-  const sides = horizontal ? [0, -1, 1] : [1, -1, 0];
+  // A label on a vertical line hides a stretch of it only in pixels; a terminal keeps it beside.
+  // `beside`: the stretch is too short to show a line on both sides of a label on it, so the label stands next to it first.
+  const sides = horizontal ? (beside ? [-1, 1, 0] : [0, -1, 1]) : ruler.terminal === true || beside ? [1, -1, 0] : [0, 1, -1];
   for (const side of sides) {
     for (let k = 0; k <= reach; k++) {
       for (const sign of k === 0 ? [1] : [1, -1]) {

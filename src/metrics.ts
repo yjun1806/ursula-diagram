@@ -40,6 +40,8 @@ export interface Ruler {
   nodeGrid: number;
   /** When set, the common box width is the widest that is no more than this many times the middle width, instead of the width three quarters of the boxes fit. */
   commonWithin?: number;
+  /** When set, boxes of one kind (shape) up to this many times as wide as the median of the kind all take the width of the widest of them; wider boxes keep their own. */
+  shareWithin?: number;
   /** Finer grid every edge bend, track offset and label position is a multiple of. Attachment points on a side are exempt. */
   edgeGrid: number;
   /**

@@ -8,11 +8,14 @@ export const stats = {
   placements: 0,
   /** Chosen drawings made with three slot units for a box a little wider than the common width instead of whole pairs. */
   compact: 0,
+  /** Chosen drawings made with every box at its own width because one width per kind gave a worse drawing. */
+  unshared: 0,
   /** Edges whose ends the vertex step moved, and how many ends of each. */
   moved: new WeakMap<LayoutEdge, number>(),
   reset(): void {
     this.draws = 0;
     this.placements = 0;
     this.compact = 0;
+    this.unshared = 0;
   },
 };

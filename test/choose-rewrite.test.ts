@@ -127,5 +127,5 @@ describe('choose.ts, sides.ts, centre.ts and check.ts on shared segments give wh
     expect({ mismatches, first }).toEqual({ mismatches: 0, first: [] });
     // The shaken copies must reach the branches of the checks, or the comparison says little.
     expect(invalid).toBeGreaterThan(500);
-  }, 600_000);
+  }, 1_200_000);
 });

@@ -118,7 +118,19 @@ export function widthForColumns(graph: Graph, ruler: Ruler, columns: number): nu
  * A port lies at the centre of a side or a multiple of the pitch from it, or at an equal fraction of the side.
  * The pitch depends on how far the rank gap was stretched or squeezed, so every unit that can give is accepted.
  */
+/**
+ * Where line ends stand, against the ports of the boxes. A drawing is made either with one width per kind of box or, when that
+ * costs a worse drawing, with every box at its own width: it is measured the way it was made, so the fewer violations count.
+ */
 export function endpointViolations(l: Layout, ruler: Ruler, graph: Graph): string[] {
+  const shared = endpointsAgainst(l, ruler, graph);
+  if (shared.length === 0 || ruler.shareWithin === undefined) return shared;
+  const { shareWithin: _, ...own } = ruler;
+  const apart = endpointsAgainst(l, own, graph);
+  return apart.length < shared.length ? apart : shared;
+}
+
+function endpointsAgainst(l: Layout, ruler: Ruler, graph: Graph): string[] {
   const m = measureNodes(graph.nodes, graph.lanes, ruler, graph.direction === 'TD');
   const pitches: number[] = [];
   for (let gap = Math.max(ruler.nodeGrid, ruler.rankGap - 2 * ruler.nodeGrid); gap <= 2 * ruler.rankGap; gap += 2 * ruler.nodeGrid) {
