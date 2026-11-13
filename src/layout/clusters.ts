@@ -551,8 +551,7 @@ function pathInside(g: Inside): Point[] | undefined {
   const s0 = at(indexIn(xs, start.x), indexIn(ys, start.y));
   const goal = new Map<number, { dir: number; price: number }>();
   for (const f of faces) {
-    // A line meets the face it comes at; a face it has to turn to costs a bend more.
-    const price = (g.taken.has(key(f.p)) ? 40 : 0) + (f.dir === g.inward ? 0 : 4 * BEND_COST);
+    const price = g.taken.has(key(f.p)) ? 40 : 0;
     goal.set(at(indexIn(xs, f.p.x), indexIn(ys, f.p.y)) * 4 + f.dir, { dir: f.dir, price });
   }
   // A point of the grid is free when it lies inside the corridors, or is the place the line starts.
