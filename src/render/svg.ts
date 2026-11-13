@@ -185,9 +185,9 @@ function nameText(cluster: LayoutCluster): string {
   return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? ' ursula-zone-sub' : ''}" x="${num(x)}" y="${num(top + 12 + 16 * i)}">${escapeXml(l)}</text>`).join('');
 }
 
-/** The fill step of a dashed boundary: one a depth, the third for every deeper one. */
+/** The look of a dashed boundary by depth: the outermost, then the even and the odd depths by turns. */
 function tintOf(cluster: LayoutCluster): 'tint-outer' | 'tint-mid' | 'tint-inner' {
-  return cluster.depth <= 1 ? 'tint-outer' : cluster.depth === 2 ? 'tint-mid' : 'tint-inner';
+  return cluster.depth <= 1 ? 'tint-outer' : cluster.depth % 2 === 0 ? 'tint-mid' : 'tint-inner';
 }
 
 /** The fill step under the middle of a label: that of the deepest dashed boundary holding it, if any. */
@@ -239,7 +239,7 @@ function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[
       : []),
     // A theme with fills by depth fills the dashed boundaries with them, a knockout of a name too.
     ...(clusters.some((c) => c.style === 'dashed') && 'tint-outer' in THEME_SPECS[theme].tokens
-      ? (['outer', 'mid', 'inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:$chip-${t}}`])
+      ? (['outer', 'mid', 'inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:$tint-${t}${t === 'mid' ? ';stroke:$line;stroke-width:1;stroke-dasharray:none' : t === 'inner' ? ';stroke:$hair;stroke-width:1;stroke-dasharray:none' : ''}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:$chip-${t}}`])
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
     ...(clusters.some((c) => c.name?.subtitle === true) ? ['.ursula-zone-sub{font-weight:400;opacity:.75}'] : []),
