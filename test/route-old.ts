@@ -1,5 +1,6 @@
 // The routing stage as it was before it was rewritten on number arrays, kept as it was; only `route` is renamed (`routeOld`).
 import type { Ruler } from '../src/metrics.ts';
+import { PASS_CLEAR } from '../src/layered/clearance.ts';
 import { endFields } from '../src/edge-ends.ts';
 import type { Compartment, Diagnostic, Graph, Layout, LayoutEdge, LayoutLane, LayoutNode, NodeShape, Point } from '../src/types.ts';
 import { crossings } from '../src/layout/check.ts';
@@ -548,10 +549,11 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
     laneRange.set(lane, r ? [r[0], i] : [i, i]);
   });
   const bottomPad = new Array<number>(laneCount).fill(ruler.lanePad);
+  const outerTracks = (n: number): number => PASS_CLEAR + (n - 1) * ruler.trackGap;
   const wanted = (b: number): number => {
-    const tracks = trackCount[b] === 0 ? 0 : ((trackCount[b] ?? 0) + 1) * ruler.trackGap;
-    // Beside the outermost bands there is no neighbour to share a label's room with.
-    return b === 0 || b === count ? tracks + (demand[b] ?? 0) : Math.max(tracks, demand[b] ?? 0);
+    const n = trackCount[b] ?? 0;
+    const tracks = n === 0 ? 0 : (n + 1) * ruler.trackGap;
+    return b === 0 || b === count ? (n === 0 ? 0 : Math.max(tracks, outerTracks(n))) + (demand[b] ?? 0) : Math.max(tracks, demand[b] ?? 0);
   };
   const baseExt = (b: number): number => {
     if (b === 0) return ruler.lanePad;
@@ -606,6 +608,8 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   const trackY = (it: Item): number => {
     if (ruler.uniform) return (bandStart[it.band] ?? 0) + (td ? 1 + 2 * it.track : it.track);
     const n = trackCount[it.band] ?? 1;
+    if (it.band === 0) return edgeNear(ruler, (bandStart[0] ?? 0) + (bandSize[0] ?? 0) - outerTracks(n) + it.track * ruler.trackGap);
+    if (it.band === count) return edgeNear(ruler, (bandStart[count] ?? 0) + outerTracks(n) - (n - 1 - it.track) * ruler.trackGap);
     const first = (bandStart[it.band] ?? 0) + ((bandSize[it.band] ?? 0) - (n - 1) * ruler.trackGap) / 2;
     return edgeNear(ruler, first + it.track * ruler.trackGap);
   };

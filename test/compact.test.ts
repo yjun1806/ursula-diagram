@@ -16,19 +16,18 @@ const EVEN_ROW = 'flowchart LR\n  a[Go]-->b[Run]\n  b-->c[Save]\n  c-->d[Tell]\n
 /** Three slot units make the drawing score worse than whole pairs. One named lane keeps the rows of the lane model: a drawing without zones may be laid out as stages instead. */
 const LOSING = `swimlane-beta LR
 subgraph main[Main]
-n0[Run] --> n1[Tell]
-n1[Tell] --> n2[Sync]
-n2[Sync] --> n3([Verify])
-n3([Verify]) --> n4[End]
-n4[End] --> n5([Verify])
-n5([Verify]) --> n6[Save]
-n6[Save] --> n7[Log]
-n7[Log] --> n8([Verify])
-n8([Verify]) --> n9[Tell]
-n5 --> n8
-n4 --> n9
-n4 --> n0
-n7 --> n8
+n0[Tell] --> n1[End]
+n1[End] --> n2[Run]
+n2[Run] --> n3([Verify])
+n3([Verify]) --> n4[Sync]
+n4[Sync] --> n5[Go]
+n5[Go] --> n6[Run]
+n6[Run] --> n7[Run]
+n7[Run] --> n8([Verify])
+n8([Verify]) --> n9([Verify])
+n1 --> n7
+n5 --> n1
+n6 --> n9
 end`;
 
 const draw = (src: string, options: { quality?: 'fast' | 'best'; compact?: boolean }) => {

@@ -19,3 +19,18 @@ describe('tightPasses', () => {
     expect(tightPasses({ nodes: nodes.map((n) => (n.id === 'b' || n.id === 'c' ? { ...n, x: 200 } : n)), edges } as never)).toBe(0);
   });
 });
+
+describe('lines in the outer bands', () => {
+  it('stand the room a passing line keeps from the boxes beside them, on both sides', async () => {
+    const { layout, pixelRuler } = await import('../src/index.ts');
+    const { parseState } = await import('../src/state/parse.ts');
+    const l = layout(parseState('stateDiagram-v2\n  [*] --> Still\n  Still --> [*]\n  Still --> Moving\n  Moving --> Still\n  Moving --> Crash\n  Crash --> [*]').graph, pixelRuler(), { legend: false });
+    expect(tightPasses(l)).toBe(0);
+    const boxes = l.nodes.filter((n) => ['Still', 'Moving', 'Crash'].includes(n.id));
+    const left = Math.min(...boxes.map((n) => n.x));
+    const right = Math.max(...boxes.map((n) => n.x + n.w));
+    const xs = l.edges.flatMap((e) => e.points.map((p) => p.x));
+    expect(left - Math.min(...xs)).toBe(24);
+    expect(Math.max(...xs) - right).toBe(24);
+  });
+});
