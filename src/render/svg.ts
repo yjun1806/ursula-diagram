@@ -190,6 +190,16 @@ function tintOf(cluster: LayoutCluster): 'tint-outer' | 'tint-mid' | 'tint-inner
   return cluster.depth <= 1 ? 'tint-outer' : cluster.depth === 2 ? 'tint-mid' : 'tint-inner';
 }
 
+/** The fill step under the middle of a label: that of the deepest dashed boundary holding it, if any. */
+function tintUnder(edge: LayoutEdge, clusters: readonly LayoutCluster[]): 'tint-outer' | 'tint-mid' | 'tint-inner' | undefined {
+  const l = edge.label;
+  if (l === undefined) return undefined;
+  const [x, y] = [l.x + l.w / 2, l.y + l.h / 2];
+  const holding = clusters.filter((c) => c.style === 'dashed' && x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h);
+  if (holding.length === 0) return undefined;
+  return tintOf(holding.reduce((a, b) => (b.depth > a.depth ? b : a)));
+}
+
 /** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands in the gap of the top row the lines leave. */
 function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
   const look = cluster.style === 'dashed' ? ` ursula-zone--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
@@ -229,7 +239,7 @@ function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[
       : []),
     // A theme with fills by depth fills the dashed boundaries with them, a knockout of a name too.
     ...(clusters.some((c) => c.style === 'dashed') && 'tint-outer' in THEME_SPECS[theme].tokens
-      ? (['tint-outer', 'tint-mid', 'tint-inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--${t}{fill:$${t}}`, `.ursula-zone-knock--dashed.ursula-zone--${t}{fill:$${t}}`])
+      ? (['outer', 'mid', 'inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:$chip-${t}}`])
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
     ...(clusters.some((c) => c.name?.subtitle === true) ? ['.ursula-zone-sub{font-weight:400;opacity:.75}'] : []),
@@ -431,7 +441,7 @@ function labelText(line: string): string {
   return `${escapeXml(line.slice(0, at))}<tspan class="ursula-edge-label-tech" role="note">${escapeXml(line.slice(at))}</tspan>`;
 }
 
-function labelSvg(edge: LayoutEdge, paint: Paint): string {
+function labelSvg(edge: LayoutEdge, paint: Paint, on?: 'tint-outer' | 'tint-mid' | 'tint-inner'): string {
   const l = edge.label;
   if (!l || edge.invisible) return '';
   const lines = l.lines ?? [l.text];
@@ -444,7 +454,7 @@ function labelSvg(edge: LayoutEdge, paint: Paint): string {
     `<rect class="${cls}" x="${num(cx - w / 2 - grow)}" y="${num(cy - h / 2 - grow)}" width="${num(w + 2 * grow)}" height="${num(h + 2 * grow)}" rx="${num(CHIP_HEIGHT / 2 + grow)}"${extra}/>`;
   const emphasis = edge.style === 'thick' ? ' ursula-edge-label--thick' : paint.roles.get(edge.from) === 'decision' ? ' ursula-edge-label--branch' : '';
   return (
-    `<g class="ursula-edge-label-group" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` +
+    `<g class="ursula-edge-label-group${on === undefined ? '' : ` ursula-edge-label--on-${on}`}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` +
     (paint.spec.chipHalo ? chip('ursula-edge-label-halo', HALO, '') : '') +
     chip('ursula-edge-label-bg', 0, shadowAttr(paint.spec)) +
     lines
@@ -726,7 +736,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
     ...(spec.portRing ? [portRings(layout, byId)] : []),
     ...(layout.clusters ?? []).map(knockoutSvg),
-    ...layout.edges.map((e) => labelSvg(e, paint)),
+    ...layout.edges.map((e) => labelSvg(e, paint, tintUnder(e, layout.clusters ?? []))),
     ...layout.edges.map(endLabelSvg),
     ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),
     ...(heading === undefined ? [] : ['</g>']),
