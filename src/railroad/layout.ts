@@ -13,8 +13,8 @@ const TITLE_GAP = 24;
 const TOKEN_H = 32;
 const TOKEN_MIN_W = 48;
 const TOKEN_PAD = 32;
-/** Width of a monospace letter at 12px. */
-const MONO_ADVANCE = 7.2;
+/** Room a letter of a token takes at least: the width of a monospace letter at 12px with its spacing, which a proportional name does not undercut. */
+const TOKEN_ADVANCE = 8;
 const SEQ_GAP = 24;
 const CHOICE_GAP = 8;
 const RULE_GAP = 40;
@@ -34,6 +34,8 @@ const NAME_GAP = 24;
 const END_STUB = 24;
 const CHIP_H = 24;
 const CHIP_GAP = 8;
+/** Radius of the ring where a loop leaves the line. */
+const PORT_R = 4;
 
 interface Sized {
   node: Node;
@@ -58,9 +60,8 @@ const loopInset = (min: number): number => (min === 0 ? LOOP_INSET : 0);
 
 const chipWidth = (text: string, ruler: Ruler): number => Math.max(CHIP_H, ceilTo(ruler.textWidth(text, 'line') + 16, 4));
 
-function tokenWidth(text: string, mono: boolean, ruler: Ruler): number {
-  const proportional = ruler.textWidth(text, 'line');
-  const w = mono ? Math.max(proportional, cellWidth(text) * MONO_ADVANCE) : proportional;
+function tokenWidth(text: string, ruler: Ruler): number {
+  const w = Math.max(ruler.textWidth(text, 'line'), cellWidth(text) * TOKEN_ADVANCE);
   return Math.max(TOKEN_MIN_W, ceilTo(w + TOKEN_PAD, 8));
 }
 
@@ -80,11 +81,11 @@ export function countText(min: number, max: number | null): string | undefined {
 function measure(node: Node, ruler: Ruler): Sized {
   switch (node.k) {
     case 'terminal':
-      return { node, w: tokenWidth(terminalLabel(node.text), true, ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
+      return { node, w: tokenWidth(terminalLabel(node.text), ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
     case 'special':
-      return { node, w: tokenWidth(node.text, true, ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
+      return { node, w: tokenWidth(node.text, ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
     case 'nonterminal':
-      return { node, w: tokenWidth(node.name, false, ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
+      return { node, w: tokenWidth(node.name, ruler), up: TOKEN_H / 2, down: TOKEN_H / 2, kids: [] };
     case 'seq':
       return measureRow(node, node.items.map((n) => measure(n, ruler)));
     case 'predicate':
@@ -133,6 +134,8 @@ function measureRow(node: Node, kids: Sized[]): Sized {
 interface Out {
   lines: SceneItem[];
   marks: SceneItem[];
+  /** Rings where a loop leaves the line, drawn over the lines. */
+  ports: SceneItem[];
   bend: number;
   arrowLength: number;
 }
@@ -225,6 +228,7 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
       line(out, [pt(x, ay), pt(kx, ay)]);
       line(out, [pt(kx + kid.w, ay), pt(right, ay)]);
       line(out, [pt(xr - FORK_X, ay), pt(xr, ay), pt(xr, yl), pt(tip, yl)], true);
+      out.ports.push({ kind: 'circle', cx: xr - FORK_X, cy: ay, r: PORT_R, role: ['port'] });
       line(out, [pt(tip, yl), pt(xl, yl), pt(xl, ay), pt(xl + FORK_X, ay)]);
       if (node.min === 0) {
         const yb = ay - kid.up - RAIL_CLEAR;
@@ -244,7 +248,7 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
 export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEFAULT_THEME): RailroadLayout {
   const spec = SCENE_THEME_SPECS[theme];
   const dotR = spec.neutralDotRadius ?? spec.dotRadius;
-  const out: Out = { lines: [], marks: [], bend: spec.bend, arrowLength: spec.arrow.length };
+  const out: Out = { lines: [], marks: [], ports: [], bend: spec.bend, arrowLength: spec.arrow.length };
   const sized = model.rules.map((r) => measure(r.body, ruler));
   const nameW = Math.max(...model.rules.map((r) => ruler.textWidth(r.name, 'title')));
   const railX = ceilTo(MARGIN + nameW + NAME_GAP, 4);
@@ -281,7 +285,7 @@ export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEF
     height,
     title: model.accTitle ?? model.title ?? 'railroad',
     theme,
-    items: [...items, ...names, ...out.lines, ...dots, ...out.marks],
+    items: [...items, ...names, ...out.lines, ...dots, ...out.marks, ...out.ports],
   };
   return { scene, axes };
 }

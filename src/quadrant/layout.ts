@@ -15,6 +15,8 @@ const ZONE_GAP = 4;
 const ZONE_PAD = 16;
 const LINE_H = 16;
 const LABEL_GAP = 8;
+/** Radius of the ring at the tail (low end) of an axis arrow. */
+const PORT_R = 4;
 const TITLE_SCALE = 15 / 13;
 /** Multiplier on the ruler widths for the medium and bold weights; the ruler already measures wide. */
 const WEIGHT = 1;
@@ -125,7 +127,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
       items.push({ kind: 'text', x: right, y, text: high, anchor: 'end', role: ['axis-name'], baseline: 'alphabetic' });
       const x1 = ceilTo(plotX + body(low) + 16);
       const x2 = floorTo(right - body(high) - 16);
-      if (x2 - x1 >= 24) items.push({ kind: 'line', points: [{ x: x1, y: y - 4 }, { x: x2, y: y - 4 }], role: ['edge', 'edge--arrow'] });
+      if (x2 - x1 >= 24) items.push({ kind: 'line', points: [{ x: x1, y: y - 4 }, { x: x2, y: y - 4 }], role: ['edge', 'edge--arrow'] }, { kind: 'circle', cx: x1, cy: y - 4, r: PORT_R, role: ['port'] });
     }
   }
   if (chart.yAxis !== undefined) {
@@ -137,7 +139,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
       items.push({ kind: 'text', x, y: top + 12, text: high, anchor: 'end', role: ['axis-name'], baseline: 'alphabetic' });
       const y1 = floorTo(bottom - 32);
       const y2 = ceilTo(top + 32);
-      if (y1 - y2 >= 24) items.push({ kind: 'line', points: [{ x: plotX - 20, y: y1 }, { x: plotX - 20, y: y2 }], role: ['edge', 'edge--arrow'] });
+      if (y1 - y2 >= 24) items.push({ kind: 'line', points: [{ x: plotX - 20, y: y1 }, { x: plotX - 20, y: y2 }], role: ['edge', 'edge--arrow'] }, { kind: 'circle', cx: plotX - 20, cy: y1, r: PORT_R, role: ['port'] });
     }
   }
 

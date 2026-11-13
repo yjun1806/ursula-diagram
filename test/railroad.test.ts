@@ -117,7 +117,7 @@ describe('railroad layout', () => {
     };
   };
 
-  it('makes a token as wide as its text plus 32 on the 8 grid, 48 at least, 32 high', () => {
+  it('makes a token as wide as its text (8 a letter at least) plus 32 on the 8 grid, 48 at least, 32 high', () => {
     const { boxes: b } = boxes('railroad-ebnf-beta\nr = "+" expression ;');
     const tokens = b.filter((x) => x.role?.includes('token'));
     expect(tokens).toHaveLength(2);
@@ -128,9 +128,17 @@ describe('railroad layout', () => {
     }
     expect(tokens[0]?.w).toBe(48);
     const wide = tokens[1] as SceneBox;
-    const textW = ruler.textWidth('expression', 'line');
+    const textW = Math.max(ruler.textWidth('expression', 'line'), 8 * 'expression'.length);
     expect(wide.w).toBeGreaterThanOrEqual(textW + 32);
     expect(wide.w).toBeLessThan(textW + 32 + 8);
+  });
+
+  it('puts a ring where a repeat loop leaves the line', () => {
+    const { scene } = layoutRailroad(parseRailroad('railroad-ebnf-beta\nr = a* ;'), ruler);
+    const rings = scene.items.filter((i) => i.kind === 'circle' && i.role.includes('port'));
+    const arrow = scene.items.find((i) => i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--arrow'));
+    expect(rings).toHaveLength(1);
+    expect(arrow?.kind === 'line' ? arrow.points[0] : undefined).toEqual({ x: rings[0]?.kind === 'circle' ? rings[0].cx : NaN, y: rings[0]?.kind === 'circle' ? rings[0].cy : NaN });
   });
 
   it('puts the tokens of a sequence 24 apart', () => {

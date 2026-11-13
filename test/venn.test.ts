@@ -320,3 +320,19 @@ describe('venn: errors', () => {
     expect(() => render('venn-beta\n  set A:many\n')).toThrow(UrsulaError);
   });
 });
+
+describe('venn set names', () => {
+  it('stands a set name four fifths of the way from its circle centre to the middle of the part only it covers', () => {
+    const l = laid('venn-beta\n    set Desirable\n    set Feasible\n    set Viable\n    union Desirable,Feasible["Worth prototyping"]\n');
+    for (const c of l.circles) {
+      const label = l.labels.find((x) => x.key === `set:${c.id}`);
+      if (label === undefined) throw new Error(`no name for ${c.id}`);
+      const dist = Math.hypot(label.x - c.cx, label.y - c.cy);
+      expect(dist).toBeGreaterThan(0);
+      expect(dist).toBeLessThan(0.9 * c.r);
+    }
+    const desirable = l.labels.find((x) => x.key === 'set:Desirable');
+    const circle = l.circles.find((c) => c.id === 'Desirable');
+    expect(Math.round((desirable?.x ?? 0) - (circle?.cx ?? 0))).toBe(-63);
+  });
+});

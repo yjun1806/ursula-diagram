@@ -21,6 +21,10 @@ const ZONE_PAD = 16;
 const ZONE_GAP = 16;
 const ROW_GAP = 32;
 const DOT_R = 4;
+/** Radius of the ring at the start of the time axis. */
+const PORT_R = 4;
+/** The baseline of a name in a box stands this far below the middle of its line. */
+const NAME_DROP = 5;
 const TITLE_Y = 40;
 const TITLE_SIZE_RATIO = 15 / 13;
 const DEFAULT_WIDTH_LIMIT = 1280;
@@ -97,7 +101,7 @@ function boxItems(box: PlacedBox, inZone: boolean, series: string | undefined): 
   const role = series !== undefined ? ['box', `${series}--tint`] : inZone ? ['box', 'box--in-zone'] : ['box'];
   return [
     { kind: 'box', style: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role },
-    ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + box.h / 2 + LINE * (i - (box.lines.length - 1) / 2), text, anchor: 'middle', role: ['name'] })),
+    ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + box.h / 2 + NAME_DROP + LINE * (i - (box.lines.length - 1) / 2), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' })),
   ];
 }
 
@@ -282,7 +286,8 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
       });
     });
     const axisLine: SceneItem = { kind: 'line', points: [{ x: MARGIN, y: axis }, { x: plan.contentRight - 2, y: axis }], role: ['edge', 'edge--arrow'] };
-    items.push(...zoneItems, axisLine, ...lineItems, ...dotItems, ...contentItems);
+    const port: SceneItem = { kind: 'circle', cx: MARGIN, cy: axis, r: PORT_R, role: ['port'] };
+    items.push(...zoneItems, axisLine, ...lineItems, ...dotItems, ...contentItems, port);
     sceneWidth = Math.max(sceneWidth, plan.width);
     bottom = end;
     top = end + ROW_GAP;

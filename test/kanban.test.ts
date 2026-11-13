@@ -222,3 +222,12 @@ describe('kanban text', () => {
     }
   });
 });
+
+describe('kanban tag width', () => {
+  it('makes a tag as wide as its text plus 12 on the 4 grid', () => {
+    const ruler = pixelRuler();
+    const tags = layoutKanban(parseKanban(blank(full)), ruler).cards.flatMap((c) => c.tags);
+    expect(tags.length).toBeGreaterThan(0);
+    for (const t of tags) expect(t.w).toBe(Math.ceil((ruler.textWidth(t.text, 'line') + 12) / 4) * 4);
+  });
+});

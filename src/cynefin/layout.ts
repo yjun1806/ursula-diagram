@@ -7,6 +7,7 @@ import type { Cynefin, CynefinTransition, Domain } from './model.ts';
 
 const MARGIN = 24;
 const GAP = 8;
+/** Baseline of an area name, below the top of its area. */
 const NAME_Y = 28;
 const ITEM_TOP = 44;
 const ITEM_H = 48;
@@ -151,14 +152,14 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): Cyne
     const px = pillarX(z);
     zones.push({ domain, name: DOMAIN_NAMES[domain], x: z.x, y: z.y, w: zoneW, h: zoneH });
     quadrants.push({ kind: 'box', style: 'frame', x: z.x, y: z.y, w: zoneW, h: zoneH, role: ['zone', 'zone--plain'], data: { domain } });
-    quadrants.push({ kind: 'text', x: px, y: z.y + NAME_Y, text: DOMAIN_NAMES[domain], anchor: 'start', role: ['zone-name'], data: { domain } });
+    quadrants.push({ kind: 'text', x: px, y: z.y + NAME_Y, text: DOMAIN_NAMES[domain], anchor: 'start', role: ['zone-name'], data: { domain }, baseline: 'alphabetic' });
     stack(domain, px, z.y, false);
   }
   const confusionX = centreX - confusionW / 2;
   const confusionY = centreY - confusionH / 2;
   zones.push({ domain: 'confusion', name: DOMAIN_NAMES.confusion, x: confusionX, y: confusionY, w: confusionW, h: confusionH });
   confusionZone.push({ kind: 'box', style: 'frame', x: confusionX, y: confusionY, w: confusionW, h: confusionH, role: ['zone'], data: { domain: 'confusion' } });
-  confusionZone.push({ kind: 'text', x: confusionX + PAD, y: confusionY + NAME_Y, text: DOMAIN_NAMES.confusion, anchor: 'start', role: ['zone-name'], data: { domain: 'confusion' } });
+  confusionZone.push({ kind: 'text', x: confusionX + PAD, y: confusionY + NAME_Y, text: DOMAIN_NAMES.confusion, anchor: 'start', role: ['zone-name'], data: { domain: 'confusion' }, baseline: 'alphabetic' });
   stack('confusion', confusionX + PAD, confusionY, true);
 
   // Lanes between an outer column of items and the Confusion zone, where the corner-to-corner arrows run.
@@ -233,7 +234,7 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): Cyne
   });
 
   const titleItems: SceneItem[] =
-    model.title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: MARGIN + 16, text: model.title, anchor: 'start', role: ['title'] }];
+    model.title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: MARGIN + 16, text: model.title, anchor: 'start', role: ['title'], baseline: 'alphabetic' }];
   const name = model.accTitle ?? (model.title === undefined ? 'cynefin' : `cynefin — ${model.title}`);
   const scene: Scene = {
     width,

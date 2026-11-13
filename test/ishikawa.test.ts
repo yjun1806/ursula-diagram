@@ -334,3 +334,47 @@ describe('ishikawa text', () => {
     expect('error' in out && out.error).toContain('line 4');
   });
 });
+
+describe('ishikawa bones and spine tail', () => {
+  const src = `ishikawa-beta
+    Blurry Photo
+    Process
+        Out of focus
+        Shutter speed too slow
+        Protective film not removed
+        Beautification filter applied
+    User
+        Shaky hands
+    Equipment
+        LENS
+            Inappropriate lens
+            Damaged lens
+            Dirty lens
+        SENSOR
+            Damaged sensor
+            Dirty sensor
+    Environment
+        Subject moved too quickly
+        Too dark`;
+  const l = layoutIshikawa(parseIshikawa(src), pixelRuler());
+
+  it('makes the bones above and below the spine as long as each other, so the boxes of a pair stand over each other', () => {
+    const top = l.bones.filter((b) => b.side === 'top');
+    const bottom = l.bones.filter((b) => b.side === 'bottom');
+    expect(new Set(l.bones.map((b) => Math.abs(b.far.y - b.join.y))).size).toBe(1);
+    top.forEach((b, i) => expect(b.box.x + b.box.w / 2).toBe((bottom[i]?.box.x ?? 0) + (bottom[i]?.box.w ?? 0) / 2));
+  });
+
+  it('keeps 48 between the widest cause of a bone and the bone before it', () => {
+    const [first, second] = [l.bones.find((b) => b.side === 'bottom' && b.rank === 0), l.bones.find((b) => b.side === 'bottom' && b.rank === 1)];
+    const cause = second?.causes[0];
+    if (first === undefined || cause === undefined) throw new Error('bones missing');
+    const prevAtRow = first.join.x - (cause.y - l.spine.y) / 2;
+    expect(cause.textX - cause.width - prevAtRow).toBeGreaterThanOrEqual(48);
+  });
+
+  it('puts a ring at the tail of the spine', () => {
+    const rings = l.scene.items.filter((i) => i.kind === 'circle' && i.role.includes('port'));
+    expect(rings).toEqual([{ kind: 'circle', cx: l.spine.x1, cy: l.spine.y, r: 4, role: ['port'] }]);
+  });
+});

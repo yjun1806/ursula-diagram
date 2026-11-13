@@ -19,6 +19,8 @@ const SAMPLE = 2;
 /** Semi-bold names run a little wider than the ruler's regular face. */
 const NAME_SLACK = 1.06;
 const OUTSIDE_GAP = 8;
+/** A set's name stands this share of the way from its circle's centre to the middle of the part only it covers, when it fits there. */
+const SET_PULL = 0.8;
 
 export interface PlacedCircle {
   id: string;
@@ -346,6 +348,11 @@ function placeBlock(block: Block, ruler: Ruler, notes: string[]): { rows: Placed
 
   let rows = block.rows;
   let found = attempt(rows, mid.x, mid.y);
+  const home = block.home;
+  if (home !== undefined && found.ok) {
+    const pulled = attempt(rows, home.cx + SET_PULL * (mid.x - home.cx), home.cy + SET_PULL * (mid.y - home.cy));
+    if (pulled.ok) found = pulled;
+  }
   for (let pass = 0; pass < 4 && !found.ok; pass++) {
     // Wrap to the width the region offers at the block's middle row, then look again with the taller block.
     const span = rowSpan(block.region, mid.y, mid.x);

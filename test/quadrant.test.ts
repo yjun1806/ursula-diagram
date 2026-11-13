@@ -109,9 +109,17 @@ describe('quadrant chart reading', () => {
 
   it('fills a styled point with the palette colour nearest to its own and never with the colour of a plain point', () => {
     const roles = layoutQuadrant(parseQuadrant(STYLING), ruler)
-      .scene.items.filter((i) => i.kind === 'circle')
+      .scene.items.filter((i) => i.kind === 'circle' && !i.role.includes('port'))
       .map((i) => (i.kind === 'circle' ? i.role.join(' ') : ''));
     expect(roles).toEqual(['mark-dot', 'series-6--dot', 'series-5--dot', 'series-6--dot', 'series-3--dot', 'series-4--dot']);
+  });
+
+  it('puts a ring at the tail (low end) of each axis arrow', () => {
+    const items = layoutQuadrant(parseQuadrant(STYLING), ruler).scene.items;
+    const tails = items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--arrow') ? [i.points[0]] : []));
+    const rings = items.flatMap((i) => (i.kind === 'circle' && i.role.includes('port') ? [{ x: i.cx, y: i.cy }] : []));
+    expect(tails.length).toBeGreaterThan(0);
+    expect(rings).toEqual(tails);
   });
 });
 

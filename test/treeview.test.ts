@@ -215,8 +215,8 @@ describe('tree view layout', () => {
     });
   }
 
-  it('bends a guide by half the theme bend radius, at the last child only', () => {
-    for (const [theme, half] of [['solid', 8], ['outline', 6], ['card', 7]] as const) {
+  it('bends a guide by half the theme bend radius (the whole radius when it is 8 or less), at the last child only', () => {
+    for (const [theme, half] of [['solid', 8], ['outline', 6], ['card', 7], ['band', 8]] as const) {
       const guides = layoutTreeView(model, ruler, theme).scene.items.filter((i) => i.kind === 'path');
       const bent = guides.filter((g) => g.kind === 'path' && g.d.includes('Q'));
       expect(bent).toHaveLength(3);
