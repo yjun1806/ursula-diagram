@@ -808,7 +808,7 @@ function straightIn(start: Point, inward: number, target: Rect): Point[] {
 const EDGE_ROOM = 8;
 
 /** The layout with the canvas grown, and everything moved, where a line or a label went past its edge; as it was otherwise. */
-function withinCanvas(layout: Layout): Layout {
+export function withinCanvas(layout: Layout): Layout {
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
@@ -870,7 +870,7 @@ function gapsOf(from: number, to: number, taken: Array<[number, number]>): Array
  * taller row of `rows` (a cluster not yet in `rows` is reported in `need`); else at the left over a knockout of the
  * fill, so that the line is seen to stop at the name.
  */
-function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>, subtitled: ReadonlySet<string>): { clusters: LayoutCluster[]; need: Set<string> } {
+export function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>, subtitled: ReadonlySet<string>): { clusters: LayoutCluster[]; need: Set<string> } {
   const need = new Set<string>();
   const segs = layout.edges.filter((e) => !e.invisible).flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i] as Point, q] as const));
   const labels = layout.edges.flatMap((e) => (e.label ? [e.label] : []));
@@ -988,7 +988,7 @@ function chooseDrawing(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: Dr
 }
 
 /** Where a label may not stand: on the border of a cluster box (the four sides, with a margin) or on the written name of one. */
-function keepOffBoxes(clusters: readonly LayoutCluster[], names: boolean): Rect[] {
+export function keepOffBoxes(clusters: readonly LayoutCluster[], names: boolean): Rect[] {
   const m = 4;
   const out: Rect[] = [];
   for (const c of clusters) {

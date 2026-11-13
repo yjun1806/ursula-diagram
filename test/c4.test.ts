@@ -476,21 +476,21 @@ describe('c4 boundaries without lines inside are grids', () => {
   const node = (id: string) => laid.nodes.find((n) => n.id === id) as (typeof laid.nodes)[number];
   const box = (id: string) => (laid.clusters ?? []).find((c) => c.id === id) as NonNullable<typeof laid.clusters>[number];
 
-  it('puts the loose customers in one row with the connected one first', () => {
+  it('puts the loose customers in the row of the connected one, and the two-way relations in one column', () => {
     const row = ['customerA', 'customerB', 'customerC', 'customerD'].map(node);
     for (const n of row) expect(n.y).toBe(row[0]?.y);
-    expect(row.map((n) => n.x)).toEqual([...row.map((n) => n.x)].sort((a, b) => a - b));
     expect(node('SystemAA').y).toBeGreaterThan(node('customerA').y);
+    expect(node('SystemAA').x).toBe(node('customerA').x);
+    expect(node('SystemE').x).toBe(node('SystemAA').x);
   });
 
-  it('lays the plain nodes of a boundary in two columns and stacks its boundaries to the right', () => {
+  it('puts the plain node of a boundary under its first row and stacks its boundaries in the same columns beside it', () => {
     expect(node('SystemE').y).toBe(node('SystemC').y);
-    expect(node('SystemC').x).toBeGreaterThan(node('SystemE').x);
     expect(node('SystemD').y).toBeGreaterThan(node('SystemE').y);
-    expect(node('SystemD').x).toBe(node('SystemE').x);
     expect(box('b2').x).toBe(box('b3').x);
+    expect(box('b2').w).toBe(box('b3').w);
     expect(box('b3').y).toBeGreaterThan(box('b2').y);
-    expect(box('b2').x).toBeGreaterThan(node('SystemC').x + node('SystemC').w);
+    expect(box('b2').x).toBeGreaterThan(Math.max(node('SystemC').x + node('SystemC').w, node('SystemE').x + node('SystemE').w));
   });
 
   it('puts the two systems of a boundary side by side', () => {

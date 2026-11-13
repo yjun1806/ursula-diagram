@@ -46,6 +46,8 @@ const BORDER_NEAR = 12;
 /** The lane outside a border along which a line may run. */
 const BORDER_OUTSIDE = 16;
 const EDGE_ROOM = 8;
+/** Lanes beyond the stub at which a pinned line may turn. */
+const PINNED_LANES = 4;
 /** Price of breaking a spacing rule when no line can be found without breaking one. */
 const RELAXED = 400;
 
@@ -277,6 +279,8 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
     for (const p of [...job.from, ...job.to]) {
       xs.push(p.sx);
       ys.push(p.sy);
+      // A pinned line may also turn a few lanes further out, so that lines out of one face can turn one after another.
+      if (job.pinned === true) for (let k = 1; k <= PINNED_LANES; k++) (p.d % 2 === 1 ? ys : xs).push((p.d % 2 === 1 ? p.sy : p.sx) + k * PITCH * (p.d === 1 || p.d === 0 ? 1 : -1));
     }
   }
   for (const id of new Set(jobs.flatMap((j) => [j.fromId, j.toId]))) {
