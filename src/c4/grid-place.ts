@@ -136,9 +136,9 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
     const colOf = new Map<string, Cell>();
 
     /** True when nothing stands in the cell but what may: no node, no cluster that holds neither end, no straight line already there. */
-    const clear = (r: number, c: number, x: Block, dc: number, ends: [string, string]): boolean => {
+    const clear = (r: number, c: number, x: Block, dc: number, ends: [string, string], dr = 0): boolean => {
       if (reserved.has(key(r, c))) return false;
-      for (const b of [...placed, shift(x, 0, dc)]) {
+      for (const b of [...placed, shift(x, dr, dc)]) {
         for (const [, p] of b.cells) if (p.r === r && p.c === c) return false;
         for (const [cid, q] of b.rects) {
           if (!inRect(q, r, c)) continue;
@@ -149,23 +149,23 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
       }
       return true;
     };
-    const fits = (x: Block, dc: number): boolean => {
-      const box = moved(x.box, 0, dc);
+    const fits = (x: Block, dc: number, dr = 0): boolean => {
+      const box = moved(x.box, dr, dc);
       if (placed.some((b) => meets(b.box, box))) return false;
       for (const k of reserved) {
         const [r, c] = k.split(',').map(Number) as [number, number];
-        if (x.rects.size > 0 || x.empty ? inRect(box, r, c) : [...x.cells.values()].some((p) => p.r === r && p.c + dc === c)) return false;
+        if (x.rects.size > 0 || x.empty ? inRect(box, r, c) : [...x.cells.values()].some((p) => p.r + dr === r && p.c + dc === c)) return false;
       }
       return true;
     };
     /** The straight lines `x` would get at column offset `dc`, best pairs first, each node keeping one partner a side. */
-    const straight = (x: Block, dc: number, pairs: Array<[string, string]>): Array<{ e: string; p: string; dir: 'up' | 'down' | 'left' | 'right'; between: string[] }> => {
+    const straight = (x: Block, dc: number, pairs: Array<[string, string]>, dr = 0): Array<{ e: string; p: string; dir: 'up' | 'down' | 'left' | 'right'; between: string[] }> => {
       const out: Array<{ e: string; p: string; dir: 'up' | 'down' | 'left' | 'right'; between: string[] }> = [];
       const taken = new Set<string>();
       for (const [e, p] of pairs) {
         const pe = x.cells.get(e) as Cell;
         const pp = colOf.get(p) as Cell;
-        const at = { r: pe.r, c: pe.c + dc };
+        const at = { r: pe.r + dr, c: pe.c + dc };
         let dir: 'up' | 'down' | 'left' | 'right';
         const between: string[] = [];
         if (at.c === pp.c && at.r !== pp.r) {
@@ -181,7 +181,7 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
         if (partner[dir].has(e) || partner[back].has(p) || taken.has(`${e}:${dir}`) || taken.has(`${p}:${back}`)) continue;
         if (!between.every((k) => {
           const [r, c] = k.split(',').map(Number) as [number, number];
-          return clear(r, c, x, dc, [e, p]);
+          return clear(r, c, x, dc, [e, p], dr);
         })) continue;
         taken.add(`${e}:${dir}`);
         taken.add(`${p}:${back}`);
@@ -200,15 +200,24 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
       }
       return pairs;
     };
+    /** For a node a cluster stands in the way of at column offset `dc`: the row offsets right above and right below that cluster where it fits, nearest first. */
+    const around = (x: Block, dc: number): number[] => {
+      if (!nodeIds.has(x.id)) return [];
+      const box = moved(x.box, 0, dc);
+      const blocks = placed.filter((b) => !nodeIds.has(b.id) && meets(b.box, box));
+      const b = blocks[0];
+      if (blocks.length !== 1 || b === undefined) return [];
+      return [b.box.r0 - 1 - x.box.r0, b.box.r1 + 1 - x.box.r0].filter((dr) => fits(x, dc, dr)).sort((p, q) => Math.abs(p) - Math.abs(q));
+    };
     const done = new Set<Block>();
-    const commit = (x: Block, dc: number): void => {
-      for (const s of straight(x, dc, pairsOf(x))) {
+    const commit = (x: Block, dc: number, dr = 0): void => {
+      for (const s of straight(x, dc, pairsOf(x), dr)) {
         const back = s.dir === 'up' ? 'down' : s.dir === 'down' ? 'up' : s.dir === 'left' ? 'right' : 'left';
         partner[s.dir].set(s.e, s.p);
         partner[back].set(s.p, s.e);
         for (const k of s.between) reserved.add(k);
       }
-      const at = shift(x, 0, dc);
+      const at = shift(x, dr, dc);
       placed.push(at);
       done.add(x);
       for (const [e, p] of at.cells) colOf.set(e, p);
@@ -259,8 +268,10 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
             const pp = y.cells.get(p) as Cell;
             if (dir === 'up' ? pp.r >= pe.r : pp.r <= pe.r) continue;
             const dc = pe.c - pp.c;
-            if (!fits(y, dc) || !straight(y, dc, pairsOf(y)).some((s) => s.e === p && s.p === e)) continue;
-            commit(y, dc);
+            // A cluster in the way: the row above it or below it in the same column, still on this side of the element.
+            const dr = fits(y, dc) ? 0 : around(y, dc).find((d) => (dir === 'up' ? pp.r + d < pe.r : pp.r + d > pe.r));
+            if (dr === undefined || !straight(y, dc, pairsOf(y), dr).some((s) => s.e === p && s.p === e)) continue;
+            commit(y, dc, dr);
             break;
           }
         }
@@ -275,6 +286,11 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
           const toward = (sign: number): number => [...(mult.get(e)?.keys() ?? [])].filter((o) => o !== p && colOf.has(o) && Math.sign((colOf.get(o) as Cell).c - pe.c) === sign && Math.sign((colOf.get(o) as Cell).r - pe.r) === Math.sign(pp.r - pe.r)).length;
           const step = forced !== 0 ? forced : rest.length > 0 && rest.reduce((sum, v) => sum + v, 0) !== 0 ? Math.sign(rest.reduce((sum, v) => sum + v, 0)) : toward(1) > toward(-1) ? -1 : 1;
           let dc = pe.c + step - pp.c;
+          const dr = fits(y, dc) ? 0 : around(y, dc)[0];
+          if (dr !== undefined) {
+            commit(y, dc, dr);
+            continue;
+          }
           while (!fits(y, dc)) dc += step;
           commit(y, dc);
         }

@@ -93,6 +93,12 @@ describe('c4 grid columns', () => {
     expect(box?.w).toBeGreaterThan(laid.nodes[0]?.w as number);
   });
 
+  it('puts an element whose column is taken by a boundary right below the boundary in that column', () => {
+    const { cell, rect } = cellsOf(head(['System(o, "o")', 'Boundary(b, "B") {', ...systems('p', 'q', 'r'), '}', 'Rel(p, o, "x")', 'Rel_R(p, q, "y")', 'Rel(q, r, "z")']));
+    const q = rect.get('b') as { r1: number };
+    expect(cell.get('o')).toEqual({ r: q.r1 + 1, c: cell.get('p')?.c });
+  });
+
   it('puts a boundary on a range of cells that holds only what stands in it', () => {
     const { cell, rect } = cellsOf(head(['Person(p, "P")', 'System_Boundary(s, "S") {', ...systems('a', 'b'), '}', ...systems('c'), 'Rel(p, a, "x")', 'Rel(a, b, "x")', 'Rel(p, c, "x")', 'Rel(c, b, "x")']));
     const q = rect.get('s') as { r0: number; r1: number; c0: number; c1: number };
