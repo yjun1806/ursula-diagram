@@ -207,6 +207,7 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
   // Lines drawn as they are: a loop for a relation of a box with itself, and a straight run out to the border of the
   // cluster that holds the other end.
   const fixed = new Map<number, Point[]>();
+  const usedFace = new Set<string>();
   graph.edges.forEach((e, i) => {
     const a = boxOf.get(e.from);
     const b = boxOf.get(e.to);
@@ -220,12 +221,16 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     if (outer === undefined) return;
     const [inner, wall] = outer === 'to' ? [a, b] : [b, a];
     const ends: [string, string] = [e.from, e.to];
-    const tries = ([0, 2, 1, 3] as const).map((f): Point[] => {
+    const innerId = outer === 'to' ? e.from : e.to;
+    // Right, left, down, up: the first face no other such line of this box uses and whose run is clear.
+    const tries = ([0, 2, 1, 3] as const).map((f) => {
       const p = pointOn(inner, f, 0);
       const q = f === 0 ? { x: wall.x + wall.w, y: p.y } : f === 2 ? { x: wall.x, y: p.y } : f === 1 ? { x: p.x, y: wall.y + wall.h } : { x: p.x, y: wall.y };
-      return outer === 'to' ? [p, q] : [q, p];
+      return { f, pts: outer === 'to' ? [p, q] : [q, p] };
     });
-    fixed.set(i, tries.find(([p, q]) => runClear(p as Point, q as Point, ends)) ?? (tries[0] as Point[]));
+    const pick = tries.find((t) => !usedFace.has(`${innerId}:${t.f}`) && runClear(t.pts[0] as Point, t.pts[1] as Point, ends)) ?? tries.find((t) => !usedFace.has(`${innerId}:${t.f}`)) ?? (tries[0] as (typeof tries)[number]);
+    usedFace.add(`${innerId}:${pick.f}`);
+    fixed.set(i, pick.pts);
   });
 
   // The faces each line may use: the straight pair, or the bent ones in the order they are tried. A line to a cluster

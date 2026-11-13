@@ -17,6 +17,10 @@ const GAP_Y = 64;
 const MARGIN = 24;
 /** Room a label keeps from the boxes on both sides of the gap it stands in. */
 const LABEL_ROOM = 16;
+/** What two labels of one pair keep between them. */
+const LABEL_GAP = 8;
+/** How far the loop of a box with itself stands out of it. */
+const LOOP = 24;
 /** What a bent line runs out of a face before it turns, and the distance between two lanes of a gap. */
 const TURN = 16;
 const LANE = 16;
@@ -52,6 +56,23 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
   };
   const nameWidth = (label: string): number => Math.max(...label.split(' · ').map((l) => ruler.textWidth(l, 'lane')));
 
+  // A line from a box to a cluster that holds it runs out to the border on the right, then the left, the bottom and the
+  // top of that box: the cluster keeps the room of its label on that side.
+  const inner = new Map<string, number>();
+  const outward = new Map<string, number>();
+  graph.edges.forEach((e) => {
+    const outer = holds(e.to, e.from) ? e.to : holds(e.from, e.to) ? e.from : undefined;
+    if (outer === undefined) return;
+    const own = outer === e.to ? e.from : e.to;
+    const n = outward.get(own) ?? 0;
+    outward.set(own, n + 1);
+    const text = e.label;
+    if (text === undefined || text === '') return;
+    const size = labelSize(text, layeredRuler(ruler));
+    const side = (['r', 'l', 'b', 't'] as const)[n % 4] as 'r' | 'l' | 'b' | 't';
+    const k = `${outer}:${side}`;
+    inner.set(k, Math.max(inner.get(k) ?? 0, (side === 'r' || side === 'l' ? size.w : size.h) + 2 * LABEL_ROOM));
+  });
   /**
    * The drawing with the columns inside each cluster moved right by `shiftOf`, and its lines, kept off the names of the
    * clusters when `names` is set.
@@ -66,7 +87,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     }
     const inset = (id: string, side: 'l' | 'r' | 't' | 'b'): number => {
       const q = grid.rect.get(id) as CellRect;
-      const own = side === 'l' ? PAD + (shiftOf.get(id) ?? 0) : side === 'r' ? PAD + (extraRight.get(id) ?? 0) : side === 't' ? PAD + NAME : PAD;
+      const own = (side === 'l' ? PAD + (shiftOf.get(id) ?? 0) : side === 'r' ? PAD + (extraRight.get(id) ?? 0) : side === 't' ? PAD + NAME : PAD) + (inner.get(`${id}:${side}`) ?? 0);
       const same = kidsOf(id).filter((k) => {
         const p = grid.rect.get(k) as CellRect;
         return side === 'l' ? p.c0 === q.c0 : side === 'r' ? p.c1 === q.c1 : side === 't' ? p.r0 === q.r0 : p.r1 === q.r1;
@@ -79,15 +100,37 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
       const text = graph.edges[i]?.label;
       return text === undefined || text === '' ? undefined : labelSize(text, layeredRuler(ruler));
     };
+    /**
+     * The room the labels of the straight lines across gap `k` need: the lines between two boxes side by side (`across`,
+     * gap between columns) or one over the other (`down`), a cluster counting with the cells it covers. The labels of
+     * the lines of one pair stand one after the other along the gap.
+     */
+    const labelRoom = (axis: 'across' | 'down', k: number): number => {
+      const rangeOf = (id: string): CellRect | undefined => {
+        const p = cellOf(id);
+        return p === undefined ? grid.rect.get(id) : { r0: p.r, r1: p.r, c0: p.c, c1: p.c };
+      };
+      const sum = new Map<string, number[]>();
+      let loops = 0;
+      graph.edges.forEach((e, i) => {
+        const [a, b] = [rangeOf(e.from), rangeOf(e.to)];
+        const size = labelOf(i);
+        // The loop of a box with itself stands right of it, its label beside the loop.
+        if (e.from === e.to && axis === 'across' && a !== undefined && a.c1 + 1 === k) loops = Math.max(loops, LOOP + LABEL_GAP + (size?.w ?? 0) + LABEL_ROOM);
+        if (a === undefined || b === undefined || size === undefined || holds(e.from, e.to) || holds(e.to, e.from)) return;
+        const level = axis === 'across' ? a.r0 <= b.r1 && b.r0 <= a.r1 : a.c0 <= b.c1 && b.c0 <= a.c1;
+        const [lo, hi] = axis === 'across' ? (a.c1 < b.c0 ? [a.c1, b.c0] : [b.c1, a.c0]) : a.r1 < b.r0 ? [a.r1, b.r0] : [b.r1, a.r0];
+        if (!level || hi !== lo + 1 || hi !== k) return;
+        const pair = [e.from, e.to].sort().join('\u0000');
+        sum.set(pair, [...(sum.get(pair) ?? []), axis === 'across' ? size.w : size.h]);
+      });
+      return Math.max(loops, ...[...sum.values()].map((l) => l.reduce((t, v) => t + v, 0) + (l.length - 1) * LABEL_GAP + 2 * LABEL_ROOM));
+    };
     // Gaps: the border insets that meet in a gap, in the row or column where they meet most.
     const colGap: number[] = [];
     for (let k = 0; k <= grid.columns; k++) {
       let base = k === 0 || k === grid.columns ? MARGIN : GAP_X;
-      graph.edges.forEach((e, i) => {
-        const [a, b] = [cellOf(e.from), cellOf(e.to)];
-        const size = labelOf(i);
-        if (a && b && size && a.r === b.r && Math.max(a.c, b.c) === k && Math.abs(a.c - b.c) === 1) base = Math.max(base, size.w + 2 * LABEL_ROOM);
-      });
+      base = Math.max(base, labelRoom('across', k));
       let most = 0;
       for (let r = 0; r < grid.rows; r++) {
         const left = Math.max(0, ...rects.filter((x) => x.q.c1 === k - 1 && x.q.r0 <= r && r <= x.q.r1).map((x) => x.r));
@@ -99,11 +142,7 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
     const rowGap: number[] = [];
     for (let k = 0; k <= grid.rows; k++) {
       let base = k === 0 || k === grid.rows ? MARGIN : GAP_Y;
-      graph.edges.forEach((e, i) => {
-        const [a, b] = [cellOf(e.from), cellOf(e.to)];
-        const size = labelOf(i);
-        if (a && b && size && a.c === b.c && Math.max(a.r, b.r) === k && Math.abs(a.r - b.r) === 1) base = Math.max(base, size.h + 2 * LABEL_ROOM);
-      });
+      base = Math.max(base, labelRoom('down', k));
       // A bent line turns in the gap under its upper end, half of them to each side: each keeps a lane of its own.
       const turning = graph.edges.filter((e) => {
         const [a, b] = [cellOf(e.from), cellOf(e.to)];
@@ -195,7 +234,46 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
   const every = new Set(laidClusters.map((c) => c.id));
   const subtitled = new Set(clusters.filter((c) => c.subtitled === true).map((c) => c.id));
   const named = { ...laid, clusters: placeNames(laid, ruler, every, subtitled).clusters };
-  const refined = refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), keepOffBoxes(named.clusters ?? [], true));
+  const refined = alongGap(refineLabels(named, layeredRuler(ruler), new Set(edges.map((_, i) => i)), keepOffBoxes(named.clusters ?? [], true)));
   const grown = withinCanvas({ ...refined, clusters: placeNames(refined, ruler, every, subtitled).clusters });
   return withLegend(grown, ruler, opts.legend);
+}
+
+/**
+ * The labels of two or more straight lines side by side between one pair stand one after the other along the stretch
+ * the lines share, each on its own line, so that they do not cover each other. The label of a loop stands right of it.
+ */
+function alongGap(layout: Layout): Layout {
+  const groups = new Map<string, number[]>();
+  layout.edges.forEach((e, i) => {
+    const [p, q] = e.points;
+    if (e.label === undefined || e.points.length !== 2 || p === undefined || q === undefined) return;
+    const k = [e.from, e.to].sort().join('\u0000') + (p.x === q.x ? '|' : '-');
+    groups.set(k, [...(groups.get(k) ?? []), i]);
+  });
+  const edges = layout.edges.map((e) => {
+    if (e.from !== e.to || e.label === undefined || e.points.length < 2) return e;
+    const x = Math.max(...e.points.map((p) => p.x));
+    const y = (Math.min(...e.points.map((p) => p.y)) + Math.max(...e.points.map((p) => p.y))) / 2;
+    return { ...e, label: { ...e.label, x: x + LABEL_GAP, y: y - e.label.h / 2 } };
+  });
+  for (const [k, list] of groups) {
+    if (list.length < 2) continue;
+    const down = k.endsWith('|');
+    const lines = list.map((i) => edges[i] as Layout['edges'][number]);
+    const lo = Math.max(...lines.map((e) => Math.min(...e.points.map((p) => (down ? p.y : p.x)))));
+    const hi = Math.min(...lines.map((e) => Math.max(...e.points.map((p) => (down ? p.y : p.x)))));
+    const sizes = lines.map((e) => (down ? (e.label as { h: number }).h : (e.label as { w: number }).w));
+    const total = sizes.reduce((t, v) => t + v, 0) + (lines.length - 1) * LABEL_GAP;
+    const order = list.map((_, n) => n).sort((a, b) => ((lines[a] as Layout['edges'][number]).points[0] as Point)[down ? 'x' : 'y'] - ((lines[b] as Layout['edges'][number]).points[0] as Point)[down ? 'x' : 'y']);
+    let at = (lo + hi) / 2 - total / 2;
+    for (const n of order) {
+      const e = lines[n] as Layout['edges'][number];
+      const label = e.label as NonNullable<Layout['edges'][number]['label']>;
+      const p = e.points[0] as Point;
+      edges[list[n] as number] = { ...e, label: down ? { ...label, x: p.x - label.w / 2, y: at } : { ...label, x: at, y: p.y - label.h / 2 } };
+      at += (sizes[n] as number) + LABEL_GAP;
+    }
+  }
+  return { ...layout, edges };
 }
