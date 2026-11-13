@@ -330,3 +330,18 @@ describe('treemap layout', () => {
     expect(out.lines.some((l) => /^│   └── Supplies\s+\$100,000$/u.test(l))).toBe(true);
   });
 });
+
+describe('treemap tile text', () => {
+  it('stands a tile name on a baseline 24 below the tile top and its value 18 below that', () => {
+    const l = layoutTreemap(parseTreemap('treemap-beta\n"Budget"\n    "Rent": 1400\n    "Food": 480\n'), pixelRuler());
+    const tiles = l.scene.items.filter((i): i is SceneBox => i.kind === 'box' && (i.role?.includes('tile') ?? false));
+    const texts = l.scene.items.filter((i): i is SceneText => i.kind === 'text');
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const t of tiles) {
+      const name = texts.find((x) => x.role?.includes('name') && x.x === t.x + 12 && x.y === t.y + 24);
+      const value = texts.find((x) => x.role?.includes('value') && x.x === t.x + 12 && x.y === t.y + 42);
+      expect(name?.baseline).toBe('alphabetic');
+      expect(value?.baseline).toBe('alphabetic');
+    }
+  });
+});

@@ -17,6 +17,9 @@ const MIN_TILE_H = 56;
 const TILE_PAD = 12;
 const NAME_H = 18;
 const VALUE_H = 16;
+/** A tile's name stands on a baseline this far below the tile's top, its value on one this far below the name's. */
+const NAME_BASE = 24;
+const VALUE_STEP = 18;
 const TITLE_H = 18;
 const TITLE_GAP = 16;
 const TITLE_SIZE = 15;
@@ -245,10 +248,10 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
       data: { label: t.label, value: t.valueText, ...(t.cls === undefined ? {} : { class: t.cls }) },
     });
     if (t.nameShown !== undefined) {
-      items.push({ kind: 'text', x: t.x + TILE_PAD, y: t.y + TILE_PAD + NAME_H / 2, text: t.nameShown, anchor: 'start', role: ['name'] });
+      items.push({ kind: 'text', x: t.x + TILE_PAD, y: t.y + NAME_BASE, text: t.nameShown, anchor: 'start', role: ['name'], baseline: 'alphabetic' });
     }
     if (t.valueShown !== undefined) {
-      items.push({ kind: 'text', x: t.x + TILE_PAD, y: t.y + TILE_PAD + NAME_H + VALUE_H / 2, text: t.valueShown, anchor: 'start', role: ['value', 'value--plain'] });
+      items.push({ kind: 'text', x: t.x + TILE_PAD, y: t.y + NAME_BASE + VALUE_STEP, text: t.valueShown, anchor: 'start', role: ['value', 'value--plain'], baseline: 'alphabetic' });
     }
   }
 
