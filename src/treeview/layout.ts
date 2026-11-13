@@ -17,8 +17,6 @@ const GUIDE_INSET = 4;
 const GUIDE_GAP = 8;
 /** The guide leaves the parent's row this far below its centre. */
 const GUIDE_DROP = 12;
-/** The text centre sits this far below the middle of its row, where the eye puts the line of a 12-13 px text. */
-const TEXT_DROP = 2;
 const DESCRIPTION_GAP = 8;
 const HIGHLIGHT_PAD = 6;
 const HIGHLIGHT_H = 24;
@@ -96,7 +94,7 @@ export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = DEFA
   const parents = parentsOf(items);
   const glyphs = items.map((item) => glyphOf(item, tree.icons));
   const columns = items.map((item) => PAD + indent * item.depth);
-  const centres = items.map((_, i) => PAD + ROW * i + ROW / 2 + TEXT_DROP);
+  const centres = items.map((_, i) => PAD + ROW * i + ROW / 2);
   const children = items.map((): number[] => []);
   parents.forEach((p, i) => {
     if (p >= 0) children[p]?.push(i);

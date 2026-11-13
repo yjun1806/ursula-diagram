@@ -100,7 +100,7 @@ export function layoutPacket(packet: Packet, ruler: Ruler): PacketLayout {
   const height = bottom + MARGIN + (tailNumber ? TALL_EXTRA : 0);
 
   const items: SceneItem[] = [];
-  if (packet.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: TITLE_Y, text: packet.title, role: ['title'] });
+  if (packet.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: TITLE_Y, text: packet.title, role: ['title'], baseline: 'alphabetic' });
 
   for (const c of cells) {
     const x = MARGIN + c.c0 * bitW + INSET;
@@ -112,11 +112,11 @@ export function layoutPacket(packet: Packet, ruler: Ruler): PacketLayout {
     items.push({ kind: 'box', style: 'box', x, y, w, h, role: ['box', 'tile'], data });
     if (bits) {
       if (c.left === c.right) {
-        items.push({ kind: 'text', x: x + w / 2, y: y - NUMBER_RISE, text: String(c.left), anchor: 'middle', role: ['mono'], data });
+        items.push({ kind: 'text', x: x + w / 2, y: y - NUMBER_RISE, text: String(c.left), anchor: 'middle', role: ['mono'], data, baseline: 'alphabetic' });
       } else {
-        items.push({ kind: 'text', x: x + INSET, y: y - NUMBER_RISE, text: String(c.left), anchor: 'start', role: ['mono'], data });
+        items.push({ kind: 'text', x: x + INSET, y: y - NUMBER_RISE, text: String(c.left), anchor: 'start', role: ['mono'], data, baseline: 'alphabetic' });
         const dropY = c.row1 > c.row0 ? y + h + TALL_NUMBER_DROP : y - NUMBER_RISE;
-        items.push({ kind: 'text', x: x + w - INSET, y: dropY, text: String(c.right), anchor: 'end', role: ['mono'], data });
+        items.push({ kind: 'text', x: x + w - INSET, y: dropY, text: String(c.right), anchor: 'end', role: ['mono'], data, baseline: 'alphabetic' });
       }
     }
     const lines = nameLines(c.label, w - 2 * NAME_PAD, nameWidth);

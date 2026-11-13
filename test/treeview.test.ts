@@ -210,7 +210,7 @@ describe('tree view layout', () => {
       expect(scene.height).toBe(48 + 28 * model.items.length);
       model.items.forEach((item, i) => {
         expect(columns[i]).toBe(24 + 28 * item.depth);
-        expect(centres[i]).toBe(40 + 28 * i);
+        expect(centres[i]).toBe(38 + 28 * i);
       });
     });
   }
@@ -220,7 +220,7 @@ describe('tree view layout', () => {
       const guides = layoutTreeView(model, ruler, theme).scene.items.filter((i) => i.kind === 'path');
       const bent = guides.filter((g) => g.kind === 'path' && g.d.includes('Q'));
       expect(bent).toHaveLength(3);
-      expect(bent.map((g) => (g.kind === 'path' ? g.d : ''))).toContain(`M28 52 V${40 + 28 * 9 - half} Q28 ${40 + 28 * 9} ${28 + half} ${40 + 28 * 9} H44`);
+      expect(bent.map((g) => (g.kind === 'path' ? g.d : ''))).toContain(`M28 50 V${38 + 28 * 9 - half} Q28 ${38 + 28 * 9} ${28 + half} ${38 + 28 * 9} H44`);
     }
   });
 

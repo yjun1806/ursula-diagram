@@ -88,6 +88,7 @@ function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
     '.ursula-rule--in-zone{stroke:$rule-in-zone;stroke-width:1}',
     '.ursula-tag{fill:$tag-fill}',
     '.ursula-tag--in-zone{fill:$tag-fill-zone}',
+    ...(spec.headBand ? ['.ursula-head-band{fill:$tag-fill}'] : []),
     '.ursula-edge{fill:none;stroke:$edge;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
     '.ursula-edge--accent{stroke:$accent}',
     '.ursula-edge--pending{stroke-dasharray:%dash}',
@@ -114,7 +115,7 @@ function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
     '.ursula-grid{fill:none;stroke:$grid;stroke-width:%grid-w;stroke-dasharray:%grid-dash;stroke-linecap:round}',
     '.ursula-mark{fill:$bar}',
     '.ursula-mark-line{fill:none;stroke:$data;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
-    '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:2.5}',
+    '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:%dot-w}',
     '.ursula-dot{fill:$dot-neutral}',
     ...(peak
       ? [
@@ -234,8 +235,9 @@ function textSvg(item: SceneText): string {
   const anchor = item.anchor === undefined ? [] : [item.anchor];
   const turn = item.rotate === undefined ? '' : ` transform="rotate(${num(item.rotate)} ${num(item.x)} ${num(item.y)})"`;
   const body = item.spans === undefined ? escapeXml(item.text) : item.spans.map(spanSvg).join('');
+  const centred = item.baseline === 'alphabetic' ? '' : ' dominant-baseline="central"';
   return (
-    `<text class="${classOf(roles, anchor)}" x="${num(item.x)}" y="${num(item.y)}" dominant-baseline="central"` +
+    `<text class="${classOf(roles, anchor)}" x="${num(item.x)}" y="${num(item.y)}"${centred}` +
     `${turn}${dataAttrs(item.data)}>${body}</text>`
   );
 }

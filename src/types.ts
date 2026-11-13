@@ -383,11 +383,13 @@ export interface SceneBox {
 
 export interface SceneText {
   kind: 'text';
-  /** Anchor position; `y` is the vertical centre of the line. */
+  /** Anchor position; `y` is the vertical centre of the line, or its baseline when `baseline` is `alphabetic`. */
   x: number;
   y: number;
   text: string;
   anchor?: 'start' | 'middle' | 'end';
+  /** Set for a text placed by its baseline, such as a heading or a number standing on a mark. */
+  baseline?: 'alphabetic';
   font?: 'title' | 'body' | 'label' | 'num' | 'caption';
   tone?: SceneTone;
   /** Roles of the themed renderer, each naming a class `ursula-<role>`. */

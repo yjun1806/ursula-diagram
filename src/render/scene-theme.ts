@@ -21,12 +21,19 @@ export interface SceneThemeSpec {
   barWidth: number;
   barTop: number;
   dataWidth: number;
+  /** Radius of a value point. */
   dotRadius: number;
+  /** Radius of a plain neutral dot, such as a station of a railroad or a component of a map; `dotRadius` when absent. */
+  neutralDotRadius?: number;
   /** Arrowhead: `length` is the room it takes along the line; an open head draws its two wings `wing` long. */
   arrow: Arrow;
   /** Head of a message line when it differs from `arrow`, so that a call stays apart from the open head of an async message. */
   msgArrow?: Arrow;
   shadow: boolean;
+  /** Whether a box that names its kind carries the kind in a band across its top instead of in a pill. */
+  headBand: boolean;
+  /** Whether a timeline draws every period in one scheme (plain boxes, neutral dots) unless asked otherwise; false when absent. */
+  plainTimeline?: boolean;
   /** Whether a chart of one bar series and at most one line draws the bars neutral, the highest bar in the accent, and the line in ink. */
   peakBar: boolean;
   /** Shape of a value line between its points. */
@@ -144,6 +151,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'grid-w': '2',
       'grid-dash': 'none',
       'data-w': '3',
+      'dot-w': '2.5',
       'value-weight': '600',
       'tint-stroke-w': '0',
       overlap: '0.24',
@@ -161,6 +169,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     dotRadius: 5,
     arrow: { kind: 'filled', length: 9.5, width: 10, stroke: 2 },
     shadow: false,
+    headBand: false,
     peakBar: false,
     interpolation: 'monotone',
     valueLabel: 'inside',
@@ -231,6 +240,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'grid-w': '1',
       'grid-dash': 'none',
       'data-w': '2.5',
+      'dot-w': '2.5',
       'value-weight': '500',
       'tint-stroke-w': '1',
       overlap: '0.16',
@@ -248,6 +258,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     dotRadius: 4,
     arrow: { kind: 'filled', length: 8, width: 8, stroke: 1.5 },
     shadow: false,
+    headBand: false,
     peakBar: false,
     interpolation: 'linear',
     valueLabel: 'outside',
@@ -273,7 +284,6 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'note-in-zone': ['#f1f0ef', '#252422'],
       'zone-plain': ['#fcfcfa', '#171614'],
       rule: ['#fcfcfa', '#171614'],
-      'dot-stroke': ['#fcfcfa', '#171614'],
       'chip-stroke': ['#fcfcfa', '#171614'],
       'chip-accent-stroke': ['#fcfcfa', '#171614'],
       'box-fill': ['#fcfcfa', '#171614'],
@@ -306,7 +316,8 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       axis: ['#484846', '#bebdbb'],
       bar: ['#c8c7c6', '#434241'],
       data: ['#5b5b59', '#b2b1af'],
-      'dot-fill': ['#5b5b59', '#b2b1af'],
+      'dot-fill': ['#fcfcfa', '#171614'],
+      'dot-stroke': ['#201f1e', '#efeeec'],
       value: ['#201f1e', '#efeeec'],
       s1: ['#82641c', '#cdad69'],
       's1-tint': ['#f1e7d2', '#3f3112'],
@@ -345,10 +356,11 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'grid-w': '1',
       'grid-dash': 'none',
       'data-w': '1.5',
+      'dot-w': '1.5',
       'value-weight': '500',
-      'tint-stroke-w': '1',
-      overlap: '0.16',
-      'overlap-w': '1.5',
+      'tint-stroke-w': '0',
+      overlap: '0.24',
+      'overlap-w': '0',
       port: 'inline',
       'port-r': '4',
     },
@@ -360,9 +372,12 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     barWidth: 32,
     barTop: 8,
     dataWidth: 2.5,
-    dotRadius: 4,
+    dotRadius: 3.5,
+    neutralDotRadius: 4,
     arrow: { kind: 'filled', length: 9, width: 9, stroke: 1.5 },
     shadow: false,
+    headBand: true,
+    plainTimeline: true,
     peakBar: true,
     interpolation: 'linear',
     valueLabel: 'outside',
@@ -433,6 +448,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
       'grid-w': '1.5',
       'grid-dash': '0.1 6',
       'data-w': '3',
+      'dot-w': '2.5',
       'value-weight': '600',
       'tint-stroke-w': '0',
       overlap: '0.16',
@@ -451,6 +467,7 @@ export const SCENE_THEME_SPECS: Record<Theme, SceneThemeSpec> = {
     arrow: { kind: 'open', length: 8, width: 10, wing: 5 },
     msgArrow: { kind: 'filled', length: 8, width: 8, stroke: 1.5 },
     shadow: true,
+    headBand: false,
     peakBar: false,
     interpolation: 'monotone',
     valueLabel: 'outside',

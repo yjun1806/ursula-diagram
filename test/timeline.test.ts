@@ -218,22 +218,30 @@ describe('timeline colour scheme', () => {
   const seriesOf = (svg: string): string[] => [...svg.matchAll(/class="[^"]*ursula-series-(\d)--tint/g)].map((m) => m[1] ?? '');
 
   it('gives each time period its own series when there is no section', () => {
-    const svg = render(renderSrc('07-styling-of-time-periods-and-events'));
+    const svg = render(renderSrc('07-styling-of-time-periods-and-events'), { theme: 'solid' });
     // LinkedIn, Facebook, Google, YouTube, Twitter: the two 2004 events share the second series.
     expect(seriesOf(svg)).toEqual(['1', '2', '2', '3', '4']);
   });
 
   it('draws every period in one scheme when disableMulticolor is set', () => {
-    expect(seriesOf(render(renderSrc('08-styling-of-time-periods-and-events')))).toEqual([]);
+    expect(seriesOf(render(renderSrc('08-styling-of-time-periods-and-events'), { theme: 'solid' }))).toEqual([]);
   });
 
   it('gives every period of a section the series of the section', () => {
-    expect(seriesOf(render(renderSrc('03-grouping-of-time-periods-in-sections-ages')))).toEqual(['1', '1', '1', '2', '2']);
+    expect(seriesOf(render(renderSrc('03-grouping-of-time-periods-in-sections-ages'), { theme: 'solid' }))).toEqual(['1', '1', '1', '2', '2']);
   });
 
   it('colours the dot of a period with the series of its events', () => {
-    const svg = render(renderSrc('07-styling-of-time-periods-and-events'));
+    const svg = render(renderSrc('07-styling-of-time-periods-and-events'), { theme: 'solid' });
     expect([...svg.matchAll(/<circle class="ursula-dot ursula-series-(\d)"/g)].map((m) => m[1])).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('draws plain boxes and neutral dots in the band theme', () => {
+    for (const name of ['07-styling-of-time-periods-and-events', '03-grouping-of-time-periods-in-sections-ages']) {
+      const svg = render(renderSrc(name), { theme: 'band' });
+      expect(svg).not.toMatch(/class="ursula-(box|dot) ursula-series-/);
+      expect(svg).toMatch(/<rect class="ursula-box[ "]/);
+    }
   });
 });
 

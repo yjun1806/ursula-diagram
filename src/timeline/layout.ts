@@ -4,6 +4,7 @@ import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { TimelineModel } from './model.ts';
 import { pixelWidth, wrapLines } from './wrap.ts';
+import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 24;
@@ -29,7 +30,7 @@ const SERIES = 8;
 export interface TimelineLayoutOptions {
   /** Width at which a horizontal drawing folds into another row. */
   maxWidth?: number;
-  /** Colours each section, or each period when there is no section, with its own series; true when absent. */
+  /** Colours each section, or each period when there is no section, with its own series; when absent, true unless the theme draws timelines plain. */
   multicolor?: boolean;
 }
 
@@ -213,7 +214,7 @@ const withSeries = (col: Col, series: string | undefined): Col => (series === un
 const dotRole = (series: string | undefined): string[] => (series === undefined ? ['dot'] : ['dot', series]);
 
 function titleItems(title: string | undefined): SceneItem[] {
-  return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'] }];
+  return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'], baseline: 'alphabetic' }];
 }
 
 function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limit: number, multicolor: boolean): TimelineLayout {
@@ -274,7 +275,7 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
         if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: cx, y: axis }, { x: cx, y: boxTop }], role: ['edge'] });
         dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: dotRole(col.series) });
         col.label.forEach((text, i) =>
-          dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'] }),
+          dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' }),
         );
         for (const b of boxes) contentItems.push(...boxItems(b, part.named, col.series));
         periods.push({ label: col.label, dot: { x: cx, y: axis }, boxes, row: rowIndex });
@@ -387,6 +388,6 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multic
 
 /** Places a timeline: periods on an axis as dots, events stacked below (or beside) them, sections as zones. */
 export function layoutTimeline(model: TimelineModel, ruler: Ruler, theme: Theme = DEFAULT_THEME, opts: TimelineLayoutOptions = {}): TimelineLayout {
-  const multicolor = opts.multicolor ?? true;
+  const multicolor = opts.multicolor ?? !SCENE_THEME_SPECS[theme].plainTimeline;
   return model.direction === 'TD' ? layoutVertical(model, ruler, theme, multicolor) : layoutHorizontal(model, ruler, theme, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT, multicolor);
 }
