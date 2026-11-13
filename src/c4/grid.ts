@@ -5,7 +5,7 @@ import type { LayoutOptions } from '../layout/index.ts';
 import { labelSize } from '../layout/labels.ts';
 import { withLegend } from '../layout/legend.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Graph, Layout, LayoutCluster, LayoutNode } from '../types.ts';
+import type { Graph, Layout, LayoutCluster, LayoutNode, Point } from '../types.ts';
 import type { Cell, CellRect } from './grid-place.ts';
 import { placeCells } from './grid-place.ts';
 import { emptySpec, gridRows } from './grid-rows.ts';
@@ -17,6 +17,9 @@ const GAP_Y = 64;
 const MARGIN = 24;
 /** Room a label keeps from the boxes on both sides of the gap it stands in. */
 const LABEL_ROOM = 16;
+/** What a bent line runs out of a face before it turns, and the distance between two lanes of a gap. */
+const TURN = 16;
+const LANE = 16;
 /** A cluster's border from what stands in it, and the room of its name (two lines) on top. */
 const PAD = 24;
 const NAME = 48;
@@ -24,6 +27,8 @@ const NAME = 48;
 const NAME_INSET = 16;
 const NAME_CLEAR = 12;
 const NAME_SHIFT = 24;
+/** Where the text of a name starts below the top border. */
+const NAME_TOP = 12;
 
 /**
  * Lays out a C4 drawing on one grid: every element in a cell of the size every element shares, every boundary on a range
@@ -47,121 +52,144 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
   };
   const nameWidth = (label: string): number => Math.max(...label.split(' · ').map((l) => ruler.textWidth(l, 'lane')));
 
-  // A line that comes into the first cell of a boundary from above crosses its name: the columns inside move right.
-  const shiftOf = new Map<string, number>();
-  for (const c of clusters) {
-    const q = grid.rect.get(c.id);
-    if (q === undefined) continue;
-    const crossed = graph.edges.some((e) => {
-      const [a, b] = [cellOf(e.from), cellOf(e.to)];
-      if (a === undefined || b === undefined) return false;
-      return ([[e.from, a, e.to, b], [e.to, b, e.from, a]] as const).some(([id, p, other, o]) => p.r === q.r0 && p.c === q.c0 && holds(c.id, id) && !holds(c.id, other) && o.r < p.r);
-    });
-    shiftOf.set(c.id, crossed && NAME_INSET + nameWidth(c.label) + NAME_CLEAR > PAD + bw / 2 ? NAME_SHIFT : 0);
-  }
-  const extraRight = new Map<string, number>();
-  for (const c of clusters) {
-    const q = grid.rect.get(c.id);
-    if (q === undefined) continue;
-    const span = (q.c1 - q.c0 + 1) * bw + (q.c1 - q.c0) * GAP_X + 2 * PAD;
-    extraRight.set(c.id, Math.max(0, NAME_INSET + nameWidth(c.label) + NAME_INSET - span));
-  }
-  const inset = (id: string, side: 'l' | 'r' | 't' | 'b'): number => {
-    const q = grid.rect.get(id) as CellRect;
-    const own = side === 'l' ? PAD + (shiftOf.get(id) ?? 0) : side === 'r' ? PAD + (extraRight.get(id) ?? 0) : side === 't' ? PAD + NAME : PAD;
-    const same = kidsOf(id).filter((k) => {
-      const p = grid.rect.get(k) as CellRect;
-      return side === 'l' ? p.c0 === q.c0 : side === 'r' ? p.c1 === q.c1 : side === 't' ? p.r0 === q.r0 : p.r1 === q.r1;
-    });
-    return own + Math.max(0, ...same.map((k) => inset(k, side)));
-  };
-  const rects = [...grid.rect].map(([id, q]) => ({ id, q, l: inset(id, 'l'), r: inset(id, 'r'), t: inset(id, 't'), b: inset(id, 'b') }));
-
-  const labelOf = (i: number): { w: number; h: number } | undefined => {
-    const text = graph.edges[i]?.label;
-    return text === undefined || text === '' ? undefined : labelSize(text, layeredRuler(ruler));
-  };
-  // Gaps: the border insets that meet in a gap, in the row or column where they meet most.
-  const colGap: number[] = [];
-  for (let k = 0; k <= grid.columns; k++) {
-    let base = k === 0 || k === grid.columns ? MARGIN : GAP_X;
-    graph.edges.forEach((e, i) => {
-      const [a, b] = [cellOf(e.from), cellOf(e.to)];
-      const size = labelOf(i);
-      if (a && b && size && a.r === b.r && Math.max(a.c, b.c) === k && Math.abs(a.c - b.c) === 1) base = Math.max(base, size.w + 2 * LABEL_ROOM);
-    });
-    let most = 0;
-    for (let r = 0; r < grid.rows; r++) {
-      const left = Math.max(0, ...rects.filter((x) => x.q.c1 === k - 1 && x.q.r0 <= r && r <= x.q.r1).map((x) => x.r));
-      const right = Math.max(0, ...rects.filter((x) => x.q.c0 === k && x.q.r0 <= r && r <= x.q.r1).map((x) => x.l));
-      most = Math.max(most, left + right);
+  /**
+   * The drawing with the columns inside each cluster moved right by `shiftOf`, and its lines, kept off the names of the
+   * clusters when `names` is set.
+   */
+  const drawn = (shiftOf: ReadonlyMap<string, number>, names: boolean) => {
+    const extraRight = new Map<string, number>();
+    for (const c of clusters) {
+      const q = grid.rect.get(c.id);
+      if (q === undefined) continue;
+      const span = (q.c1 - q.c0 + 1) * bw + (q.c1 - q.c0) * GAP_X + 2 * PAD;
+      extraRight.set(c.id, Math.max(0, NAME_INSET + nameWidth(c.label) + NAME_INSET - span));
     }
-    colGap.push(base + most);
-  }
-  const rowGap: number[] = [];
-  for (let k = 0; k <= grid.rows; k++) {
-    let base = k === 0 || k === grid.rows ? MARGIN : GAP_Y;
-    graph.edges.forEach((e, i) => {
-      const [a, b] = [cellOf(e.from), cellOf(e.to)];
-      const size = labelOf(i);
-      if (a && b && size && a.c === b.c && Math.max(a.r, b.r) === k && Math.abs(a.r - b.r) === 1) base = Math.max(base, size.h + 2 * LABEL_ROOM);
-    });
-    let most = 0;
-    for (let c = 0; c < grid.columns; c++) {
-      const above = Math.max(0, ...rects.filter((x) => x.q.r1 === k - 1 && x.q.c0 <= c && c <= x.q.c1).map((x) => x.b));
-      const below = Math.max(0, ...rects.filter((x) => x.q.r0 === k && x.q.c0 <= c && c <= x.q.c1).map((x) => x.t));
-      most = Math.max(most, above + below);
-    }
-    rowGap.push(base + most);
-  }
-  const colX: number[] = [];
-  for (let c = 0, x = 0; c < grid.columns; c++) {
-    x += (colGap[c] as number) + (c === 0 ? 0 : bw);
-    colX.push(x);
-  }
-  const rowY: number[] = [];
-  for (let r = 0, y = 0; r < grid.rows; r++) {
-    y += (rowGap[r] as number) + (r === 0 ? 0 : bh);
-    rowY.push(y);
-  }
-  const width = (colX.at(-1) ?? 0) + bw + (colGap.at(-1) ?? MARGIN);
-  const height = (rowY.at(-1) ?? 0) + bh + (rowGap.at(-1) ?? MARGIN);
-
-  const nodes: LayoutNode[] = graph.nodes.map((n) => {
-    const p = cellOf(n.id) as Cell;
-    return {
-      id: n.id,
-      lane: n.lane,
-      rank: p.r,
-      span: 1,
-      row: p.c,
-      x: colX[p.c] as number,
-      y: rowY[p.r] as number,
-      w: bw,
-      h: bh,
-      title: n.title,
-      lines: n.lines,
-      shape: n.shape,
-      ...(n.compartments === undefined ? {} : { compartments: n.compartments }),
-      ...(n.cluster === undefined ? {} : { cluster: n.cluster }),
+    const inset = (id: string, side: 'l' | 'r' | 't' | 'b'): number => {
+      const q = grid.rect.get(id) as CellRect;
+      const own = side === 'l' ? PAD + (shiftOf.get(id) ?? 0) : side === 'r' ? PAD + (extraRight.get(id) ?? 0) : side === 't' ? PAD + NAME : PAD;
+      const same = kidsOf(id).filter((k) => {
+        const p = grid.rect.get(k) as CellRect;
+        return side === 'l' ? p.c0 === q.c0 : side === 'r' ? p.c1 === q.c1 : side === 't' ? p.r0 === q.r0 : p.r1 === q.r1;
+      });
+      return own + Math.max(0, ...same.map((k) => inset(k, side)));
     };
-  });
-  const depthOf = (id: string): number => {
-    let d = 1;
-    for (let at = parentOf.get(id); at !== undefined; at = parentOf.get(at)) d++;
-    return d;
-  };
-  const order = new Map(spec.order.map((id, i) => [id, i] as const));
-  const laidClusters: LayoutCluster[] = rects
-    .map(({ id, q, l, r, t, b }): LayoutCluster => {
-      const c = clusters.find((k) => k.id === id);
-      const x = (colX[q.c0] as number) - l;
-      const y = (rowY[q.r0] as number) - t;
-      return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + bh + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
-    })
-    .sort((a, b) => a.depth - b.depth || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    const rects = [...grid.rect].map(([id, q]) => ({ id, q, l: inset(id, 'l'), r: inset(id, 'r'), t: inset(id, 't'), b: inset(id, 'b') }));
 
-  const { edges, diagnostics } = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf });
+    const labelOf = (i: number): { w: number; h: number } | undefined => {
+      const text = graph.edges[i]?.label;
+      return text === undefined || text === '' ? undefined : labelSize(text, layeredRuler(ruler));
+    };
+    // Gaps: the border insets that meet in a gap, in the row or column where they meet most.
+    const colGap: number[] = [];
+    for (let k = 0; k <= grid.columns; k++) {
+      let base = k === 0 || k === grid.columns ? MARGIN : GAP_X;
+      graph.edges.forEach((e, i) => {
+        const [a, b] = [cellOf(e.from), cellOf(e.to)];
+        const size = labelOf(i);
+        if (a && b && size && a.r === b.r && Math.max(a.c, b.c) === k && Math.abs(a.c - b.c) === 1) base = Math.max(base, size.w + 2 * LABEL_ROOM);
+      });
+      let most = 0;
+      for (let r = 0; r < grid.rows; r++) {
+        const left = Math.max(0, ...rects.filter((x) => x.q.c1 === k - 1 && x.q.r0 <= r && r <= x.q.r1).map((x) => x.r));
+        const right = Math.max(0, ...rects.filter((x) => x.q.c0 === k && x.q.r0 <= r && r <= x.q.r1).map((x) => x.l));
+        most = Math.max(most, left + right);
+      }
+      colGap.push(base + most);
+    }
+    const rowGap: number[] = [];
+    for (let k = 0; k <= grid.rows; k++) {
+      let base = k === 0 || k === grid.rows ? MARGIN : GAP_Y;
+      graph.edges.forEach((e, i) => {
+        const [a, b] = [cellOf(e.from), cellOf(e.to)];
+        const size = labelOf(i);
+        if (a && b && size && a.c === b.c && Math.max(a.r, b.r) === k && Math.abs(a.r - b.r) === 1) base = Math.max(base, size.h + 2 * LABEL_ROOM);
+      });
+      // A bent line turns in the gap under its upper end, half of them to each side: each keeps a lane of its own.
+      const turning = graph.edges.filter((e) => {
+        const [a, b] = [cellOf(e.from), cellOf(e.to)];
+        return a !== undefined && b !== undefined && a.c !== b.c && a.r !== b.r && Math.min(a.r, b.r) === k - 1;
+      }).length;
+      if (turning > 0) base = Math.max(base, 2 * TURN + LANE * Math.ceil(turning / 2));
+      let most = 0;
+      for (let c = 0; c < grid.columns; c++) {
+        const above = Math.max(0, ...rects.filter((x) => x.q.r1 === k - 1 && x.q.c0 <= c && c <= x.q.c1).map((x) => x.b));
+        const below = Math.max(0, ...rects.filter((x) => x.q.r0 === k && x.q.c0 <= c && c <= x.q.c1).map((x) => x.t));
+        most = Math.max(most, above + below);
+      }
+      rowGap.push(base + most);
+    }
+    const colX: number[] = [];
+    for (let c = 0, x = 0; c < grid.columns; c++) {
+      x += (colGap[c] as number) + (c === 0 ? 0 : bw);
+      colX.push(x);
+    }
+    const rowY: number[] = [];
+    for (let r = 0, y = 0; r < grid.rows; r++) {
+      y += (rowGap[r] as number) + (r === 0 ? 0 : bh);
+      rowY.push(y);
+    }
+    const width = (colX.at(-1) ?? 0) + bw + (colGap.at(-1) ?? MARGIN);
+    const height = (rowY.at(-1) ?? 0) + bh + (rowGap.at(-1) ?? MARGIN);
+
+    const nodes: LayoutNode[] = graph.nodes.map((n) => {
+      const p = cellOf(n.id) as Cell;
+      return {
+        id: n.id,
+        lane: n.lane,
+        rank: p.r,
+        span: 1,
+        row: p.c,
+        x: colX[p.c] as number,
+        y: rowY[p.r] as number,
+        w: bw,
+        h: bh,
+        title: n.title,
+        lines: n.lines,
+        shape: n.shape,
+        ...(n.compartments === undefined ? {} : { compartments: n.compartments }),
+        ...(n.cluster === undefined ? {} : { cluster: n.cluster }),
+      };
+    });
+    const depthOf = (id: string): number => {
+      let d = 1;
+      for (let at = parentOf.get(id); at !== undefined; at = parentOf.get(at)) d++;
+      return d;
+    };
+    const order = new Map(spec.order.map((id, i) => [id, i] as const));
+    const laidClusters: LayoutCluster[] = rects
+      .map(({ id, q, l, r, t, b }): LayoutCluster => {
+        const c = clusters.find((k) => k.id === id);
+        const x = (colX[q.c0] as number) - l;
+        const y = (rowY[q.r0] as number) - t;
+        return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + bh + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
+      })
+      .sort((a, b) => a.depth - b.depth || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+    // The name stands in the top left corner, two lines high.
+    const nameOf = (id: string): { x: number; y: number; w: number; h: number } | undefined => {
+      const c = laidClusters.find((k) => k.id === id);
+      return c === undefined ? undefined : { x: c.x + NAME_INSET, y: c.y + NAME_TOP, w: nameWidth(c.label), h: NAME - NAME_TOP };
+    };
+    const { edges, diagnostics } = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf, ...(names ? { nameOf } : {}) });
+    return { width, height, nodes, laidClusters, colX, edges, diagnostics };
+  };
+  // A line down the first column of a cluster that runs over its name moves the columns inside right, as far as the name needs.
+  const first = drawn(new Map(), false);
+  const shiftOf = new Map<string, number>();
+  for (const c of first.laidClusters) {
+    const q = grid.rect.get(c.id) as CellRect;
+    const [x0, x1] = [first.colX[q.c0] as number, (first.colX[q.c0] as number) + bw];
+    const reach = c.x + NAME_INSET + nameWidth(c.label) + NAME_CLEAR;
+    let need = 0;
+    for (const e of first.edges) {
+      for (const [a, b] of e.points.slice(1).map((p, i) => [e.points[i] as Point, p] as const)) {
+        if (Math.abs(a.x - b.x) > 1e-6 || a.x < x0 || a.x > x1 || a.x < c.x + NAME_INSET - NAME_CLEAR || a.x > reach) continue;
+        if (Math.min(a.y, b.y) < c.y + PAD + NAME && Math.max(a.y, b.y) > c.y) need = Math.max(need, NAME_SHIFT, reach - a.x);
+      }
+    }
+    if (need > 0) shiftOf.set(c.id, need);
+  }
+  const { width, height, nodes, laidClusters, edges, diagnostics } = drawn(shiftOf, true);
 
   const laid: Layout = { width, height, direction: 'TD', laneAxis: 'across', lanes: [], clusters: laidClusters, nodes, edges, diagnostics };
   const every = new Set(laidClusters.map((c) => c.id));

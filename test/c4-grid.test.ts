@@ -9,7 +9,6 @@ import { parseC4 } from '../src/c4/parse.ts';
 import { gridRows } from '../src/c4/grid-rows.ts';
 import { placeCells } from '../src/c4/grid-place.ts';
 import { drawLines } from '../src/c4/grid-lines.ts';
-import { routeGlobally } from '../src/layout/global-route.ts';
 import type { Graph, Layout, LayoutEdge, LayoutNode, Point } from '../src/types.ts';
 
 const graphOf = (src: string): Graph => c4Graph(parseC4(src), pixelRuler());
@@ -184,26 +183,11 @@ describe('c4 grid on the documented examples', () => {
 });
 
 describe('c4 grid lines', () => {
-  it('routes a pinned line between its pins only', () => {
-    const [p] = routeGlobally({
-      width: 400,
-      height: 400,
-      nodes: [
-        { id: 'a', x: 40, y: 40, w: 120, h: 60 },
-        { id: 'b', x: 240, y: 260, w: 120, h: 60 },
-      ],
-      clusters: [],
-      edges: [{ from: 'a', to: 'b', current: [], pin: { from: { x: 130, y: 100, d: 1 }, to: { x: 270, y: 260, d: 3 } } }],
-    });
-    expect(p?.[0]).toEqual({ x: 130, y: 100 });
-    expect(p?.at(-1)).toEqual({ x: 270, y: 260 });
-  });
-
   it('reports a line that finds no way between its places on the faces', () => {
-    const graph: Graph = { direction: 'TD', lanes: [{ id: '_', label: '' }], nodes: ['a', 'b', 'w'].map((id) => ({ id, title: id, lines: [], shape: 'rect' as const, lane: '_' })), edges: [{ from: 'a', to: 'b', style: 'normal' }] };
+    const graph: Graph = { direction: 'TD', lanes: [{ id: '_', label: '' }], nodes: ['a', 'b', 'w', 'l', 'r'].map((id) => ({ id, title: id, lines: [], shape: 'rect' as const, lane: '_' })), edges: [{ from: 'a', to: 'b', style: 'normal' }] };
     const node = (id: string, x: number, y: number, w = 120, h = 60): LayoutNode => ({ id, lane: '_', rank: 0, span: 1, row: 0, x, y, w, h, title: id, lines: [], shape: 'rect' });
-    // A wall right under the bottom of `a` leaves no room for the line to leave it there.
-    const nodes = [node('a', 40, 40), node('b', 40, 300), node('w', 20, 104, 160, 60)];
+    // A wall right under the bottom of `a` leaves no room for the line to leave it there, and walls on both sides no room to go round.
+    const nodes = [node('a', 40, 40), node('b', 40, 300), node('w', 20, 104, 160, 60), node('l', 0, 0, 30, 400), node('r', 170, 0, 230, 400)];
     const { edges, diagnostics } = drawLines({ graph, nodes, clusters: [], width: 400, height: 400, holds: () => false, labelOf: () => undefined });
     expect(diagnostics.map((d) => d.kind)).toEqual(['off-centre']);
     expect(edges[0]?.points.length).toBeGreaterThan(1);

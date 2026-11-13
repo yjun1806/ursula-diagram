@@ -96,15 +96,14 @@ const C4_CONTAINER = `    C4Container
 `;
 
 describe('C4 container diagram', () => {
-  it('draws the line into the Single-Page App round the web app above it with at most four bends, and no line along a border', () => {
+  it('draws the line into the Single-Page App with at most two bends and no line along a border', () => {
     const r = pixelRuler();
     const l = layout(c4Graph(parseC4(C4_CONTAINER), r), r);
     const find = (a: string, b: string) => l.edges.find((e) => e.from === a && e.to === b) ?? l.edges.find((e) => e.from === b && e.to === a);
     const ids = l.nodes.map((n) => n.id);
     const pick = (re: RegExp) => ids.find((id) => re.test(id)) as string;
     const [customer, spa, api, mail] = [pick(/customer/i), pick(/single|spa/i), pick(/api/i), pick(/mail/i)];
-    // The web app stands straight above the Single-Page App, so the customer's line comes down beside it and turns in.
-    expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(4);
+    expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(2);
     // No line runs along a cluster border closer than 12 (a line may touch it only to cross).
     for (const c of l.clusters ?? []) {
       for (const e of l.edges) {
