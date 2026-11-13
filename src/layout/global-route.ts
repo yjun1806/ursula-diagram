@@ -31,7 +31,9 @@ const NAME_CLEAR = 4;
 const STUB = 12;
 const PITCH = 8;
 const CORNER_CLEAR = 12;
-const BORDER_NEAR = 16;
+const BORDER_NEAR = 12;
+/** The lane outside a border along which a line may run. */
+const BORDER_OUTSIDE = 16;
 const EDGE_ROOM = 8;
 /** Price of breaking a spacing rule when no line can be found without breaking one. */
 const RELAXED = 400;
@@ -250,10 +252,10 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
     xs.push(w.x0, w.x1);
     ys.push(w.y0, w.y1);
   }
-  // A lane as near a border as a line may run along it.
+  // The lanes along a border: the middle of the pad inside, 16 outside.
   for (const c of input.clusters) {
-    xs.push(c.box.x - BORDER_NEAR, c.box.x + BORDER_NEAR, c.box.x + c.box.w - BORDER_NEAR, c.box.x + c.box.w + BORDER_NEAR);
-    ys.push(c.box.y - BORDER_NEAR, c.box.y + BORDER_NEAR, c.box.y + c.box.h - BORDER_NEAR, c.box.y + c.box.h + BORDER_NEAR);
+    xs.push(c.box.x - BORDER_OUTSIDE, c.box.x + BORDER_NEAR, c.box.x + c.box.w - BORDER_NEAR, c.box.x + c.box.w + BORDER_OUTSIDE);
+    ys.push(c.box.y - BORDER_OUTSIDE, c.box.y + BORDER_NEAR, c.box.y + c.box.h - BORDER_NEAR, c.box.y + c.box.h + BORDER_OUTSIDE);
   }
   for (const job of jobs) {
     for (const p of [...job.from, ...job.to]) {

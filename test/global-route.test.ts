@@ -104,7 +104,7 @@ describe('C4 container diagram', () => {
     const pick = (re: RegExp) => ids.find((id) => re.test(id)) as string;
     const [customer, spa, api, mail] = [pick(/customer/i), pick(/single|spa/i), pick(/api/i), pick(/mail/i)];
     expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(3);
-    // No line runs along a cluster border closer than 16 (a line may touch it only to cross).
+    // No line runs along a cluster border closer than 12 (a line may touch it only to cross).
     for (const c of l.clusters ?? []) {
       for (const e of l.edges) {
         for (const [p, q] of segs(e.points)) {
@@ -113,7 +113,7 @@ describe('C4 container diagram', () => {
           const sides = horizontal ? [[c.y, c.x, c.x + c.w], [c.y + c.h, c.x, c.x + c.w]] : [[c.x, c.y, c.y + c.h], [c.x + c.w, c.y, c.y + c.h]];
           for (const [at, a0, a1] of sides as Array<[number, number, number]>) {
             const d = Math.abs((horizontal ? p.y : p.x) - at);
-            if (Math.min(hi, a1) - Math.max(lo, a0) > 1e-6) expect(d === 0 || d >= 16 - 1e-6, `${e.from}->${e.to} beside ${c.id}`).toBe(true);
+            if (Math.min(hi, a1) - Math.max(lo, a0) > 1e-6) expect(d === 0 || d >= 12 - 1e-6, `${e.from}->${e.to} beside ${c.id}`).toBe(true);
           }
         }
       }
