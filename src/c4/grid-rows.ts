@@ -40,7 +40,24 @@ function asksOf(graph: Graph, spec: GridSpec): Ask[] {
     else if (hint === 'right') asks.push({ kind: 'beside', a, b, tier, step, index });
     else asks.push({ kind: 'beside', a: b, b: a, tier, step, index });
   };
+  // A line to a boundary stands its other end above or below everything in the boundary, after every other rule.
+  const inside = (cid: string): string[] => graph.nodes.filter((n) => {
+    for (let at = n.cluster; at !== undefined; at = graph.clusters?.find((c) => c.id === at)?.parent) if (at === cid) return true;
+    return false;
+  }).map((n) => n.id);
+  const clusterIds = new Set((graph.clusters ?? []).map((c) => c.id));
   graph.edges.forEach((e, index) => {
+    const [fromBox, toBox] = [clusterIds.has(e.from), clusterIds.has(e.to)];
+    if (fromBox !== toBox && (nodes.has(e.from) || nodes.has(e.to))) {
+      const hint = spec.hints[index];
+      for (const id of inside(fromBox ? e.from : e.to)) {
+        const [a, b] = fromBox ? [id, e.to] : [e.from, id];
+        if (a === b) continue;
+        if (hint === 'up' || hint === 'down') hinted(a, b, hint, 0, Infinity, index);
+        else if (hint === undefined) asks.push({ kind: 'below', a, b, tier: 4, step: Infinity, index });
+      }
+      return;
+    }
     if (!nodes.has(e.from) || !nodes.has(e.to) || e.from === e.to) return;
     const hint = spec.hints[index];
     const step = spec.steps[index] ?? Infinity;

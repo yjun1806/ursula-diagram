@@ -209,3 +209,14 @@ describe('c4 grid lines', () => {
     expect(edges[0]?.points.length).toBeGreaterThan(1);
   });
 });
+
+describe('c4 grid lines to a boundary', () => {
+  it('stands the other end above the boundary and ends the line at the middle of its border', () => {
+    const laid = layout(graphOf(head(['Person(p, "P")', 'System_Boundary(s, "S") {', ...systems('a', 'b'), '}', 'Rel(p, s, "uses")', 'Rel(a, b, "x")'])), pixelRuler());
+    const s = laid.clusters?.find((c) => c.id === 's') as NonNullable<Layout['clusters']>[number];
+    const p = laid.nodes.find((n) => n.id === 'p') as LayoutNode;
+    expect(p.y + p.h).toBeLessThan(s.y);
+    const line = laid.edges.find((e) => e.to === 's') as LayoutEdge;
+    expect(line.points.at(-1)).toEqual({ x: s.x + s.w / 2, y: s.y });
+  });
+});

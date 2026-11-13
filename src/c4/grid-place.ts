@@ -330,14 +330,14 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
       if (block) blocksIn.push(moved.box);
     }
 
-    alignSiblings(placed, nodeIds);
+    const level = alignSiblings(placed, nodeIds);
     const cells = new Map<string, Cell>();
     const rects = new Map<string, CellRect>();
-    for (const b of placed) {
+    for (const b of level) {
       for (const [k, v] of b.cells) cells.set(k, v);
       for (const [k, v] of b.rects) rects.set(k, v);
     }
-    const box = boundOf(placed);
+    const box = boundOf(level);
     const empty = box === undefined;
     const own = box ?? { r0: 0, r1: 0, c0: 0, c1: 0 };
     if (id !== '') rects.set(id, own);
@@ -351,20 +351,21 @@ export function placeCells(graph: Graph, spec: GridSpec, rows: GridRows): GridCe
  * Sibling clusters stacked one over the other take the same columns, and the ones side by side the same rows, where the
  * wider range covers nothing else.
  */
-function alignSiblings(placed: Block[], nodeIds: ReadonlySet<string>): void {
-  const clusters = placed.filter((b) => !nodeIds.has(b.id));
-  for (const a of clusters) {
-    for (const b of clusters) {
-      if (a === b) continue;
+function alignSiblings(placed: readonly Block[], nodeIds: ReadonlySet<string>): Block[] {
+  const out = [...placed];
+  out.forEach((_, i) => {
+    out.forEach((b, j) => {
+      const a = out[i] as Block;
+      if (i === j || nodeIds.has(a.id) || nodeIds.has(b.id)) return;
       const stacked = a.box.c0 <= b.box.c1 && b.box.c0 <= a.box.c1 && (a.box.r1 < b.box.r0 || b.box.r1 < a.box.r0);
       const level = a.box.r0 <= b.box.r1 && b.box.r0 <= a.box.r1 && (a.box.c1 < b.box.c0 || b.box.c1 < a.box.c0);
-      if (!stacked && !level) continue;
+      if (!stacked && !level) return;
       const wide = stacked ? { ...a.box, c0: Math.min(a.box.c0, b.box.c0), c1: Math.max(a.box.c1, b.box.c1) } : { ...a.box, r0: Math.min(a.box.r0, b.box.r0), r1: Math.max(a.box.r1, b.box.r1) };
-      if (placed.some((o) => o !== a && meets(o.box, wide))) continue;
-      a.box = wide;
-      a.rects.set(a.id, wide);
-    }
-  }
+      if (out.some((o, k) => k !== i && meets(o.box, wide))) return;
+      out[i] = { ...a, box: wide, rects: new Map([...a.rects, [a.id, wide]]) };
+    });
+  });
+  return out;
 }
 
 /** The grid with the rows and columns no node stands in left out, counted from 0. */
