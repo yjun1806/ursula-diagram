@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { themeValues } from '../src/render/theme.ts';
+import { render } from '../src/index.ts';
 
 function luminance(hex: string): number {
   const channel = (i: number): number => {
@@ -36,5 +37,26 @@ describe.each([
     ['border', 'surface', 3],
   ] as const)('%s on %s is at least %d', (fg, bg, min) => {
     expect(contrast(of(fg, mode), of(bg, mode))).toBeGreaterThanOrEqual(min);
+  });
+});
+
+const C4 = 'C4Context\n  Person(a, "Customer", "Buys things")\n  System(b, "Shop", "Sells things")\n  Rel(a, b, "Uses")';
+const CLASS = 'classDiagram\n  class Animal {\n    +name\n    +eat()\n  }\n  class Dog\n  Animal <|-- Dog';
+
+describe('band head band', () => {
+  it('draws a C4 kind on a band instead of a pill', () => {
+    const svg = render(C4, { theme: 'band' });
+    expect(svg).toContain('ursula-head-band');
+    expect(svg).not.toContain('ursula-cell-pill');
+  });
+
+  it('draws the title compartment of a class box on a band', () => {
+    expect(render(CLASS, { theme: 'band' })).toContain('ursula-head-band');
+  });
+
+  it('draws no band in solid', () => {
+    expect(render(C4, { theme: 'solid' })).not.toContain('ursula-head-band');
+    expect(render(C4, { theme: 'solid' })).toContain('ursula-cell-pill');
+    expect(render(CLASS, { theme: 'solid' })).not.toContain('ursula-head-band');
   });
 });

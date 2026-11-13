@@ -206,9 +206,9 @@ function knockoutSvg(cluster: LayoutCluster): string {
 
 /** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene theme. */
 /** The rules of what only a C4 drawing has: the pill of a kind and the technology of a relation. */
-function faceRules(layout: Layout): string[] {
+function faceRules(layout: Layout, spec: ThemeSpec): string[] {
   return [
-    ...(layout.nodes.some((n) => n.compartments?.some((c) => c.face === true)) ? ['.ursula-cell-pill{fill:$hair}'] : []),
+    ...(layout.nodes.some((n) => n.compartments?.some((c) => c.face === true)) && !spec.headBand ? ['.ursula-cell-pill{fill:$hair}'] : []),
     ...(layout.edges.some((e) => e.label?.text.includes('\u2003')) ? ['.ursula-edge-label-tech{font-weight:400;opacity:.7}'] : []),
   ];
 }
@@ -526,6 +526,16 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
   }
 }
 
+/** A band along the top of a box, cut to the corners of the box's outline so that the outline's stroke stays whole. */
+function headBandSvg(node: LayoutNode, radius: number, height: number, spec: ThemeSpec): string {
+  const inset = spec.boxBorder / 2;
+  const id = `ursula-band-${node.id.replace(/[^A-Za-z0-9_-]/g, '_')}-${num(node.x)}-${num(node.y)}-${num(node.w)}-${num(node.h)}`.replace(/\./g, '_');
+  return (
+    `<clipPath id="${id}"><rect x="${num(node.x + inset)}" y="${num(node.y + inset)}" width="${num(node.w - 2 * inset)}" height="${num(node.h - 2 * inset)}" rx="${num(Math.max(0, radius - inset))}"/></clipPath>` +
+    `<rect class="ursula-head-band" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(height)}" clip-path="url(#${id})"/>`
+  );
+}
+
 /** The rules and texts of a box divided into compartments; the box is as tall as they are. */
 function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   const cells = node.compartments ?? [];
@@ -538,6 +548,11 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
   const outline = cylinder || node.shape === 'round' ? shapeSvg(node, spec) : boxSvg(node, spec.boxRadius, shadowAttr(spec));
   const parts = [outline];
+  // The band follows the corners of the outline, rounded further on a rounded box.
+  const bandRadius = node.shape === 'round' ? Math.min(spec.boxRadius + 8, node.h / 2) : spec.boxRadius;
+  const banded = spec.headBand && !cylinder;
+  const hasFace = cells.some((c) => c.face === true);
+  if (banded && !hasFace && cells.length > 1) parts.push(headBandSvg(node, bandRadius, heights[0] ?? 0, spec));
   let top = node.y + caps;
   cells.forEach((cell, i) => {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
@@ -554,7 +569,8 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
       const y = num(cell.face === true ? faceTop + rowTop(k) + (rows[k] ?? 0) / 2 : first + k * COMPARTMENT_LINE);
       if (cell.face === true && k === 0) {
         const pill = ruler.textWidth(line, 'line') + FACE_PILL_PAD;
-        parts.push(`<rect class="ursula-cell-pill" x="${num(node.x + node.w / 2 - pill / 2)}" y="${num(first - 10)}" width="${num(pill)}" height="20" rx="10"/>`);
+        if (banded) parts.push(headBandSvg(node, bandRadius, first + 14 - node.y, spec));
+        else if (!spec.headBand) parts.push(`<rect class="ursula-cell-pill" x="${num(node.x + node.w / 2 - pill / 2)}" y="${num(first - 10)}" width="${num(pill)}" height="20" rx="10"/>`);
       }
       const row = cell.columns?.[k];
       if (row === undefined) {
@@ -659,7 +675,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...faceRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...faceRules(layout, spec), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
     `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),

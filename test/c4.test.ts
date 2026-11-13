@@ -304,7 +304,7 @@ describe('c4 reading', () => {
   });
 
   it('draws the kind in a pill, the technology of a relation in a span of its own and the type of a boundary under its name', () => {
-    const svg = render(EXAMPLES[0] as string);
+    const svg = render(EXAMPLES[0] as string, { theme: 'solid' });
     expect(svg).toContain('class="ursula-cell-pill"');
     expect(svg).toContain('<tspan class="ursula-edge-label-tech" role="note">');
     expect(svg).toContain('ursula-zone-name ursula-zone-sub');

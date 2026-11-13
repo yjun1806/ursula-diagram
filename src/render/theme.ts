@@ -23,6 +23,8 @@ export interface ThemeSpec {
   bend: number;
   arrow: { kind: 'filled'; length: number; width: number } | { kind: 'open'; length: number; width: number };
   shadow: boolean;
+  /** Whether a box's head — the kind of a C4 element, the title compartment of a record — sits on a band of the lane colour cut to the box's corners. */
+  headBand: boolean;
   /** Whether edge labels have an outline of their own. */
   chipBorder: boolean;
   /** Whether edge labels have a rim of the background colour around them. */
@@ -75,6 +77,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     bend: 16,
     arrow: { kind: 'filled', length: 10, width: 9.5 },
     shadow: false,
+    headBand: false,
     chipBorder: false,
     chipHalo: true,
     accentEdges: true,
@@ -104,6 +107,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     bend: 12,
     arrow: { kind: 'filled', length: 8, width: 8 },
     shadow: false,
+    headBand: false,
     chipBorder: true,
     chipHalo: false,
     accentEdges: true,
@@ -133,6 +137,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     bend: 14,
     arrow: { kind: 'open', length: 8, width: 9 },
     shadow: true,
+    headBand: false,
     chipBorder: false,
     chipHalo: false,
     accentEdges: true,
@@ -167,6 +172,7 @@ export const THEME_SPECS: Record<Theme, ThemeSpec> = {
     bend: 8,
     arrow: { kind: 'filled', length: 9, width: 9 },
     shadow: false,
+    headBand: true,
     chipBorder: false,
     chipHalo: false,
     accentEdges: false,
@@ -238,6 +244,7 @@ export function recordRules(spec: ThemeSpec): string[] {
     `.ursula-rule{fill:none;stroke:$${rule.token};stroke-width:${rule.width}}`,
     // A face that is white (a box in a filled zone) shows no white gap: its rules are hairlines.
     '.ursula-node--on-lane .ursula-rule{stroke:$hair;stroke-width:1}',
+    ...(spec.headBand ? ['.ursula-head-band{fill:$lane}'] : []),
     '.ursula-cell-title{fill:$fg;font-size:13px;font-weight:600}',
     '.ursula-cell-tag{fill:$muted;font-size:11px;font-weight:500}',
     '.ursula-cell-body{fill:$fg;font-size:12px;font-weight:400}',
