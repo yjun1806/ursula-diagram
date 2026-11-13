@@ -1,5 +1,8 @@
 import { ceilTo, roundTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
+import { HEAD_BAND, headBand } from '../render/head-band.ts';
+import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
@@ -19,6 +22,8 @@ const NAME_LIMIT = 224;
 const BOX_MIN_W = 152;
 const TAG_TOP = 10;
 const TAG_H = 20;
+/** Centre of the first name line under a head band. */
+const NAME_UNDER_BAND = 46;
 const JUNCTION = 8;
 const ARROW_GAP = 3;
 const TITLE_BLOCK = 36;
@@ -367,6 +372,7 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Th
   for (const e of placedEdges) e.points = e.points.map(movePoint);
 
   const placedGroups: PlacedGroup[] = [];
+  const spec = SCENE_THEME_SPECS[theme ?? DEFAULT_THEME];
   const items: SceneItem[] = [];
   if (model.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: MARGIN + TITLE_BLOCK / 2 - 4, text: model.title, anchor: 'start', role: ['title'] });
   for (const g of [...model.groups].sort((a, b) => depthOf(a.id) - depthOf(b.id))) {
@@ -398,7 +404,11 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Th
     const names = nameLines.get(n.id) ?? [];
     const cx = n.x + n.w / 2;
     let firstLine = n.y + n.h / 2 - (LINE_STEP * (names.length - 1)) / 2;
-    if (def.icon !== undefined) {
+    if (def.icon !== undefined && spec.headBand) {
+      items.push(headBand(n.x, n.y, n.w, spec, data));
+      items.push({ kind: 'text', x: cx, y: n.y + HEAD_BAND / 2, text: def.icon, role: ['tag-text'], data });
+      firstLine = n.y + NAME_UNDER_BAND;
+    } else if (def.icon !== undefined) {
       const tw = tagWidth(def.icon);
       items.push({ kind: 'box', style: 'label', x: cx - tw / 2, y: n.y + TAG_TOP, w: tw, h: TAG_H, role: ['tag'], data });
       items.push({ kind: 'text', x: cx, y: n.y + TAG_TOP + TAG_H / 2, text: def.icon, role: ['tag-text'], data });

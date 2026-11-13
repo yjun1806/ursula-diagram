@@ -88,6 +88,7 @@ function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
     '.ursula-rule--in-zone{stroke:$rule-in-zone;stroke-width:1}',
     '.ursula-tag{fill:$tag-fill}',
     '.ursula-tag--in-zone{fill:$tag-fill-zone}',
+    ...(spec.headBand ? ['.ursula-head-band{fill:$tag-fill}'] : []),
     '.ursula-edge{fill:none;stroke:$edge;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
     '.ursula-edge--accent{stroke:$accent}',
     '.ursula-edge--pending{stroke-dasharray:%dash}',

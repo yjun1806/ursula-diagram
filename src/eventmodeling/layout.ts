@@ -1,5 +1,8 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
+import { HEAD_BAND, headBand } from '../render/head-band.ts';
+import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
+import { DEFAULT_THEME } from '../render/theme.ts';
 import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
@@ -24,6 +27,8 @@ const DATA_PAD = 8;
 const DATA_ROW = 20;
 const DATA_WRAP = 240;
 const LABEL_LINE = 18;
+/** Centre of a box's name under a head band. */
+const NAME_UNDER_BAND = 46;
 const PORT_R = 4;
 /** Distance before a target at which a detour edge turns toward it. */
 const TURN = 16;
@@ -70,7 +75,8 @@ const hits = (r: Rect, a: Point, b: Point): boolean => {
   return x2 > r.x && x1 < r.x + r.w && y2 > r.y && y1 < r.y + r.h;
 };
 
-export function layoutEventModel(model: EventModel, ruler: Ruler, _theme?: Theme): EventLayout {
+export function layoutEventModel(model: EventModel, ruler: Ruler, theme?: Theme): EventLayout {
+  const spec = SCENE_THEME_SPECS[theme ?? DEFAULT_THEME];
   const nameW = (s: string): number => ruler.textWidth(s, 'title');
   const lineW = (s: string): number => ruler.textWidth(s, 'line');
   const lanes = lanesOf(model);
@@ -195,10 +201,17 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, _theme?: Theme
     const role = ['box', ...(filled ? ['box--in-zone'] : []), ...(start ? ['box--start'] : [])];
     const data = { frame: frame.label, kind: frame.kind };
     boxItems.push({ kind: 'box', style: 'box', x: p.x, y: p.y, w: p.w, h: p.h, role, data });
-    const tagX = p.x + (p.w - size.tagW) / 2;
-    boxItems.push({ kind: 'box', style: 'label', x: tagX, y: p.y + 8, w: size.tagW, h: 20, role: ['tag'], data });
-    boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 18, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
-    boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 48, text: frame.name, anchor: 'middle', role: start ? ['name', 'on-start'] : ['name'], data });
+    if (spec.headBand) {
+      // The band stays grey on a start box too, so that the start colour fills only the body.
+      boxItems.push(headBand(p.x, p.y, p.w, spec, data));
+      boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
+    } else {
+      const tagX = p.x + (p.w - size.tagW) / 2;
+      boxItems.push({ kind: 'box', style: 'label', x: tagX, y: p.y + 8, w: size.tagW, h: 20, role: ['tag'], data });
+      boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 18, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
+    }
+    const nameY = p.y + (spec.headBand ? NAME_UNDER_BAND : 48);
+    boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: nameY, text: frame.name, anchor: 'middle', role: start ? ['name', 'on-start'] : ['name'], data });
     if (size.rows.length > 0) {
       boxItems.push({ kind: 'line', points: [{ x: p.x, y: p.y + BOX_H }, { x: p.x + p.w, y: p.y + BOX_H }], role: filled ? ['rule', 'rule--in-zone'] : ['rule'], data });
       size.rows.forEach((row, ri) => {
@@ -208,6 +221,6 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, _theme?: Theme
   }
 
   const title = model.accTitle ?? `eventmodeling — ${heading ?? 'Event Modeling'}`;
-  const scene: Scene = { width, height, title, items: [...items, ...edgeItems, ...boxItems, ...portItems], ...(_theme === undefined ? {} : { theme: _theme }) };
+  const scene: Scene = { width, height, title, items: [...items, ...edgeItems, ...boxItems, ...portItems], ...(theme === undefined ? {} : { theme }) };
   return { scene, lanes: placedLanes, columns, frames: placed, edges };
 }
