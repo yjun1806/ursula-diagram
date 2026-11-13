@@ -551,6 +551,10 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
 }
 
 /** A band along the top of a box, cut to the corners of the box's outline so that the outline's stroke stays whole. */
+/** Height of the head band of a C4 element, and the room between the band and the name under it. */
+const HEAD_BAND = 28;
+const HEAD_BAND_GAP = 10;
+
 function headBandSvg(node: LayoutNode, radius: number, height: number, spec: ThemeSpec): string {
   const inset = spec.boxBorder / 2;
   const id = `ursula-band-${node.id.replace(/[^A-Za-z0-9_-]/g, '_')}-${num(node.x)}-${num(node.y)}-${num(node.w)}-${num(node.h)}`.replace(/\./g, '_');
@@ -586,14 +590,19 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
     const content = rows.reduce((a, b) => a + b, 0) + FACE_PILL_GAP;
     const rowTop = (k: number): number => rows.slice(0, k).reduce((a, b) => a + b, 0) + (k > 0 ? FACE_PILL_GAP : 0);
     const faceTop = top + ((heights[i] ?? 0) - content) / 2;
+    // On a head band the kind stands in the middle of a band of one height in every box, and the lines under it start
+    // right below the band instead of sharing the middle of the box: every box of a drawing shows the same band.
+    const onBand = banded && cell.face === true;
+    const faceY = (k: number): number =>
+      onBand ? (k === 0 ? top + HEAD_BAND / 2 : top + HEAD_BAND + HEAD_BAND_GAP + rowTop(k) - (rows[0] ?? 0) - FACE_PILL_GAP + (rows[k] ?? 0) / 2) : faceTop + rowTop(k) + (rows[k] ?? 0) / 2;
     const first = cell.face === true ? faceTop + (rows[0] ?? 0) / 2 : top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
     const starts = cell.columns === undefined ? [] : columnStarts(cell, ruler);
     cell.lines.forEach((line, k) => {
       const emphasis = lineEmphasis(cell, k, i);
-      const y = num(cell.face === true ? faceTop + rowTop(k) + (rows[k] ?? 0) / 2 : first + k * COMPARTMENT_LINE);
+      const y = num(cell.face === true ? faceY(k) : first + k * COMPARTMENT_LINE);
       if (cell.face === true && k === 0) {
         const pill = ruler.textWidth(line, 'line') + FACE_PILL_PAD;
-        if (banded) parts.push(headBandSvg(node, bandRadius, first + 14 - node.y, spec));
+        if (banded) parts.push(headBandSvg(node, bandRadius, top + HEAD_BAND - node.y, spec));
         else if (!spec.headBand) parts.push(`<rect class="ursula-cell-pill" x="${num(node.x + node.w / 2 - pill / 2)}" y="${num(first - 10)}" width="${num(pill)}" height="20" rx="10"/>`);
       }
       const row = cell.columns?.[k];

@@ -133,3 +133,12 @@ describe('band theme: rings on lines drawn against their meaning and on trunks',
     expect(rings(render(src))).toHaveLength(3);
   });
 });
+
+describe('band theme: C4 head bands', () => {
+  it('draws one band height in every element, whatever the number of lines under the kind', () => {
+    const src = 'C4Context\n  System(a, "Short")\n  System(b, "Long", "A system of the bank, with personal bank accounts and a long description that wraps")\n  Rel(a, b, "Uses")';
+    const heights = [...render(src).matchAll(/<rect class="ursula-head-band"[^>]* height="([\d.]+)"/g)].map((m) => m[1]);
+    expect(heights).toHaveLength(2);
+    expect(new Set(heights).size).toBe(1);
+  });
+});
