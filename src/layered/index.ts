@@ -59,6 +59,8 @@ export interface LayeredOptions {
   nested?: boolean;
   /** With `nested`: the `spread` drawing is taken at this level when it wins (off by default, because it is scored before the lines are joined into boxes). */
   nestedSpread?: boolean;
+  /** With `nested`: set to `wins: true` when the `spread` drawing would be taken at this level if `nestedSpread` were on, so that a caller can tell whether drawing with it on can give anything new. */
+  spreadProbe?: { wins: boolean };
 }
 
 const RETRIES = 10;
@@ -514,6 +516,7 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Without zones the `spread` drawing replaces the usual one only when `spreadWins`.
   const spread = unzoned(source) && !given.terminal && opts.quality === 'best' && opts.quick !== true ? drawSpread(source, given, opts) : undefined;
   const room = { width: opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM, height: opts.maxHeight ?? Infinity };
+  if (spread !== undefined && opts.spreadProbe !== undefined && opts.nested === true && opts.nestedSpread !== true && spreadWins(spread, drawn, room, true) !== spreadWins(spread, drawn, room, false)) opts.spreadProbe.wins = true;
   return spread !== undefined && spreadWins(spread, drawn, room, opts.nested !== true || opts.nestedSpread === true) ? spread : drawn;
 }
 

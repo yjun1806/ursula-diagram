@@ -50,6 +50,8 @@ export interface LayoutOptions extends SolveOptions {
   clusterExits?: boolean;
   /** Clusters only: lets a level inside a cluster take the `spread` drawing when it wins (default false). `layoutClusters` draws with it on as a further candidate and keeps whichever whole drawing is better. */
   nestedSpread?: boolean;
+  /** Clusters only: see `LayeredOptions.spreadProbe`. */
+  spreadProbe?: { wins: boolean };
 }
 
 export type { LegendOption } from './legend.ts';
@@ -255,8 +257,8 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...flat, diagnostics: [...flat.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, ...solveOpts } = opts;
-  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }) });
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, ...solveOpts } = opts;
+  if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
   }
