@@ -18,6 +18,8 @@ const GUIDE_GAP = 8;
 /** The guide leaves the parent's row this far below its centre. */
 const GUIDE_DROP = 12;
 const DESCRIPTION_GAP = 8;
+/** The largest theme bend radius a guide takes whole. */
+const SMALL_BEND = 8;
 const HIGHLIGHT_PAD = 6;
 const HIGHLIGHT_H = 24;
 /** Size of an item icon and the room from the item's left edge to its text. */
@@ -90,7 +92,9 @@ function indentOf(tree: TreeView): number {
 export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = DEFAULT_THEME): TreeViewLayout {
   const { items } = tree;
   const indent = indentOf(tree);
-  const bend = SCENE_THEME_SPECS[theme].bend / 2;
+  // A guide bends by half the theme's radius, or by the whole of a radius that is already small.
+  const themeBend = SCENE_THEME_SPECS[theme].bend;
+  const bend = themeBend <= SMALL_BEND ? themeBend : themeBend / 2;
   const parents = parentsOf(items);
   const glyphs = items.map((item) => glyphOf(item, tree.icons));
   const columns = items.map((item) => PAD + indent * item.depth);
