@@ -437,6 +437,8 @@ export interface SceneTextSpan {
   italic?: true;
   /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
   role?: string[];
+  /** Space in pixels before the run, in place of a space in its text. */
+  dx?: number;
 }
 
 export interface SceneLine {
