@@ -21,6 +21,13 @@ const TICK_GAP = 12;
 const COMPACT_GAP = 8;
 /** Room left and right of a name written inside its band. */
 const INNER_PAD = 8;
+/** Room left and right of a status tag's text. */
+const TAG_PAD = 9;
+/** Sections with more rows than this keep their order: trying every order would take too long. */
+const MAX_REORDER = 7;
+/** Shortest run of an `after` line from where it leaves its predecessor to its arrow tip. */
+const MIN_RUN = 28;
+const ARROW_REACH = 3;
 
 /** Pixels per unit of time the chart may use: `ladder` values of each unit; the largest that fits wins. */
 const UNITS_MS = [1, 1000, 60_000, 3_600_000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
@@ -59,12 +66,8 @@ export function chooseScale(span: number): number {
   return best > 0 ? best : MAX_CHART / span;
 }
 
-interface Rect {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-}
+/** A stretch along x, left and right edge. */
+type Span = [number, number];
 
 export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLayout {
   const w11 = (s: string): number => (ruler.textWidth(s, 'line') * 11) / 12;
@@ -114,7 +117,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const chips: Trail['chips'] = [];
     for (const [on, text] of [[t.done, 'done'], [t.active, 'active'], [t.milestone, 'milestone']] as const) {
       if (!on) continue;
-      const cw = ceilTo(w11(text) + 16);
+      const cw = ceilTo(w11(text) + 2 * TAG_PAD);
       const dx = at + (chips.length === 0 ? TAG_GAP : 4);
       chips.push({ dx, w: cw, text });
       at = dx + cw;
@@ -152,8 +155,8 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     lines[row]?.push(ti);
     lineEnds[row] = (lines[row]?.length === 1 ? g.alone : g.shared).reach;
   }
-  const rowOfTask = new Map<number, number>();
-  lines.forEach((tasksOfLine, row) => tasksOfLine.forEach((ti) => rowOfTask.set(ti, row)));
+  const lineOfTask = new Map<number, number>();
+  lines.forEach((tasksOfLine, line) => tasksOfLine.forEach((ti) => lineOfTask.set(ti, line)));
 
   // Columns
   const named = model.sections.some((s) => s !== '');
@@ -163,30 +166,58 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const x0 = Math.max(nameX + NAME_ROOM, ceilTo(nameX + nameW + 24));
   const xOf = (t: number): number => x0 + posOf(t);
 
+  // Each task's text after its band, and the stretches along x that each line's bands and text take
+  const labels = new Map<number, { name?: { x: number; text: string }; dur: { x: number; text: string }; chips: Array<{ x: number; w: number; text: string }>; right: number }>();
+  const spans: Span[][] = lines.map(() => []);
+  lines.forEach((tasksOfLine, line) =>
+    tasksOfLine.forEach((ti) => {
+      const g = geo(ti);
+      const trail = tasksOfLine[0] === ti ? g.alone : g.shared;
+      const x = x0 + g.rx;
+      const durX = x0 + trail.durDx;
+      const chips = trail.chips.map((c) => ({ x: Math.round((x0 + c.dx) / 2) * 2, w: c.w, text: c.text }));
+      const right = chips.length === 0 ? durX + w11(g.dur) : (chips[chips.length - 1]?.x ?? 0) + (chips[chips.length - 1]?.w ?? 0);
+      const name = trail.nameDx === undefined ? {} : { name: { x: x0 + trail.nameDx, text: taskOf(ti).label } };
+      labels.set(ti, { ...name, dur: { x: durX, text: g.dur }, chips, right });
+      spans[line]?.push([x, x + g.w], [x + g.w + TAG_GAP, right]);
+    }),
+  );
+
+  // `after` lines from one line to another: where each leaves its predecessor, and whether it has room
+  const links = rowTasks.flatMap((to) =>
+    taskOf(to).after.flatMap((from) => {
+      const lf = lineOfTask.get(from);
+      const lt = lineOfTask.get(to) ?? 0;
+      if (lf === undefined || lf === lt) return [];
+      const pg = geo(from);
+      const predX = x0 + pg.rx;
+      const left = x0 + geo(to).rx;
+      const inset = Math.min(8, pg.w / 2);
+      const xFrom = taskOf(from).milestone ? predX + pg.w / 2 : Math.min(Math.max(left - 32, predX + inset), predX + pg.w - inset);
+      return [{ from, to, lf, lt, xFrom, short: left - ARROW_REACH - xFrom < MIN_RUN }];
+    }),
+  );
+
+  // Rows: each section's lines in the order that lets the most `after` lines run clear of other bars
+  const order = orderLines(lineSection, links.filter((k) => !k.short), spans);
+  const rows = order.map((line) => lines[line] ?? []);
+  const rowOfTask = new Map<number, number>();
+  rows.forEach((tasksOfRow, row) => tasksOfRow.forEach((ti) => rowOfTask.set(ti, row)));
+
   // Rows' places
   const hasTitle = model.title !== undefined;
   const base = hasTitle ? 120 : 80;
   const gridTop = plan.twoRow ? base : base - 12;
   const rowTop = (row: number): number => gridTop + ROW * row;
-  const gridBottom = rowTop(lines.length);
+  const gridBottom = rowTop(rows.length);
 
   const bars: PlacedBar[] = [];
-  const labels = new Map<number, { name?: { x: number; text: string }; dur: { x: number; text: string }; chips: Array<{ x: number; w: number; text: string }>; right: number }>();
-  const obstacles: Rect[][] = lines.map(() => []);
   for (const ti of rowTasks) {
     const row = rowOfTask.get(ti) ?? 0;
     const g = geo(ti);
-    const trail = lines[row]?.[0] === ti ? g.alone : g.shared;
     const x = x0 + g.rx;
     const y = rowTop(row) + BAND_TOP;
-    const cy = y + HALF;
-    bars.push({ task: ti, row, x, y, w: g.w, h: BAND, cx: x + g.w / 2, cy });
-    const durX = x0 + trail.durDx;
-    const chips = trail.chips.map((c) => ({ x: ceilTo(x0 + c.dx), w: c.w, text: c.text }));
-    const right = chips.length === 0 ? durX + w11(g.dur) : (chips[chips.length - 1]?.x ?? 0) + (chips[chips.length - 1]?.w ?? 0);
-    const name = trail.nameDx === undefined ? {} : { name: { x: x0 + trail.nameDx, text: taskOf(ti).label } };
-    labels.set(ti, { ...name, dur: { x: durX, text: g.dur }, chips, right });
-    obstacles[row]?.push({ x0: x, x1: x + g.w, y0: y, y1: y + BAND }, { x0: x + g.w + TAG_GAP, x1: right, y0: cy - 10, y1: cy + 10 });
+    bars.push({ task: ti, row, x, y, w: g.w, h: BAND, cx: x + g.w / 2, cy: y + HALF });
   }
 
   // Vertical markers: a dashed line with its name under the chart
@@ -263,7 +294,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   rowTasks.forEach((ti) => {
     const row = rowOfTask.get(ti) ?? 0;
     const s = taskOf(ti).section;
-    if (!firstRowOf.has(s)) firstRowOf.set(s, row);
+    firstRowOf.set(s, Math.min(firstRowOf.get(s) ?? row, row));
     lastRowOf.set(s, Math.max(lastRowOf.get(s) ?? 0, row));
   });
   const dividerRows = [0, ...[...lastRowOf.values()].map((r) => r + 1)];
@@ -272,52 +303,43 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const row = firstRowOf.get(s);
     if (name !== '' && row !== undefined) items.push({ kind: 'text', x: LEFT, y: rowTop(row) + 20, text: name, role: ['zone-name'] });
   });
-  lines.forEach((tasksOfLine, row) => items.push({ kind: 'text', x: nameX, y: rowTop(row) + 20, text: taskOf(tasksOfLine[0] ?? 0).label, role: ['body'] }));
+  rows.forEach((tasksOfRow, row) => items.push({ kind: 'text', x: nameX, y: rowTop(row) + 20, text: taskOf(tasksOfRow[0] ?? 0).label, role: ['body'] }));
 
   // `after` lines, under the bars
   const omitted: GanttLayout['omitted'] = [];
   const barOf = new Map(bars.map((b) => [b.task, b]));
   const ports = new Set<string>();
   const portItems: SceneItem[] = [];
-  const arrowReach = 3;
-  for (const to of rowTasks) {
+  const spansAt = (row: number): Span[] => spans[order[row] ?? 0] ?? [];
+  for (const link of links) {
+    const { from, to, xFrom } = link;
+    const pred = barOf.get(from);
     const target = barOf.get(to);
-    if (target === undefined) continue;
-    for (const from of taskOf(to).after) {
-      const pred = barOf.get(from);
-      if (pred === undefined || pred.row === target.row) continue;
-      const predTask = taskOf(from);
-      const left = target.x;
-      const tip = left - arrowReach;
-      const inset = Math.min(8, pred.w / 2);
-      const xFrom = predTask.milestone ? pred.cx : Math.min(Math.max(left - 32, pred.x + inset), pred.x + pred.w - inset);
-      const down = target.row > pred.row;
-      const yFrom = down ? pred.y + pred.h : pred.y;
-      if (tip - xFrom < 28) {
-        omitted.push({ from, to, reason: 'short' });
-        continue;
-      }
-      const between = down ? range(pred.row + 1, target.row) : range(target.row + 1, pred.row);
-      const blocked = between.some((r) => (obstacles[r] ?? []).some((o) => xFrom >= o.x0 - 4 && xFrom <= o.x1 + 4));
-      if (blocked) {
-        omitted.push({ from, to, reason: 'crosses' });
-        continue;
-      }
-      items.push({
-        kind: 'line',
-        points: [
-          { x: xFrom, y: yFrom },
-          { x: xFrom, y: target.cy },
-          { x: tip, y: target.cy },
-        ],
-        role: ['edge', 'edge--arrow'],
-        data: { from: taskOf(from).id, to: taskOf(to).id },
-      });
-      const key = `${xFrom}:${yFrom}`;
-      if (!ports.has(key)) {
-        ports.add(key);
-        portItems.push({ kind: 'circle', cx: xFrom, cy: yFrom, r: 3.25, role: ['port'] });
-      }
+    if (pred === undefined || target === undefined) continue;
+    if (link.short) {
+      omitted.push({ from, to, reason: 'short' });
+      continue;
+    }
+    if (crosses(xFrom, pred.row, target.row, spansAt)) {
+      omitted.push({ from, to, reason: 'crosses' });
+      continue;
+    }
+    const tip = target.x - ARROW_REACH;
+    const yFrom = target.row > pred.row ? pred.y + pred.h : pred.y;
+    items.push({
+      kind: 'line',
+      points: [
+        { x: xFrom, y: yFrom },
+        { x: xFrom, y: target.cy },
+        { x: tip, y: target.cy },
+      ],
+      role: ['edge', 'edge--arrow'],
+      data: { from: taskOf(from).id, to: taskOf(to).id },
+    });
+    const key = `${xFrom}:${yFrom}`;
+    if (!ports.has(key)) {
+      ports.add(key);
+      portItems.push({ kind: 'circle', cx: xFrom, cy: yFrom, r: 3.25, role: ['port'] });
     }
   }
 
@@ -337,7 +359,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
     const label = labels.get(bar.task);
     if (label === undefined) continue;
     if (label.name !== undefined) items.push({ kind: 'text', x: label.name.x, y: bar.cy, text: label.name.text, role: ['body'], data });
-    else if (lines[bar.row]?.[0] !== bar.task) items.push({ kind: 'text', x: bar.x + INNER_PAD, y: bar.cy, text: t.label, role: ['body'], data });
+    else if (rows[bar.row]?.[0] !== bar.task) items.push({ kind: 'text', x: bar.x + INNER_PAD, y: bar.cy, text: t.label, role: ['body'], data });
     items.push({ kind: 'text', x: label.dur.x, y: bar.cy, text: label.dur.text, role: ['tick', 'start'] });
     for (const chip of label.chips) {
       items.push({ kind: 'box', style: 'label', x: chip.x, y: bar.cy - 10, w: chip.w, h: 20, role: ['tag'] });
@@ -349,6 +371,46 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   const name = model.accTitle ?? (model.title === undefined ? 'gantt' : `gantt — ${model.title}`);
   const scene: Scene = { width, height, title: name, items, ...(theme === undefined ? {} : { theme }) };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
+}
+
+/** Whether a line going down or up at `x` between rows `a` and `b` passes over a band or its text in a row between them. */
+function crosses(x: number, a: number, b: number, spansAt: (row: number) => Span[]): boolean {
+  return range(Math.min(a, b) + 1, Math.max(a, b)).some((r) => spansAt(r).some(([x0, x1]) => x >= x0 - 4 && x <= x1 + 4));
+}
+
+/**
+ * The line shown on each row: every section tries each order of its own lines and keeps the one that leaves the
+ * fewest `after` lines crossing a bar, the given order winning a tie.
+ */
+function orderLines(lineSection: number[], links: Array<{ lf: number; lt: number; xFrom: number }>, spans: Span[][]): number[] {
+  const crossings = (order: number[]): number => {
+    const rowOf = new Map(order.map((line, row) => [line, row]));
+    return links.filter((k) => crosses(k.xFrom, rowOf.get(k.lf) ?? 0, rowOf.get(k.lt) ?? 0, (row) => spans[order[row] ?? 0] ?? [])).length;
+  };
+  let order = lineSection.map((_, line) => line);
+  let fewest = crossings(order);
+  for (const s of new Set(lineSection)) {
+    const slots = order.flatMap((line, row) => (lineSection[line] === s ? [row] : []));
+    if (fewest === 0 || slots.length < 2 || slots.length > MAX_REORDER) continue;
+    for (const perm of permutations(slots.map((row) => order[row] ?? 0))) {
+      const next = order.map((line, row) => {
+        const k = slots.indexOf(row);
+        return k < 0 ? line : (perm[k] ?? line);
+      });
+      const n = crossings(next);
+      if (n < fewest) {
+        order = next;
+        fewest = n;
+      }
+    }
+  }
+  return order;
+}
+
+/** Every order of `items`, the given order first. */
+function permutations(items: number[]): number[][] {
+  if (items.length <= 1) return [items];
+  return items.flatMap((first, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [first, ...rest]));
 }
 
 /** `text` cut to `limit` with an ellipsis when it does not fit. */
