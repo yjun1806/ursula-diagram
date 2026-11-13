@@ -24,7 +24,7 @@ export const COMPARTMENT_INSET = 16;
 export const COLUMN_GAP = 16;
 export const COLUMN_GAP_CELLS = 2;
 /** Pixels: least width of a rounded box, so that a one-letter name is not drawn as a circle. */
-export const ROUND_MIN_W = 80;
+export const ROUND_MIN_W = 128;
 
 /** Pixels: height of each end cap of a cylinder (half the height of the ellipse that closes it). */
 export const CYLINDER_CAP = 6;
