@@ -24,6 +24,7 @@ const NAME = 48;
 const NAME_INSET = 16;
 const NAME_CLEAR = 12;
 const NAME_SHIFT = 24;
+
 /**
  * Lays out a C4 drawing on one grid: every element in a cell of the size every element shares, every boundary on a range
  * of cells, gaps that grow only where a border or a label passes. Lines between elements of one column or one row run
@@ -39,7 +40,6 @@ export function layoutC4Grid(graph: Graph, ruler: Ruler, opts: LayoutOptions): L
   const clusters = graph.clusters ?? [];
   const parentOf = new Map(clusters.map((c) => [c.id, c.parent]));
   const kidsOf = (id: string): string[] => clusters.filter((c) => c.parent === id && grid.rect.has(c.id)).map((c) => c.id);
-  const nodeIds = new Set(graph.nodes.map((n) => n.id));
   const cellOf = (id: string): Cell | undefined => grid.cell.get(id);
   const holds = (cid: string, id: string): boolean => {
     for (let at = graph.nodes.find((n) => n.id === id)?.cluster ?? parentOf.get(id); at !== undefined; at = parentOf.get(at)) if (at === cid) return true;
