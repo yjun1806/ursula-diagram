@@ -834,7 +834,7 @@ function withinCanvas(layout: Layout): Layout {
     width: tidy(width),
     height: tidy(height),
     nodes: layout.nodes.map((n) => ({ ...move(n), ...(n.outline ? { outline: move(n.outline) } : {}) })),
-    clusters: (layout.clusters ?? []).map(move),
+    clusters: (layout.clusters ?? []).map((c) => ({ ...move(c), ...(c.name ? { name: move(c.name) } : {}) })),
     lanes: layout.lanes.map((l) => ({ ...move(l), ...(l.labelBox ? { labelBox: move(l.labelBox) } : {}) })),
     edges: layout.edges.map((e) => ({
       ...e,
@@ -916,6 +916,22 @@ function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { 
  * border is drawn between the outermost boxes it joins; inside, it goes on from the border to its node.
  */
 export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
+  const usual = chooseDrawing(graph, ruler, opts, draw);
+  if (opts.clusterExits !== undefined || opts.nestedSpread !== undefined || ruler.terminal === true) return usual;
+  // The levels inside the boxes may also take the spread drawing; it is judged here, on the joined drawings, because a level alone cannot tell what the lines will do once they reach the boxes.
+  const spread = chooseDrawing(graph, ruler, { ...opts, nestedSpread: true }, draw);
+  return better(priceOf(spread), priceOf(usual)) ? spread : usual;
+}
+
+const priceOf = (l: Layout): number[] => [crossingCount(l.edges), l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0), l.edges.reduce((n, e) => n + segmentsOf(e.points).reduce((m, t) => m + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y), 0), 0)];
+
+/** True when the drawing priced `x` is better than the one priced `y`: fewer crossings, then fewer bends, then shorter lines. */
+const better = (x: number[], y: number[]): boolean => {
+  for (let i = 0; i < 3; i++) if ((x[i] as number) !== (y[i] as number)) return (x[i] as number) < (y[i] as number);
+  return false;
+};
+
+function chooseDrawing(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
   // Drawn once with every name on one line; the clusters whose name has no room there get a taller name row, and the drawing is made once more.
   const drawn = (exits: boolean): Layout => {
     const first = layoutPass(graph, ruler, opts, draw, new Set(), exits);
@@ -925,16 +941,22 @@ export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, 
   // The straight exits are kept only when the whole drawing is better with them: fewer crossings, then fewer bends, then shorter lines.
   const off = drawn(false);
   const on = drawn(true);
-  const price = (l: Layout): number[] => [crossingCount(l.edges), l.edges.reduce((n, e) => n + Math.max(0, e.points.length - 2), 0), l.edges.reduce((n, e) => n + segmentsOf(e.points).reduce((m, t) => m + Math.abs(t.a.x - t.b.x) + Math.abs(t.a.y - t.b.y), 0), 0)];
-  const [a, b] = [price(on), price(off)];
-  const better = (x: number[], y: number[]): boolean => {
-    for (let i = 0; i < 3; i++) if ((x[i] as number) !== (y[i] as number)) return (x[i] as number) < (y[i] as number);
-    return false;
-  };
+  const [a, b] = [priceOf(on), priceOf(off)];
   const chosen = better(a, b) ? on : off;
   // A third drawing has every line routed once more in one pass over the finished drawing; it wins only when it is better still.
   const once = ruler.terminal === true ? undefined : routedOnce(chosen, ruler);
-  return once !== undefined && better(price(once), price(chosen)) ? once : chosen;
+  return once !== undefined && better(priceOf(once), priceOf(chosen)) ? once : chosen;
+}
+
+/** Where a label may not stand: on the border of a cluster box (the four sides, with a margin) or on the written name of one. */
+function keepOffBoxes(clusters: readonly LayoutCluster[], names: boolean): Rect[] {
+  const m = 4;
+  const out: Rect[] = [];
+  for (const c of clusters) {
+    out.push({ x: c.x - m, y: c.y - m, w: c.w + 2 * m, h: 2 * m }, { x: c.x - m, y: c.y + c.h - m, w: c.w + 2 * m, h: 2 * m }, { x: c.x - m, y: c.y - m, w: 2 * m, h: c.h + 2 * m }, { x: c.x + c.w - m, y: c.y - m, w: 2 * m, h: c.h + 2 * m });
+    if (names && c.name !== undefined) out.push({ x: c.name.x, y: c.name.y, w: c.name.w, h: c.name.h });
+  }
+  return out;
 }
 
 /** The drawing with its lines routed in one pass over all of it, labels placed again; undefined when that changes nothing or leaves the canvas. */
@@ -956,8 +978,13 @@ function routedOnce(layout: Layout, ruler: Ruler): Layout | undefined {
     return { ...e, points };
   });
   if (moved.size === 0) return undefined;
-  const refined = refineLabels({ ...layout, edges }, layeredRuler(ruler), moved);
-  return withinCanvas(refined) === refined ? refined : undefined;
+  const refined = refineLabels({ ...layout, edges }, layeredRuler(ruler), moved, keepOffBoxes(layout.clusters ?? [], true));
+  const grown = withinCanvas(refined);
+  if (grown !== refined && layout.legend !== undefined) return undefined;
+  // A name written over a knockout because a line passed behind it needs none once no line does.
+  const passes = (name: { x: number; y: number; w: number; h: number }): boolean =>
+    grown.edges.some((e) => !e.invisible && segmentsOf(e.points).some((t) => Math.min(t.a.x, t.b.x) < name.x + name.w - EPS && Math.max(t.a.x, t.b.x) > name.x + EPS && Math.min(t.a.y, t.b.y) < name.y + name.h - EPS && Math.max(t.a.y, t.b.y) > name.y + EPS));
+  return { ...grown, clusters: (grown.clusters ?? []).map((c) => (c.name?.knockout === true && !passes(c.name) ? { ...c, name: { x: c.name.x, y: c.name.y, w: c.name.w, h: c.name.h, lines: c.name.lines } } : c)) };
 }
 
 function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel, rows: ReadonlySet<string>, useExits: boolean): { layout: Layout; need: Set<string> } {
@@ -1238,7 +1265,7 @@ function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawL
     diagnostics: acc.diagnostics,
   };
   // The labels were placed level by level; once every level and every inner stretch is in, they are placed again against all the lines.
-  const finished = ruler.terminal === true ? base : withinCanvas(refineLabels(base, layeredRuler(ruler), redrawn));
+  const finished = ruler.terminal === true ? base : withinCanvas(refineLabels(base, layeredRuler(ruler), redrawn, keepOffBoxes(acc.clusters, false)));
   const named = ruler.terminal === true ? { clusters: finished.clusters ?? [], need: new Set<string>() } : placeNames(finished, ruler, rows);
   return { layout: withLegend({ ...finished, clusters: named.clusters }, ruler, opts.legend), need: named.need };
 }

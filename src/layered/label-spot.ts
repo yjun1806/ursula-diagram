@@ -1,5 +1,5 @@
 import type { Ruler } from '../metrics.ts';
-import type { EdgeStyle, Layout, Point } from '../types.ts';
+import type { EdgeStyle, Layout, LayoutEdge, Point } from '../types.ts';
 import type { LabelSize, Rect, Segment } from '../layout/labels.ts';
 import { overlaps } from '../layout/labels.ts';
 import { edgeNear } from '../layout/place.ts';
@@ -11,6 +11,8 @@ export const LINE_CLEAR = 12;
 export const LABEL_CLEAR = 8;
 /** Distance between two candidate places along a segment. */
 const SLIDE = 8;
+/** Least gap a label keeps from the mark at an end of its line. */
+export const MARK_CLEAR = 8;
 const EPS = 1e-6;
 
 export interface SpotQuery {
@@ -27,6 +29,10 @@ export interface SpotQuery {
   /** The place the label would take without this check, and the index in `own` of the segment it stands at. */
   basic: Rect;
   basicSeg: number;
+  /** Boxes a label may not touch: it is never taken over one, as over a node. */
+  avoid?: Rect[];
+  /** Ends of the line that carry a mark: a label keeps `MARK_CLEAR` from each. */
+  marks?: Point[];
 }
 
 export interface Spot {
@@ -76,11 +82,12 @@ export function segmentToRect(s: Segment, r: Rect): number {
 const nearestLine = (r: Rect, foreign: Segment[]): number => foreign.reduce((m, s) => Math.min(m, segmentToRect(s, r)), Infinity);
 
 /** Distance of the box to the lines of other edges, whether it overlaps something, and whether it is clean in the sense of `chooseSpot`. */
-function measure(r: Rect, q: SpotQuery): { line: number; clean: boolean; overlap: boolean } {
+function measure(r: Rect, q: SpotQuery): { line: number; clean: boolean; overlap: boolean; marked: boolean } {
   const line = nearestLine(r, q.foreign);
-  const overlap = q.nodes.some((n) => overlaps(r, n)) || q.placed.some((o) => overlaps(r, o)) || line < EPS;
-  const clean = !overlap && line >= LINE_CLEAR - EPS && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS);
-  return { line, clean, overlap };
+  const overlap = q.nodes.some((n) => overlaps(r, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS;
+  const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS);
+  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS);
+  return { line, clean, overlap, marked };
 }
 
 interface Candidate {
@@ -155,10 +162,12 @@ export function chooseSpot(q: SpotQuery): Spot {
   const clean = scored.filter((s) => s.clean).sort((a, b) => away(a.c.rect) - away(b.c.rect) || rank(a.c) - rank(b.c));
   const first = clean[0];
   if (first) return { rect: first.c.rect, moved: true, overlap: false };
-  let best = { rect: q.basic, line: basic.line, overlap: basic.overlap, away: 0 };
+  // A basic place over a box to avoid gives way to any place that is not over one.
+  const onAvoided = (q.avoid ?? []).some((a) => overlaps(q.basic, a));
+  let best = { rect: q.basic, line: onAvoided ? -Infinity : basic.line, overlap: basic.overlap, away: 0 };
   for (const s of scored) {
     // A place over a box is never taken, however far it stands from the other lines.
-    if (s.overlap) continue;
+    if (s.overlap || s.marked) continue;
     const next = { rect: s.c.rect, line: s.line, overlap: s.overlap, away: away(s.c.rect) };
     if (next.line > best.line + EPS || (Math.abs(next.line - best.line) <= EPS && next.away < best.away - EPS)) best = next;
   }
@@ -175,11 +184,18 @@ function onLongest(own: Segment[], label: Rect, ruler: Ruler): Rect {
   return { x: edgeNear(ruler, cx - label.w / 2), y: edgeNear(ruler, cy - label.h / 2), w: label.w, h: label.h };
 }
 
+/** The ends of a line that carry a mark: the arrowhead unless the edge says none, and the start when it has one. */
+function marksOf(edge: LayoutEdge): Point[] {
+  const first = edge.points[0];
+  const last = edge.points.at(-1);
+  return [...(first !== undefined && edge.startEnd !== undefined && edge.startEnd !== 'none' ? [first] : []), ...(last !== undefined && edge.end !== 'none' ? [last] : [])];
+}
+
 /**
  * Moves the labels of a finished drawing that stand too near the line of another edge or another label. Labels are
  * handled in the order of the edges, each against the labels before it; edges and boxes stay where they are.
  */
-export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<number> = new Set()): Layout {
+export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<number> = new Set(), avoid: Rect[] = []): Layout {
   const segsOf = (points: Point[]): Segment[] => points.slice(1).map((q, i) => [points[i] as Point, q] as Segment);
   const all = layout.edges.map((e) => segsOf(e.points));
   const nodes: Rect[] = layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
@@ -192,7 +208,7 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
     const foreign = all.flatMap((ss, k) => (k === ei ? [] : ss));
     const basic: Rect = redrawn.has(ei) ? onLongest(own, label, ruler) : { x: label.x, y: label.y, w: label.w, h: label.h };
     const near = own.map((sg) => segmentToRect(sg, basic));
-    const spot = chooseSpot({ own, foreign, nodes, placed: finals, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)) });
+    const spot = chooseSpot({ own, foreign, nodes, placed: finals, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) });
     finals.push(spot.rect);
     if (!spot.moved && !redrawn.has(ei)) return edge;
     changed = true;
