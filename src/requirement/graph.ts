@@ -62,8 +62,9 @@ export function requirementGraph(model: RequirementModel, ruler: Ruler): Graph {
     style: 'normal',
     ...(r.type === 'contains' ? { startEnd: 'circle-plus', end: 'none', trunk: { end: 'from' as const, kind: 'contains' } } : { end: 'arrow' }),
   }));
-  // A requirement stands above what satisfies or verifies it and beside what it derives; what contains stands above.
-  const hints = model.relations.map((r): GridHint | undefined => (r.type === 'satisfies' || r.type === 'verifies' ? 'up' : r.type === 'derives' ? 'right' : undefined));
+  // An element stands below the requirement it relates to, whatever the relation; a requirement it derives stands beside.
+  const element = new Set(model.nodes.filter((n) => n.kind !== 'requirement').map((n) => n.name));
+  const hints = model.relations.map((r): GridHint | undefined => (element.has(r.from) && !element.has(r.to) ? 'up' : r.type === 'derives' ? 'right' : undefined));
   const grid: GridSpec = { ...emptySpec({ nodes, edges } as Graph), hints };
   return { direction, ...(mirror === undefined ? {} : { mirror }), ignored: model.ignored, lanes: [LANE], nodes, edges, placer: 'c4-grid', grid };
 }
