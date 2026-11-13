@@ -12,7 +12,8 @@ import type { EventLayout, EventModel, Frame, LaneZone, PlacedColumn, PlacedFram
 const MARGIN = 24;
 const LABEL_AREA = 96;
 const LABEL_PAD = 16;
-const LABEL_GAP = 8;
+/** Least room between a lane name and the first box; the ruler measures names a little wide, which leaves some more. */
+const LABEL_GAP = 4;
 const COLUMN_GAP = 32;
 const BOX_W = 132;
 const BOX_H = 68;

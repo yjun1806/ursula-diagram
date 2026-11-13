@@ -205,3 +205,11 @@ describe('eventmodeling relation lines', () => {
     }
   });
 });
+
+describe('eventmodeling lane name column', () => {
+  it('keeps the lane name column at 96 when the names fit in it with 4 to spare', () => {
+    const l = layoutEventModel(parseEventModeling('eventmodeling\n\ntf 01 ui ShopUI\ntf 02 cmd AddItemToCart\ntf 03 evt ItemAdded\ntf 04 rmo CartView ->> 03\n'), pixelRuler());
+    const first = l.scene.items.find((i): i is SceneBox => i.kind === 'box' && (i.role?.includes('box') ?? false));
+    expect(first?.x).toBe(24 + 96);
+  });
+});
