@@ -345,14 +345,67 @@ describe('gantt layout', () => {
     expect(lines.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('leaves out an after line that would pass over another bar and says so', () => {
+  it('reorders a section\'s rows so an after line runs clear of another bar', () => {
     const src = `gantt
     dateFormat YYYY-MM-DD
     A :a, 2024-03-01, 10d
     B :b, 2024-03-01, 30d
     C :after a, 5d`;
     const layout = layoutGantt(parseGantt(src), ruler);
+    expect(layout.omitted).toEqual([]);
+    expect(layout.bars.map((b) => b.row)).toEqual([0, 2, 1]);
+  });
+
+  it('lifts the milestone above the long bar in its section, as the reference does', () => {
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    section Build
+    Design prototype :active, proto, 2024-03-18, 14d
+    User testing :testing, after proto, 7d
+    section Launch
+    Marketing campaign :marketing, after proto, 14d
+    Release day :milestone, after testing, 0d`;
+    const layout = layoutGantt(parseGantt(src), ruler);
+    expect(layout.omitted).toEqual([]);
+    expect(layout.bars.map((b) => b.row)).toEqual([0, 1, 3, 2]);
+    const names = layout.scene.items.filter((i): i is SceneText => i.kind === 'text' && (i.role ?? []).includes('zone-name'));
+    expect(names.map((n) => [n.text, n.y])).toEqual([
+      ['Build', (layout.bars[0]?.y ?? 0) + 12],
+      ['Launch', (layout.bars[3]?.y ?? 0) + 12],
+    ]);
+  });
+
+  it('leaves out an after line only when no order of the rows clears it, and says so', () => {
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    section One
+    A :a, 2024-03-01, 10d
+    section Two
+    B :b, 2024-03-01, 30d
+    section Three
+    C :after a, 5d`;
+    const layout = layoutGantt(parseGantt(src), ruler);
     expect(layout.omitted).toEqual([{ from: 0, to: 2, reason: 'crosses' }]);
+    expect(layout.bars.map((b) => b.row)).toEqual([0, 1, 2]);
+  });
+
+  it('sets a status tag 8 after the duration and pads its text 9 a side, rounded up to 4', () => {
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    A :done, a, 2024-03-01, 10d
+    B :active, b, after a, 14d
+    C :milestone, c, after b, 0d`;
+    const layout = layoutGantt(parseGantt(src), ruler);
+    const items = layout.scene.items;
+    const tags = items.filter((i): i is SceneBox => i.kind === 'box' && (i.role ?? []).includes('tag'));
+    const durs = items.filter((i): i is SceneText => i.kind === 'text' && /^\d+d$/.test(i.text));
+    const w11 = (s: string): number => (ruler.textWidth(s, 'line') * 11) / 12;
+    expect(tags.map((t) => t.w)).toEqual(['done', 'active', 'milestone'].map((s) => Math.ceil((w11(s) + 18) / 4) * 4));
+    tags.forEach((t, k) => {
+      const d = durs[k] as SceneText;
+      expect(Math.abs(t.x - (d.x + w11(d.text) + 8))).toBeLessThanOrEqual(1);
+      expect(t.x % 2).toBe(0);
+    });
   });
 
   it('draws excluded days as columns and a critical task with an accent border', () => {
