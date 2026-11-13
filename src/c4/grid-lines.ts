@@ -24,6 +24,10 @@ const NEAR = 100;
 const ON_TOP = 1000;
 const ALONG = 1000;
 const HOOK = 2 * BEND;
+/** What a run across rows gains in the middle of a free gap: less than a crossing, so that lines sharing a gap still nest. */
+const MIDDLE = 24;
+/** More bent lines than this on one face nest from the face instead of taking the middle of a gap. */
+const CROWD = 2;
 /** What a line keeps from a border it runs along, and the size of the self loop. */
 const BORDER_NEAR = 12;
 /** What a line keeps from the edge of the canvas. */
@@ -135,7 +139,7 @@ const hits = (r: Run, box: Rect, by: number): boolean =>
  * with the middle run at one of the places between the ends (or round beyond both, when the faces look the same way).
  * `prefer` is a small price that keeps the turn of a line across rows near its start, or near its end when `atEnd`.
  */
-function shapes(p: Pin, q: Pin, atEnd = false): Array<{ pts: Point[]; prefer: number }> {
+function shapes(p: Pin, q: Pin, atEnd = false, gapMids: (x0: number, x1: number) => number[] = () => []): Array<{ pts: Point[]; prefer: number }> {
   const vp = p.d % 2 === 1;
   const vq = q.d % 2 === 1;
   if (vp !== vq) {
@@ -158,13 +162,16 @@ function shapes(p: Pin, q: Pin, atEnd = false): Array<{ pts: Point[]; prefer: nu
     const from = along(p) + sp * RUN;
     const to = along(q) - sp * RUN;
     // A line across rows turns near the end whose face is more crowded, so that the farther lines turn nearer it and
-    // pass round the nearer ones; across columns, half way.
+    // pass round the nearer ones, and best in the middle of a free gap between rows; across columns, half way.
     const wish = vp ? (atEnd ? to : from) : (along(p) + along(q)) / 2;
+    const mids = vp ? gapMids(Math.min(p.x, q.x), Math.max(p.x, q.x)).filter((m) => (m - from) * sp >= -1e-6 && (m - to) * sp <= 1e-6) : [];
     const ms = new Set<number>();
     for (let m = from; (m - to) * sp <= 1e-6; m += sp * STEP) ms.add(tidy(m));
     ms.add(tidy(to));
     ms.add(tidy(wish));
-    for (const m of ms) out.push({ pts: make(m), prefer: 0.5 * Math.abs(m - wish) });
+    for (const m of mids) ms.add(tidy(m));
+    const atMiddle = (m: number): boolean => mids.some((c) => Math.abs(m - c) < 0.5);
+    for (const m of ms) out.push({ pts: make(m), prefer: 0.5 * Math.abs(m - wish) - (atMiddle(m) ? MIDDLE : 0) });
     return out;
   }
   const base = sp > 0 ? Math.max(along(p), along(q)) + RUN : Math.min(along(p), along(q)) - RUN;
@@ -192,6 +199,13 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     const r = scene.nameOf?.(c.id);
     return r === undefined ? [] : [r];
   });
+  // The rows under a run across them are cut by the tops and bottoms of the boxes, the borders and the names of the
+  // clusters that stand over the run; it stands best in the middle between two of these lines next to each other.
+  const rowCuts = [...boxes.map(({ box }) => box), ...names];
+  const gapMids = (x0: number, x1: number): number[] => {
+    const ys = [...new Set(rowCuts.filter((r) => r.x < x1 + 0.5 && r.x + r.w > x0 - 0.5).flatMap((r) => [tidy(r.y), tidy(r.y + r.h)]))].sort((a, b) => a - b);
+    return ys.slice(1).map((y, k) => ((ys[k] as number) + y) / 2);
+  };
   /** True when a straight run touches no box but its ends' and goes through no cluster that holds neither end. */
   const runClear = (a: Point, b: Point, ends: [string, string]): boolean => {
     const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
@@ -441,7 +455,9 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     const best = (i: number): { pts: Point[]; cost: number } | undefined => {
       const pin = pins[i] as { from: Pin; to: Pin };
       let out: { pts: Point[]; cost: number } | undefined;
-      for (const s of shapes(pin.from, pin.to, (load.get(faceKey(i, 'to')) ?? 0) > (load.get(faceKey(i, 'from')) ?? 0))) {
+      const [loadFrom, loadTo] = [load.get(faceKey(i, 'from')) ?? 0, load.get(faceKey(i, 'to')) ?? 0];
+      // Lines that crowd a face nest round each other from that face; the middle of a gap is for the few.
+      for (const s of shapes(pin.from, pin.to, loadTo > loadFrom, Math.max(loadFrom, loadTo) <= CROWD ? gapMids : undefined)) {
         const pts = s.pts.map((p) => ({ x: tidy(p.x), y: tidy(p.y) }));
         if (pts.some((p) => p.x < EDGE_ROOM || p.y < EDGE_ROOM || p.x > scene.width - EDGE_ROOM || p.y > scene.height - EDGE_ROOM)) continue;
         const own = ownCost(pts, i);
