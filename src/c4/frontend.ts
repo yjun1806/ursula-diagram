@@ -9,7 +9,8 @@ import { parseC4 } from './parse.ts';
 
 function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): { layout: Layout; title: string | undefined } {
   const model = parseC4(src);
-  const ruler = mode === 'text' ? cellRuler() : pixelRuler();
+  // 64: a label chip (24) and 20 of line on each side fit in one gap; at 48 every gap with a label takes a whole extra place (88).
+  const ruler = mode === 'text' ? cellRuler() : { ...pixelRuler(), rankGap: 64 };
   const laid = layout(c4Graph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }) });
   return { layout: laid, title: model.accTitle ?? model.title };
 }

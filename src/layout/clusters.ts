@@ -870,7 +870,7 @@ function gapsOf(from: number, to: number, taken: Array<[number, number]>): Array
  * taller row of `rows` (a cluster not yet in `rows` is reported in `need`); else at the left over a knockout of the
  * fill, so that the line is seen to stop at the name.
  */
-function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { clusters: LayoutCluster[]; need: Set<string> } {
+function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>, subtitled: ReadonlySet<string>): { clusters: LayoutCluster[]; need: Set<string> } {
   const need = new Set<string>();
   const segs = layout.edges.filter((e) => !e.invisible).flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i] as Point, q] as const));
   const labels = layout.edges.flatMap((e) => (e.label ? [e.label] : []));
@@ -896,13 +896,14 @@ function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<string>): { 
     const whole = [c.label];
     const parts = c.label.split(' \u00b7 ');
     const split = parts.length > 1 ? [parts[0] as string, parts.slice(1).join(' \u00b7 ')] : undefined;
-    const one = at(whole);
+    const forced = subtitled.has(c.id) && split !== undefined;
+    const one = forced ? undefined : at(whole);
     const two = rows.has(c.id) && split !== undefined ? at(split) : undefined;
     const choice = one !== undefined ? { ...one, lines: whole, knockout: false } : two !== undefined && split !== undefined ? { ...two, lines: split, knockout: false } : undefined;
     if (choice === undefined && split !== undefined && !rows.has(c.id)) need.add(c.id);
-    const lines = choice?.lines ?? whole;
-    const w = choice?.w ?? ruler.textWidth(c.label, 'lane');
-    const name = { x: choice?.x ?? c.x + CLUSTER_NAME_INSET, y: c.y + NAME_FONT, w, h: 16 * lines.length, lines, ...(choice === undefined ? { knockout: true } : {}) };
+    const lines = choice?.lines ?? (forced ? split : whole);
+    const w = choice?.w ?? Math.max(...lines.map((l) => ruler.textWidth(l, 'lane')));
+    const name = { x: choice?.x ?? c.x + CLUSTER_NAME_INSET, y: c.y + NAME_FONT, w, h: 16 * lines.length, lines, ...(choice === undefined ? { knockout: true } : {}), ...(forced ? { subtitle: true as const } : {}) };
     return { ...c, name };
   });
   return { clusters, need };
@@ -967,7 +968,7 @@ const better = (x: number[], y: number[]): boolean => {
 function chooseDrawing(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
   // Drawn once with every name on one line; the clusters whose name has no room there get a taller name row, and the drawing is made once more.
   const drawn = (exits: boolean): Layout => {
-    const first = layoutPass(graph, ruler, opts, draw, new Set(), exits);
+    const first = layoutPass(graph, ruler, opts, draw, new Set((graph.clusters ?? []).filter((c) => c.subtitled === true).map((c) => c.id)), exits);
     return first.need.size === 0 ? first.layout : layoutPass(graph, ruler, opts, draw, first.need, exits).layout;
   };
   if (opts.clusterExits !== undefined) return drawn(opts.clusterExits);
@@ -1299,6 +1300,6 @@ function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawL
   };
   // The labels were placed level by level; once every level and every inner stretch is in, they are placed again against all the lines.
   const finished = ruler.terminal === true ? base : withinCanvas(refineLabels(base, layeredRuler(ruler), redrawn, keepOffBoxes(acc.clusters, false)));
-  const named = ruler.terminal === true ? { clusters: finished.clusters ?? [], need: new Set<string>() } : placeNames(finished, ruler, rows);
+  const named = ruler.terminal === true ? { clusters: finished.clusters ?? [], need: new Set<string>() } : placeNames(finished, ruler, rows, new Set((graph.clusters ?? []).filter((c) => c.subtitled === true).map((c) => c.id)));
   return { layout: withLegend({ ...finished, clusters: named.clusters }, ruler, opts.legend), need: named.need };
 }

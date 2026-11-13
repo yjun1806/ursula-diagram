@@ -5,6 +5,11 @@ import type { Compartment, NodeShape } from '../types.ts';
 export const COMPARTMENT_LINE = 20;
 export const HEAD_PAD = 20;
 export const BODY_PAD = 16;
+/** Pixels: extra room between the pill of a face and the line under it, and the room the pill takes around the text of its kind. */
+export const FACE_PILL_GAP = 4;
+export const FACE_PILL_PAD = 16;
+/** Pixels: room a face adds around its lines in all (a cylinder's two caps come on top of it). */
+export const FACE_PAD = 12;
 /** Pixels: room a compartment box adds around its widest line, and its least width. */
 export const COMPARTMENT_SIDE = 32;
 export const COMPARTMENT_MIN_W = 120;
@@ -89,7 +94,7 @@ function widest(c: Compartment, i: number, ruler: Ruler): number {
 /** Height of every compartment of a box; a terminal box gives each at least one row. */
 export function compartmentHeights(compartments: readonly Compartment[], ruler: Ruler): number[] {
   if (ruler.terminal === true) return compartments.map((c) => Math.max(1, c.lines.length));
-  return compartments.map((c, i) => (i === 0 ? c.lines.length * COMPARTMENT_LINE + HEAD_PAD : c.lines.length === 0 ? BODY_PAD : c.lines.length * COMPARTMENT_LINE + BODY_PAD));
+  return compartments.map((c, i) => (c.face === true ? c.lines.length * COMPARTMENT_LINE + FACE_PILL_GAP + FACE_PAD : i === 0 ? c.lines.length * COMPARTMENT_LINE + HEAD_PAD : c.lines.length === 0 ? BODY_PAD : c.lines.length * COMPARTMENT_LINE + BODY_PAD));
 }
 
 /** Width of a box divided into compartments. A terminal box also has a column of border on each side. */
