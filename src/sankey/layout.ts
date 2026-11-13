@@ -19,7 +19,7 @@ const LABEL_CLEAR = 12;
 /** Space between a node's name and its value. */
 const VALUE_GAP = 6;
 const TARGET_W = 840;
-const MIN_PLOT_H = 400;
+const MIN_PLOT_H = 512;
 const MIN_STEP = 64;
 const SERIES = 8;
 const TITLE_H = 18;
