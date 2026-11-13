@@ -4,6 +4,7 @@ import type { Diagnostic, Graph, Layout, LaneAxis } from '../types.ts';
 import type { AlongArrangement } from './along.ts';
 import { alongEstimate, arrangeAlong, considerAlong, polishAlong, refineAlong } from './along.ts';
 import { flattenClusters, flattenedNote, layoutClusters } from './clusters.ts';
+import { layoutC4Grid } from '../c4/grid.ts';
 import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
@@ -252,6 +253,7 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
 }
 
 function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+  if (graph.placer === 'c4-grid' && ruler.terminal !== true) return layoutC4Grid(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
     const flat = layout(flattenClusters(graph), ruler, opts);

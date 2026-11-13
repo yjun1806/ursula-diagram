@@ -268,7 +268,26 @@ describe('c4 reading', () => {
       ['SystemC', 'customerA', 'end'],
     ]);
     expect(m.rels[2]?.tech).toBe('SMTP');
-    expect(m.ignored).toContain('UpdateLayoutConfig');
+    expect(m.config).toEqual({ shapeInRow: 3, boundaryInRow: 1 });
+    expect(m.ignored).not.toContain('UpdateLayoutConfig');
+  });
+
+  it('keeps the direction hints of relations and the places asked for without a line', () => {
+    const m = parseC4('C4Context\n  System(a, "A")\n  System(b, "B")\n  System(c, "C")\n  Rel_U(a, b, "x")\n  Rel_Neighbor(b, c, "y")\n  BiRel_Left(a, c, "z")\n  Rel(c, a, "w")\n  Lay_D(a, c)');
+    expect(m.rels.map((r) => r.hint)).toEqual(['up', 'right', 'left', undefined]);
+    expect(m.lays).toEqual([{ from: 'a', to: 'c', hint: 'down', line: 9 }]);
+    expect(m.ignored).toEqual([]);
+    expect(m.config).toEqual({ shapeInRow: 4, boundaryInRow: 2 });
+  });
+
+  it('turns the hint and the first-written end with a line it lays out from the other end', () => {
+    const g = c4Graph(parseC4('C4Context\n  Person(p, "P")\n  System(s, "S")\n  System(t, "T")\n  Rel_D(s, p, "x")\n  Rel_Back(s, t, "y")\n  BiRel(t, s, "z")'), pixelRuler());
+    expect(g.placer).toBe('c4-grid');
+    expect(g.edges.map((e) => [e.from, e.to])).toEqual([['p', 's'], ['t', 's'], ['t', 's']]);
+    expect(g.grid?.hints).toEqual(['up', undefined, undefined]);
+    expect(g.grid?.upper).toEqual([undefined, 'to', 'from']);
+    expect(g.grid?.starts).toEqual(['p']);
+    expect(g.grid?.order).toEqual(['p', 's', 't']);
   });
 
   it('reads technology and description of a container and the back relation', () => {
@@ -457,21 +476,21 @@ describe('c4 boundaries without lines inside are grids', () => {
   const node = (id: string) => laid.nodes.find((n) => n.id === id) as (typeof laid.nodes)[number];
   const box = (id: string) => (laid.clusters ?? []).find((c) => c.id === id) as NonNullable<typeof laid.clusters>[number];
 
-  it('puts the loose customers in one row with the connected one first', () => {
+  it('puts the loose customers in the row of the connected one, and the two-way relations in one column', () => {
     const row = ['customerA', 'customerB', 'customerC', 'customerD'].map(node);
     for (const n of row) expect(n.y).toBe(row[0]?.y);
-    expect(row.map((n) => n.x)).toEqual([...row.map((n) => n.x)].sort((a, b) => a - b));
     expect(node('SystemAA').y).toBeGreaterThan(node('customerA').y);
+    expect(node('SystemAA').x).toBe(node('customerA').x);
+    expect(node('SystemE').x).toBe(node('SystemAA').x);
   });
 
-  it('lays the plain nodes of a boundary in two columns and stacks its boundaries to the right', () => {
+  it('puts the plain node of a boundary under its first row and stacks its boundaries in the same columns beside it', () => {
     expect(node('SystemE').y).toBe(node('SystemC').y);
-    expect(node('SystemC').x).toBeGreaterThan(node('SystemE').x);
     expect(node('SystemD').y).toBeGreaterThan(node('SystemE').y);
-    expect(node('SystemD').x).toBe(node('SystemE').x);
     expect(box('b2').x).toBe(box('b3').x);
+    expect(box('b2').w).toBe(box('b3').w);
     expect(box('b3').y).toBeGreaterThan(box('b2').y);
-    expect(box('b2').x).toBeGreaterThan(node('SystemC').x + node('SystemC').w);
+    expect(box('b2').x).toBeGreaterThan(Math.max(node('SystemC').x + node('SystemC').w, node('SystemE').x + node('SystemE').w));
   });
 
   it('puts the two systems of a boundary side by side', () => {
