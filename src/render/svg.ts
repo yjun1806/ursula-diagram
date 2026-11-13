@@ -340,12 +340,21 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint)
 /** Radius of the ring where a line leaves its box. */
 const PORT_RING_R = 4;
 
-/** Rings at the start of every visible line that ends in a mark and starts bare; lines that share a start share one ring. */
+/**
+ * Rings where a line leaves its box: on the bare end of every visible line that has a mark at one end only (a line
+ * drawn against its meaning carries its mark at the start, and its ring at the last point); lines that share an end share one ring,
+ * and the lines of a trunk count the mark its lead line draws.
+ */
 function portRings(layout: Layout, nodes: Map<string, LayoutNode>): string {
   const seen: Point[] = [];
+  const marksOf = (edge: LayoutEdge): boolean[] => [(edge.startEnd ?? 'none') !== 'none', (edge.end ?? 'arrow') !== 'none'];
+  // The lines of one trunk share the mark of its lead line, which alone draws it.
+  const leads = new Map(layout.edges.filter((e) => e.trunk?.lead === true).map((e) => [e.trunk?.id, marksOf(e)] as const));
   for (const edge of layout.edges) {
-    if (edge.invisible || (edge.end ?? 'arrow') === 'none' || (edge.startEnd ?? 'none') !== 'none') continue;
-    const at = trimmedPoints(edge, nodes)[0];
+    const marked = (edge.trunk === undefined ? undefined : leads.get(edge.trunk.id)) ?? marksOf(edge);
+    if (edge.invisible || marked[0] === marked[1]) continue;
+    const points = trimmedPoints(edge, nodes);
+    const at = marked[1] ? points[0] : points[points.length - 1];
     if (at === undefined || seen.some((p) => Math.abs(p.x - at.x) <= 0.5 && Math.abs(p.y - at.y) <= 0.5)) continue;
     seen.push(at);
   }

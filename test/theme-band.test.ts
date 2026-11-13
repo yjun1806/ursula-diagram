@@ -119,3 +119,17 @@ describe('band chart emphasis', () => {
     expect(marks(svg)).toHaveLength(4);
   });
 });
+
+describe('band theme: rings on lines drawn against their meaning and on trunks', () => {
+  const rings = (svg: string): string[] => svg.match(/<circle class="ursula-port"[^>]*>/g) ?? [];
+
+  it('puts the ring on the bare end of a C4 relation laid out from its target', () => {
+    const src = 'C4Context\n  Person(a, "Customer")\n  System(s, "Mail")\n  Rel(s, a, "Sends e-mails to")';
+    expect(rings(render(src))).toHaveLength(1);
+  });
+
+  it('gives every child of an inheritance trunk its own ring', () => {
+    const src = 'classDiagram\n  Animal <|-- Duck\n  Animal <|-- Fish\n  Animal <|-- Zebra';
+    expect(rings(render(src))).toHaveLength(3);
+  });
+});
