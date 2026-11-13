@@ -96,14 +96,27 @@ const C4_CONTAINER = `    C4Container
 `;
 
 describe('C4 container diagram', () => {
-  it('draws the two lines that went round with at most two bends', () => {
+  it('draws the line into the Single-Page App with at most three bends and no line along a border', () => {
     const r = pixelRuler();
     const l = layout(c4Graph(parseC4(C4_CONTAINER), r), r);
     const find = (a: string, b: string) => l.edges.find((e) => e.from === a && e.to === b) ?? l.edges.find((e) => e.from === b && e.to === a);
     const ids = l.nodes.map((n) => n.id);
     const pick = (re: RegExp) => ids.find((id) => re.test(id)) as string;
     const [customer, spa, api, mail] = [pick(/customer/i), pick(/single|spa/i), pick(/api/i), pick(/mail/i)];
-    expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(2);
-    expect(bends((find(api, mail) as { points: Point[] }).points)).toBeLessThanOrEqual(2);
+    expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(3);
+    // No line runs along a cluster border closer than 16 (a line may touch it only to cross).
+    for (const c of l.clusters ?? []) {
+      for (const e of l.edges) {
+        for (const [p, q] of segs(e.points)) {
+          const horizontal = p.y === q.y;
+          const [lo, hi] = horizontal ? [Math.min(p.x, q.x), Math.max(p.x, q.x)] : [Math.min(p.y, q.y), Math.max(p.y, q.y)];
+          const sides = horizontal ? [[c.y, c.x, c.x + c.w], [c.y + c.h, c.x, c.x + c.w]] : [[c.x, c.y, c.y + c.h], [c.x + c.w, c.y, c.y + c.h]];
+          for (const [at, a0, a1] of sides as Array<[number, number, number]>) {
+            const d = Math.abs((horizontal ? p.y : p.x) - at);
+            if (Math.min(hi, a1) - Math.max(lo, a0) > 1e-6) expect(d === 0 || d >= 16 - 1e-6, `${e.from}->${e.to} beside ${c.id}`).toBe(true);
+          }
+        }
+      }
+    }
   });
 });

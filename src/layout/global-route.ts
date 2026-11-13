@@ -31,7 +31,7 @@ const NAME_CLEAR = 4;
 const STUB = 12;
 const PITCH = 8;
 const CORNER_CLEAR = 12;
-const BORDER_NEAR = 8;
+const BORDER_NEAR = 16;
 const EDGE_ROOM = 8;
 /** Price of breaking a spacing rule when no line can be found without breaking one. */
 const RELAXED = 400;
@@ -249,6 +249,11 @@ export function routeGlobally(input: RouteInput): Array<Point[] | undefined> {
     spanY.push([w.y0, w.y1]);
     xs.push(w.x0, w.x1);
     ys.push(w.y0, w.y1);
+  }
+  // A lane as near a border as a line may run along it.
+  for (const c of input.clusters) {
+    xs.push(c.box.x - BORDER_NEAR, c.box.x + BORDER_NEAR, c.box.x + c.box.w - BORDER_NEAR, c.box.x + c.box.w + BORDER_NEAR);
+    ys.push(c.box.y - BORDER_NEAR, c.box.y + BORDER_NEAR, c.box.y + c.box.h - BORDER_NEAR, c.box.y + c.box.h + BORDER_NEAR);
   }
   for (const job of jobs) {
     for (const p of [...job.from, ...job.to]) {

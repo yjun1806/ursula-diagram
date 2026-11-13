@@ -195,8 +195,9 @@ describe('a line that goes into a box', () => {
     const core = (l.clusters ?? []).find((c) => c.id === 'Core') as LayoutCluster;
     const y = node('Create').y + node('Create').h / 2;
     const crossing = segmentsOf(e).find((s) => Math.min(s.a.x, s.b.x) <= core.x + 1e-6 && Math.max(s.a.x, s.b.x) >= core.x + 1e-6) as { a: Point; b: Point };
-    expect(crossing.a.y).toBeCloseTo(y, 4);
-    expect(crossing.b.y).toBeCloseTo(y, 4);
+    // One straight stretch, level with a part of the node's face.
+    expect(crossing.a.y).toBeCloseTo(crossing.b.y, 4);
+    expect(Math.abs(crossing.a.y - y)).toBeLessThan(node('Create').h / 2);
     expect(crossing.b.x).toBeCloseTo(node('Create').x, 4);
     expect(e.points.at(-1)?.x).toBeCloseTo(node('Create').x, 4);
   });

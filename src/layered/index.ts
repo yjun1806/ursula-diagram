@@ -57,6 +57,8 @@ export interface LayeredOptions {
   legend?: LegendOption;
   /** The graph is one level of a drawing with clusters: edges outside it join its boxes, so it is neither shelved in pieces nor drawn as stages (off by default). */
   nested?: boolean;
+  /** With `nested`: the `spread` drawing is taken at this level when it wins (off by default, because it is scored before the lines are joined into boxes). */
+  nestedSpread?: boolean;
 }
 
 const RETRIES = 10;
@@ -512,7 +514,7 @@ function layoutAt(source: Graph, given: Ruler, opts: LayeredOptions): Layout {
   // Without zones the `spread` drawing replaces the usual one only when `spreadWins`.
   const spread = unzoned(source) && !given.terminal && opts.quality === 'best' && opts.quick !== true ? drawSpread(source, given, opts) : undefined;
   const room = { width: opts.maxWidth ?? (given.defaultWidth ?? Infinity) * DEFAULT_ROOM, height: opts.maxHeight ?? Infinity };
-  return spread !== undefined && spreadWins(spread, drawn, room, opts.nested !== true) ? spread : drawn;
+  return spread !== undefined && spreadWins(spread, drawn, room, opts.nested !== true || opts.nestedSpread === true) ? spread : drawn;
 }
 
 /**
