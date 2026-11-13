@@ -55,7 +55,10 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     const size = measureNodes(given.nodes, [{ label: '' }], layeredRuler(ruler), given.direction !== 'LR');
     const boxes = given.nodes.map((n, i) => ({ n, w: size.w[i] as number, h: size.h[i] as number })).filter((b) => b.n.shape !== 'actor');
     const box = { w: Math.max(ACTOR_W, ...boxes.map((b) => b.w)), h: Math.max(ACTOR_H, ...boxes.map((b) => b.h)) };
-    for (const n of given.nodes) if (n.shape === 'actor') own.set(n.id, { w: ACTOR_W, h: ACTOR_H });
+    // Every other box keeps its own height: a row is as high as its highest box, the boxes of a row share their top.
+    // Measured across, each box keeps the height of its own content.
+    const tall = measureNodes(given.nodes, [{ label: '' }], layeredRuler(ruler), false).h;
+    given.nodes.forEach((n, i) => own.set(n.id, n.shape === 'actor' ? { w: ACTOR_W, h: ACTOR_H } : { w: box.w, h: Math.max(tall[i] as number, ACTOR_H) }));
     graph = { ...given, nodes: given.nodes.map((n) => ({ ...n, box })) };
   }
   const spec = graph.grid ?? emptySpec(graph);
@@ -65,6 +68,10 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
   const grid: GridCells = given_ !== undefined ? givenCells(given_) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows);
   const bw = Math.max(1, ...graph.nodes.map((n) => n.box?.w ?? 0));
   const bh = Math.max(1, ...graph.nodes.map((n) => n.box?.h ?? 0));
+  const rowH = Array.from({ length: grid.rows }, (_, r) => {
+    const here = graph.nodes.filter((n) => grid.cell.get(n.id)?.r === r).map((n) => own.get(n.id)?.h ?? bh);
+    return here.length === 0 ? bh : Math.max(...here);
+  });
   const clusters = graph.clusters ?? [];
   const parentOf = new Map(clusters.map((c) => [c.id, c.parent]));
   const kidsOf = (id: string): string[] => clusters.filter((c) => c.parent === id && grid.rect.has(c.id)).map((c) => c.id);
@@ -196,11 +203,11 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     }
     const rowY: number[] = [];
     for (let r = 0, y = 0; r < grid.rows; r++) {
-      y += (rowGap[r] as number) + (r === 0 ? 0 : bh);
+      y += (rowGap[r] as number) + (r === 0 ? 0 : (rowH[r - 1] as number));
       rowY.push(y);
     }
     const width = (colX.at(-1) ?? 0) + bw + (colGap.at(-1) ?? MARGIN);
-    const height = (rowY.at(-1) ?? 0) + bh + (rowGap.at(-1) ?? MARGIN);
+    const height = (rowY.at(-1) ?? 0) + (rowH.at(-1) ?? bh) + (rowGap.at(-1) ?? MARGIN);
 
     const nodes: LayoutNode[] = graph.nodes.map((n) => {
       const p = cellOf(n.id) as Cell;
@@ -212,7 +219,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         row: p.c,
         // A box of its own size (an actor) stands in the middle of its cell.
         x: (colX[p.c] as number) + (bw - (own.get(n.id)?.w ?? bw)) / 2,
-        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + (bh - (own.get(n.id)?.h ?? bh)) / 2,
+        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + (n.shape === 'actor' ? ((rowH[p.r] as number) - ACTOR_H) / 2 : 0),
         w: own.get(n.id)?.w ?? bw,
         h: own.get(n.id)?.h ?? bh,
         title: n.title,
@@ -233,7 +240,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         const c = clusters.find((k) => k.id === id);
         const x = (colX[q.c0] as number) - l;
         const y = (rowY[q.r0] as number) - t;
-        return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + bh + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
+        return { id, label: c?.label ?? id, x, y, w: (colX[q.c1] as number) + bw + r - x, h: (rowY[q.r1] as number) + (rowH[q.r1] as number) + b - y, depth: depthOf(id), ...(c?.style === undefined ? {} : { style: c.style }) };
       })
       .sort((a, b) => a.depth - b.depth || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     const laidClusters = alignSiblings(placedClusters, (id) => grid.rect.get(id) as CellRect, (id) => parentOf.get(id), nodes.map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h, cluster: n.cluster })));
