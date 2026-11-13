@@ -1,7 +1,7 @@
 import { ceilTo, round2 } from '../chart/grid.ts';
 import { anchoredBox, clashCost, pickLeastClash, trendAt } from '../chart/label-place.ts';
 import type { Box } from '../chart/label-place.ts';
-import { monotonePath } from '../chart/monotone.ts';
+import { monotonePath, pathSamples } from '../chart/monotone.ts';
 import type { Ruler } from '../metrics.ts';
 import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
 import type { Theme } from '../render/theme.ts';
@@ -210,7 +210,8 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
   const dots = placed.map((t) => t.dot);
   if (dots.length > 1) {
     const d = spec.interpolation === 'linear' ? dots.map((p, i) => `${i === 0 ? 'M' : 'L'}${round2(p.x)} ${round2(p.y)}`).join(' ') : monotonePath(dots);
-    items.push({ kind: 'path', d, role: ['mark-line'] });
+    // a theme that draws a lone value line in ink does so here too; the points stay hollow rings
+    items.push({ kind: 'path', d, role: [spec.peakBar ? 'mark-line--ink' : 'mark-line'] });
   }
   for (const p of dots) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: ['mark-dot'] });
 
@@ -225,24 +226,7 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
       const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
       for (let k = 0; k <= steps; k++) samples.push({ x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps });
     }
-  } else if (dots.length > 1) {
-    // points along the cubic segments of the drawn curve
-    const nums = (monotonePath(dots).match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
-    let from: Point = { x: nums[0] ?? 0, y: nums[1] ?? 0 };
-    for (let k = 2; k + 5 < nums.length; k += 6) {
-      const [c1x = 0, c1y = 0, c2x = 0, c2y = 0, ex = 0, ey = 0] = nums.slice(k, k + 6);
-      const steps = Math.max(1, Math.ceil(Math.hypot(ex - from.x, ey - from.y) / 3));
-      for (let t = 0; t <= steps; t++) {
-        const u = t / steps;
-        const v = 1 - u;
-        samples.push({
-          x: v * v * v * from.x + 3 * v * v * u * c1x + 3 * v * u * u * c2x + u * u * u * ex,
-          y: v * v * v * from.y + 3 * v * v * u * c1y + 3 * v * u * u * c2y + u * u * u * ey,
-        });
-      }
-      from = { x: ex, y: ey };
-    }
-  }
+  } else if (dots.length > 1) samples.push(...pathSamples(monotonePath(dots)));
   const dotBoxes: Box[] = dots.map((p) => ({ x0: p.x - spec.dotRadius, x1: p.x + spec.dotRadius, y0: p.y - spec.dotRadius, y1: p.y + spec.dotRadius }));
   const bounds: Box = { x0: LEFT, x1: plotRight, y0: zoneTop + zoneH + 4, y1: height - 4 };
   const taken: Box[] = [];
