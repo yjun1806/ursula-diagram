@@ -177,7 +177,7 @@ export function parseSequence(src: string): Sequence {
   const groups: ParticipantGroup[] = [];
   const created = new Set<string>();
   const destroyed = new Set<string>();
-  const declare = (d: Declaration, keyword: ParticipantKind): void => {
+  const declareParticipant = (d: Declaration, keyword: ParticipantKind): void => {
     if (declared.has(d.id)) return;
     declared.add(d.id);
     participants.set(d.id, { id: d.id, lines: textLines(d.label ?? d.id), kind: d.kind ?? keyword });
@@ -200,14 +200,14 @@ export function parseSequence(src: string): Sequence {
 
     if (word === 'participant' || word === 'actor') {
       if (rest === '') fail(`'${word}' needs a name`, lineNo);
-      declare(readDeclaration(rest, lineNo), word);
+      declareParticipant(readDeclaration(rest, lineNo), word);
       continue;
     }
     if (word === 'create') {
       const m = /^(participant|actor)\s+(.+)$/i.exec(rest);
       if (!m) fail("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
       const d = readDeclaration(m[2] ?? '', lineNo);
-      declare(d, (m[1] ?? '').toLowerCase() === 'actor' ? 'actor' : 'participant');
+      declareParticipant(d, (m[1] ?? '').toLowerCase() === 'actor' ? 'actor' : 'participant');
       created.add(d.id);
       continue;
     }

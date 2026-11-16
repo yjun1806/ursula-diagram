@@ -436,6 +436,25 @@ describe('layoutSequence fit', () => {
     expect(l.diagnostics[0]).toMatchObject({ kind: 'overflow', nodes: ['A', 'B', 'C'] });
   });
 
+  it('wraps participant names at word boundaries when the headers alone are too wide', () => {
+    const heads = `sequenceDiagram
+  participant A as Browser extension background
+  participant B as Payment gateway service
+  participant C as Conversion worker pool
+  participant D as Notification delivery queue
+  A->>B: a
+  B->>C: b
+  C->>D: c`;
+    const natural = layoutSequence(seqOf(heads), pixelRuler(), { maxWidth: Infinity });
+    expect(natural.width).toBeGreaterThan(700);
+    const fitted = layoutSequence(seqOf(heads), pixelRuler(), { maxWidth: 700 });
+    expect(fitted.width).toBeLessThanOrEqual(700);
+    expect(fitted.diagnostics).toEqual([]);
+    const texts = fitted.scene.items.flatMap((item) => ('text' in item && typeof item.text === 'string' ? [item.text] : []));
+    expect(texts).toContain('background');
+    expect(texts).not.toContain('Browser extension background');
+  });
+
   it('fits a cell drawing to the terminal width', () => {
     const l = layoutSequence(seqOf(long), cellRuler(), { maxWidth: 70 });
     expect(l.width).toBeLessThanOrEqual(70);
