@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { renderHtml } from './html.ts';
-import { checkLines, selectFrontEnd, spansToAnsi, UrsulaError } from './index.ts';
+import { checkLines, selectFrontEnd, sequenceCheckLines, spansToAnsi, UrsulaError } from './index.ts';
+import type { SequenceLayout } from './sequence/model.ts';
 import type { Layout } from './types.ts';
 
 function usage(): never {
@@ -65,8 +66,9 @@ try {
   if (format === 'html') {
     process.stdout.write(renderHtml(src, { ...(title === undefined ? {} : { title }), ...(width === undefined ? {} : { maxWidth: width }), ...(theme === undefined ? {} : { theme }) }));
   } else if (format === 'check') {
-    const laid = frontEnd.json(src, 'svg', opts) as Layout;
-    process.stdout.write(`${('edges' in laid && 'diagnostics' in laid ? checkLines(laid) : ['no checks for this kind of diagram']).join('\n')}\n`);
+    const laid = frontEnd.json(src, 'svg', opts) as Layout | SequenceLayout;
+    const lines = 'edges' in laid && 'diagnostics' in laid ? checkLines(laid) : 'messages' in laid ? sequenceCheckLines(laid) : ['no checks for this kind of diagram'];
+    process.stdout.write(`${lines.join('\n')}\n`);
   } else if (format === 'text') {
     const rows =
       color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);

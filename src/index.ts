@@ -54,6 +54,7 @@ export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
 export { layoutSequenceText } from './sequence/text.ts';
 export { parseSequence } from './sequence/parse.ts';
 export { layoutSequence } from './sequence/layout.ts';
+export { sequenceCheckLines } from './sequence/check.ts';
 export type { SequenceLayoutOptions } from './sequence/layout.ts';
 export type * from './sequence/model.ts';
 export { UrsulaError } from './types.ts';
