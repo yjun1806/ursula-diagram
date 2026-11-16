@@ -249,10 +249,15 @@ function wrappable(seq: Sequence): Array<{ line: string; role: TextRole }> {
     if (s.kind === 'message') for (const line of s.lines) out.push({ line, role: 'edge' });
     else if (s.kind === 'note') for (const line of s.lines) out.push({ line, role: 'line' });
   }
+  for (const p of seq.participants) for (const line of p.lines) out.push({ line, role: 'title' });
   return out;
 }
 
-function build(seq: Sequence, R: Ruler, cap: number, tight: boolean, legendOption: SequenceLegendOption | undefined): SequenceLayout {
+function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOption: SequenceLegendOption | undefined): SequenceLayout {
+  // Participant names wrap at the same cap as the texts, so one long name does not hold every lifeline apart.
+  const seq: Sequence = Number.isFinite(cap)
+    ? { ...source, participants: source.participants.map((p) => ({ ...p, lines: p.lines.flatMap((l) => wrapLine(l, cap, (t) => R.textWidth(t, 'title'))) })) }
+    : source;
   const S = R.sequence;
   const g = R.grid;
   const up = (v: number): number => Math.ceil(v / g - 1e-9) * g;
@@ -1136,8 +1141,9 @@ export function layoutSequence(seq: Sequence, ruler: Ruler, opts: SequenceLayout
   const lines = wrappable(seq);
   const measure = (e: { line: string; role: TextRole }): number => ruler.textWidth(e.line, e.role);
   const longest = Math.max(0, ...lines.map(measure));
-  const word = Math.max(0, ...lines.flatMap((e) => e.line.split(/\s+/).map((w) => ruler.textWidth(w, e.role))));
-  const capMin = Math.ceil(word / g) * g;
+  // A word wider than the cap keeps its own line, so the cap may go below the widest word: a long word on a
+  // message that spans several lifelines must not stop the short labels between neighbours from wrapping.
+  const capMin = g;
   const narrowest = build(seq, ruler, capMin, true, opts.legend);
   if (narrowest.width > limit) {
     const diagnostic: Diagnostic = {
