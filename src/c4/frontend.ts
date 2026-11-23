@@ -13,7 +13,7 @@ function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): 
   const ruler = mode === 'text' ? cellRuler() : pixelRuler();
   let laid = layout(c4Graph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }) });
   // A terminal drawing that is too wide is made again with its descriptions wrapped narrower.
-  for (const cells of mode === 'text' && maxWidth !== undefined ? [22, 18, 14] : []) {
+  for (const cells of mode === 'text' && maxWidth !== undefined ? [22, 18, 14, 10] : []) {
     if (maxWidth === undefined || laid.width <= maxWidth) break;
     const narrow = layout(c4Graph(model, ruler, cells), ruler, { maxWidth });
     if (narrow.width < laid.width) laid = narrow;

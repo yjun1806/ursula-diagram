@@ -26,7 +26,9 @@ function wrap(text: string, ruler: Ruler): string[] {
 }
 
 function compartmentsOf(e: C4Element, ruler: Ruler): Compartment[] {
-  const name = e.label.split('\n').map((l) => l.trim());
+  // A terminal drawing made narrower wraps the name as well: the name is what keeps a box wide once the description is narrow.
+  const narrow = ruler.terminal === true && wrapCells < WRAP_CELLS;
+  const name = e.label.split('\n').map((l) => l.trim()).flatMap((l) => (narrow ? wrap(l, ruler) : [l]));
   const tech = e.tech === undefined ? [] : wrap(e.tech, ruler);
   const descr = e.descr === undefined ? [] : wrap(e.descr, ruler);
   return [
