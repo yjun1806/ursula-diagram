@@ -3,11 +3,12 @@ import { pixelRuler } from '../metrics.ts';
 import type { Diagnostic, Graph, Layout, LaneAxis } from '../types.ts';
 import type { AlongArrangement } from './along.ts';
 import { alongEstimate, arrangeAlong, considerAlong, polishAlong, refineAlong } from './along.ts';
-import { flattenClusters, flattenedNote, layoutClusters } from './clusters.ts';
+import { bandClusters, flattenedNote, layoutClusters } from './clusters.ts';
 import { layoutC4Grid } from '../c4/grid.ts';
 import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
+import { closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
@@ -244,6 +245,21 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
+  const drawn = layoutAny(graph, given, opts);
+  if (given.terminal !== true || opts.nested === true) return drawn;
+  const limit = opts.maxWidth ?? given.defaultWidth;
+  return packParts(closeTextRows(openTextLabels(shrinkDots(drawn), limit)), limit);
+}
+
+/** Terminal drawings: a compartment with nothing in it takes no rows; the name of the box always stays. */
+function withoutEmptyCompartments(graph: Graph): Graph {
+  const empty = (lines: readonly string[]): boolean => lines.every((t) => t.trim() === '');
+  if (!graph.nodes.some((n) => n.compartments?.some((c, i) => i > 0 && empty(c.lines)))) return graph;
+  return { ...graph, nodes: graph.nodes.map((n) => (n.compartments === undefined ? n : { ...n, compartments: n.compartments.filter((c, i) => i === 0 || !empty(c.lines)) })) };
+}
+
+function layoutAny(source: Graph, given: Ruler, opts: LayoutOptions): Layout {
+  const graph = given.terminal === true ? withoutEmptyCompartments(source) : source;
   const ruler: Ruler = graph.gaps === undefined || given.terminal === true ? given : { ...given, ...(graph.gaps.flow === undefined ? {} : { rankGap: graph.gaps.flow }), ...(graph.gaps.join === undefined ? {} : { joinGap: graph.gaps.join }) };
   const attached = splitAttached(graph);
   if (attached === undefined) return arrange(graph, ruler, opts);
@@ -256,8 +272,21 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
   if (graph.placer === 'c4-grid' && ruler.terminal !== true) return layoutC4Grid(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
-    const flat = layout(flattenClusters(graph), ruler, opts);
-    return { ...flat, diagnostics: [...flat.diagnostics, flattenedNote()] };
+    // Bands side by side cannot fold: when they are too wide the bands are stacked, and when that is too wide as well no band is drawn.
+    const banded = bandClusters(graph);
+    const home = banded.lanes.find((lane) => lane.label === '') ?? { id: '', label: '' };
+    const { zones: _zones, ...unzoned } = banded;
+    const plain: Graph = { ...unzoned, lanes: [home], nodes: banded.nodes.map((n) => ({ ...n, lane: home.id })) };
+    const limit = opts.maxWidth ?? ruler.defaultWidth;
+    const tries: Array<() => Layout> = [() => layoutAny(banded, ruler, opts), () => layoutAny(banded, ruler, { ...opts, composition: 'lanes' }), () => layoutAny(plain, ruler, opts)];
+    let flat: Layout | undefined;
+    for (const draw of opts.composition === undefined ? tries : [tries[0] as () => Layout, tries[2] as () => Layout]) {
+      const drawn = draw();
+      if (flat === undefined || drawn.width < flat.width) flat = drawn;
+      if (limit === undefined || !Number.isFinite(limit) || flat.width <= limit) break;
+    }
+    const kept = flat as Layout;
+    return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
   const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, ...solveOpts } = opts;

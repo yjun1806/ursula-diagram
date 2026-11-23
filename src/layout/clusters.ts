@@ -30,18 +30,66 @@ const tidy = (v: number): number => {
   return r === 0 ? 0 : r;
 };
 
-/** The graph without its clusters, for a medium that cannot draw them; edges that end at a cluster are dropped. */
-export function flattenClusters(graph: Graph): Graph {
+/**
+ * The graph for a medium that draws no cluster boxes: every outermost cluster is a band (a lane) with its name, and
+ * the nodes of the clusters in it stand in that band. A line that ends at a cluster ends at a node in it instead:
+ * one that comes in at the start dot, or else at the first node nothing in the cluster leads to; one that goes out
+ * at the end dot, or else at the last node that leads to nothing in the cluster.
+ */
+export function bandClusters(graph: Graph): Graph {
   const { clusters: _clusters, ...rest } = graph;
+  const all = new Map((graph.clusters ?? []).map((c) => [c.id, c] as const));
+  const parentOf = (id: string): string | undefined => {
+    const p = all.get(id)?.parent;
+    return p !== undefined && all.has(p) ? p : undefined;
+  };
+  const chainOf = (id: string | undefined): string[] => {
+    const out: string[] = [];
+    for (let c = id, i = 0; c !== undefined && all.has(c) && i <= all.size; c = parentOf(c), i++) out.unshift(c);
+    return out;
+  };
+  const chains = new Map(graph.nodes.map((n) => [n.id, chainOf(n.cluster)] as const));
   const known = new Set(graph.nodes.map((n) => n.id));
+  const members = (cluster: string): GraphNode[] => graph.nodes.filter((n) => chains.get(n.id)?.includes(cluster));
+  const between = graph.edges.filter((e) => known.has(e.from) && known.has(e.to));
+  const doorOf = (cluster: string, way: 'in' | 'out'): string | undefined => {
+    const inside = members(cluster);
+    const ids = new Set(inside.map((n) => n.id));
+    const own = inside.filter((n) => n.cluster === cluster);
+    const dot = own.find((n) => n.shape === (way === 'in' ? 'start-dot' : 'end-dot'));
+    if (dot) return dot.id;
+    const open = inside.filter((n) => !between.some((e) => e.from !== e.to && ids.has(e.from) && ids.has(e.to) && (way === 'in' ? e.to : e.from) === n.id));
+    const pool = open.length > 0 ? open : inside;
+    return (way === 'in' ? pool[0] : pool[pool.length - 1])?.id;
+  };
+  const edges: GraphEdge[] = [];
+  for (const e of graph.edges) {
+    const from = known.has(e.from) ? e.from : doorOf(e.from, 'out');
+    const to = known.has(e.to) ? e.to : doorOf(e.to, 'in');
+    if (from === undefined || to === undefined) continue;
+    // A line between a cluster and something in it has no two ends left once the cluster is a band.
+    if (from === to && (e.from !== e.to || !known.has(e.from))) continue;
+    edges.push(from === e.from && to === e.to ? e : { ...e, from, to });
+  }
+  const top = [...new Set([...chains.values()].map((c) => c[0]).filter((c): c is string => c !== undefined))];
+  const order = (graph.clusters ?? []).map((c) => c.id).filter((id) => top.includes(id));
+  const home = graph.lanes[0] ?? { id: '', label: '' };
+  const loose = graph.nodes.findIndex((n) => chains.get(n.id)?.length === 0);
+  const banded = graph.nodes.findIndex((n) => (chains.get(n.id)?.length ?? 0) > 0);
+  const bands = order.map((id) => ({ id: `cluster:${id}`, label: all.get(id)?.label ?? id }));
   return {
     ...rest,
-    nodes: graph.nodes.map(({ cluster: _cluster, ...n }) => n),
-    edges: graph.edges.filter((e) => known.has(e.from) && known.has(e.to)),
+    lanes: loose < 0 ? bands : loose < banded ? [home, ...bands] : [...bands, home],
+    ...(bands.length > 0 ? { zones: 'groups' as const } : {}),
+    nodes: graph.nodes.map(({ cluster: _cluster, ...n }) => {
+      const band = chains.get(n.id)?.[0];
+      return band === undefined ? { ...n, lane: home.id } : { ...n, lane: `cluster:${band}` };
+    }),
+    edges,
   };
 }
 
-export const flattenedNote = (): Diagnostic => ({ kind: 'clusters-flattened-in-text', nodes: [], message: 'Clusters are drawn flat in text: the boxes around nodes are left out.' });
+export const flattenedNote = (): Diagnostic => ({ kind: 'clusters-flattened-in-text', nodes: [], message: 'Clusters are drawn as bands in text: the boxes around nodes are left out, and a line to a cluster ends at a node in it.' });
 
 // ---------------------------------------------------------------------------------------------------------------
 // The tree of clusters

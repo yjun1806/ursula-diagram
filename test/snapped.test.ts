@@ -137,7 +137,8 @@ describe('text ruler', () => {
     const r = renderText(fx.library, 120);
     expect('error' in r).toBe(false);
     const l = layout(parse(fx.library), cellRuler(), { maxWidth: 120 });
-    for (const n of l.nodes) for (const v of [n.x, n.y, n.w, n.h]) expect(on(v, cellRuler().nodeGrid)).toBe(true);
+    // A terminal drawing is laid out on whole cells.
+    for (const n of l.nodes) for (const v of [n.x, n.y, n.w, n.h]) expect(on(v, 1)).toBe(true);
   });
 });
 

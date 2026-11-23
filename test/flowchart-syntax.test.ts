@@ -587,7 +587,7 @@ describe('documentation examples', () => {
     expect('error' in text).toBe(false);
   });
 
-  it.each(BOXED)('draws %s as boxes and, in text, flat with a note', (_name, src) => {
+  it.each(BOXED)('draws %s as boxes and, in text, as bands with a note', (_name, src) => {
     const svg = render(src);
     expect(svg).toContain('data-cluster=');
     const text = renderText(src, 100);
