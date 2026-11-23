@@ -46,7 +46,8 @@ export function withLegend(layout: Layout, ruler: Ruler, option: LegendOption | 
     return item;
   });
   const contentEnd = cursor - ruler.legendGap;
-  const width = tidy(Math.max(bare.width, contentEnd + x0));
+  // Pixels: a legend wider than the drawing widens it to a whole pixel.
+  const width = tidy(Math.max(bare.width, ruler.uniform ? contentEnd + x0 : Math.ceil(contentEnd + x0 - 1e-9)));
   return {
     ...bare,
     width,
