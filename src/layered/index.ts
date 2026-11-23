@@ -17,7 +17,7 @@ import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
 import { separateTwoWay } from './two-way.ts';
 import { arrangeLanes, laneBorders } from './lane-gaps.ts';
-import { refineLabels } from './label-spot.ts';
+import { crowdedLabels, refineLabels } from './label-spot.ts';
 import { crossings } from '../layout/check.ts';
 import { offCentreEnds } from './centre.ts';
 import { settleMixedSides } from './vertex.ts';
@@ -642,9 +642,22 @@ export function layoutLayered(source: Graph, ruled: Ruler, options: LayeredOptio
   const opts: LayeredOptions = { ...options, quality: options.quality ?? (given.terminal ? 'fast' : 'best') };
   if (!given.terminal || opts.gap !== undefined) {
     if (given.terminal) return withQuestions(source, layoutAt(source, given, opts), given, opts);
-    const [sided, ruler, redrawn] = settledSides(layoutAt(source, given, opts), given);
-    const settled = arrangeLanes(separateTwoWay(sided, ruler), ruler);
-    return withQuestions(source, refineLabels(opts.nested === true ? settled : applyTrunks(settled, source, ruler), ruler, redrawn, laneBorders(settled)), given, opts);
+    const finish = (g: Ruler): Layout => {
+      const [sided, ruler, redrawn] = settledSides(layoutAt(source, g, opts), g);
+      const settled = arrangeLanes(separateTwoWay(sided, ruler), ruler);
+      return refineLabels(opts.nested === true ? settled : applyTrunks(settled, source, ruler), ruler, redrawn, laneBorders(settled));
+    };
+    let drawn = finish(given);
+    // A label stands over no box and no text at the end of a line: while one does in the finished drawing, the drawing is made again with a wider rank gap, at most twice the given one, and kept when fewer labels do.
+    let crowded = opts.nested === true ? 0 : crowdedLabels(drawn);
+    for (let gap = given.rankGap + given.nodeGrid; crowded > 0 && gap <= 2 * given.rankGap; gap += given.nodeGrid) {
+      const wider = finish({ ...given, rankGap: gap });
+      const now = crowdedLabels(wider);
+      if (now >= crowded) continue;
+      drawn = wider;
+      crowded = now;
+    }
+    return withQuestions(source, drawn, given, opts);
   }
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.
   // The narrowest gap whose drawing fits the width is used; when none fits, the narrowest drawing.
