@@ -49,6 +49,8 @@ export interface LayoutOptions extends SolveOptions {
   fold?: boolean;
   /** Terminal drawings: `false` leaves a drawing that is too wide as it is, instead of pushing it to the left and cutting its texts shorter. */
   squeeze?: boolean;
+  /** Terminal drawings: `false` never cuts the lines of boxes divided into compartments (the caller wraps them narrower itself). */
+  clip?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
   /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
@@ -274,7 +276,7 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
     }
   }
   // A drawing of boxes divided into compartments that is still too wide: every line is cut shorter, from 40 cells down to 8.
-  if (over(best) && limit !== undefined && graph.nodes.some((n) => n.compartments !== undefined)) {
+  if (opts.clip !== false && over(best) && limit !== undefined && graph.nodes.some((n) => n.compartments !== undefined)) {
     for (let cells = 40; best.width > limit && cells >= 8; cells -= 4) {
       const cutLines = (ls: string[]): string[] => ls.map((t) => clip(t, cells));
       const short: Graph = {
@@ -333,7 +335,7 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, ...solveOpts } = opts;
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);
