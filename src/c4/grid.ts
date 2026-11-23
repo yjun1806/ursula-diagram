@@ -112,7 +112,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
       const q = grid.rect.get(c.id);
       if (q === undefined) continue;
       const span = (q.c1 - q.c0 + 1) * bw + (q.c1 - q.c0) * GAP_X + 2 * PAD;
-      extraRight.set(c.id, Math.max(0, NAME_INSET + nameWidth(c.label) + NAME_INSET - span));
+      extraRight.set(c.id, Math.ceil(Math.max(0, NAME_INSET + nameWidth(c.label) + NAME_INSET - span) / ruler.edgeGrid - 1e-9) * ruler.edgeGrid);
     }
     const inset = (id: string, side: 'l' | 'r' | 't' | 'b'): number => {
       const q = grid.rect.get(id) as CellRect;
@@ -158,7 +158,9 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         const marks = [e.end, e.startEnd].filter((m) => m !== undefined && m !== 'none' && m !== 'arrow').length * MARK_ROOM;
         sum.set(pair, [...(sum.get(pair) ?? []), (axis === 'across' ? size.w : size.h) + marks]);
       });
-      return Math.max(loops, ...[...sum.values()].map((l) => l.reduce((t, v) => t + v, 0) + (l.length - 1) * LABEL_GAP + 2 * LABEL_ROOM));
+      // Up to the edge grid: a gap of whole pixels keeps the columns and the size of the drawing whole.
+      const room = Math.max(loops, ...[...sum.values()].map((l) => l.reduce((t, v) => t + v, 0) + (l.length - 1) * LABEL_GAP + 2 * LABEL_ROOM));
+      return Math.ceil(room / ruler.edgeGrid - 1e-9) * ruler.edgeGrid;
     };
     // Gaps: the border insets that meet in a gap, in the row or column where they meet most.
     const colGap: number[] = [];
@@ -273,7 +275,8 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         if (Math.min(a.y, b.y) < c.y + PAD + NAME && Math.max(a.y, b.y) > c.y) need = Math.max(need, NAME_SHIFT, reach - a.x);
       }
     }
-    if (need > 0) shiftOf.set(c.id, need);
+    // Up to the edge grid, so that the columns stay on whole pixels.
+    if (need > 0) shiftOf.set(c.id, Math.ceil(need / ruler.edgeGrid - 1e-9) * ruler.edgeGrid);
   }
   const finish = (wider: ReadonlyMap<number, number>): { layout: Layout; colX: number[] } => {
     const { width, height, nodes, laidClusters, edges, diagnostics, colX } = drawn(shiftOf, true, wider);
@@ -293,7 +296,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     if (l === undefined || !once.layout.edges.some((o) => o !== e && o.points.slice(1).some((q, i) => crossesRect(o.points[i] as Point, q, l)))) continue;
     const cx = l.x + l.w / 2;
     for (let k = 1; k < once.colX.length; k++) {
-      if (cx > (once.colX[k - 1] as number) + bw && cx < (once.colX[k] as number)) wider.set(k, Math.max(wider.get(k) ?? 0, l.w + 2 * LABEL_GAP));
+      if (cx > (once.colX[k - 1] as number) + bw && cx < (once.colX[k] as number)) wider.set(k, Math.max(wider.get(k) ?? 0, Math.ceil((l.w + 2 * LABEL_GAP) / ruler.edgeGrid - 1e-9) * ruler.edgeGrid));
     }
   }
   const grown = withinCanvas(wider.size === 0 ? once.layout : finish(wider).layout);
