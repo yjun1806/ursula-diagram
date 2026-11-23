@@ -116,7 +116,9 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
       const moved = (l.edges[ei] as LayoutEdge).label;
       if (moved === undefined) break;
       // A cut label keeps the blank on each side of its text.
-      const shown = room < lw ? (room >= 4 ? { ...moved, text: cut(moved.text, room - 2), w: room } : undefined) : moved;
+      // Short of room, a label first gives up the blanks beside its text; only a text that still has no room is cut.
+      const bare = cellWidth(moved.text);
+      const shown = room >= lw ? moved : room >= bare ? { ...moved, w: bare } : room >= 4 ? { ...moved, text: cut(moved.text, room - 2), w: room } : undefined;
       if (shown === undefined) break;
       const first = a + low + 1 + Math.floor((room - shown.w) / 2);
       if (shown !== moved || added > 0 || lx < a + low + 1 || lx + lw > end - high) {
@@ -135,6 +137,14 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
   const width = within(right) ? right : Math.max(solid, limit ?? solid);
   const fitted = (e: LayoutEdge): LayoutEdge => {
     const t = e.label;
+    if (t !== undefined && !e.invisible && t.x < 0) {
+      // A label that starts left of the drawing keeps its end.
+      const room = Math.floor(t.x + t.w);
+      const tail = [...t.text];
+      let kept = '';
+      while (tail.length > 0 && cellWidth(`…${tail[tail.length - 1]}${kept}`) <= room - 2) kept = `${tail.pop()}${kept}`;
+      return room >= 4 ? { ...e, label: { ...t, text: `…${kept.trimStart()}`, x: 0, w: room } } : e;
+    }
     if (t === undefined || e.invisible || Math.ceil(t.x + t.w) <= width) return e;
     const room = Math.floor(width - t.x);
     return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
@@ -182,7 +192,7 @@ function rowsNeeded(n: LayoutNode): number {
   if (n.shape === 'bar') return Math.round(n.h);
   if (n.compartments !== undefined && n.compartments.length > 0) return n.compartments.reduce((sum, c) => sum + Math.max(1, c.lines.length), 0) + n.compartments.length - 1 + 2;
   if (n.shape === 'start-dot' || n.shape === 'end-dot') return Math.min(3, Math.round(n.h));
-  return 3 + n.lines.length;
+  return 2 + Math.max(1, (n.title === '' ? 0 : 1) + n.lines.length);
 }
 
 /**
@@ -378,5 +388,69 @@ export function packParts(l: Layout, limit: number | undefined): Layout {
       return { ...e, points: e.points.map(move), ...(e.label ? { label: move(e.label) } : {}), ...(e.startLabel ? { startLabel: move(e.startLabel) } : {}), ...(e.endLabel ? { endLabel: move(e.endLabel) } : {}) };
     }),
     ...(l.legend ? { legend: { ...l.legend, y: l.legend.y - lift, w: Math.max(l.legend.w, width), base: { width, height: l.legend.base.height - lift }, items: l.legend.items.map((item) => ({ ...item, y: item.y - lift })) } } : {}),
+  };
+}
+
+/**
+ * Terminal drawings: columns that show only level lines passing through are taken out. A column stays when a box, a
+ * label, or the end, a bend or an upright stretch of a line stands in it; the cell before the end of a line stays as
+ * well, so that an arrowhead keeps a cell of line behind it. A drawing with named lanes keeps its columns.
+ */
+export function closeTextColumns(l: Layout): Layout {
+  const width = Math.ceil(l.width);
+  if (width <= 0 || l.clusters !== undefined || l.lanes.some((lane) => lane.label !== '')) return l;
+  const kept = new Array<boolean>(width).fill(false);
+  const used = new Array<boolean>(width).fill(false);
+  const keep = (from: number, to: number): void => {
+    for (let x = Math.max(0, Math.floor(from)); x <= Math.min(width - 1, Math.floor(to)); x++) kept[x] = true;
+  };
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  for (const n of l.nodes) keep(Math.round(n.x), Math.round(n.x) + Math.round(n.w) - 1);
+  for (const item of l.legend?.items ?? []) keep(item.x, Math.ceil(item.captionX) + cellWidth(item.caption));
+  for (const e of l.edges) {
+    for (const t of [e.label, e.startLabel, e.endLabel]) if (t) keep(Math.round(t.x), Math.round(t.x) + Math.max(1, Math.round(t.w)) - 1);
+    if (e.points.length < 2) continue;
+    const corners = e.points.map((_, i) => cellOf(e, nodes, i));
+    const cells: Array<[number, number]> = [corners[0] as [number, number]];
+    for (let i = 0; i + 1 < corners.length; i++) {
+      let [x, y] = corners[i] as [number, number];
+      const [x2, y2] = corners[i + 1] as [number, number];
+      const dx = Math.sign(x2 - x);
+      const dy = dx === 0 ? Math.sign(y2 - y) : 0;
+      if (dx !== 0 && y2 !== y) keep(Math.min(x, x2), Math.max(x, x2));
+      while (x !== x2 || (dx === 0 && y !== y2)) {
+        x += dx;
+        y += dy;
+        cells.push([x, y]);
+      }
+    }
+    cells.forEach(([x, y], k) => {
+      if (x >= 0 && x < width) used[x] = true;
+      const before = cells[k - 1];
+      const after = cells[k + 1];
+      const passing = before !== undefined && after !== undefined && before[1] === y && after[1] === y && before[0] !== x && after[0] !== x;
+      // The cell of line next to the marks at each end stays.
+      if (!passing || k <= startCells(e) || k >= cells.length - 1 - Math.max(1, endCells(e))) keep(x, x);
+    });
+  }
+  const gone: number[] = [];
+  for (let x = 0; x < width; x++) if (used[x] && !kept[x]) gone.push(x);
+  if (gone.length === 0) return l;
+  const before = (v: number): number => gone.reduce((count, c) => count + (c < v ? 1 : 0), 0);
+  const at = (v: number): number => v - before(Math.floor(v + 1e-9));
+  const text = <T extends { x: number }>(t: T): T => ({ ...t, x: at(t.x) });
+  return {
+    ...l,
+    width: l.width - gone.length,
+    nodes: l.nodes.map(text),
+    lanes: l.lanes.map((lane) => ({ ...lane, w: lane.w - gone.length })),
+    edges: l.edges.map((e) => ({
+      ...e,
+      points: e.points.map(text),
+      ...(e.label ? { label: text(e.label) } : {}),
+      ...(e.startLabel ? { startLabel: text(e.startLabel) } : {}),
+      ...(e.endLabel ? { endLabel: text(e.endLabel) } : {}),
+    })),
+    ...(l.legend ? { legend: { ...l.legend, base: { ...l.legend.base, width: l.legend.base.width - gone.length } } } : {}),
   };
 }

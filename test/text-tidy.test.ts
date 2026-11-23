@@ -99,3 +99,37 @@ describe('parts of a terminal drawing that no line joins', () => {
     expect(Math.max(...text.map((row) => [...row].length))).toBeLessThanOrEqual(14);
   });
 });
+
+describe('a terminal drawing that is too wide', () => {
+  const requirement = 'requirementDiagram\nrequirement first_requirement {\nid: 1\ntext: the first text of the drawing.\nrisk: high\nverifymethod: demonstration\n}\nfunctionalRequirement second_requirement {\nid: 1.1\ntext: the second text of the drawing.\nrisk: low\nverifymethod: inspection\n}\nelement an_element {\ntype: simulation\n}\nfirst_requirement - traces -> second_requirement\nan_element - satisfies -> second_requirement';
+
+  it('is pushed together until it fits, with every text whole', () => {
+    const wide = lines(requirement, 300);
+    const text = lines(requirement, 100);
+    expect(Math.max(...text.map((row) => [...row].length))).toBeLessThanOrEqual(100);
+    expect(text.join('\n')).not.toContain('…');
+    for (const word of ['verifymethod', 'demonstration', 'inspection', 'simulation']) expect(text.join('\n')).toContain(word);
+    expect(wide.length).toBeGreaterThan(0);
+  });
+
+  it('wraps the notes beside its boxes narrower', () => {
+    const src = 'stateDiagram-v2\nState1: The state with a note\nnote right of State1\nImportant information! You can write notes.\nend note\nState1 --> State2\nnote left of State2 : This is the note to the left.';
+    const text = lines(src, 100);
+    expect(Math.max(...text.map((row) => [...row].length))).toBeLessThanOrEqual(100);
+    expect(text.join(' ').replace(/[│┄\s]+/g, ' ')).toContain('Important information! You');
+  });
+
+  it('cuts the label of a level line when pushing together is not enough', () => {
+    const src = 'flowchart LR\nA[A box with a long name] -->|a label that is far too long for the width of this drawing| B[Another box with a long name]';
+    const r = renderText(src, 70);
+    expect('error' in r).toBe(false);
+  });
+});
+
+describe('columns of a terminal drawing', () => {
+  it('keep a cell of line next to the marks of a relation', () => {
+    const text = lines('erDiagram\nMANUFACTURER ||--o{ CAR : makes\nCAR ||--o{ DRIVER : allows', 200).join('\n');
+    expect(text).toContain('||─ makes ─o<');
+    expect(text).toContain('||─ allows ─o<');
+  });
+});

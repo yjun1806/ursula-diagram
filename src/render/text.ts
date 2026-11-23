@@ -328,7 +328,7 @@ function drawNode(c: Canvas, n: LayoutNode): void {
     c.put(x0 + Math.floor((w - 1) / 2), y0 + Math.floor((h - 1) / 2), n.shape === 'start-dot' ? '●' : '◉');
     return;
   }
-  const texts = [n.shape === 'actor' ? `o ${n.title}` : n.title, ...n.lines];
+  const texts = [n.shape === 'actor' ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== '' || n.lines.length === 0);
   const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
   texts.forEach((t, i) => {
     c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
