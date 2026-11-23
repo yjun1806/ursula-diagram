@@ -317,3 +317,24 @@ export function crowdedLabels(layout: Pick<Layout, 'nodes' | 'edges'>): number {
   }
   return count;
 }
+
+/** Pixels: labels of a finished drawing whose chip a stretch of another line runs through. */
+export function crossedLabels(layout: Pick<Layout, 'edges'>): number {
+  let count = 0;
+  layout.edges.forEach((e, i) => {
+    const l = e.label;
+    if (!l || e.invisible) return;
+    const chip: Rect = { x: l.x - CHIP_GROW_X, y: l.y - CHIP_GROW_Y, w: l.w + 2 * CHIP_GROW_X, h: l.h + 2 * CHIP_GROW_Y };
+    const through = layout.edges.some((o, k) => {
+      if (k === i || o.invisible) return false;
+      for (let s = 0; s + 1 < o.points.length; s++) {
+        const p = o.points[s] as { x: number; y: number };
+        const q = o.points[s + 1] as { x: number; y: number };
+        if (Math.max(p.x, q.x) > chip.x + 1 && Math.min(p.x, q.x) < chip.x + chip.w - 1 && Math.max(p.y, q.y) > chip.y + 1 && Math.min(p.y, q.y) < chip.y + chip.h - 1) return true;
+      }
+      return false;
+    });
+    if (through) count++;
+  });
+  return count;
+}

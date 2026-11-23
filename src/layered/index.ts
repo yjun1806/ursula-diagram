@@ -17,7 +17,7 @@ import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
 import { separateTwoWay } from './two-way.ts';
 import { arrangeLanes, laneBorders } from './lane-gaps.ts';
-import { crowdedLabels, refineLabels } from './label-spot.ts';
+import { crossedLabels, crowdedLabels, refineLabels } from './label-spot.ts';
 import { crossings } from '../layout/check.ts';
 import { offCentreEnds } from './centre.ts';
 import { settleMixedSides } from './vertex.ts';
@@ -656,6 +656,15 @@ export function layoutLayered(source: Graph, ruled: Ruler, options: LayeredOptio
       if (now >= crowded) continue;
       drawn = wider;
       crowded = now;
+    }
+    // A label stands over no other line either: while a line runs through one, the drawing is made again with more room between the boxes of a layer, up to twice the given gap, and kept when fewer labels are run through and no more stand over a box.
+    let crossed = opts.nested === true ? 0 : crossedLabels(drawn);
+    for (let gap = given.rowGap + given.nodeGrid; crossed > 0 && gap <= 2 * given.rowGap; gap += given.nodeGrid) {
+      const wider = finish({ ...given, rowGap: gap });
+      const now = crossedLabels(wider);
+      if (now >= crossed || crowdedLabels(wider) > crowded) continue;
+      drawn = wider;
+      crossed = now;
     }
     return withQuestions(source, drawn, given, opts);
   }
