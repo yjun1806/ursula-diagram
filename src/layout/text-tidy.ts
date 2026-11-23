@@ -455,8 +455,13 @@ export function closeTextColumns(l: Layout): Layout {
   };
 }
 
+/** The cells of the lines of a drawing, kept while the drawing is alive: many labels ask for the same drawing. */
+const cellsOfLines = new WeakMap<Layout, Set<string>>();
+
 /** The cells every line of the drawing runs through, as `x,y`. */
 function lineCells(l: Layout): Set<string> {
+  const known = cellsOfLines.get(l);
+  if (known) return known;
   const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
   const out = new Set<string>();
   for (const e of l.edges) {
@@ -477,6 +482,7 @@ function lineCells(l: Layout): Set<string> {
       y = y2;
     }
   }
+  cellsOfLines.set(l, out);
   return out;
 }
 

@@ -324,6 +324,17 @@ export function mirroredEdges(l: Pick<Layout, 'nodes' | 'edges' | 'direction'>, 
 
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
 export function score(l: Layout): number[] {
+  // One drawing is measured many times while candidates are compared and changes are tried.
+  const known = scores.get(l);
+  if (known !== undefined) return known.slice();
+  const made = scoreOnce(l);
+  scores.set(l, made);
+  return made.slice();
+}
+
+const scores = new WeakMap<Layout, number[]>();
+
+function scoreOnce(l: Layout): number[] {
   const g = segsOf(l);
   const axis = l.direction === 'TD' ? 'y' : 'x';
   const across = l.direction === 'TD' ? 'x' : 'y';

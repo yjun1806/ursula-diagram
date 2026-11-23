@@ -943,6 +943,33 @@ function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => n
  * band it crosses, a straight segment between neighbours, or a U through the band above or below its layer.
  */
 export function route(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
+  // The search for a drawing asks for the same drawing many times over (candidates that meet, changes tried and taken
+  // back): a drawing is made once for a graph and what it is made from, and given again after that.
+  // The ladder, the layers and the plan are plain numbers and names and are written out as they are; only the frame
+  // holds a map, and is written out with it.
+  const { graph, ...frame } = given;
+  const key = `${JSON.stringify(frame, plain)}|${JSON.stringify(l)}|${JSON.stringify(layers)}|${start.join(',')}|${JSON.stringify([...plan])}`;
+  let made = drawings.get(graph);
+  if (made === undefined) drawings.set(graph, (made = new Map()));
+  const known = made.get(key);
+  if (known !== undefined) return known;
+  const drawn = routeOnce(given, l, layers, start, plan);
+  made.set(key, drawn);
+  return drawn;
+}
+
+/** The drawings made for a graph so far, by everything else they are made from. */
+const drawings = new WeakMap<Graph, Map<string, Layout>>();
+
+/** Maps, sets and typed arrays written out, so that two values with the same content give the same text. */
+function plain(_key: string, value: unknown): unknown {
+  if (value instanceof Map) return { map: [...value] };
+  if (value instanceof Set) return { set: [...value] };
+  if (ArrayBuffer.isView(value)) return { view: Array.from(value as unknown as ArrayLike<number>) };
+  return value;
+}
+
+function routeOnce(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
   stats.draws++;
   const f = evenRecords(given, l, start);
   const prep = prepare(f, l, layers, start, plan);
