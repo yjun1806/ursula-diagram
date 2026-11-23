@@ -1,5 +1,7 @@
 import type { Ruler } from '../metrics.ts';
-import { pixelRuler } from '../metrics.ts';
+import { cellWidth, pixelRuler } from '../metrics.ts';
+import { clip } from '../text/fit.ts';
+import { wrapWords } from '../text/wrap.ts';
 import type { Diagnostic, Graph, Layout, LaneAxis } from '../types.ts';
 import type { AlongArrangement } from './along.ts';
 import { alongEstimate, arrangeAlong, considerAlong, polishAlong, refineAlong } from './along.ts';
@@ -8,7 +10,8 @@ import { layoutC4Grid } from '../c4/grid.ts';
 import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
-import { closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
+import { compactColumns } from './text-compact.ts';
+import { closeTextColumns, closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
@@ -44,6 +47,8 @@ export interface LayoutOptions extends SolveOptions {
   quick?: boolean;
   /** Layered engine only: cut paths and give up alignment when a drawing is still too wide after blocks moved to other rows (default true). */
   fold?: boolean;
+  /** Terminal drawings: `false` leaves a drawing that is too wide as it is, instead of pushing it to the left and cutting its texts shorter. */
+  squeeze?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
   /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
@@ -248,7 +253,46 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true) return drawn;
   const limit = opts.maxWidth ?? given.defaultWidth;
-  return packParts(closeTextRows(openTextLabels(shrinkDots(drawn), limit)), limit);
+  const over = (l: Layout): boolean => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
+  // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
+  const tidy = (l: Layout): Layout => {
+    // Rows and columns are closed first, so that a label is given the room that frees.
+    const closed = openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
+    if (!over(closed)) return packParts(closed, limit);
+    const pushed = openTextLabels(compactColumns(closed), limit);
+    // Still too wide: the labels on level lines give way, and are cut to the room they are left.
+    return packParts(over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed, limit);
+  };
+  let best = tidy(drawn);
+  // A drawing too wide with notes beside its boxes: the notes are wrapped narrower until it fits.
+  if (over(best) && limit !== undefined && graph.nodes.some((n) => n.attach !== undefined && n.lines.length > 0)) {
+    for (const cells of [28, 22, 16]) {
+      const narrow: Graph = { ...graph, nodes: graph.nodes.map((n) => (n.attach === undefined ? n : { ...n, lines: wrapWords(n.lines.join(' '), cells, cellWidth) })) };
+      const tried = tidy(layoutAny(narrow, given, opts));
+      if (tried.width < best.width) best = tried;
+      if (best.width <= limit) break;
+    }
+  }
+  // A drawing of boxes divided into compartments that is still too wide: every line is cut shorter, from 40 cells down to 8.
+  if (over(best) && limit !== undefined && graph.nodes.some((n) => n.compartments !== undefined)) {
+    for (let cells = 40; best.width > limit && cells >= 8; cells -= 4) {
+      const cutLines = (ls: string[]): string[] => ls.map((t) => clip(t, cells));
+      const short: Graph = {
+        ...graph,
+        nodes: graph.nodes.map((n) => ({
+          ...n,
+          title: clip(n.title, cells),
+          lines: n.attach === undefined ? cutLines(n.lines) : wrapWords(n.lines.join(' '), Math.min(cells, 16), cellWidth),
+          ...(n.compartments === undefined
+            ? {}
+            : { compartments: n.compartments.map((c) => ({ ...c, lines: cutLines(c.lines), ...(c.columns === undefined ? {} : { columns: c.columns.map((row) => row.map((cell) => clip(cell, Math.max(4, Math.floor(cells / Math.max(1, row.length)))))) }) })) }),
+        })),
+      };
+      const tried = tidy(layoutAny(short, given, opts));
+      if (tried.width < best.width) best = tried;
+    }
+  }
+  return best;
 }
 
 /** Terminal drawings: a compartment with nothing in it takes no rows; the name of the box always stays. */
@@ -289,7 +333,7 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, ...solveOpts } = opts;
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);

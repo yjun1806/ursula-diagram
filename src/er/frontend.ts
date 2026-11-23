@@ -25,18 +25,20 @@ const headsOnly = (g: Graph): Graph => ({ ...g, nodes: g.nodes.map((n) => ({ ...
 
 function terminal(src: string, maxWidth: number | undefined, opts: TextOptions): string[] {
   const model = parseEr(src, opts.heading);
-  const draw = (g: Graph, fold: boolean): string[] =>
+  const draw = (g: Graph, fold: boolean, squeeze = true): string[] =>
     renderTextLayout(
       layout(g, cellRuler(), {
         legend: false,
         fold,
+        squeeze,
         ...(opts.quality === undefined ? {} : { quality: opts.quality }),
         ...(maxWidth === undefined ? {} : { maxWidth }),
         ...(opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight }),
       }),
     );
   const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
-  const full = draw(model.graph, true);
+  // The attributes are drawn only when they fit as they are laid out; the heads alone may be pushed together to fit.
+  const full = draw(model.graph, true, false);
   if (maxWidth === undefined || widest(full) <= maxWidth) return full;
   const heads = draw(headsOnly(model.graph), true);
   return widest(heads) < widest(full) ? heads : full;

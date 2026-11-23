@@ -20,9 +20,9 @@ function cells(line: string): string[] {
 describe('renderText', () => {
   it('draws a small LR graph', () => {
     expect(lines('flowchart LR\nA[Start] -->|go| B[Finish]').join('\n')).toMatchInlineSnapshot(`
-      "┌─────────┐          ┌─────────┐
-      │  Start  │─── go ──▶│ Finish  │
-      └─────────┘          └─────────┘"
+      "┌─────────┐       ┌─────────┐
+      │  Start  │─ go ─▶│ Finish  │
+      └─────────┘       └─────────┘"
     `);
   });
 

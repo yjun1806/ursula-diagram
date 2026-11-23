@@ -11,7 +11,13 @@ import { titledLines } from '../front/title.ts';
 function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): { layout: Layout; title: string | undefined; shown: string | undefined } {
   const model = parseC4(src);
   const ruler = mode === 'text' ? cellRuler() : pixelRuler();
-  const laid = layout(c4Graph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }) });
+  let laid = layout(c4Graph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }) });
+  // A terminal drawing that is too wide is made again with its descriptions wrapped narrower.
+  for (const cells of mode === 'text' && maxWidth !== undefined ? [22, 18, 14] : []) {
+    if (maxWidth === undefined || laid.width <= maxWidth) break;
+    const narrow = layout(c4Graph(model, ruler, cells), ruler, { maxWidth });
+    if (narrow.width < laid.width) laid = narrow;
+  }
   return { layout: laid, title: model.accTitle ?? model.title, shown: model.title };
 }
 

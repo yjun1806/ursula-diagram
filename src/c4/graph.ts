@@ -8,6 +8,8 @@ import type { C4Element, C4Model } from './parse.ts';
 /** Width of the text of a description in pixels, and in terminal cells. */
 const WRAP_PX = 200;
 const WRAP_CELLS = 26;
+/** The width in terminal cells of the drawing being made; a drawing that is too wide is made again with a smaller one. */
+let wrapCells = WRAP_CELLS;
 
 /** A boundary with more elements than this reads top down: unconnected elements stand in one line and a longer row grows too wide. */
 const MAX_ROW = 4;
@@ -19,7 +21,7 @@ export const TECH_SEPARATOR = '\u2003';
 
 function wrap(text: string, ruler: Ruler): string[] {
   const width = (s: string): number => ruler.textWidth(s, 'line');
-  const limit = ruler.terminal === true ? WRAP_CELLS : WRAP_PX;
+  const limit = ruler.terminal === true ? wrapCells : WRAP_PX;
   return text.split('\n').flatMap((paragraph) => wrapWords(paragraph, limit, width));
 }
 
@@ -77,7 +79,17 @@ function clusterLabel(label: string, kind: string, descr: string | undefined): s
  * width of the widest and the height of the highest. A line into a person from anything else is laid out from the person,
  * so that persons stand above what they use and what reaches them; its arrowhead stays at the person.
  */
-export function c4Graph(model: C4Model, ruler: Ruler): Graph {
+/** `cells`: the width descriptions are wrapped to in a terminal drawing. */
+export function c4Graph(model: C4Model, ruler: Ruler, cells: number = WRAP_CELLS): Graph {
+  wrapCells = cells;
+  try {
+    return graphOf(model, ruler);
+  } finally {
+    wrapCells = WRAP_CELLS;
+  }
+}
+
+function graphOf(model: C4Model, ruler: Ruler): Graph {
   const own: GraphNode[] = model.elements.map((e) => ({
     id: e.alias,
     title: e.label,
