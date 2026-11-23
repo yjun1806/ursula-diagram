@@ -133,3 +133,13 @@ describe('columns of a terminal drawing', () => {
     expect(text).toContain('||─ allows ─o<');
   });
 });
+
+describe('a label beside an upright line of a terminal drawing', () => {
+  it('stands on a row where no other line runs under its text', () => {
+    const text = lines('flowchart TD\nA{Within 14 days?} -->|yes| B[Item used?]\nA -->|no| D[Decline]\nB --> C[Refund]\nC --> D');
+    const row = text.find((r) => r.includes('yes')) ?? '';
+    const after = row.slice(row.indexOf('yes') + 3);
+    expect(row).toMatch(/[│▼]\s+yes/);
+    expect(after).not.toMatch(/^\s?[─┐┘└┌]/);
+  });
+});
