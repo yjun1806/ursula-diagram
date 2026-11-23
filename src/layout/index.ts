@@ -11,7 +11,7 @@ import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
-import { closeTextColumns, closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
+import { clearUprightLabels, closeTextColumns, closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
@@ -257,7 +257,7 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
   const tidy = (l: Layout): Layout => {
     // Rows and columns are closed first, so that a label is given the room that frees.
-    const closed = openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
+    const closed = clearUprightLabels(openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit));
     if (!over(closed)) return packParts(closed, limit);
     const pushed = openTextLabels(compactColumns(closed), limit);
     // Still too wide: the labels on level lines give way, and are cut to the room they are left.

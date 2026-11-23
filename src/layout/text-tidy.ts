@@ -454,3 +454,87 @@ export function closeTextColumns(l: Layout): Layout {
     ...(l.legend ? { legend: { ...l.legend, base: { ...l.legend.base, width: l.legend.base.width - gone.length } } } : {}),
   };
 }
+
+/** The cells every line of the drawing runs through, as `x,y`. */
+function lineCells(l: Layout): Set<string> {
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const out = new Set<string>();
+  for (const e of l.edges) {
+    if (e.invisible || e.points.length === 0) continue;
+    const corners = e.points.map((_, i) => cellOf(e, nodes, i));
+    let [x, y] = corners[0] as [number, number];
+    out.add(`${x},${y}`);
+    for (let i = 1; i < corners.length; i++) {
+      const [x2, y2] = corners[i] as [number, number];
+      const dx = Math.sign(x2 - x);
+      const dy = dx === 0 ? Math.sign(y2 - y) : 0;
+      if (dx === 0 && dy === 0) continue;
+      while (x !== x2 || (dx === 0 && y !== y2)) {
+        x += dx;
+        y += dy;
+        out.add(`${x},${y}`);
+      }
+      y = y2;
+    }
+  }
+  return out;
+}
+
+/**
+ * Terminal drawings: a label beside an upright stretch of its line stands where no line runs under its text. When
+ * a line does, the label moves to another row of that stretch; when no row of it is free, the drawing gets one more
+ * row there.
+ */
+export function clearUprightLabels(given: Layout): Layout {
+  let l = given;
+  for (let ei = 0; ei < l.edges.length; ei++) {
+    const e = l.edges[ei] as LayoutEdge;
+    const label = e.label;
+    if (label === undefined || e.invisible || e.points.length < 2 || Math.round(label.h) !== 1) continue;
+    const lx = Math.round(label.x);
+    const lw = Math.round(label.w);
+    const stretch = (now: Layout): { x: number; top: number; bottom: number } | undefined => {
+      const nodes = new Map(now.nodes.map((n) => [n.id, n] as const));
+      const edge = now.edges[ei] as LayoutEdge;
+      const cells = edge.points.map((_, i) => cellOf(edge, nodes, i));
+      const ly = Math.round((edge.label as { y: number }).y);
+      let best: { x: number; top: number; bottom: number } | undefined;
+      for (let i = 0; i + 1 < cells.length; i++) {
+        const [x1, y1] = cells[i] as [number, number];
+        const [x2, y2] = cells[i + 1] as [number, number];
+        // A label on a level stretch of its own line is not beside an upright one.
+        if (y1 === y2 && x1 !== x2 && ly === y1 && lx + lw - 1 >= Math.min(x1, x2) && lx <= Math.max(x1, x2)) return undefined;
+        if (x1 !== x2) continue;
+        const run = { x: x1, top: Math.min(y1, y2), bottom: Math.max(y1, y2) };
+        if (ly >= run.top && ly <= run.bottom && run.x < lx) best = run;
+      }
+      return best;
+    };
+    const free = (now: Layout, row: number): boolean => {
+      const taken = lineCells(now);
+      for (let x = lx + 1; x < lx + lw - 1; x++) if (taken.has(`${x},${row}`)) return false;
+      return !now.nodes.some((n) => row >= Math.round(n.y) && row < Math.round(n.y) + Math.round(n.h) && lx + lw - 1 > Math.round(n.x) && lx + 1 < Math.round(n.x) + Math.round(n.w)) &&
+        !now.edges.some((o, k) => k !== ei && o.label !== undefined && Math.round(o.label.y) === row && lx < Math.round(o.label.x) + Math.round(o.label.w) && Math.round(o.label.x) < lx + lw);
+    };
+    const run = stretch(l);
+    if (run === undefined || free(l, Math.round(label.y))) continue;
+    const place = (now: Layout, s: { top: number; bottom: number }): Layout | undefined => {
+      const middle = (s.top + s.bottom) / 2;
+      const rows = Array.from({ length: s.bottom - s.top + 1 }, (_, k) => s.top + k).sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle));
+      const row = rows.find((r) => free(now, r));
+      if (row === undefined) return undefined;
+      return { ...now, edges: now.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, y: row } } : o)) };
+    };
+    const moved = place(l, run);
+    if (moved !== undefined) {
+      l = moved;
+      continue;
+    }
+    // One more row after the first cell of the stretch; the label takes a row of the longer stretch.
+    const taller = grow(l, run.top + 0.5, 1, true);
+    const again = stretch({ ...taller, edges: taller.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o)) });
+    const placed = again === undefined ? undefined : place(taller, again);
+    if (placed !== undefined) l = placed;
+  }
+  return l;
+}
