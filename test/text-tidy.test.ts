@@ -143,3 +143,12 @@ describe('a label beside an upright line of a terminal drawing', () => {
     expect(after).not.toMatch(/^\s?[─┐┘└┌]/);
   });
 });
+
+describe('a C4 drawing in a narrow terminal', () => {
+  it('wraps the names of its elements as well as their descriptions', () => {
+    const src = 'C4Container\nPerson(customer, "Customer", "A customer of the bank, with personal bank accounts")\nSystem_Ext(mainframe, "Mainframe Banking System", "Stores all of the core banking information about customers")\nSystem_Ext(mail, "E-Mail System Of The Bank", "The internal e-mail system of the bank")\nRel(customer, mainframe, "Uses")\nRel(mainframe, mail, "Sends e-mails using")';
+    const r = renderText(src, 50);
+    expect('error' in r).toBe(false);
+    if (!('error' in r)) expect(r.lines.join('\n')).toContain('Mainframe');
+  });
+});
