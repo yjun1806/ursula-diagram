@@ -154,11 +154,11 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
   };
 
   /** Every sound path with 0 to 3 bends from the face point `c` of `end.node` to the other end of the edge; the ones near the two ends, or the whole drawing when none of those is sound. A path that crosses more lines than `limit` or than a path found before it is counted with a number above that, not exactly. Paths with more bends than one that crosses no line are left out. */
-  const waysFor = (end: End, face: Face, c: Point, limit = Infinity): Way[] => {
+  const waysFor = (end: End, face: Face, c: Point, limit = Infinity, far?: { at: Point; face: Face }): Way[] => {
     let cap = limit;
     const pts = end.edge.points;
-    const q = end.first ? (pts[pts.length - 1] as Point) : (pts[0] as Point);
-    const qFace = faceAt(end.other, q);
+    const q = far?.at ?? (end.first ? (pts[pts.length - 1] as Point) : (pts[0] as Point));
+    const qFace = far?.face ?? faceAt(end.other, q);
     if (!qFace) return [];
     const n = NORMAL[face];
     const m = NORMAL[qFace];
@@ -281,7 +281,33 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
     return best;
   };
 
-  return { endsOf, redraw, apply, bestWay, moved: (): number => moved };
+  /**
+   * As `bestWay`, with the other end of the edge moved too: every free face of the box at the other end that the edge
+   * does not stand on yet is tried against every free face of this one.
+   */
+  const bestWayBoth = (end: End, limit = Infinity): Way | undefined => {
+    const pts = end.edge.points;
+    const q = end.first ? (pts[pts.length - 1] as Point) : (pts[0] as Point);
+    const held = faceAt(end.other, q);
+    if (!held) return undefined;
+    const farEnd: End = { index: end.index, edge: end.edge, first: !end.first, node: end.other, other: end.node, face: held };
+    let best: Way | undefined;
+    for (const face of targets(end)) {
+      const c = freePort(end.node, face, end);
+      if (!c) continue;
+      for (const farFace of FACES) {
+        if (farFace === held) continue;
+        const at = freePort(end.other, farFace, farEnd);
+        if (!at) continue;
+        for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity), { at, face: farFace })) {
+          if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && way.length < best.length - EPS)))) best = way;
+        }
+      }
+    }
+    return best;
+  };
+
+  return { endsOf, redraw, apply, bestWay, bestWayBoth, moved: (): number => moved };
 }
 
 /**
@@ -336,12 +362,14 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
  * incoming end on it, in the order of the edges, is drawn again from a face of the node that holds no end or only
  * incoming ends, with the same search as settleVertices (the face is free when its shape has a port left). Of all
  * the paths that hold the one that crosses the fewest other lines wins, then the one with fewest bends, then the
- * shortest. An end stays where it is when the best path crosses more lines than the path it has, has more than 2
- * bends beyond it, or when no path holds. The edges are changed in place.
+ * shortest. When that path crosses more lines than the path the end has, has more than 2 bends beyond it, or when
+ * none holds, the other end of the edge may move to a free face of its box as well: such a path is taken when it
+ * crosses no more lines and has no more bends than the path the end has. Otherwise the end stays where it is. The
+ * edges are changed in place.
  */
 export function settleMixedSides(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number): Settled {
   if (ruler.uniform) return { moved: 0, diagnostics: [] };
-  const { endsOf, apply, bestWay, moved } = kit(edges, nodes, ruler, step);
+  const { endsOf, apply, bestWay, bestWayBoth, moved } = kit(edges, nodes, ruler, step);
   const crossing = (edge: LayoutEdge): number => {
     const mine = segs(edge.points);
     return edges.reduce((sum, e) => (e === edge ? sum : sum + segs(e.points).reduce((k, t) => k + mine.filter((s) => properCross(s, t)).length, 0)), 0);
@@ -352,10 +380,15 @@ export function settleMixedSides(edges: LayoutEdge[], nodes: LayoutNode[], ruler
       for (const end of onFace().filter((e) => !e.first).sort((a, b) => a.index - b.index)) {
         if (!onFace().some((e) => e.first)) break;
         const had = crossing(end.edge);
+        const bends = Math.max(0, end.edge.points.length - 2);
         const way = bestWay(end, had);
-        if (!way) continue;
-        if (way.crossings > had || way.bends > Math.max(0, end.edge.points.length - 2) + 2) continue;
-        apply(end, way.path);
+        if (way && way.crossings <= had && way.bends <= bends + 2) {
+          apply(end, way.path);
+          continue;
+        }
+        // No face of this box alone serves: the line may leave the other box by another face, as long as it bends no more than it did.
+        const both = bestWayBoth(end, had);
+        if (both && both.crossings <= had && both.bends <= bends) apply(end, both.path);
       }
     }
   }
