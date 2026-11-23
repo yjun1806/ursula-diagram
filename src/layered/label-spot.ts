@@ -13,6 +13,9 @@ export const LABEL_CLEAR = 8;
 export const SLIDE = 8;
 /** Least gap a label keeps from the mark at an end of its line. */
 export const MARK_CLEAR = 8;
+/** How far the chip of a label reaches beyond its text box on each side, across and down. */
+const CHIP_GROW_X = 6;
+const CHIP_GROW_Y = 2;
 const EPS = 1e-6;
 
 export interface SpotQuery {
@@ -81,10 +84,15 @@ export function segmentToRect(s: Segment, r: Rect): number {
 
 const nearestLine = (r: Rect, foreign: Segment[]): number => foreign.reduce((m, s) => Math.min(m, segmentToRect(s, r)), Infinity);
 
+/** Pixels: the chip a label is drawn on, which is larger than its text box. A terminal draws the text alone. */
+const chipOf = (r: Rect, q: SpotQuery): Rect => (q.ruler.uniform ? r : { x: r.x - CHIP_GROW_X, y: r.y - CHIP_GROW_Y, w: r.w + 2 * CHIP_GROW_X, h: r.h + 2 * CHIP_GROW_Y });
+
 /** Distance of the box to the lines of other edges, whether it overlaps something, and whether it is clean in the sense of `chooseSpot`. */
 function measure(r: Rect, q: SpotQuery): { line: number; clean: boolean; overlap: boolean; marked: boolean } {
   const line = nearestLine(r, q.foreign);
-  const overlap = q.nodes.some((n) => overlaps(r, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS;
+  // It is the chip that may not stand over a box.
+  const chip = chipOf(r, q);
+  const overlap = q.nodes.some((n) => overlaps(chip, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS;
   const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS);
   const clean = !overlap && !marked && line >= LINE_CLEAR - EPS && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS);
   return { line, clean, overlap, marked };
@@ -177,7 +185,9 @@ export function chooseSpot(q: SpotQuery): Spot {
   if (first) return { rect: first.c.rect, moved: true, overlap: false };
   // A basic place over a box to avoid gives way to any place that is not over one.
   const onAvoided = (q.avoid ?? []).some((a) => overlaps(q.basic, a));
-  let best = { rect: q.basic, line: onAvoided ? -Infinity : basic.line, overlap: basic.overlap, away: 0 };
+  // So does a basic place over a node or a label.
+  const onSomething = q.nodes.some((n) => overlaps(chipOf(q.basic, q), n)) || q.placed.some((o) => overlaps(q.basic, o));
+  let best = { rect: q.basic, line: onAvoided || onSomething ? -Infinity : basic.line, overlap: basic.overlap, away: 0 };
   for (const s of scored) {
     // A place over a box is never taken, however far it stands from the other lines.
     if (s.overlap || s.marked) continue;
@@ -213,6 +223,8 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
   const all = layout.edges.map((e) => segsOf(e.points));
   const nodes: Rect[] = layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h }));
   const finals: Rect[] = [];
+  // The small texts at the ends of the lines have their places already: a label keeps clear of them as of another label.
+  const endTexts: Rect[] = layout.edges.flatMap((e) => [e.startLabel, e.endLabel].flatMap((t) => (t === undefined ? [] : [{ x: t.x, y: t.y, w: t.w, h: t.h }])));
   let changed = false;
   const edges = layout.edges.map((edge, ei) => {
     const label = edge.label;
@@ -221,7 +233,7 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
     const foreign = all.flatMap((ss, k) => (k === ei ? [] : ss));
     const basic: Rect = redrawn.has(ei) ? onLongest(own, label, ruler) : { x: label.x, y: label.y, w: label.w, h: label.h };
     const near = own.map((sg) => segmentToRect(sg, basic));
-    const spot = chooseSpot({ own, foreign, nodes, placed: finals, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) });
+    const spot = chooseSpot({ own, foreign, nodes, placed: [...finals, ...endTexts], size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) });
     finals.push(spot.rect);
     if (!spot.moved && !redrawn.has(ei)) return edge;
     changed = true;
@@ -291,4 +303,17 @@ function levelSiblings(layout: Layout, edges: LayoutEdge[], all: Segment[][], no
     }
   }
   return out;
+}
+
+/** Pixels: labels of a finished drawing whose chip stands over a box or over a small text at the end of a line. */
+export function crowdedLabels(layout: Pick<Layout, 'nodes' | 'edges'>): number {
+  const endTexts: Rect[] = layout.edges.flatMap((e) => [e.startLabel, e.endLabel].flatMap((t) => (t === undefined ? [] : [{ x: t.x, y: t.y, w: t.w, h: t.h }])));
+  let count = 0;
+  for (const e of layout.edges) {
+    const l = e.label;
+    if (!l || e.invisible) continue;
+    const chip: Rect = { x: l.x - CHIP_GROW_X, y: l.y - CHIP_GROW_Y, w: l.w + 2 * CHIP_GROW_X, h: l.h + 2 * CHIP_GROW_Y };
+    if (layout.nodes.some((n) => overlaps(chip, n)) || endTexts.some((t) => overlaps(l, t))) count++;
+  }
+  return count;
 }
