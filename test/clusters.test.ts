@@ -150,11 +150,24 @@ describe('the direction of a box', () => {
 });
 
 describe('boxes in text', () => {
-  it('draws flat with a note and no boxes', () => {
-    const l = layout(parse(FLOW), cellRuler());
+  const l = layout(parse(FLOW), cellRuler());
+
+  it('draws no boxes and says so', () => {
     expect(l.clusters).toBeUndefined();
     expect(l.diagnostics.map((d) => d.kind)).toContain('clusters-flattened-in-text');
-    expect(l.edges).toHaveLength(parse(FLOW).edges.filter((e) => !['one', 'two', 'three'].some((c) => e.from === c || e.to === c)).length);
+  });
+
+  it('draws every outermost box as a band with its name', () => {
+    expect(l.lanes.map((lane) => lane.label)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('ends a line to a box at a node in it, and keeps every line', () => {
+    expect(l.edges).toHaveLength(parse(FLOW).edges.length);
+    const ends = l.edges.map((e) => `${e.from}>${e.to}`);
+    // `one --> two`: out of the last node of `one` that leads nowhere in it, into the first node of `two` nothing leads to.
+    expect(ends).toContain('a2>b1');
+    expect(ends).toContain('c2>b1');
+    expect(ends).toContain('b2>c2');
   });
 });
 

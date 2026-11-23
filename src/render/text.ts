@@ -131,7 +131,7 @@ type Heading = 'right' | 'left' | 'down' | 'up';
 export function markGlyphs(end: EdgeEnd, heading: Heading): string[] {
   const across = heading === 'right' || heading === 'left';
   const foot = { right: '<', left: '>', down: '^', up: 'v' }[heading];
-  const bar = across ? '|' : '─';
+  const bar = across ? '|' : '┼';
   switch (end) {
     case 'triangle-open':
       return [{ right: '▷', left: '◁', down: '▽', up: '△' }[heading]];
@@ -297,6 +297,10 @@ function drawNode(c: Canvas, n: LayoutNode): void {
   const y0 = Math.round(n.y);
   const w = Math.round(n.w);
   const h = Math.round(n.h);
+  if ((n.shape === 'start-dot' || n.shape === 'end-dot') && w === 1 && h === 1) {
+    c.put(x0, y0, n.shape === 'start-dot' ? '●' : '◉');
+    return;
+  }
   const [tl, tr, bl, br] = CORNERS[n.shape === 'ellipse' || n.shape === 'actor' ? 'round' : n.shape === 'note' ? 'note' : 'square'] as readonly [string, string, string, string];
   const solid = n.shape === 'bar';
   for (let y = y0; y < y0 + h; y++) {
