@@ -622,6 +622,11 @@ function withQuestions(source: Graph, drawn: Layout, given: Ruler, opts: Layered
   return asked.length === 0 ? drawn : { ...drawn, diagnostics: [...drawn.diagnostics, ...asked] };
 }
 
+/** A drawing with more labels than this run through by other lines is dense, and more room between its boxes does not clear them. */
+const CROSSED_WORTH = 4;
+/** Drawings with more lines than this are not drawn again for such labels: the tries cost more than they clear. */
+const CROSSED_EDGES = 24;
+
 /** Gaps a terminal drawing is tried with: one pass-through line per gap, then two, then three. */
 const TERMINAL_GAPS = [3, 5, 7];
 
@@ -658,13 +663,15 @@ export function layoutLayered(source: Graph, ruled: Ruler, options: LayeredOptio
       crowded = now;
     }
     // A label stands over no other line either: while a line runs through one, the drawing is made again with more room between the boxes of a layer, up to twice the given gap, and kept when fewer labels are run through and no more stand over a box.
-    let crossed = opts.nested === true ? 0 : crossedLabels(drawn);
-    for (let gap = given.rowGap + given.nodeGrid; crossed > 0 && gap <= 2 * given.rowGap; gap += given.nodeGrid) {
-      const wider = finish({ ...given, rowGap: gap });
-      const now = crossedLabels(wider);
-      if (now >= crossed || crowdedLabels(wider) > crowded) continue;
-      drawn = wider;
-      crossed = now;
+    // A try draws the whole drawing again, so only a few such labels are worth it, and two gaps are tried: half as wide again, then twice as wide.
+    const crossed = opts.nested === true ? 0 : crossedLabels(drawn);
+    if (crossed > 0 && crossed <= CROSSED_WORTH && source.edges.length <= CROSSED_EDGES) {
+      for (const gap of [1.5 * given.rowGap, 2 * given.rowGap]) {
+        const wider = finish({ ...given, rowGap: gap });
+        if (crossedLabels(wider) >= crossed || crowdedLabels(wider) > crowded) continue;
+        drawn = wider;
+        break;
+      }
     }
     return withQuestions(source, drawn, given, opts);
   }
