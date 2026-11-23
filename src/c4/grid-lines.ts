@@ -106,9 +106,18 @@ interface Run {
   c: number;
   lo: number;
   hi: number;
+  /** Where along the run the line ends on a box, on the first and the last run of a line. */
+  ends?: number[];
 }
 const runOf = ([a, b]: [Point, Point]): Run => (Math.abs(a.y - b.y) < 1e-6 ? { h: true, c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) } : { h: false, c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
-const runsOf = (pts: readonly Point[]): Run[] => segs(pts).filter(([a, b]) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 1e-6).map(runOf);
+const runsOf = (pts: readonly Point[]): Run[] => {
+  const kept = segs(pts).filter(([a, b]) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 1e-6);
+  return kept.map((seg, i) => {
+    const run = runOf(seg);
+    const ends = [...(i === 0 ? [run.h ? seg[0].x : seg[0].y] : []), ...(i === kept.length - 1 ? [run.h ? seg[1].x : seg[1].y] : [])];
+    return ends.length === 0 ? run : { ...run, ends };
+  });
+};
 
 /** What two lines cost together: crossings, and the price of touching or running beside each other. */
 function between(a: readonly Run[], b: readonly Run[]): { cross: number; penalty: number } {
@@ -119,8 +128,8 @@ function between(a: readonly Run[], b: readonly Run[]): { cross: number; penalty
       if (s.h === t.h) {
         const over = Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo);
         const d = Math.abs(s.c - t.c);
-        // Two runs into one crowded face stand as close as their places on it.
-        const oneFace = Math.abs(s.lo - t.lo) < 0.5 || Math.abs(s.hi - t.hi) < 0.5;
+        // Two runs into one crowded face stand as close as their places on it: both end there, at the same distance.
+        const oneFace = (s.ends ?? []).some((v) => (t.ends ?? []).some((w) => Math.abs(v - w) < 0.5));
         if (over > 0.5 && d < LANE - 1e-6 && (d < 1 || !oneFace)) penalty += (d < 1 ? ON_TOP : NEAR) + 2 * over;
         continue;
       }
