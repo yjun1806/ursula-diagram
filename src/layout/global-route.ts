@@ -29,7 +29,7 @@ const OWN_CLEAR = 8;
 const NAME_CLEAR = 4;
 /** The straight run out of a face, the distance between two lines that run side by side, and the distance of a port from a corner. */
 const STUB = 12;
-const PITCH = 8;
+const PITCH = 12;
 const CORNER_CLEAR = 12;
 const BORDER_NEAR = 12;
 /** The lane outside a border along which a line may run. */
