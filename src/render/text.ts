@@ -223,8 +223,9 @@ function drawEdges(c: Canvas, layout: Layout): void {
     toward(edge.points.length - 1, edge.to);
     const endMark = edge.end !== undefined && RELATION_MARKS.has(edge.end) ? edge.end : undefined;
     if (last && pts.length >= 2 && endMark !== undefined) mark(endMark, last, pts[pts.length - 2] as [number, number]);
-    else if (last && !(records && edge.end === 'none')) arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
+    else if (last && edge.end !== 'none') arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
     if (first && pts.length >= 2 && edge.startEnd !== undefined && RELATION_MARKS.has(edge.startEnd)) mark(edge.startEnd, first, pts[1] as [number, number]);
+    else if (first && pts.length >= 2 && edge.startEnd === 'arrow') arrows.push({ x: first[0], y: first[1], ch: arrowFor({ ...edge, points: [...edge.points].reverse() }) });
   }
   for (const [key, cell] of cells) {
     const [xs, ys] = key.split(',');

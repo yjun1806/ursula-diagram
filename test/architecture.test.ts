@@ -387,13 +387,47 @@ describe('architecture layout', () => {
 });
 
 describe('architecture terminal output', () => {
-  it('lists the groups with their services and then the connections', () => {
+  it('draws the services as boxes with their icon names and the connections as lines, within the width', () => {
     const out = renderText(BASIC, 60);
     expect('lines' in out).toBe(true);
     if (!('lines' in out)) return;
+    const text = out.lines.join('\n');
     expect(out.lines[0]).toContain('API');
-    expect(out.lines.join('\n')).toContain('Connections');
-    expect(out.lines.join('\n')).toContain('Storage (disk1):T -- B:Server');
+    expect(text).toContain('│  Database  │');
+    expect(text).toContain('[database]');
+    expect(text).not.toContain('Connections');
     for (const line of out.lines) expect(line.length).toBeLessThanOrEqual(60);
+  });
+
+  it('draws an arrowhead only at an end written with one', () => {
+    const plain = renderText('architecture-beta\n  service a(server)[A]\n  service b(server)[B]\n  a:R -- L:b', 60);
+    const arrow = renderText('architecture-beta\n  service a(server)[A]\n  service b(server)[B]\n  a:R --> L:b', 60);
+    const both = renderText('architecture-beta\n  service a(server)[A]\n  service b(server)[B]\n  a:R <--> L:b', 60);
+    if (!('lines' in plain) || !('lines' in arrow) || !('lines' in both)) throw new Error('no lines');
+    expect(plain.lines.join('\n')).not.toMatch(/[▶◀▲▼]/);
+    expect(arrow.lines.join('\n')).toContain('▶');
+    expect(arrow.lines.join('\n')).not.toContain('◀');
+    expect(both.lines.join('\n')).toMatch(/◀─*▶/);
+  });
+
+  it('turns a line written from right to left so that it runs with the reading direction', () => {
+    const out = renderText('architecture-beta\n  service a(server)[First]\n  service b(server)[Second]\n  b:L <-- R:a', 60);
+    if (!('lines' in out)) throw new Error('no lines');
+    const row = out.lines.find((l) => l.includes('First')) ?? '';
+    expect(row.indexOf('First')).toBeLessThan(row.indexOf('Second'));
+    expect(out.lines.join('\n')).toContain('▶');
+  });
+
+  it('names every group on a band of its own when there are several', () => {
+    const out = renderText('architecture-beta\n  group one(cloud)[One]\n  group two(cloud)[Two]\n  service a(server)[A] in one\n  service b(server)[B] in two\n  a:B --> T:b', 60);
+    if (!('lines' in out)) throw new Error('no lines');
+    expect(out.lines.some((l) => /── One ─/.test(l))).toBe(true);
+    expect(out.lines.some((l) => /Two ─/.test(l))).toBe(true);
+  });
+
+  it('writes the list when the drawing has no service', () => {
+    const out = renderText('architecture-beta\n  group api(cloud)[API]', 60);
+    if (!('lines' in out)) throw new Error('no lines');
+    expect(out.lines[0]).toContain('API');
   });
 });
