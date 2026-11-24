@@ -31,6 +31,7 @@ describe('lines in the outer bands', () => {
     const right = Math.max(...boxes.map((n) => n.x + n.w));
     const xs = l.edges.flatMap((e) => e.points.map((p) => p.x));
     expect(left - Math.min(...xs)).toBe(24);
-    expect(Math.max(...xs) - right).toBe(24);
+    // The line on the right bends into a mark: it stands as far out as the straight piece before a mark is long.
+    expect(Math.max(...xs) - right).toBe(32);
   });
 });
