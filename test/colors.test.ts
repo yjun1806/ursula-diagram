@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderHtml } from '../src/html.ts';
 import { render } from '../src/index.ts';
 import { COLORS, fillColors } from '../src/render/colors.ts';
+import { BAKE_SOURCE } from '../src/render/html.ts';
 import { sceneStyleSheet } from '../src/render/scene-svg.ts';
 
 const FLOW = 'flowchart LR\n  a([Start]) --> b{Choose}\n  b -->|yes| c[Done]\n  b -.-> d[(Store)]';
@@ -95,4 +96,12 @@ describe('colours of an exported page', () => {
     expect(declared(renderHtml(FLOW), ':root').has('bg')).toBe(false);
   });
 
+  it('saves a variable with a digit in its name as its value', () => {
+    const bake = new Function(`return ${BAKE_SOURCE}`)() as (text: string, get: (name: string) => string) => string;
+    const svg = render(CHART);
+    expect(read(svg)).toContain('s2');
+    const baked = bake(svg, (name) => COLORS[name]?.[1] ?? 'transparent');
+    expect(baked).not.toContain('var(');
+    expect(baked).toContain(`stroke:${COLORS['s2']?.[1]}`);
+  });
 });

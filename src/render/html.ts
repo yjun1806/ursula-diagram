@@ -29,7 +29,7 @@ function variables(mode: 0 | 1): string {
  * as source text so that the page and the tests run the same code.
  */
 export const BAKE_SOURCE = `function ursulaBake(text, get) {
-  return text.replace(/var\\(--ursula-([a-z-]+)\\s*(?:,[^)]*)?\\)/g, function (_, name) { return get(name); });
+  return text.replace(/var\\(--ursula-([a-z0-9-]+)\\s*(?:,[^)]*)?\\)/g, function (_, name) { return get(name); });
 }`;
 
 /** Source text kept inside a `<script>` element: the sequences that would end or confuse it are escaped, and a backslash is doubled. */
