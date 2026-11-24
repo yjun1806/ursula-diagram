@@ -24,13 +24,20 @@ const PRIORITY: Record<EdgeStyle, number> = { dotted: 0, normal: 1, thick: 2 };
 
 class Canvas {
   readonly rows: string[][];
-  readonly width: number;
+  width: number;
   readonly height: number;
 
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
     this.rows = Array.from({ length: height }, () => new Array<string>(width).fill(' '));
+  }
+
+  /** Makes every row at least `width` cells wide; the new cells are blank. */
+  widen(width: number): void {
+    if (width <= this.width) return;
+    for (const row of this.rows) while (row.length < width) row.push(' ');
+    this.width = width;
   }
 
   /** Writes one character; wide characters take two cells and never get split. */
@@ -350,7 +357,7 @@ function drawLegend(c: Canvas, layout: Layout): void {
  * is drawn over the name; where a line crosses the rule at that place the name moves to the right of the line (a
  * cell and a blank after it), and where no such place is free, to the first free stretch of the rule.
  */
-function drawLaneNames(c: Canvas, layout: Layout): void {
+function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
   const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
   if (vertical) return;
   for (const lane of layout.lanes) {
@@ -368,22 +375,32 @@ function drawLaneNames(c: Canvas, layout: Layout): void {
     for (let x = x0; x <= x1; x++) if (c.get(x, y) !== '─') lines.push(x);
     const candidates = [preferred, ...lines.map((x) => x + 2)];
     for (let x = preferred; x + w <= x1; x++) candidates.push(x);
-    const at = candidates.find(free) ?? preferred;
+    // A rule too short for the name beside its lines lets the name run past its end, up to `limit`, rather than over a line.
+    const past = (x: number): boolean => {
+      if (x + w > limit) return false;
+      for (let k = x - 1; k <= Math.min(x + w, x1); k++) if (k < x0 || c.get(k, y) !== '─') return false;
+      return true;
+    };
+    const at = candidates.find(free) ?? candidates.find(past) ?? preferred;
+    c.widen(at + w);
     c.put(at - 1, y, ' ');
     c.text(at, y, lane.label);
     c.put(at + w, y, ' ');
   }
 }
 
-/** Draws a layout made with the cell ruler; returns one string per terminal row. */
-export function renderTextLayout(layout: Layout): string[] {
+/**
+ * Draws a layout made with the cell ruler; returns one string per terminal row. `maxWidth` is how wide a row may grow
+ * for a lane name that has no room on its rule; without it no row is wider than the layout.
+ */
+export function renderTextLayout(layout: Layout, maxWidth?: number): string[] {
   const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
   drawLanes(c, layout);
   drawEdges(c, layout);
   drawLabels(c, layout);
   drawEndLabels(c, layout);
   for (const n of layout.nodes) drawNode(c, n);
-  drawLaneNames(c, layout);
+  drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();

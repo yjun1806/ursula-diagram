@@ -160,14 +160,38 @@ describe('eventmodeling layout', () => {
 });
 
 describe('eventmodeling text', () => {
-  it('lists each swimlane in time order', () => {
-    const out = renderText(examples['06-resetting-the-flow'] ?? '', 80);
-    expect('error' in out).toBe(false);
-    const text = 'lines' in out ? out.lines.join('\n') : '';
-    expect(text).toContain('UI/Automation');
-    expect(text).toContain('Events / External');
-    expect(text).toContain('01  ui   CartUI');
-    expect(text).toContain('Relations');
+  const text = (name: string, width: number): string[] => {
+    const out = renderText(examples[name] ?? '', width);
+    return 'lines' in out ? out.lines : [];
+  };
+
+  it('draws each frame as a box with its number and kind under the name', () => {
+    const lines = text('06-resetting-the-flow', 80);
+    expect(lines.join('\n')).toContain('│       CartUI        │');
+    expect(lines.join('\n')).toContain('│        01 ui        │');
+    expect(lines.join('\n')).not.toContain('Relations');
+    for (const line of lines) expect([...line].length).toBeLessThanOrEqual(80);
+  });
+
+  it('stands the swimlanes in the order of the picture, a lane no line touches included', () => {
+    const names = (name: string): string[] => text(name, 80).flatMap((line) => (line.startsWith('─') ? (line.match(/UI\/Automation|Command\/Read Model|Events(?: \/ \w+)?/)?.[0] ?? []) : []));
+    expect(names('08-resetting-the-flow-3')).toEqual(['UI/Automation', 'Command/Read Model', 'Events']);
+    expect(names('06-resetting-the-flow')).toEqual(['UI/Automation', 'Command/Read Model', 'Events', 'Events / External', 'Events / Cart']);
+  });
+
+  it('writes a lane name beside the line that crosses its rule, never over it', () => {
+    const lines = text('01-timeline', 80);
+    expect(lines).toContain('──────▼ Command/Read Model');
+    expect(lines).toContain('──────▼ Events');
+  });
+
+  it('writes the data rows of a frame in its box', () => {
+    expect(text('04-data-block', 80).join('\n')).toContain("description: 'john'");
+  });
+
+  it('writes the list when the drawing does not fit the width', () => {
+    const lines = text('06-resetting-the-flow', 24);
+    expect(lines.join('\n')).toContain('Relations');
   });
 });
 
