@@ -614,9 +614,32 @@ describe('usecase actor column', () => {
     expect(geometryViolations(l)).toEqual([]);
   });
 
-  it('keeps the drawing of the layered engine when the columns would bend more', () => {
+  it('stands every actor to the left of what it is joined to, even where another drawing bends less', () => {
     const src = 'usecase-beta\nactor SalesAgent("Sales agent")@{ business: true } <<Employee>>\nactor Broker@{ type: hollow, business: true }\nQuote("Prepare quote")@{ business: true } <<Core>>\nArchive[Archive quote] <<Record>>\nSalesAgent --> Quote\nBroker --> Quote\nQuote --> Archive';
     const l = drawn(src);
-    expect(l.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0)).toBe(0);
+    expect(centre(l, 'SalesAgent')).toBe(centre(l, 'Broker'));
+    expect(centre(l, 'Broker')).toBeLessThan(centre(l, 'Quote'));
+    expect(centre(l, 'Quote')).toBeLessThan(centre(l, 'Archive'));
+    expect(geometryViolations(l)).toEqual([]);
+  });
+
+  it('keeps the actors in the first column of a drawing with boundaries, each boundary around its own use cases', () => {
+    const src = 'usecase-beta\ndirection LR\nactor Customer\nactor Support\nsystemBoundary Storefront\n  Browse("Browse catalogue")\n  Checkout("Checkout")\nend\nsystemBoundary Fulfilment\n  Track("Track delivery")\nend\nCustomer --> Browse\nCustomer --> Checkout\nCustomer --> Track\nSupport --> Track\nCheckout ..> : include Browse';
+    const l = drawn(src);
+    expect(centre(l, 'Customer')).toBe(centre(l, 'Support'));
+    expect(centre(l, 'Customer')).toBeLessThan(centre(l, 'Browse'));
+    expect(centre(l, 'Browse')).toBe(centre(l, 'Track'));
+    const box = (label: string) => l.clusters?.find((c) => c.label === label);
+    const [a, b] = [box('Storefront'), box('Fulfilment')];
+    if (!a || !b) throw new Error('no boundary');
+    expect(a.y + a.h).toBeLessThanOrEqual(b.y);
+    for (const id of ['Customer', 'Support']) expect(centre(l, id)).toBeLessThan(Math.min(a.x, b.x));
+    // The lines of Customer share a trunk on purpose; no other line may share a run with them.
+    expect(geometryViolations(l).filter((v) => /Support/.test(v))).toEqual([]);
+  });
+
+  it('leaves a drawing with a note or an actor inside a boundary to the layered engine', () => {
+    const noted = drawn('usecase-beta\nnote for Login "Needs a session"\nactor User\nLogin("Sign in")\nUser --> Login');
+    expect(noted.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0)).toBe(0);
   });
 });

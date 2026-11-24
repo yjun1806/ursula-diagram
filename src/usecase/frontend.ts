@@ -61,10 +61,18 @@ function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean): Layou
   if (grid === undefined) return draw(undefined);
   const columns = draw(grid);
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
-  // Lines between two use cases can run a way round in the columns: the drawing of the layered engine is kept when it bends less and crosses no more.
+  // Lines between two use cases can run a way round in the columns: the drawing of the layered engine is kept when it
+  // bends less, crosses no more and stands every actor to the left of what it is joined to as well.
   if (!model.graph.edges.some((e) => kind(e.from) !== 'actor' && kind(e.to) !== 'actor')) return columns;
   const free = draw(undefined);
-  return bendsIn(free) < bendsIn(columns) && crossingsIn(free) <= crossingsIn(columns) ? free : columns;
+  const astray = (l: Layout): number => {
+    const mid = new Map(l.nodes.map((n) => [n.id, n.x + n.w / 2]));
+    return l.edges.filter((e) => {
+      const [a, u] = kind(e.from) === 'actor' ? [e.from, e.to] : [e.to, e.from];
+      return kind(a) === 'actor' && kind(u) !== 'actor' && (mid.get(a) ?? 0) >= (mid.get(u) ?? 0);
+    }).length;
+  };
+  return bendsIn(free) < bendsIn(columns) && crossingsIn(free) <= crossingsIn(columns) && astray(free) <= astray(columns) ? free : columns;
 }
 
 registerFrontEnd({
@@ -86,37 +94,102 @@ registerFrontEnd({
   },
 });
 
-/**
- * The cells of a drawing of actors and their use cases only (no boundary, no note, no line between two actors): the
- * actors in the first column, each in the middle of its use cases, and the use cases in the second, grouped by actor in
- * the order written; a use case no actor is joined to stands below them. Undefined for any other drawing, which keeps
- * the layered engine.
- */
 /** The gap between two use cases of one actor, and between the use cases of two actors. */
 const TOGETHER = 24;
 const APART = 48;
 
+/**
+ * The cells of a drawing that reads from left to right with every actor outside the boundaries and no line between two
+ * actors: the actors in the first column, each in the middle of its use cases, and what they are joined to in the
+ * second, grouped by boundary and then by actor in the order written. What no actor is joined to stands in the next
+ * column beside the first element a line joins it to, or below the rest. A boundary covers the cells of what it holds.
+ * Undefined for any other drawing, and when a boundary would cover an element that is not in it: the layered engine draws those.
+ */
 function actorColumns(model: UsecaseModel): GridSpec | undefined {
   const g = model.graph;
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
-  if ((g.clusters ?? []).length > 0 || g.direction !== 'LR') return undefined;
-  if (g.nodes.some((n) => kind(n.id) !== 'actor' && kind(n.id) !== 'usecase')) return undefined;
-  if (g.edges.some((e) => kind(e.from) === 'actor' && kind(e.to) === 'actor')) return undefined;
-  const cells: Record<string, { r: number; c: number }> = {};
-  const shift: Record<string, number> = {};
-  let row = 0;
-  // The use cases of one actor stand close; a wider gap parts the actors.
-  const rowGaps: Record<number, number> = {};
-  for (const a of g.nodes.filter((n) => kind(n.id) === 'actor')) {
-    const mine = g.edges.flatMap((e) => (e.from === a.id ? [e.to] : e.to === a.id ? [e.from] : [])).filter((u) => cells[u] === undefined);
-    const first = row;
-    if (first > 0) rowGaps[first] = APART;
-    for (let k = first + 1; k < first + new Set(mine).size; k++) rowGaps[k] = TOGETHER;
-    for (const u of [...new Set(mine)]) cells[u] = { r: row++, c: 1 };
-    cells[a.id] = { r: first, c: 0 };
-    shift[a.id] = Math.max(0, row - first - 1) / 2;
-    if (row === first) row++;
+  const actor = (id: string): boolean => kind(id) === 'actor';
+  if (g.direction !== 'LR') return undefined;
+  if ((g.clusters ?? []).some((c) => c.parent !== undefined)) return undefined;
+  if (g.nodes.some((n) => actor(n.id) && n.cluster !== undefined)) return undefined;
+  if (g.edges.some((e) => actor(e.from) && actor(e.to))) return undefined;
+  // A note stands beside what it is for, which the layered engine arranges.
+  if (g.nodes.some((n) => kind(n.id) === 'note')) return undefined;
+  const placed = g.nodes.filter((n) => n.attach === undefined);
+  const actors = placed.filter((n) => actor(n.id));
+  const others = placed.filter((n) => !actor(n.id));
+  if (actors.length === 0) return undefined;
+
+  // The second column: what the actors are joined to, by actor in the order written, then gathered by boundary.
+  const owner = new Map<string, string>();
+  for (const a of actors) for (const e of g.edges) {
+    const u = e.from === a.id ? e.to : e.to === a.id ? e.from : undefined;
+    if (u !== undefined && !actor(u) && !owner.has(u) && others.some((n) => n.id === u)) owner.set(u, a.id);
   }
-  for (const u of g.nodes.filter((n) => cells[n.id] === undefined)) cells[u.id] = { r: row++, c: 1 };
-  return { ...emptySpec(g), cells, shift, rowGaps };
+  const clusterOf = new Map(g.nodes.map((n) => [n.id, n.cluster]));
+  const joined = [...owner.keys()];
+  const groups: Array<string | undefined> = [];
+  for (const u of joined) if (!groups.includes(clusterOf.get(u))) groups.push(clusterOf.get(u));
+  const second = groups.flatMap((c) => joined.filter((u) => clusterOf.get(u) === c));
+
+  const cells: Record<string, { r: number; c: number }> = {};
+  const rowGaps: Record<number, number> = {};
+  second.forEach((u, r) => {
+    cells[u] = { r, c: 1 };
+    const before = second[r - 1];
+    if (before !== undefined) rowGaps[r] = owner.get(before) === owner.get(u) && clusterOf.get(before) === clusterOf.get(u) ? TOGETHER : APART;
+  });
+  let rows = second.length;
+
+  // The rest: beside the first placed element a line joins it to, one column on, when that cell is free; else below.
+  const taken = (r: number, c: number): boolean => Object.values(cells).some((p) => p.r === r && p.c === c);
+  let waiting = others.filter((n) => cells[n.id] === undefined);
+  for (let moved = true; moved && waiting.length > 0; ) {
+    moved = false;
+    for (const n of waiting) {
+      const beside = g.edges.flatMap((e) => (e.to === n.id ? [e.from] : e.from === n.id ? [e.to] : [])).map((id) => cells[id]).find((p) => p !== undefined && !taken(p.r, p.c + 1));
+      if (beside === undefined) continue;
+      cells[n.id] = { r: beside.r, c: beside.c + 1 };
+      moved = true;
+    }
+    waiting = waiting.filter((n) => cells[n.id] === undefined);
+  }
+  for (const n of waiting) {
+    rowGaps[rows] = APART;
+    cells[n.id] = { r: rows++, c: 1 };
+  }
+
+  // The first column: each actor in the middle of its use cases, pushed down where two would stand closer than a row.
+  const shift: Record<string, number> = {};
+  let floor = 0;
+  const wish = (a: string): number => {
+    const at = second.flatMap((u, r) => (owner.get(u) === a ? [r] : []));
+    return at.length === 0 ? Infinity : ((at[0] as number) + (at[at.length - 1] as number)) / 2;
+  };
+  for (const a of [...actors].sort((x, y) => wish(x.id) - wish(y.id))) {
+    // An actor with no use case of its own stands below every row, and so does one pushed past the last: each takes a whole row.
+    const wished = Number.isFinite(wish(a.id)) ? Math.max(floor, wish(a.id)) : Math.max(floor, rows);
+    const at = wished > rows - 1 ? Math.ceil(wished) : wished;
+    rows = Math.max(rows, Math.floor(at) + 1);
+    // The cell is the row of its first use case and the rest a shift, so the figure adds no height to a row between.
+    const first = second.findIndex((u) => owner.get(u) === a.id);
+    const r = first === -1 || first > at ? Math.floor(at) : first;
+    cells[a.id] = { r, c: 0 };
+    if (at !== r) shift[a.id] = at - r;
+    floor = at + 1;
+  }
+  for (let r = Math.max(1, second.length); r < rows; r++) rowGaps[r] ??= APART;
+
+  // A boundary covers the cells of what it holds; it may hold nothing else, and two may not share a cell.
+  const rects = (g.clusters ?? []).flatMap((c) => {
+    const inside = placed.filter((n) => n.cluster === c.id).map((n) => cells[n.id] as { r: number; c: number });
+    return inside.length === 0 ? [] : [{ id: c.id, r0: Math.min(...inside.map((p) => p.r)), r1: Math.max(...inside.map((p) => p.r)), c0: Math.min(...inside.map((p) => p.c)), c1: Math.max(...inside.map((p) => p.c)) }];
+  });
+  if (rects.length !== (g.clusters ?? []).length) return undefined;
+  const within = (q: (typeof rects)[number], p: { r: number; c: number }): boolean => p.r >= q.r0 && p.r <= q.r1 && p.c >= q.c0 && p.c <= q.c1;
+  for (const q of rects) {
+    if (placed.some((n) => n.cluster !== q.id && within(q, cells[n.id] as { r: number; c: number }))) return undefined;
+    if (rects.some((o) => o !== q && o.r0 <= q.r1 && q.r0 <= o.r1 && o.c0 <= q.c1 && q.c0 <= o.c1)) return undefined;
+  }
+  return { ...emptySpec(g), cells, shift, rowGaps, ...(rects.length === 0 ? {} : { rects: Object.fromEntries(rects.map(({ id, ...q }) => [id, q])) }) };
 }

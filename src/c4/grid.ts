@@ -5,7 +5,7 @@ import type { LayoutOptions } from '../layout/index.ts';
 import { labelSize } from '../layout/labels.ts';
 import { withLegend } from '../layout/legend.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Graph, Layout, LayoutCluster, LayoutNode, Point } from '../types.ts';
+import type { Graph, GridSpec, Layout, LayoutCluster, LayoutNode, Point } from '../types.ts';
 import type { Cell, CellRect, GridCells } from './grid-place.ts';
 import { placeCells } from './grid-place.ts';
 import { emptySpec, gridRows } from './grid-rows.ts';
@@ -67,7 +67,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
   const rows = gridRows(graph, spec);
   // Cells given outright stand as they are; otherwise a drawing that reads from left to right stands its rows as columns.
   const given_ = spec.cells;
-  const grid: GridCells = overTrunks(graph, given_ !== undefined ? givenCells(given_) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows));
+  const grid: GridCells = overTrunks(graph, given_ !== undefined ? givenCells(given_, spec.rects) : graph.direction === 'LR' ? transposed(placeCells(graph, spec, rows)) : placeCells(graph, spec, rows));
   const bw = Math.max(1, ...graph.nodes.map((n) => n.box?.w ?? 0));
   const bh = Math.max(1, ...graph.nodes.map((n) => n.box?.h ?? 0));
   const rowH = Array.from({ length: grid.rows }, (_, r) => {
@@ -519,9 +519,9 @@ function transposed(g: GridCells): GridCells {
 }
 
 /** The grid of cells given outright. */
-function givenCells(cells: Record<string, { r: number; c: number }>): GridCells {
+function givenCells(cells: Record<string, { r: number; c: number }>, rects: GridSpec['rects'] = {}): GridCells {
   const all = Object.values(cells);
-  return { cell: new Map(Object.entries(cells)), rect: new Map(), rows: Math.max(0, ...all.map((p) => p.r)) + 1, columns: Math.max(0, ...all.map((p) => p.c)) + 1 };
+  return { cell: new Map(Object.entries(cells)), rect: new Map(Object.entries(rects)), rows: Math.max(0, ...all.map((p) => p.r)) + 1, columns: Math.max(0, ...all.map((p) => p.c)) + 1 };
 }
 
 /** How far right of the shared end the dot of a trunk stands. */
