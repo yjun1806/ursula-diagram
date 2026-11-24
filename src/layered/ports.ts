@@ -1,5 +1,5 @@
 import type { Ruler } from '../metrics.ts';
-import type { NodeShape } from '../types.ts';
+import type { EdgeEnd, Graph, NodeShape } from '../types.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
 import { adjacency, flatRoute } from './order.ts';
@@ -195,19 +195,135 @@ export function planFlat(l: Ladder, layers: number[][], ruler: Ruler): Map<numbe
   return out;
 }
 
-/** Ports every real node needs on its sides crossed by inter-layer edges. */
-export function portDemand(l: Ladder, plan: Map<number, FlatPlan>): Array<{ up: number; down: number }> {
+/**
+ * The ends of lines that share one port on a side of a box: the bundle of an end, by twice the index of its chain plus
+ * 0 for the end at the source or 1 for the end at the target. An end that is not in it has a port of its own.
+ */
+export type Bundles = ReadonlyMap<number, number>;
+
+const NO_BUNDLES: Bundles = new Map();
+
+/** The bundle the end of chain `chain` at its source (`0`) or its target (`1`) belongs to; -1 when the end has a port of its own. */
+export const bundleAt = (bundles: Bundles, chain: number, end: 0 | 1): number => bundles.get(2 * chain + end) ?? -1;
+
+/** Counts the placements in which lines were given a port to share: a drawing during which it stands still is the same with and without shared ports. */
+export const sharing = { placements: 0 };
+
+/** Marks that take two cells at the end of a line: lines that carry one keep a port of their own. */
+const COUNT_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['one', 'zero-one', 'many', 'one-many', 'zero-many', 'lollipop']);
+
+interface BundleEnd {
+  chain: number;
+  end: 0 | 1;
+  /** The box at the other end of the line. */
+  other: number;
+  /** Place in its layer of the next node of the chain: the ends of a side take their ports in this order. */
+  place: number;
+  /** What the line looks like from this end; empty for a line that is never joined. */
+  look: string;
+}
+
+/**
+ * Terminal drawings whose layers are columns: lines without a label that end on one side of a box share its port there
+ * and split after they have left the box, so that the box needs one line of the side for all of them. Only lines that
+ * look alike are joined: the same style and the same marks, with a mark at exactly one end, so that the lines that
+ * leave a box are never joined with those that arrive. The joined ends are neighbours in the order of the side, so
+ * no other line of the side has to cross them. A line is joined at one of its ends only, and two lines between the
+ * same two boxes are not joined, so every branch still leads to one box.
+ */
+export function endBundles(graph: Graph, l: Ladder, layers: number[][], plan: Map<number, FlatPlan>, on: boolean): Bundles {
+  if (!on) return NO_BUNDLES;
+  const place = new Array<number>(l.nodes.length).fill(0);
+  layers.forEach((row) => row.forEach((n, k) => (place[n] = k)));
+  const sides = new Map<number, BundleEnd[]>();
+  const closed = new Set<number>();
+  const sideKey = (node: number, next: number): number => 2 * node + ((l.nodes[next]?.layer ?? 0) > (l.nodes[node]?.layer ?? 0) ? 1 : 0);
+  l.chains.forEach((c, ci) => {
+    if (c.kind !== 'span' || c.nodes.length < 2) return;
+    const e = graph.edges[c.edge];
+    const startMark: EdgeEnd = e?.startEnd ?? 'none';
+    const endMark: EdgeEnd = e?.end ?? 'arrow';
+    const alike =
+      e !== undefined &&
+      e.invisible !== true &&
+      (e.label ?? '') === '' &&
+      (e.startLabel ?? '') === '' &&
+      (e.endLabel ?? '') === '' &&
+      (startMark === 'none') !== (endMark === 'none') &&
+      !COUNT_MARKS.has(startMark) &&
+      !COUNT_MARKS.has(endMark);
+    const src = c.nodes[0] as number;
+    const tgt = c.nodes[c.nodes.length - 1] as number;
+    const add = (node: number, next: number, end: 0 | 1, here: EdgeEnd, there: EdgeEnd, other: number): void => {
+      const k = sideKey(node, next);
+      sides.set(k, [...(sides.get(k) ?? []), { chain: ci, end, other, place: place[next] ?? 0, look: alike ? `${e?.style}|${here}|${there}` : '' }]);
+    };
+    add(src, c.nodes[1] as number, 0, startMark, endMark, tgt);
+    add(tgt, c.nodes[c.nodes.length - 2] as number, 1, endMark, startMark, src);
+  });
+  // A side that a loop or a line within the layer also uses keeps a port for every end.
+  l.chains.forEach((c, ci) => {
+    const side = c.kind === 'loop' ? 'up' : c.kind === 'flat' && plan.get(ci)?.mode === 'u' ? plan.get(ci)?.side : undefined;
+    if (side !== undefined) for (const n of c.nodes) closed.add(2 * n + (side === 'down' ? 1 : 0));
+  });
+  const taken = new Set<number>();
+  /** The runs of neighbouring ends of a side that look alike and are still free, each run leading to different boxes. */
+  const runsOf = (ends: BundleEnd[]): BundleEnd[][] => {
+    const runs: BundleEnd[][] = [];
+    let run: BundleEnd[] = [];
+    for (const m of ends) {
+      const joins = m.look !== '' && !taken.has(m.chain) && run[0]?.look === m.look && !run.some((r) => r.other === m.other);
+      if (!joins) {
+        if (run.length >= 2) runs.push(run);
+        run = m.look !== '' && !taken.has(m.chain) ? [m] : [];
+      } else run = [...run, m];
+    }
+    if (run.length >= 2) runs.push(run);
+    return runs;
+  };
+  // Two lines to the same neighbour have no order of their own on the side: neither is joined.
+  const ordered = [...sides]
+    .filter(([k]) => !closed.has(k))
+    .map(([, ends]) => [...ends].sort((a, b) => a.place - b.place || a.chain - b.chain))
+    .map((ends) => ends.map((m, i) => (ends[i - 1]?.place === m.place || ends[i + 1]?.place === m.place ? { ...m, look: '' } : m)));
+  const at = new Map<number, number>();
+  let next = 0;
+  // The longest run first: a line that could be joined at both ends is joined where more lines meet.
+  for (;;) {
+    let best: BundleEnd[] | undefined;
+    for (const ends of ordered) for (const run of runsOf(ends)) if (best === undefined || run.length > best.length) best = run;
+    if (best === undefined) break;
+    for (const m of best) {
+      taken.add(m.chain);
+      at.set(2 * m.chain + m.end, next);
+    }
+    next++;
+  }
+  return next === 0 ? NO_BUNDLES : at;
+}
+
+/** Ports every real node needs on its sides crossed by inter-layer edges; the ends of one bundle need one port together. */
+export function portDemand(l: Ladder, plan: Map<number, FlatPlan>, bundles: Bundles = NO_BUNDLES): Array<{ up: number; down: number }> {
   const need = l.nodes.map(() => ({ up: 0, down: 0 }));
+  const counted = new Set<number>();
+  /** False for an end of a bundle that has been counted already. */
+  const fresh = (chain: number, end: 0 | 1): boolean => {
+    const b = bundleAt(bundles, chain, end);
+    if (b < 0) return true;
+    if (counted.has(b)) return false;
+    counted.add(b);
+    return true;
+  };
   l.chains.forEach((c, ci) => {
     if (c.kind === 'span') {
       for (let k = 0; k + 1 < c.nodes.length; k++) {
         const p = c.nodes[k] as number;
         const q = c.nodes[k + 1] as number;
-        const [upper, lower] = (l.nodes[p]?.layer ?? 0) < (l.nodes[q]?.layer ?? 0) ? [p, q] : [q, p];
-        const a = need[upper];
-        const b = need[lower];
-        if (a) a.down++;
-        if (b) b.up++;
+        const pDown = (l.nodes[p]?.layer ?? 0) < (l.nodes[q]?.layer ?? 0);
+        const a = need[p];
+        const b = need[q];
+        if (a && (k > 0 || fresh(ci, 0))) a[pDown ? 'down' : 'up']++;
+        if (b && (k + 2 < c.nodes.length || fresh(ci, 1))) b[pDown ? 'up' : 'down']++;
       }
     } else if (c.kind === 'loop') {
       const n = need[c.nodes[0] as number];
@@ -226,8 +342,8 @@ export function portDemand(l: Ladder, plan: Map<number, FlatPlan>): Array<{ up: 
 }
 
 /** Widens real nodes by whole pairs of slot units until their sides hold the ports that edges need. */
-export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number, terminal: boolean, shapes: readonly NodeShape[], td: boolean, across: number, given: ReadonlyArray<number | undefined> = []): void {
-  const need = portDemand(l, plan);
+export function growForPorts(l: Ladder, plan: Map<number, FlatPlan>, unit: number, gap: number, step: number, terminal: boolean, shapes: readonly NodeShape[], td: boolean, across: number, given: ReadonlyArray<number | undefined> = [], bundles: Bundles = NO_BUNDLES): void {
+  const need = portDemand(l, plan, bundles);
   for (const n of l.nodes) {
     if (n.idx >= l.realCount) continue;
     const up = need[n.idx]?.up ?? 0;

@@ -22,6 +22,8 @@ import { crossingCount } from './check.ts';
 import { mirrorLayout } from './mirror.ts';
 import { drawAttached, splitAttached } from '../layered/attach.ts';
 import { layoutLayered } from '../layered/index.ts';
+import { sharing } from '../layered/ports.ts';
+import { costsMore, textCost } from './text-cost.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
 
@@ -51,6 +53,13 @@ export interface LayoutOptions extends SolveOptions {
   squeeze?: boolean;
   /** Terminal drawings: `false` never cuts the lines of boxes divided into compartments (the caller wraps them narrower itself). */
   clip?: boolean;
+  /**
+   * Terminal drawings of the layered engine: `true` lets lines without a label that end alike on one side of a box share one line of that side, `false` gives
+   * every line end a line of its own. Absent, both are drawn and the drawing with shared lines is kept when it costs no more in any respect (see `TextCost`) and
+   * less in one, and only when lines do share in it and its bands are arranged as without; a quick drawing and a drawing that is too wide without shared lines
+   * never share.
+   */
+  sharePorts?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
   /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
@@ -252,6 +261,31 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
+  // A quick drawing is what a caller chooses a setting on: it never shares ports, so that the choice does not turn on them.
+  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts);
+  // Lines that share a port on the side of a box leave the box shorter, and may cost elsewhere: the drawing is made
+  // with shared ports and without, and the one with shared ports is kept only when it costs no more in any respect
+  // and less in one. Where no line found a port to share there is one drawing only.
+  const before = sharing.placements;
+  const joined = layoutOnce(graph, given, { ...opts, sharePorts: true });
+  const shares = joined.edges.some((e) => e.sharedPort !== undefined);
+  if (sharing.placements === before && !shares) return joined;
+  const apart = layoutOnce(graph, given, { ...opts, sharePorts: false });
+  // Sharing ports changes the width of a drawing on the way, and with it the arrangement that fits: a drawing in which
+  // no line shares a port after all, or one whose bands are arranged another way, is not kept for it.
+  if (!shares || arrangementOf(joined) !== arrangementOf(apart)) return apart;
+  const own = textCost(apart);
+  // A drawing that is too wide without shared ports is given as it is, so that a caller that draws again for the width does what it did without them.
+  const limit = opts.maxWidth ?? given.defaultWidth;
+  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.width, own.width) > limit) return apart;
+  const shared = textCost(joined);
+  return costsMore(shared, own) || !costsMore(own, shared) ? apart : joined;
+}
+
+/** How the bands of a drawing are arranged: alongside the reading direction or across it, and which bands there are. */
+const arrangementOf = (l: Layout): string => [l.composition, l.laneAxis, ...l.lanes.map((lane) => lane.id)].join('|');
+
+function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true) return drawn;
   const limit = opts.maxWidth ?? given.defaultWidth;

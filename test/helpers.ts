@@ -57,6 +57,21 @@ export function rectsOverlap(
   return a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS;
 }
 
+/**
+ * True when segments `s` of `e` and `t` of `other` may run along one another: the two lines share a port, they
+ * end at the same point of a box there, and each segment is the one its line starts with at that point.
+ */
+function sharedStub(e: LayoutEdge, other: LayoutEdge, s: Seg, t: Seg): boolean {
+  if (e.sharedPort === undefined || e.sharedPort.id !== other.sharedPort?.id) return false;
+  /** The port of a line, and whether `seg` is the segment the line starts with there. */
+  const stub = (x: LayoutEdge, seg: Seg): Point | undefined => {
+    const [port, next] = x.sharedPort?.at === 'start' ? [x.points[0], x.points[1]] : [x.points[x.points.length - 1], x.points[x.points.length - 2]];
+    return (seg.a === port && seg.b === next) || (seg.b === port && seg.a === next) ? port : undefined;
+  };
+  const [p, q] = [stub(e, s), stub(other, t)];
+  return p !== undefined && q !== undefined && Math.abs(p.x - q.x) < EPS && Math.abs(p.y - q.y) < EPS;
+}
+
 /** Returns a list of invariant violations; empty when the layout is sound. */
 export function geometryViolations(l: Layout): string[] {
   const bad: string[] = [];
@@ -92,7 +107,7 @@ export function geometryViolations(l: Layout): string[] {
       if (!other) continue;
       for (const s of segmentsOf(e)) {
         for (const t of segmentsOf(other)) {
-          if (overlapLength(s, t) > EPS) bad.push(`edges ${name} and ${other.from}->${other.to} share a segment`);
+          if (overlapLength(s, t) > EPS && !sharedStub(e, other, s, t)) bad.push(`edges ${name} and ${other.from}->${other.to} share a segment`);
         }
       }
     }

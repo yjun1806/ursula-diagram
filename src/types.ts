@@ -309,6 +309,12 @@ export interface LayoutEdge {
    * splits, on the lead only. `square`: the branches leave a flat bar and are drawn without rounded bends.
    */
   trunk?: { id: string; lead: boolean; dot?: Point; square?: true };
+  /**
+   * Terminal drawings: the line ends on the same point of a box as the other lines with this `id`, at its start or at
+   * its end (`at`), and runs along them from there to where they split. Every one of them keeps its marks. A reader
+   * of the layout needs this to tell lines that overlap on purpose from lines that collide.
+   */
+  sharedPort?: { id: string; at: 'start' | 'end' };
 }
 
 export type DiagnosticKind = 'crossing' | 'detour' | 'overflow' | 'label-overlap' | 'label-tight' | 'off-centre' | 'mixed-side' | 'shared-port' | 'attach-overlap' | 'question' | 'direction-mirrored-in-text' | 'clusters-flattened-in-text';

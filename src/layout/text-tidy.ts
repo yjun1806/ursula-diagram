@@ -16,7 +16,7 @@ function cut(text: string, cells: number): string {
 }
 
 /** The cell a point of a line is drawn in: an end on the left or top border of its box is drawn in the cell outside it. */
-function cellOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>, index: number): [number, number] {
+export function cellOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>, index: number): [number, number] {
   const p = edge.points[index] as Point;
   let x = Math.floor(p.x + 1e-9);
   let y = Math.floor(p.y + 1e-9);

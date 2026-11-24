@@ -19,6 +19,8 @@ export interface Variant {
   start: boolean;
   /** How flows inside a lane are laid over rows. */
   fold: Fold;
+  /** Terminal: lines without a label that end alike on one side of a box share a port there. */
+  sharePorts?: true;
 }
 
 export const CANDIDATES: readonly Variant[] = [
@@ -141,17 +143,32 @@ function violationsOf(l: Layout, g: Segs): number {
   }
   // Two segments share a stretch when both are horizontal or both are not, they lie on one line and their spans overlap.
   const apart = 2 * EPS;
+  // Lines that share a port run along one another on purpose from that port to where they split: the segment each of
+  // them starts with there, and no other. -1 for a line with ports of its own.
+  const stub = l.edges.map((e, i) => (e.sharedPort === undefined || g.at[i] === g.at[i + 1] ? -1 : e.sharedPort.at === 'start' ? (g.at[i] as number) : (g.at[i + 1] as number) - 1));
+  const portOf = (i: number): [number, number] => {
+    const o = (stub[i] as number) * 8 + (l.edges[i]?.sharedPort?.at === 'start' ? 0 : 2);
+    return [S[o] as number, S[o + 1] as number];
+  };
+  const samePort = (i: number, j: number): boolean => {
+    if ((stub[i] as number) < 0 || (stub[j] as number) < 0 || l.edges[i]?.sharedPort?.id !== l.edges[j]?.sharedPort?.id) return false;
+    const [a, b] = [portOf(i), portOf(j)];
+    return Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS;
+  };
   for (let i = 0; i < m; i++) {
     for (let j = i + 1; j < m; j++) {
       if ((g.box[4 * i + 1] as number) + apart < (g.box[4 * j] as number) || (g.box[4 * j + 1] as number) + apart < (g.box[4 * i] as number)) continue;
       if ((g.box[4 * i + 3] as number) + apart < (g.box[4 * j + 2] as number) || (g.box[4 * j + 3] as number) + apart < (g.box[4 * i + 2] as number)) continue;
+      const [si, sj] = samePort(i, j) ? [stub[i], stub[j]] : [-1, -1];
       for (const s of g.horizontal[i] as number[]) {
         for (const t of g.horizontal[j] as number[]) {
+          if (s === si && t === sj) continue;
           if (Math.abs((S[s * 8 + 1] as number) - (S[t * 8 + 1] as number)) < EPS && Math.min(S[s * 8 + 5] as number, S[t * 8 + 5] as number) - Math.max(S[s * 8 + 4] as number, S[t * 8 + 4] as number) > EPS) n++;
         }
       }
       for (const s of g.vertical[i] as number[]) {
         for (const t of g.vertical[j] as number[]) {
+          if (s === si && t === sj) continue;
           if (Math.abs((S[s * 8] as number) - (S[t * 8] as number)) < EPS && Math.min(S[s * 8 + 7] as number, S[t * 8 + 7] as number) - Math.max(S[s * 8 + 6] as number, S[t * 8 + 6] as number) > EPS) n++;
         }
       }

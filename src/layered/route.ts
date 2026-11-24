@@ -10,7 +10,7 @@ import { useElbows } from './elbows.ts';
 import { edgeNear, gridUp } from '../layout/place.ts';
 import type { Ladder } from './model.ts';
 import type { Side } from './order.ts';
-import type { FlatPlan } from './ports.ts';
+import type { Bundles, FlatPlan } from './ports.ts';
 import { stats } from './stats.ts';
 import { settleVertices } from './vertex.ts';
 import { offCentreEnds } from './centre.ts';
@@ -20,7 +20,7 @@ import { placeEndLabels } from './end-labels.ts';
 import { ARROW, labelBox, labelLines, lineBeside } from './label-room.ts';
 import { BORDER_CLEAR } from './lane-gaps.ts';
 import { SLIDE } from './label-spot.ts';
-import { bodyLength, boxLength, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
+import { bodyLength, boxLength, bundleAt, CORNER_CLEAR, faceOf, faceOffsets, faceReach, LINE_PITCH, portStep, sideFractions } from './ports.ts';
 
 export interface Frame {
   graph: Graph;
@@ -105,6 +105,8 @@ interface Prepared {
   nodeO: (n: number) => number;
   centre: (n: number) => number;
   len: (n: number) => number;
+  /** The bundle a chain shares a port in and the end it shares it at (0: its source, 1: its target); undefined for a chain with ports of its own. */
+  bundle: (chain: number) => { id: number; end: 0 | 1 } | undefined;
 }
 
 interface TrackSpec {
@@ -113,6 +115,8 @@ interface TrackSpec {
   hi: number;
   top: number[];
   bot: number[];
+  /** Set on the two jogs of a pair that shares a port: when they run opposite ways from it they may stand on one track. */
+  pair?: number;
 }
 
 /** Pairs of jogs whose spans touch and that collide on a shared column whichever way they are stacked. */
@@ -131,7 +135,7 @@ export function hardPairs(items: TrackSpec[]): Array<[number, number]> {
 }
 
 /** Track order of the items of one band: jogs whose spans touch are stacked in the order that crosses least. */
-export function assignTracks(items: Array<{ order: number; lo: number; hi: number; top: number[]; bot: number[] }>): number[] {
+export function assignTracks(items: Array<{ order: number; lo: number; hi: number; top: number[]; bot: number[]; pair?: number }>): number[] {
   const n = items.length;
   const inside = (x: number, it: { lo: number; hi: number }): number => (x > it.lo + EPS && x < it.hi - EPS ? 1 : 0);
   const cost = (a: (typeof items)[number], b: (typeof items)[number]): number => {
@@ -149,6 +153,8 @@ export function assignTracks(items: Array<{ order: number; lo: number; hi: numbe
       const a = items[i] as (typeof items)[number];
       const b = items[j] as (typeof items)[number];
       if (a.lo > b.hi + EPS || b.lo > a.hi + EPS) continue;
+      // The two lines of a shared port that part there: one track holds both, and the port reads as a fork.
+      if (a.pair !== undefined && a.pair === b.pair && (a.lo > b.hi - EPS || b.lo > a.hi - EPS)) continue;
       overlap[i * n + j] = overlap[j * n + i] = 1;
       const ab = cost(a, b);
       const ba = cost(b, a);
@@ -200,7 +206,7 @@ export function assignTracks(items: Array<{ order: number; lo: number; hi: numbe
   return track;
 }
 
-function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Prepared {
+function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>, bundles: Bundles): Prepared {
   const { ruler, unit, gap } = f;
   const margin = marginOf(ruler);
   const origin = margin + f.gutter + ruler.lanePad;
@@ -288,7 +294,19 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   };
   // A side that only one edge touches takes it at the centre; where the side has two cells at the centre, the left or upper one.
   const sideCount = new Int32Array(2 * l.nodes.length);
-  for (const e of ends) sideCount[key(e.node, e.side)] = (sideCount[key(e.node, e.side)] ?? 0) + 1;
+  // The ends of one bundle share a port: they count as one end on their side, and what one of them takes all take.
+  const bundleOf = (e: End): number => {
+    if (e.item.kind !== 'piece') return -1;
+    const nodes = l.chains[e.item.chain]?.nodes ?? [];
+    return e.node === nodes[0] ? bundleAt(bundles, e.item.chain, 0) : e.node === nodes[nodes.length - 1] ? bundleAt(bundles, e.item.chain, 1) : -1;
+  };
+  const bundled: End[][] = [];
+  for (const e of ends) {
+    const b = bundleOf(e);
+    if (b >= 0) (bundled[b] ??= []).push(e);
+    if (b < 0 || bundled[b]?.length === 1) sideCount[key(e.node, e.side)] = (sideCount[key(e.node, e.side)] ?? 0) + 1;
+  }
+  const peers = (e: End): End[] => bundled[bundleOf(e)] ?? [e];
   const single = (n: number, side: Side): boolean => sideCount[key(n, side)] === 1;
   const portCentre = (n: number): number => centre(n) - (ruler.uniform && len(n) % 2 === 0 ? 0.5 : 0);
   const setX = (it: Item, which: 'a' | 'b', x: number): void => {
@@ -296,6 +314,19 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     else it.xb = x;
   };
   const done = (e: End): boolean => !Number.isNaN(e.which === 'a' ? e.item.xa : e.item.xb);
+  const endsOf = new Map<Item, { a?: End; b?: End }>();
+  for (const e of ends) endsOf.set(e.item, { ...endsOf.get(e.item), [e.which]: e });
+  const endOf = (it: Item, which: 'a' | 'b'): End | undefined => endsOf.get(it)?.[which];
+  /** Gives the port an end took to the other ends of its bundle. */
+  const share = (e: End | undefined, x: number): void => {
+    if (e === undefined) return;
+    for (const p of peers(e)) if (!done(p)) setX(p.item, p.which, x);
+  };
+  /** The port the bundle of an end has already taken. */
+  const shared = (e: End | undefined): number | undefined => {
+    const held = e === undefined ? undefined : peers(e).find(done);
+    return held === undefined ? undefined : held.which === 'a' ? held.item.xa : held.item.xb;
+  };
 
   // Pieces between two boxes that share a port go straight on it. In pixels a box with only this edge on its side has
   // it at the centre, so two such boxes go straight only when their centres agree; a box with several edges on its side
@@ -359,10 +390,12 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   for (const it of items) {
     if (it.kind !== 'piece' || !real(it.a) || !real(it.b) || !Number.isNaN(it.xa)) continue;
     if (!ruler.uniform && (single(it.a, 'down') || single(it.b, 'up'))) continue;
-    const fb = free(it.b, 'up');
+    const [ea, eb] = [endOf(it, 'a'), endOf(it, 'b')];
+    const [heldA, heldB] = [shared(ea), shared(eb)];
+    const fb = heldB === undefined ? free(it.b, 'up') : [heldB];
     // A terminal keeps boxes of one column centred: only two boxes with the same centre are joined by a straight line.
     if (ruler.uniform && Math.abs(centre(it.a) - centre(it.b)) > EPS) continue;
-    const common = free(it.a, 'down').filter((x) => fb.some((y) => Math.abs(x - y) < EPS));
+    const common = (heldA === undefined ? free(it.a, 'down') : [heldA]).filter((x) => fb.some((y) => Math.abs(x - y) < EPS));
     const mid = (centre(it.a) + centre(it.b)) / 2;
     common.sort((x, y) => Math.abs(x - mid) - Math.abs(y - mid) || x - y);
     const x = common[0];
@@ -370,15 +403,35 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     it.xa = it.xb = x;
     mark(it.a, 'down', x);
     mark(it.b, 'up', x);
+    share(ea, x);
+    share(eb, x);
   }
-  // A piece whose other end is a dummy line takes that line when the box has a free port there.
+  // Where a bundle stands in the order of its side: the middle of the ends it leads to.
+  const aim = (e: End): number => {
+    const all = peers(e);
+    return all.reduce((sum, p) => sum + centre(p.other), 0) / all.length;
+  };
+  /** Whether the bundle of `e` may take port `x`: the other ends of the side keep their order around it, the ones not yet placed with a port left on their side of it. */
+  const inOrder = (e: End, x: number): boolean => {
+    const mine = aim(e);
+    // The other ends of the side, a bundle among them counted once.
+    const others = ends.filter((o) => o.node === e.node && o.side === e.side && bundleOf(o) !== bundleOf(e) && peers(o)[0] === o);
+    const [before, after] = [others.filter((o) => aim(o) < mine), others.filter((o) => aim(o) >= mine)];
+    const at = (o: End): number => (o.which === 'a' ? o.item.xa : o.item.xb);
+    if (before.some((o) => done(o) && at(o) > x - EPS) || after.some((o) => done(o) && at(o) < x + EPS)) return false;
+    const ports = free(e.node, e.side);
+    return ports.filter((p) => p < x - EPS).length >= before.filter((o) => !done(o)).length && ports.filter((p) => p > x + EPS).length >= after.filter((o) => !done(o)).length;
+  };
+  // A piece whose other end is a dummy line takes that line when the box has a free port there. A bundle takes the
+  // line of one of its ends only where the side keeps its order: its other lines would have to cross what stands between.
   for (const e of ends) {
     if (done(e) || e.item.kind !== 'piece' || real(e.other) || single(e.node, e.side)) continue;
     const x = centre(e.other);
-    if (free(e.node, e.side).some((p) => Math.abs(p - x) < EPS)) {
-      setX(e.item, e.which, x);
-      mark(e.node, e.side, x);
-    }
+    if (!free(e.node, e.side).some((p) => Math.abs(p - x) < EPS)) continue;
+    if (bundleOf(e) >= 0 && !inOrder(e, x)) continue;
+    setX(e.item, e.which, x);
+    mark(e.node, e.side, x);
+    share(e, x);
   }
   // A loop takes two neighbouring free ports as near the centre as it can.
   for (const it of items) {
@@ -412,7 +465,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   const xOf = (e: End): number => (e.which === 'a' ? e.item.xa : e.item.xb);
   for (const group of groups) {
     const first = group[0] as End;
-    const loose = group.filter((e) => !done(e)).sort((x, y) => centre(x.other) - centre(y.other) || x.item.chain - y.item.chain);
+    const loose = group.filter((e) => !done(e) && peers(e)[0] === e).sort((x, y) => aim(x) - aim(y) || x.item.chain - y.item.chain);
     if (loose.length === 0) continue;
     const fixed = group.filter(done).map(xOf).sort((x, y) => x - y);
     const assign = (list: End[], xs: number[]): void => {
@@ -420,9 +473,10 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
         const x = xs[k] ?? xs[xs.length - 1] ?? centre(first.node);
         setX(e.item, e.which, x);
         mark(first.node, first.side, x);
+        share(e, x);
       });
     };
-    if (group.length === 1) {
+    if (single(first.node, first.side)) {
       assign(loose, [portCentre(first.node)]);
       continue;
     }
@@ -431,7 +485,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       continue;
     }
     for (let seg = 0; seg <= fixed.length; seg++) {
-      const members = loose.filter((e) => fixed.filter((fx) => fx < centre(e.other) - EPS).length === seg);
+      const members = loose.filter((e) => fixed.filter((fx) => fx < aim(e) - EPS).length === seg);
       if (members.length === 0) continue;
       const lo = seg === 0 ? -Infinity : (fixed[seg - 1] as number);
       const hi = seg === fixed.length ? Infinity : (fixed[seg] as number);
@@ -454,6 +508,12 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
     }
     list.push(i);
   });
+  // Per item: the bundle of two it is in, or -1.
+  const pairOf = new Int32Array(items.length).fill(-1);
+  const itemAt = new Map(items.map((it, i) => [it, i] as const));
+  bundled.forEach((list, b) => {
+    if (list.length === 2) for (const e of list) pairOf[itemAt.get(e.item) ?? 0] = b;
+  });
   const specsOf = (members: number[]): { horizontal: number[]; specs: TrackSpec[] } => {
     const horizontal = members.filter((i) => {
       const it = items[i] as Item;
@@ -466,7 +526,8 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       const fromBottom = it.kind !== 'piece' && it.aSide === 'up';
       const top = it.kind === 'piece' ? [it.xa] : fromBottom ? [] : [it.xa, it.xb];
       const bot = it.kind === 'piece' ? [it.xb] : fromBottom ? [it.xa, it.xb] : [];
-      return { order: i, lo, hi, top, bot };
+      const pair = pairOf[i] ?? -1;
+      return { order: i, lo, hi, top, bot, ...(pair < 0 ? {} : { pair }) };
     });
     return { horizontal, specs };
   };
@@ -476,7 +537,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
       const { specs } = specsOf(members);
       for (const [p, q] of hardPairs(specs)) {
         const pair = [items[specs[p]?.order ?? 0], items[specs[q]?.order ?? 0]];
-        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS && !single(e.node, e.side));
+        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS && !single(e.node, e.side) && bundleOf(e) < 0);
         for (const e of candidates) {
           const now = e.which === 'a' ? e.item.xa : e.item.xb;
           const others = free(e.node, e.side).filter((x) => Math.abs(x - now) > EPS).sort((x, y) => Math.abs(x - now) - Math.abs(y - now));
@@ -504,7 +565,7 @@ function prepare(f: Frame, l: Ladder, layers: number[][], start: number[], plan:
   items.forEach((it, i) => {
     it.track = tracks[i] ?? -1;
   });
-  return { items, ends, tracks, nodeO, centre, len };
+  return { items, ends, tracks, nodeO, centre, len, bundle: (chain) => { const [atSource, atTarget] = [bundleAt(bundles, chain, 0), bundleAt(bundles, chain, 1)]; return atSource >= 0 ? { id: atSource, end: 0 } : atTarget >= 0 ? { id: atTarget, end: 1 } : undefined; } };
 }
 
 /**
@@ -812,7 +873,9 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
       put(it.xb, y);
       put(it.xb, faceAt(it.b, 'up', edge));
     }
-    edges.push({ from: e.from, to: e.to, style: e.style, ...endFields(e), points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}) });
+    const bundle = prep.bundle(ci);
+    const sharedPort = bundle === undefined ? {} : { sharedPort: { id: `port${bundle.id}`, at: bundle.end === 0 ? ('start' as const) : ('end' as const) } };
+    edges.push({ from: e.from, to: e.to, style: e.style, ...endFields(e), points: simplify(xy), ...(f.main?.has(`${e.from}|${e.to}`) ? { main: true as const } : {}), ...sharedPort });
   });
 
   if (f.elbows) useElbows(edges, nodes, ruler, td, { stages: f.stages === true, td, order: new Map(graph.lanes.map((lane, i) => [lane.id, i] as const)) });
@@ -942,18 +1005,18 @@ function prepWidth(f: Frame, l: Ladder, start: number[], nodeO: (n: number) => n
  * Stage 5: coordinates, ports and routes. No path search: every edge is a vertical, a jog on a track of the
  * band it crosses, a straight segment between neighbours, or a U through the band above or below its layer.
  */
-export function route(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
+export function route(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>, bundles: Bundles = new Map()): Layout {
   // The search for a drawing asks for the same drawing many times over (candidates that meet, changes tried and taken
   // back): a drawing is made once for a graph and what it is made from, and given again after that.
   // The ladder, the layers and the plan are plain numbers and names and are written out as they are; only the frame
   // holds a map, and is written out with it.
   const { graph, ...frame } = given;
-  const key = `${JSON.stringify(frame, plain)}|${JSON.stringify(l)}|${JSON.stringify(layers)}|${start.join(',')}|${JSON.stringify([...plan])}`;
+  const key = `${JSON.stringify(frame, plain)}|${JSON.stringify(l)}|${JSON.stringify(layers)}|${start.join(',')}|${JSON.stringify([...plan])}|${JSON.stringify([...bundles])}`;
   let made = drawings.get(graph);
   if (made === undefined) drawings.set(graph, (made = new Map()));
   const known = made.get(key);
   if (known !== undefined) return known;
-  const drawn = routeOnce(given, l, layers, start, plan);
+  const drawn = routeOnce(given, l, layers, start, plan, bundles);
   made.set(key, drawn);
   return drawn;
 }
@@ -969,10 +1032,10 @@ function plain(_key: string, value: unknown): unknown {
   return value;
 }
 
-function routeOnce(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>): Layout {
+function routeOnce(given: Frame, l: Ladder, layers: number[][], start: number[], plan: Map<number, FlatPlan>, bundles: Bundles): Layout {
   stats.draws++;
   const f = evenRecords(given, l, start);
-  const prep = prepare(f, l, layers, start, plan);
+  const prep = prepare(f, l, layers, start, plan, bundles);
   const demand = new Array<number>(layers.length + 1).fill(0);
   const { ruler, td } = f;
   const need = (text: string): number => {

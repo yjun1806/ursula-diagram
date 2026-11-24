@@ -45,7 +45,7 @@ export interface Ladder {
 }
 
 import type { Ruler } from '../metrics.ts';
-import type { FlatPlan } from './ports.ts';
+import type { Bundles, FlatPlan } from './ports.ts';
 import type { Rows } from './rows.ts';
 
 export const isReal = (l: Ladder, n: number): boolean => n < l.realCount;
@@ -73,6 +73,8 @@ export interface Placed {
   start: number[];
   width: number;
   plan: Map<number, FlatPlan>;
+  /** The line ends that share a port; the boxes were grown for the ports that are left. */
+  bundles: Bundles;
   /** Units a layer may hold. */
   capacity: number;
   rows: Rows;

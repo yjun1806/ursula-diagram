@@ -89,7 +89,9 @@ describe('choose.ts, sides.ts, centre.ts and check.ts on shared segments give wh
     const first: string[] = [];
     seen.check = (l) => {
       const i = seen.calls - 1;
-      const subjects = [l, shaken(l, rnd), shaken(l, rnd)];
+      // The code before knows no lines that share a port: the marks of such lines are left out, and both score what remains.
+      const plain: Layout = { ...l, edges: l.edges.map(({ sharedPort: _sharedPort, ...e }) => e) };
+      const subjects = [plain, shaken(plain, rnd), shaken(plain, rnd)];
       subjects.forEach((s, k) => {
         const a = fresh.violations(s);
         if (a > 0) invalid++;

@@ -11,7 +11,7 @@ import { buildLadder } from './dummies.ts';
 import type { Ladder, Placed } from './model.ts';
 import type { Rows } from './rows.ts';
 import { orderLayers } from './order.ts';
-import { bodyLength, boxLength, CORNER_CLEAR, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep } from './ports.ts';
+import { bodyLength, boxLength, CORNER_CLEAR, endBundles, growForPorts, lacksRoom, LINE_PITCH, planFlat, portDemand, portStep, sharing } from './ports.ts';
 import type { FlatPlan } from './ports.ts';
 import { labelSize } from '../layout/labels.ts';
 import { labelBox, labelLines, roomAround } from './label-room.ts';
@@ -58,6 +58,8 @@ export interface LayeredOptions {
   fold?: boolean;
   /** Terminal only: the gap between neighbouring boxes in cells (3 holds one pass-through line, each further line adds 2); tried in turn when absent. */
   gap?: number;
+  /** Terminal only, layers as columns: lines without a label that end alike on one side of a box share one line of that side (off by default). */
+  sharePorts?: boolean;
   maxWidth?: number;
   maxHeight?: number;
   legend?: LegendOption;
@@ -204,6 +206,7 @@ function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | n
   const hit = made.get(key);
   if (hit !== undefined) {
     stats.placements++;
+    if (hit.bundles.size > 0) sharing.placements++;
     return hit;
   }
   const out = placeOnce(graph, ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given);
@@ -232,15 +235,19 @@ function placeOnce(graph: Graph, ruler: Ruler, units: number[], capacity: number
     leftToRight(ladder, layers);
     for (const node of ladder.nodes) if (node.idx < ladder.realCount) node.units = units[node.idx] ?? 2;
     const plan = planFlat(ladder, layers, ruler);
-    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across, graph.nodes.map((n, i) => (n.box === undefined ? undefined : bodies[i])));
-    const need = portDemand(ladder, plan);
-    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), body: (n) => { const own = bodies[n]; return own === undefined ? undefined : bodyLength(own, boxLength(ladder.nodes[n]?.units ?? 2, unit, gap)); }, squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)) });
+    // Whether lines share ports is settled here, once: the boxes grow for the ports that are left, and the routes are drawn from the same bundles.
+    const bundles = endBundles(graph, ladder, layers, plan, ruler.uniform === true && td && variant.sharePorts === true);
+    if (bundles.size > 0) sharing.placements++;
+    growForPorts(ladder, plan, unit, gap, portStep(unit, ruler), ruler.uniform === true, shapes, td, across, graph.nodes.map((n, i) => (n.box === undefined ? undefined : bodies[i])), bundles);
+    const need = portDemand(ladder, plan, bundles);
+    const aligned = align(ladder, layers, labelExtra(graph, ladder, plan, ruler, unit, gap, td), { limit, ports: geometry(ruler, unit, gap), body: (n) => { const own = bodies[n]; return own === undefined ? undefined : bodyLength(own, boxLength(ladder.nodes[n]?.units ?? 2, unit, gap)); }, squeeze, lines: gapLines(ruler, gap), dummyShift, main: new Set(rows.main), single: (n, side) => n < ladder.realCount && need[n]?.[side] === 1, degree: (n) => degreeOf[n] ?? 0, hubs: apart || (!ruler.uniform && unzoned(graph)), levelShared: bundles.size > 0 });
     return {
       ladder,
       layers,
       start: aligned.start,
       width: aligned.width,
       plan,
+      bundles,
       capacity: limit,
       rows,
       loose: variant.loose,
@@ -324,7 +331,7 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   };
   // Every way to fit is drawn and scored: bends and crossings, and a heavy price for each added row.
   const price = (p: Placed): number => {
-    const l = route(frame, p.ladder, p.layers, p.start, p.plan);
+    const l = route(frame, p.ladder, p.layers, p.start, p.plan, p.bundles);
     // An edge inside a lane that runs from a lower row up to a higher one reads against the folded flow.
     const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
     const upward = l.edges.filter((e) => {
@@ -398,7 +405,8 @@ interface Prep {
  */
 export type Order = 'gap' | 'rows';
 
-function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, variant: Variant, order: Order = 'gap'): Prep {
+function prepare(graph: Graph, given: Ruler, opts: LayeredOptions, apart: boolean, candidate: Variant, order: Order = 'gap'): Prep {
+  const variant: Variant = opts.sharePorts === true ? { ...candidate, sharePorts: true } : candidate;
   const td = graph.direction === 'TD';
   const tuned = layeredRuler(given, opts.gap, opts.share !== false);
   // Terminal stages stack boxes in a column: the lines that cross the gap between them stand on adjacent rows.
@@ -457,7 +465,7 @@ function mainEdges(graph: Graph, rows: Rows): ReadonlySet<string> {
 
 function plainDraw(p: Prep, placed: Placed, elbows = p.opts.elbows !== false): Layout {
   const f = { ...frameFor(p.graph, placed.ruler, p.bounded ? p.limit : undefined).frame, elbows, stages: p.apart, ...(p.apart ? {} : { main: mainEdges(p.graph, placed.rows) }) };
-  return route(f, placed.ladder, placed.layers, placed.start, placed.plan);
+  return route(f, placed.ladder, placed.layers, placed.start, placed.plan, placed.bundles);
 }
 
 function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !== false): Layout {
@@ -466,7 +474,7 @@ function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !==
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {
     const f = { ...frameFor(graph, r, bounded ? limit : undefined).frame, elbows, stages: apart, ...(apart ? {} : { main: mainEdges(graph, placed.rows) }) };
-    return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan);
+    return route(spread === 0 ? f : { ...f, spread }, placed.ladder, placed.layers, placed.start, placed.plan, placed.bundles);
   };
   let drawn = draw(ruler);
   let usedGap = ruler.rankGap;

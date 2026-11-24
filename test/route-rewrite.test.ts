@@ -11,9 +11,12 @@ vi.mock('../src/layered/route.ts', async (original) => {
     ...real,
     route: (...args: Parameters<typeof real.route>): Layout => {
       const a = real.route(...args);
-      const b = old(...args);
+      // The code before the rewrite gives every line end a port of its own: a drawing whose lines share ports is compared drawn that way.
+      const [frame, l, layers, start, plan, bundles] = args;
+      const b = old(frame, l, layers, start, plan);
       seen.calls++;
-      if (JSON.stringify(a) !== JSON.stringify(b)) seen.wrong.push(JSON.stringify(args[0].graph.nodes.map((n) => n.id)));
+      const own = bundles === undefined || bundles.size === 0 ? a : real.route(frame, l, layers, start, plan);
+      if (JSON.stringify(own) !== JSON.stringify(b)) seen.wrong.push(JSON.stringify(args[0].graph.nodes.map((n) => n.id)));
       return a;
     },
   };

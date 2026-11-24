@@ -43,6 +43,8 @@ export interface AlignOptions {
   degree?: (node: number) => number;
   /** Stages: a node with two or more partners in the next layer or the one before stands in the middle of them. */
   hubs?: boolean;
+  /** With `hubs`: a node whose lines to an even number of partners share the one port of its side stands level with one of the two middle partners instead of between them. */
+  levelShared?: boolean;
   /** Real nodes whose side (`down` toward the next layer, `up` toward the previous) has this one edge only: the edge is at the centre. */
   single?: (node: number, side: 'up' | 'down') => boolean;
   /** Units a dummy at the end of a layer needs beyond its own slot to stay inside the limit (0 or 1). */
@@ -723,7 +725,12 @@ export function align(l: Ladder, layers: number[][], extra: Extra = () => 0, opt
       }
       const used = centres.subarray(0, d);
       used.sort();
-      const target = d % 2 === 1 ? (used[(d - 1) / 2] as number) : ((used[d / 2 - 1] as number) + (used[d / 2] as number)) / 2;
+      // Lines that share the one port of the side split outside the box: level with one of the two middle partners,
+      // the nearer one, the line to it is straight, where between them every line would bend.
+      const shared = opts.levelShared === true && (downCount >= 2 ? singleDown[n] : singleUp[n]) === 1;
+      const [lower, upper] = [used[d / 2 - 1] as number, used[d / 2] as number];
+      const here = (start[n] as number) + (centreOff[n] as number);
+      const target = d % 2 === 1 ? (used[(d - 1) / 2] as number) : shared ? (Math.abs(lower - here) <= Math.abs(upper - here) ? lower : upper) : (lower + upper) / 2;
       const b = before[n] as number;
       const a = after[n] as number;
       const low = b === -1 ? 0 : (start[b] as number) + (sepLeft[n] as number);
