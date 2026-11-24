@@ -1,7 +1,7 @@
 {
   "name": "@yjun1806/ursula",
   "version": "0.0.0",
-  "description": "Deterministic layout and rendering of Mermaid flowcharts to layout data, inline SVG and terminal text.",
+  "description": "Draws Mermaid text as inline SVG and terminal text: every diagram type, the same drawing every time, no browser.",
   "type": "module",
   "private": true,
   "main": "dist/index.js",
