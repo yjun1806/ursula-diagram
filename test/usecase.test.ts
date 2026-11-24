@@ -597,3 +597,26 @@ describe('usecase: errors', () => {
     expect(() => parseUsecase('actor A')).toThrow(UrsulaError);
   });
 });
+
+describe('usecase actor column', () => {
+  const drawn = (src: string): Layout => (selectFrontEnd(src).json(src, 'svg', {}) as { layout: Layout }).layout;
+  const centre = (l: Layout, id: string): number => {
+    const n = l.nodes.find((x) => x.id === id);
+    if (!n) throw new Error(`no node ${id}`);
+    return n.x + n.w / 2;
+  };
+
+  it('keeps the actors in the first column when a line joins two use cases', () => {
+    const l = drawn('usecase-beta\nactor Customer\nactor Auditor\nBrowse\nCheckout\nCustomer --> Browse\nAuditor --> Checkout\nBrowse --> Checkout');
+    expect(centre(l, 'Customer')).toBe(centre(l, 'Auditor'));
+    expect(centre(l, 'Browse')).toBe(centre(l, 'Checkout'));
+    expect(centre(l, 'Customer')).toBeLessThan(centre(l, 'Browse'));
+    expect(geometryViolations(l)).toEqual([]);
+  });
+
+  it('keeps the drawing of the layered engine when the columns would bend more', () => {
+    const src = 'usecase-beta\nactor SalesAgent("Sales agent")@{ business: true } <<Employee>>\nactor Broker@{ type: hollow, business: true }\nQuote("Prepare quote")@{ business: true } <<Core>>\nArchive[Archive quote] <<Record>>\nSalesAgent --> Quote\nBroker --> Quote\nQuote --> Archive';
+    const l = drawn(src);
+    expect(l.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0)).toBe(0);
+  });
+});

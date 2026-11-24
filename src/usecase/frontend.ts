@@ -6,7 +6,7 @@ import type { RenderOptions } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
 import type { NodeHook } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
-import type { GridSpec, LayoutNode } from '../types.ts';
+import type { GridSpec, Layout, LayoutNode } from '../types.ts';
 import { emptySpec } from '../c4/grid-rows.ts';
 import type { UsecaseModel } from './model.ts';
 import { parseUsecase } from './parse.ts';
@@ -44,15 +44,27 @@ function summary(model: UsecaseModel): string {
   return `Use case diagram: ${actors} actors, ${model.graph.nodes.length - actors} other elements, ${model.graph.edges.length} lines`;
 }
 
-function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean) {
+const bendsIn = (l: Layout): number => l.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0);
+const crossingsIn = (l: Layout): number =>
+  l.diagnostics.reduce((sum, d) => sum + (d.kind !== 'crossing' ? 0 : Number(/\((\d+) times\)/.exec(d.message)?.[1] ?? 1)), 0);
+
+function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean): Layout {
   const grid = text ? undefined : actorColumns(model);
-  return layout(grid === undefined ? model.graph : { ...model.graph, placer: 'c4-grid', grid }, text ? cellRuler() : pixelRuler(), {
-    ...(opts.engine === undefined ? {} : { engine: opts.engine }),
-    ...(opts.quality === undefined ? {} : { quality: opts.quality }),
-    ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
-    ...(text ? { fold: true } : {}),
-    legend: false,
-  });
+  const draw = (columns: GridSpec | undefined): Layout =>
+    layout(columns === undefined ? model.graph : { ...model.graph, placer: 'c4-grid', grid: columns }, text ? cellRuler() : pixelRuler(), {
+      ...(opts.engine === undefined ? {} : { engine: opts.engine }),
+      ...(opts.quality === undefined ? {} : { quality: opts.quality }),
+      ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
+      ...(text ? { fold: true } : {}),
+      legend: false,
+    });
+  if (grid === undefined) return draw(undefined);
+  const columns = draw(grid);
+  const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
+  // Lines between two use cases can run a way round in the columns: the drawing of the layered engine is kept when it bends less and crosses no more.
+  if (!model.graph.edges.some((e) => kind(e.from) !== 'actor' && kind(e.to) !== 'actor')) return columns;
+  const free = draw(undefined);
+  return bendsIn(free) < bendsIn(columns) && crossingsIn(free) <= crossingsIn(columns) ? free : columns;
 }
 
 registerFrontEnd({
@@ -75,9 +87,10 @@ registerFrontEnd({
 });
 
 /**
- * The cells of a drawing of actors and their use cases only (no boundary, note or line between two use cases): the
+ * The cells of a drawing of actors and their use cases only (no boundary, no note, no line between two actors): the
  * actors in the first column, each in the middle of its use cases, and the use cases in the second, grouped by actor in
- * the order written. Undefined for any other drawing, which keeps the layered engine.
+ * the order written; a use case no actor is joined to stands below them. Undefined for any other drawing, which keeps
+ * the layered engine.
  */
 /** The gap between two use cases of one actor, and between the use cases of two actors. */
 const TOGETHER = 24;
@@ -88,7 +101,7 @@ function actorColumns(model: UsecaseModel): GridSpec | undefined {
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
   if ((g.clusters ?? []).length > 0 || g.direction !== 'LR') return undefined;
   if (g.nodes.some((n) => kind(n.id) !== 'actor' && kind(n.id) !== 'usecase')) return undefined;
-  if (g.edges.some((e) => (kind(e.from) === 'actor') === (kind(e.to) === 'actor'))) return undefined;
+  if (g.edges.some((e) => kind(e.from) === 'actor' && kind(e.to) === 'actor')) return undefined;
   const cells: Record<string, { r: number; c: number }> = {};
   const shift: Record<string, number> = {};
   let row = 0;
