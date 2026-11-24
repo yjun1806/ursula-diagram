@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderThemedScene, sceneStyleSheet } from '../src/render/scene-svg.ts';
+import { COLORS } from '../src/render/colors.ts';
 import { SCENE_THEME } from '../src/render/scene-theme.ts';
 import type { Scene } from '../src/types.ts';
 
@@ -54,7 +55,7 @@ describe('scene drawing', () => {
     const css = svg.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
     expect(css).not.toMatch(/\.id-|--id-|url\(#id-/);
     expect(css).toContain('@media (prefers-color-scheme: dark)');
-    expect(css).toMatch(/var\(--ursula-box-fill,#/);
+    expect(css).toMatch(/var\(--ursula-surface,#/);
   });
 
   it('uses no context-stroke and ends the arrow line short of the tip', () => {
@@ -134,29 +135,29 @@ describe('scene drawing', () => {
 
   it('draws the rule of a box in a filled zone as a hairline that shows on that box in both schemes', () => {
     for (const mode of [0, 1] as const) {
-      const rule = SCENE_THEME.colors['rule-in-zone']?.[mode] ?? '';
-      const face = SCENE_THEME.colors['box-in-zone']?.[mode] ?? '';
+      const rule = COLORS['hair']?.[mode] ?? '';
+      const face = COLORS['surface']?.[mode] ?? '';
       expect(contrast(rule, face), `${mode}`).toBeGreaterThan(1.15);
     }
     const light = sceneStyleSheet().split('@media')[0] ?? '';
     expect(light.indexOf('.ursula-rule--in-zone{')).toBeGreaterThan(light.indexOf('.ursula-rule{'));
-    expect(light).toMatch(/\.ursula-rule--in-zone\{stroke:var\(--ursula-rule-in-zone,#[0-9a-f]{6}\);stroke-width:1\}/);
+    expect(light).toMatch(/\.ursula-rule--in-zone\{stroke:var\(--ursula-hair,#[0-9a-f]{6}\);stroke-width:1\}/);
   });
 
   it('has a zone face role that paints the zone colour without its outline', () => {
     const light = sceneStyleSheet().split('@media')[0] ?? '';
-    expect(light).toContain('.ursula-zone-face{fill:var(--ursula-zone-fill,');
+    expect(light).toContain('.ursula-zone-face{fill:var(--ursula-surface,');
     expect(light).not.toMatch(/\.ursula-zone-face\{[^}]*stroke:var/);
   });
 
   it('paints a note inside a zone apart from the zone in both schemes', () => {
     for (const mode of [0, 1] as const) {
-      const note = SCENE_THEME.colors['note-in-zone']?.[mode] ?? '';
-      const zone = SCENE_THEME.colors['zone-fill']?.[mode] ?? '';
+      const note = COLORS['chip-fill']?.[mode] ?? '';
+      const zone = COLORS['surface']?.[mode] ?? '';
       expect(contrast(note, zone), `${mode}`).toBeGreaterThanOrEqual(1.05);
     }
     const light = sceneStyleSheet().split('@media')[0] ?? '';
-    expect(light.indexOf('.ursula-note--in-zone{fill:var(--ursula-note-in-zone,')).toBeGreaterThan(light.indexOf('.ursula-note{'));
+    expect(light.indexOf('.ursula-note--in-zone{fill:var(--ursula-chip-fill,')).toBeGreaterThan(light.indexOf('.ursula-note{'));
   });
 
   it('draws a round box rounder than a plain box', () => {

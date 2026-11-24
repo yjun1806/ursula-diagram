@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { themeValues } from '../src/render/theme.ts';
+import { COLORS } from '../src/render/colors.ts';
 import { render } from '../src/index.ts';
 
 function luminance(hex: string): number {
@@ -15,7 +15,7 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const values = themeValues();
+const values = COLORS;
 const of = (name: string, mode: 0 | 1): string => {
   const pair = values[name];
   if (pair === undefined) throw new Error(`no token ${name}`);

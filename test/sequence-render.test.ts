@@ -39,8 +39,8 @@ describe('sequence svg', () => {
     expect(svg).toContain('role="img"');
     expect(svg).toContain('<title>Sequence diagram: 2 participants, 3 messages</title>');
     expect(svg).toContain('prefers-color-scheme: dark');
-    expect(svg).toContain('--ursula-ink');
-    expect(svg).toContain('--ursula-edge-msg');
+    expect(svg).toContain('--ursula-fg');
+    expect(svg).toContain('--ursula-line');
     expect(svg).not.toMatch(/#[0-9a-f]{3,6}"/i);
   });
 

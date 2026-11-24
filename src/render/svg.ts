@@ -3,9 +3,10 @@ import { pixelRuler } from '../metrics.ts';
 import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, faceLineHeights, FACE_PILL_GAP, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
+import { fillColors } from './colors.ts';
 import { SCENE_THEME } from './scene-theme.ts';
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
-import { ARROW_TRIM, flowMarker, flowRules, recordRules, THEME, tokenVar } from './theme.ts';
+import { ARROW_TRIM, flowMarker, flowRules, recordRules, THEME } from './theme.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutCluster, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
 import { CLUSTER_NAME_INSET } from '../layout/clusters.ts';
 
@@ -48,16 +49,10 @@ export const FONT_STACK =
 
 const FONT = FONT_STACK;
 
-type Lookup = (name: string, mode: 0 | 1) => string;
-
 /** Rules are written once with $name placeholders and expanded per colour scheme. */
-function expand(rule: string, mode: 0 | 1, lookup: Lookup): string {
-  return rule.replace(/\$([a-z][a-z-]*)/g, (_, name: string) => lookup(name, mode));
-}
-
-function styleSheet(rules: readonly string[], lookup: Lookup): string {
-  const light = rules.map((r) => expand(r, 0, lookup)).join('\n');
-  const dark = rules.map((r) => expand(r, 1, lookup)).join('\n');
+function styleSheet(rules: readonly string[]): string {
+  const light = rules.map((r) => fillColors(r, 0)).join('\n');
+  const dark = rules.map((r) => fillColors(r, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
 }
 
@@ -251,23 +246,33 @@ function faceRules(layout: Layout): string[] {
   ];
 }
 
-/** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene colours. */
+/**
+ * A dashed boundary by depth: its fill, the fill of a label chip on it, and the outline that replaces the dashes. The
+ * outermost keeps its dashes, the next is the face of the page in a thin solid line, the innermost a fill in a hairline.
+ */
+const TINTS = [
+  ['outer', '$tint-outer', '$tint-chip', ''],
+  ['mid', '$surface', '$chip-fill', ';stroke:$line;stroke-width:1;stroke-dasharray:none'],
+  ['inner', '$tint-inner', '$tint-chip', ';stroke:$hair;stroke-width:1;stroke-dasharray:none'],
+] as const;
+
+/** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes the width and the dashes of its stroke from the scene measures. */
 function clusterRules(clusters: readonly LayoutCluster[]): string[] {
   if (clusters.length === 0) return [];
   const m = SCENE_THEME.metrics;
   return [
     '.ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}',
-    '.ursula-zone--plain{fill:$zone}',
+    '.ursula-zone--plain{fill:$surface}',
     ...(clusters.some((c) => c.style === 'dashed')
-      ? [`.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
+      ? [`.ursula-zone--dashed{fill:none;stroke:$faint;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
       : []),
     // The dashed boundaries take a fill by depth, a knockout of a name too.
     ...(clusters.some((c) => c.style === 'dashed')
-      ? (['outer', 'mid', 'inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:$tint-${t}${t === 'mid' ? ';stroke:$line;stroke-width:1;stroke-dasharray:none' : t === 'inner' ? ';stroke:$hair;stroke-width:1;stroke-dasharray:none' : ''}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:$chip-${t}}`])
+      ? TINTS.flatMap(([t, fill, chip, stroke]) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:${fill}${stroke}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:${fill}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:${chip}}`])
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
     ...(clusters.some((c) => c.name?.subtitle === true) ? ['.ursula-zone-sub{font-weight:400;opacity:.75}'] : []),
-    ...(clusters.some((c) => c.name?.knockout) ? ['.ursula-zone-knock{fill:$lane}', '.ursula-zone-knock--plain{fill:$zone}', '.ursula-zone-knock--dashed{fill:$zone}'] : []),
+    ...(clusters.some((c) => c.name?.knockout) ? ['.ursula-zone-knock{fill:$lane}', '.ursula-zone-knock--plain{fill:$surface}', '.ursula-zone-knock--dashed{fill:$surface}'] : []),
   ];
 }
 
@@ -734,14 +739,11 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), ...(layout.clusters ?? []).filter((c) => c.style === 'dashed').map((c) => c.x), layout.width);
   const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
   const h = num(layout.height + rowH);
-  // A colour the layered drawing does not have (the dashed zone's stroke) is the scene colour of the same name.
-  const scene = SCENE_THEME.colors;
-  const lookup: Lookup = (name, mode) => (THEME.tokens[name] === undefined && scene[name] !== undefined ? `var(--ursula-${name},${scene[name][mode]})` : tokenVar(name, mode));
   const ends = extraEnds(layout, paint);
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...(usesRecords(layout) ? recordRules() : []), ...faceRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
+    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...(usesRecords(layout) ? recordRules() : []), ...faceRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])])}</style>`,
     `<defs>${flowMarker('ursula-arrow', 'ursula-arrow')}${flowMarker('ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}</defs>`,
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'))),

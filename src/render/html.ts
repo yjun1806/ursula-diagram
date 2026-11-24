@@ -1,6 +1,6 @@
 import type { Layout } from '../types.ts';
+import { COLORS } from './colors.ts';
 import { escapeXml, FONT_STACK } from './svg.ts';
-import { themeValues } from './theme.ts';
 
 export type Theme = 'auto' | 'light' | 'dark';
 
@@ -13,14 +13,15 @@ export interface HtmlOptions {
 
 const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
 
-type Palette = Record<string, readonly [string, string]>;
-
-/** Declarations of one colour scheme: every drawing token and the page background. */
-function variables(palette: Palette, mode: 0 | 1): string {
-  const tokens = Object.entries(palette)
+/**
+ * Declarations of one colour scheme: every colour of a drawing and the page background. The background of a drawing
+ * is left out, so that the page shows through a drawing that paints none.
+ */
+function variables(mode: 0 | 1): string {
+  const colours = Object.entries(COLORS)
     .filter(([name]) => name !== 'bg')
     .map(([name, pair]) => `--ursula-${name}:${pair[mode]}`);
-  return [...tokens, `--ursula-paper:${PAPER[mode]}`].join(';');
+  return [...colours, `--ursula-paper:${PAPER[mode]}`].join(';');
 }
 
 /**
@@ -49,11 +50,11 @@ export function fileBase(title: string | undefined): string {
   return slug === '' ? 'diagram' : slug;
 }
 
-const style = (palette: Palette): string => `
+const STYLE = `
 *{box-sizing:border-box}
-:root{${variables(palette, 0)};color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${variables(palette, 1)};color-scheme:dark}}
-:root[data-theme="dark"]{${variables(palette, 1)};color-scheme:dark}
+:root{${variables(0)};color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${variables(1)};color-scheme:dark}}
+:root[data-theme="dark"]{${variables(1)};color-scheme:dark}
 body{margin:0;padding:16px;background:var(--ursula-paper);color:var(--ursula-fg);font-family:${FONT_STACK}}
 h1{margin:0 0 8px;font-size:16px;font-weight:600}
 .ursula-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
@@ -66,7 +67,7 @@ h1{margin:0 0 8px;font-size:16px;font-weight:600}
 [data-node]{cursor:pointer}
 svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:.25}
 #ursula-raw{margin:12px 0 0;padding:8px;white-space:pre-wrap;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);font-size:12px}
-@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{${variables(palette, 0)};color-scheme:light}.ursula-tools,#ursula-raw,#ursula-note{display:none}svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:1}}
+@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{${variables(0)};color-scheme:light}.ursula-tools,#ursula-raw,#ursula-note{display:none}svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:1}}
 `.trim();
 
 const SCRIPT = `
@@ -252,7 +253,7 @@ export function renderHtmlDocument(svg: string, layout: Layout | undefined, sour
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeXml(title)}</title>`,
-    `<style>${style(themeValues())}</style>`,
+    `<style>${STYLE}</style>`,
     '</head>',
     `<body data-file="${escapeXml(fileBase(opts.title))}">`,
     ...(opts.title === undefined ? [] : [`<h1>${escapeXml(opts.title)}</h1>`]),

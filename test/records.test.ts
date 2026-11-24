@@ -144,7 +144,7 @@ describe('marks of relation lines', () => {
   it('fills its marker: solid marks use the line colour, hollow ones the page colour', () => {
     const svg = renderSvg(layout(pair('diamond-filled', 'triangle-open'), px), { legend: false });
     expect(svg).toContain('.ursula-end-solid{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554)');
-    expect(svg).toContain('.ursula-end-hollow{fill:var(--ursula-zone,#fcfcfa);stroke:var(--ursula-line,#565554)');
+    expect(svg).toContain('.ursula-end-hollow{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554)');
   });
 
   it('draws a mark in the accent colour on a thick line', () => {
