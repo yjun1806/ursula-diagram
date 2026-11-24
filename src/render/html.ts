@@ -69,8 +69,8 @@ h1{margin:0 0 8px;font-size:16px;font-weight:600}
 .ursula-tools button:hover{border-color:var(--ursula-accent)}
 .ursula-tools button:focus-visible,[data-node]:focus-visible{outline:2px solid var(--ursula-accent);outline-offset:2px}
 #ursula-note{font-size:12px;color:var(--ursula-muted)}
-.ursula-frame{overflow-x:auto}
-.ursula-frame svg{display:block;max-width:none}
+.ursula-viewport{overflow-x:auto}
+.ursula-viewport svg{display:block;max-width:none}
 [data-node]{cursor:pointer}
 svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:.25}
 #ursula-raw{margin:12px 0 0;padding:8px;white-space:pre-wrap;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);font-size:12px}
@@ -81,7 +81,7 @@ const SCRIPT = `
 (function () {
   ${BAKE_SOURCE}
   var root = document.documentElement;
-  var svg = document.querySelector('.ursula-frame svg');
+  var svg = document.querySelector('.ursula-viewport svg');
   var note = document.getElementById('ursula-note');
   var base = document.body.getAttribute('data-file') || 'diagram';
   var links = {};
@@ -270,7 +270,7 @@ export function renderHtmlDocument(svg: string, layout: Layout | undefined, sour
       '<button type="button" id="ursula-svg">SVG</button>' +
       '<button type="button" id="ursula-copy">Copy source</button>' +
       '<span id="ursula-note" role="status"></span></div>',
-    `<div class="ursula-frame">${pressable}</div>`,
+    `<div class="ursula-viewport">${pressable}</div>`,
     `<script type="text/plain" id="ursula-source">${encodeSource(source)}</script>`,
     `<script type="application/json" id="ursula-links">${links}</script>`,
     `<script>${SCRIPT}</script>`,

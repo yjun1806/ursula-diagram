@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { renderHtml } from '../src/html.ts';
 import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import { BAKE_SOURCE, decodeSource, encodeSource, fileBase } from '../src/render/html.ts';
+import { sceneStyleSheet } from '../src/render/scene-svg.ts';
+import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
 
 const SRC = `swimlane-beta LR
   subgraph a[Alpha]
@@ -111,5 +113,14 @@ describe('saving with baked colours', () => {
     const svg = renderSvg(layout(parse(SRC), pixelRuler()));
     const baked = bake(svg, () => '#000000');
     expect(baked.replace(/#000000/g, '')).toBe(svg.replace(/var\(--ursula-[a-z-]+,[^)]*\)/g, ''));
+  });
+
+  it('wraps the drawing in no class a drawing styles', () => {
+    const page = renderHtml('sequenceDiagram\n  A->>B: hi\n  loop again\n    B->>A: yo\n  end');
+    const outer = page.slice(page.indexOf('<body'), page.indexOf('<svg '));
+    const classes = values(outer, 'class').flatMap((v) => v.split(/\s+/));
+    expect(classes.length).toBeGreaterThan(0);
+    const sheet = sceneStyleSheet(SCENE_THEME_SPECS.band);
+    for (const name of classes) expect(sheet).not.toMatch(new RegExp(`\\.${name}[^a-z-]`));
   });
 });
