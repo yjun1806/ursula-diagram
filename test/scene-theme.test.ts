@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderThemedScene } from '../src/render/scene-svg.ts';
+import { renderThemedScene, sceneStyleSheet } from '../src/render/scene-svg.ts';
 import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
 import { THEMES } from '../src/render/theme.ts';
 import type { Scene } from '../src/types.ts';
@@ -108,8 +108,10 @@ describe('themed scene', () => {
   });
 
   it('styles a series tint written as two roles and as one', () => {
+    expect(sceneStyleSheet(SCENE_THEME_SPECS.solid)).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
+    // The sample writes it as two roles, so its own sheet keeps that selector alone.
     const css = renderThemedScene(scene, { theme: 'solid' }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
-    expect(css).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
+    expect(css).toMatch(/\n\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
   });
 
   it('writes text spans as tspans of one text, with weight, slant and role', () => {
@@ -145,8 +147,7 @@ describe('themed scene', () => {
         const face = spec.colors['box-in-zone']?.[mode] ?? '';
         expect(contrast(rule, face), `${theme} ${mode}`).toBeGreaterThan(1.15);
       }
-      const css = renderThemedScene(scene, { theme }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
-      const light = css.split('@media')[0] ?? '';
+      const light = sceneStyleSheet(spec).split('@media')[0] ?? '';
       expect(light.indexOf('.ursula-rule--in-zone{')).toBeGreaterThan(light.indexOf('.ursula-rule{'));
       expect(light).toMatch(/\.ursula-rule--in-zone\{stroke:var\(--ursula-rule-in-zone,#[0-9a-f]{6}\);stroke-width:1\}/);
     }
@@ -172,7 +173,7 @@ describe('themed scene', () => {
 
   it('has a zone face role that paints the zone colour without its outline', () => {
     for (const theme of THEMES) {
-      const light = (renderThemedScene(scene, { theme }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').split('@media')[0] ?? '';
+      const light = sceneStyleSheet(SCENE_THEME_SPECS[theme]).split('@media')[0] ?? '';
       expect(light).toContain('.ursula-zone-face{fill:var(--ursula-zone-fill,');
       expect(light).not.toMatch(/\.ursula-zone-face\{[^}]*stroke:var/);
     }
@@ -186,7 +187,7 @@ describe('themed scene', () => {
         const zone = spec.colors['zone-fill']?.[mode] ?? '';
         expect(contrast(note, zone), `${theme} ${mode}`).toBeGreaterThanOrEqual(1.05);
       }
-      const light = (renderThemedScene(scene, { theme }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').split('@media')[0] ?? '';
+      const light = sceneStyleSheet(spec).split('@media')[0] ?? '';
       expect(light.indexOf('.ursula-note--in-zone{fill:var(--ursula-note-in-zone,')).toBeGreaterThan(light.indexOf('.ursula-note{'));
     }
   });

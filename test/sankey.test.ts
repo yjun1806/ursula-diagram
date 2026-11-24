@@ -179,7 +179,7 @@ describe('sankey: official examples', () => {
       for (const theme of ['solid', 'outline', 'card'] as const) {
         const svg = render(src, { theme });
         expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('ursula-series-1');
+        expect(svg).toMatch(/ class="ursula-series-\d/);
       }
     });
   }

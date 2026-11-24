@@ -13,10 +13,10 @@ const FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 const SERIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 /**
- * Rules of a themed drawing, written once with `$name` colour placeholders and `%name` metric placeholders.
- * A role `x` is the class `ursula-x`.
+ * Every rule a themed drawing can need, written once with `$name` colour placeholders and `%name` metric placeholders.
+ * A role `x` is the class `ursula-x`. A selector is a run of classes and nothing else, which is what `ruleFor` reads.
  */
-function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
+function sceneRules(spec: SceneThemeSpec): string[] {
   const arrow = spec.arrow;
   const head =
     arrow.kind === 'filled'
@@ -117,7 +117,8 @@ function sceneRules(spec: SceneThemeSpec, peak: boolean): string[] {
     '.ursula-mark-line{fill:none;stroke:$data;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
     '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:%dot-w}',
     '.ursula-dot{fill:$dot-neutral}',
-    ...(peak
+    // A neutral chart with an emphasised bar.
+    ...(spec.peakBar
       ? [
           '.ursula-mark--peak{fill:$accent-mid}',
           '.ursula-mark--ink{fill:$ink}',
@@ -138,8 +139,30 @@ function expand(rule: string, spec: SceneThemeSpec, mode: 0 | 1): string {
     .replace(/\$([a-z][a-z0-9-]*)/g, (_, name: string) => `var(--ursula-${name},${spec.colors[name]?.[mode] ?? 'inherit'})`);
 }
 
-function sceneStyleSheet(spec: SceneThemeSpec, peak: boolean): string {
-  const rules = sceneRules(spec, peak);
+/** Classes written on the elements of `parts`, and the class of the root element. */
+function classesIn(parts: readonly string[]): Set<string> {
+  const found = new Set<string>(['ursula']);
+  for (const part of parts) for (const m of part.matchAll(/ class="([^"]*)"/g)) for (const name of (m[1] ?? '').split(' ')) found.add(name);
+  return found;
+}
+
+/** `rule` with the selectors whose classes are all in `used`; undefined when none of them is. */
+function ruleFor(rule: string, used: ReadonlySet<string>): string | undefined {
+  const brace = rule.indexOf('{');
+  const selectors = rule
+    .slice(0, brace)
+    .split(',')
+    .filter((selector) => selector.slice(1).split('.').every((name) => used.has(name)));
+  return selectors.length === 0 ? undefined : `${selectors.join(',')}${rule.slice(brace)}`;
+}
+
+/**
+ * The style sheet of a theme: once for the light scheme, once more for the dark one. Given the classes a drawing
+ * carries, it holds only the rules that can reach one of them, in the order of the whole sheet.
+ */
+export function sceneStyleSheet(spec: SceneThemeSpec, used?: ReadonlySet<string>): string {
+  const all = sceneRules(spec);
+  const rules = used === undefined ? all : all.flatMap((rule) => ruleFor(rule, used) ?? []);
   const light = rules.map((r) => expand(r, spec, 0)).join('\n');
   const dark = rules.map((r) => expand(r, spec, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
@@ -335,18 +358,19 @@ export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: 
   const w = num(heading === undefined ? scene.width : widthWithTitle(scene.width, left, heading));
   const h = num(scene.height + rowH);
   const defs = [...markersUsed(scene).map(([variant, end]) => markerSvg(spec, variant, end)), ...(spec.shadow ? [SHADOW_FILTER] : [])];
-  const items = scene.items.map((it) => itemSvg(it, spec));
-  // The rules of a neutral chart with an emphasised bar are written only into a drawing that uses them.
-  const peak = spec.peakBar && items.some((it) => /ursula-mark(--peak|--ink|-line--ink|-dot--ink)/.test(it));
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
-    `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
-    `<style>${sceneStyleSheet(spec, peak)}</style>`,
+  const body = [
     ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
     `<rect class="ursula-bg" x="0" y="0" width="${w}" height="${h}"/>`,
     ...(heading === undefined ? [] : [textSvg({ kind: 'text', x: left, y: TITLE_CENTRE, text: heading, anchor: 'start', role: ['title', 'diagram-title'] }), `<g transform="translate(0 ${rowH})">`]),
-    ...items,
+    ...scene.items.map((it) => itemSvg(it, spec)),
     ...(heading === undefined ? [] : ['</g>']),
+  ];
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
+    // Only the rules the elements below can use are written.
+    `<style>${sceneStyleSheet(spec, classesIn(body))}</style>`,
+    ...body,
     '</svg>',
   ].join('');
 }
