@@ -16,7 +16,7 @@ registerFrontEnd({
   headers: ['treemap-beta', 'treemap'],
   svg(src, opts) {
     const layout = layoutTreemap(read(src, opts), pixelRuler());
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return treemapTextLines(read(src, opts), maxWidth);

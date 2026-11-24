@@ -1,11 +1,9 @@
 import { ceilTo, FLOAT_NOISE, GRID } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import { displayOrder } from './model.ts';
 import type { Commit, GitGraph } from './model.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Distance between neighbouring commits along the time axis, and between neighbouring branch lines. */
 const STEP = 96;
@@ -87,10 +85,10 @@ const TEXT_HALF = 8;
  * Lays out the graph. A fork or merge curve that would cross the id or tag of a commit it can move away from starts
  * (fork) or ends (merge) one step later or earlier, along an empty column added for it, up to `MAX_DELAY` steps.
  */
-export function layoutGit(graph: GitGraph, ruler: Ruler, theme: Theme = DEFAULT_THEME): GitLayout {
+export function layoutGit(graph: GitGraph, ruler: Ruler): GitLayout {
   const delays = new Map<string, number>();
   for (;;) {
-    const { layout, hits } = buildGit(graph, ruler, theme, delays);
+    const { layout, hits } = buildGit(graph, ruler, delays);
     const grow = hits.filter((k) => (delays.get(k) ?? 0) < MAX_DELAY);
     if (grow.length === 0) return layout;
     for (const k of grow) delays.set(k, (delays.get(k) ?? 0) + 1);
@@ -141,9 +139,8 @@ interface Connector {
   escapes: (t: number) => boolean;
 }
 
-function buildGit(graph: GitGraph, ruler: Ruler, theme: Theme, delays: ReadonlyMap<string, number>): { layout: GitLayout; hits: string[] } {
-  const spec = SCENE_THEME_SPECS[theme];
-  const radius = spec?.dotRadius ?? 5;
+function buildGit(graph: GitGraph, ruler: Ruler, delays: ReadonlyMap<string, number>): { layout: GitLayout; hits: string[] } {
+  const radius = SCENE_THEME.dotRadius;
   const { showBranches, showCommitLabel, parallelCommits } = graph.config;
   const vertical = graph.orientation !== 'LR';
   const order = displayOrder(graph);

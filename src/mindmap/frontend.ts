@@ -20,7 +20,7 @@ export const mindmapFrontEnd: FrontEnd = {
   headers: ['mindmap'],
   svg(src, opts) {
     const { layout } = layoutOf(src, opts, 'svg');
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return mindmapTextLines(parseMindmap(src), maxWidth, opts.heading);

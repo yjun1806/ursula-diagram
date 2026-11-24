@@ -12,7 +12,7 @@ export const pieFrontEnd: FrontEnd = {
   headers: ['pie'],
   svg(src, opts) {
     const layout = layoutPie(parsePie(src, frontOf(opts).heading, frontOf(opts).config), pixelRuler());
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return pieTextLines(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);

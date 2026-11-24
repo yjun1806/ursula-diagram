@@ -1,27 +1,19 @@
 import type { Layout } from '../types.ts';
-import { escapeXml, FONT_STACK, TOKENS } from './svg.ts';
-import { THEMES, themeValues } from './theme.ts';
-import type { Theme as DrawingTheme } from './theme.ts';
+import { escapeXml, FONT_STACK } from './svg.ts';
+import { themeValues } from './theme.ts';
 
 export type Theme = 'auto' | 'light' | 'dark';
 
 export interface HtmlOptions {
   /** Title of the page and of the file names that are saved; the page is called `Diagram` when absent. */
   title?: string;
-  /** Light or dark of the page, not the theme of the drawing; `auto` follows the viewer's system setting. */
+  /** Light or dark of the page; `auto` follows the viewer's system setting. */
   theme?: Theme;
 }
 
 const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
 
 type Palette = Record<string, readonly [string, string]>;
-
-/** The palette of the theme named on the root element of a drawing; a drawing without one uses `TOKENS`. */
-function paletteOf(svg: string): Palette {
-  const name = /^<svg [^>]*data-theme="([a-z]+)"/.exec(svg)?.[1];
-  const theme = THEMES.find((t): t is DrawingTheme => t === name);
-  return theme === undefined ? TOKENS : themeValues(theme);
-}
 
 /** Declarations of one colour scheme: every drawing token and the page background. */
 function variables(palette: Palette, mode: 0 | 1): string {
@@ -260,7 +252,7 @@ export function renderHtmlDocument(svg: string, layout: Layout | undefined, sour
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeXml(title)}</title>`,
-    `<style>${style(paletteOf(svg))}</style>`,
+    `<style>${style(themeValues())}</style>`,
     '</head>',
     `<body data-file="${escapeXml(fileBase(opts.title))}">`,
     ...(opts.title === undefined ? [] : [`<h1>${escapeXml(opts.title)}</h1>`]),

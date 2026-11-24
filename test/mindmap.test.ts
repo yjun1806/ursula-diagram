@@ -67,14 +67,11 @@ const OTHERS: Array<[string, string]> = [
   ['markdown', MARKDOWN],
   ['depth', DEPTH],
 ];
-const THEMES = ['solid', 'outline', 'card', 'band'] as const;
-
 const walk = (n: MindNode): MindNode[] => [n, ...n.children.flatMap(walk)];
 
 describe('mindmap render', () => {
   for (const [name, src] of [['basic', BASIC], ...OTHERS] as Array<[string, string]>) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
       expect(render(src)).toContain('data-theme="band"');
     });
   }

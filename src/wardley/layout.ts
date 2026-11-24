@@ -2,12 +2,10 @@ import { anchoredBox, clashCost, pickLeastClash } from '../chart/label-place.ts'
 import type { Box, ClashContext } from '../chart/label-place.ts';
 import { ceilTo, round2 } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Sourcing, WardleyMap, WardleyNode } from './parse.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 40;
 const TOP_TITLE = 80;
@@ -118,10 +116,9 @@ function noteWraps(note: string, text: (s: string) => number): string[][] {
   return [...byCount.keys()].sort((a, b) => a - b).map((k) => byCount.get(k) ?? []);
 }
 
-/** Computes the scene of a Wardley map; the theme sets the radius of a component's dot. */
-export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFAULT_THEME): WardleyLayout {
-  const spec = SCENE_THEME_SPECS[theme];
-  const dot = spec.neutralDotRadius ?? spec.dotRadius;
+/** Computes the scene of a Wardley map. */
+export function layoutWardley(map: WardleyMap, ruler: Ruler): WardleyLayout {
+  const dot = SCENE_THEME.neutralDotRadius;
   const text = (s: string): number => ruler.textWidth(s, 'line');
   const strong = (s: string): number => ruler.textWidth(s, 'title');
   const items: SceneItem[] = [];
@@ -483,6 +480,6 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler, theme: Theme = DEFA
   for (const b of placed) width = Math.max(width, ceilTo(b.x1 + MARGIN / 2));
 
   items.unshift({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
-  const scene: Scene = { width, height, title: map.accTitle ?? map.title ?? 'Wardley map', items, theme };
+  const scene: Scene = { width, height, title: map.accTitle ?? map.title ?? 'Wardley map', items };
   return { scene, plot: { x0: plotX, x1: plotX + plotW, y0: top, y1: bottom }, boundaries, nodes, notes, ignored: map.ignored };
 }

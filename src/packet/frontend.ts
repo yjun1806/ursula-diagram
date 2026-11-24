@@ -16,7 +16,7 @@ registerFrontEnd({
   headers: ['packet', 'packet-beta'],
   svg(src, opts) {
     const { scene } = layoutPacket(parsePacket(src, packetOptions(opts)), pixelRuler());
-    return renderThemedScene(scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth);

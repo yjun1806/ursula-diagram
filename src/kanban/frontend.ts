@@ -23,11 +23,10 @@ registerFrontEnd({
   name: 'kanban',
   headers: ['kanban'],
   svg(src, opts) {
-    const layout = layoutKanban(parseKanban(src, ticketBaseUrlOf(opts)), pixelRuler(), opts.theme);
+    const layout = layoutKanban(parseKanban(src, ticketBaseUrlOf(opts)), pixelRuler());
     return linkTickets(
       renderThemedScene(layout.scene, {
         ...(opts.title === undefined ? {} : { title: opts.title }),
-        ...(opts.theme === undefined ? {} : { theme: opts.theme }),
         ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }),
       }),
     );
@@ -40,6 +39,6 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseKanban(src, ticketBaseUrlOf(opts));
-    return { model, ...layoutKanban(model, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme) };
+    return { model, ...layoutKanban(model, mode === 'text' ? cellRuler() : pixelRuler()) };
   },
 });

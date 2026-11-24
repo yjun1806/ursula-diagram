@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellRuler, layout, pixelRuler, renderSvg, renderTextLayout, THEMES } from '../src/index.ts';
+import { cellRuler, layout, pixelRuler, renderSvg, renderTextLayout } from '../src/index.ts';
 import { placeEndLabels } from '../src/layered/end-labels.ts';
 import { compartmentHeights, CYLINDER_CAP, ownSize, recordHeight, recordWidth } from '../src/layout/records.ts';
 import { markGlyphs } from '../src/render/text.ts';
@@ -66,17 +66,12 @@ describe('boxes divided into compartments: size', () => {
 });
 
 describe('boxes divided into compartments: drawing', () => {
-  it('draws one rule between neighbouring compartments, in the colour and width of the theme', () => {
+  it('draws one hairline rule between neighbouring compartments', () => {
     const g = inheritance();
     const rules = g.nodes.reduce((n, node) => n + (node.compartments?.length ?? 1) - 1, 0);
-    const l = layout(g, px);
-    const solid = renderSvg(l, { theme: 'solid', legend: false });
-    const outline = renderSvg(l, { theme: 'outline', legend: false });
-    const card = renderSvg(l, { theme: 'card', legend: false });
-    for (const svg of [solid, outline, card]) expect(svg.match(/<path class="ursula-rule"/g)?.length).toBe(rules);
-    expect(solid).toContain('.ursula-rule{fill:none;stroke:var(--ursula-zone,#ffffff);stroke-width:2}');
-    expect(outline).toContain('.ursula-rule{fill:none;stroke:var(--ursula-hair,#ecebf1);stroke-width:1}');
-    expect(card).toContain('.ursula-rule{fill:none;stroke:var(--ursula-hair,#ecebf1);stroke-width:1}');
+    const svg = renderSvg(layout(g, px), { legend: false });
+    expect(svg.match(/<path class="ursula-rule"/g)?.length).toBe(rules);
+    expect(svg).toContain('.ursula-rule{fill:none;stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}');
   });
 
   it('puts the head in bold at the middle and the bodies at the left', () => {
@@ -116,42 +111,40 @@ function pair(start: EdgeEnd | undefined, end: EdgeEnd, extra: Partial<Parameter
 }
 
 describe('marks of relation lines', () => {
-  for (const theme of THEMES) {
-    for (const end of ENDS) {
-      it(`${end} has a marker of its own colour in ${theme}, and the line stops 12 short of it`, () => {
-        const l = layout(pair(undefined, end), px);
-        const svg = renderSvg(l, { theme, legend: false });
-        expect(svg).not.toContain('context-stroke');
-        const id = `ursula-end-${end}`;
-        expect(svg).toContain(`<marker id="${id}"`);
-        expect(svg).toContain(`marker-end="url(#${id})"`);
-        const edge = l.edges[0] as LayoutEdge;
-        const last = edge.points[edge.points.length - 1] as Point;
-        const [d] = pathsOf(svg);
-        const stop = tail(d as string);
-        expect(Math.hypot(last.x - stop.x, last.y - stop.y)).toBeCloseTo(12, 5);
-        expect(Math.abs(last.y - stop.y)).toBeLessThan(EPS);
-      });
+  for (const end of ENDS) {
+    it(`${end} has a marker of its own colour, and the line stops 12 short of it`, () => {
+      const l = layout(pair(undefined, end), px);
+      const svg = renderSvg(l, { legend: false });
+      expect(svg).not.toContain('context-stroke');
+      const id = `ursula-end-${end}`;
+      expect(svg).toContain(`<marker id="${id}"`);
+      expect(svg).toContain(`marker-end="url(#${id})"`);
+      const edge = l.edges[0] as LayoutEdge;
+      const last = edge.points[edge.points.length - 1] as Point;
+      const [d] = pathsOf(svg);
+      const stop = tail(d as string);
+      expect(Math.hypot(last.x - stop.x, last.y - stop.y)).toBeCloseTo(12, 5);
+      expect(Math.abs(last.y - stop.y)).toBeLessThan(EPS);
+    });
 
-      it(`${end} at the start of a line shortens it the same way in ${theme}`, () => {
-        const l = layout(pair(end, 'none'), px);
-        const svg = renderSvg(l, { theme, legend: false });
-        const id = `ursula-end-${end}`;
-        expect(svg).toContain(`marker-start="url(#${id})"`);
-        expect(svg).not.toContain('marker-end=');
-        const edge = l.edges[0] as LayoutEdge;
-        const first = edge.points[0] as Point;
-        const [d] = pathsOf(svg);
-        const begin = head(d as string);
-        expect(Math.hypot(first.x - begin.x, first.y - begin.y)).toBeCloseTo(12, 5);
-      });
-    }
+    it(`${end} at the start of a line shortens it the same way`, () => {
+      const l = layout(pair(end, 'none'), px);
+      const svg = renderSvg(l, { legend: false });
+      const id = `ursula-end-${end}`;
+      expect(svg).toContain(`marker-start="url(#${id})"`);
+      expect(svg).not.toContain('marker-end=');
+      const edge = l.edges[0] as LayoutEdge;
+      const first = edge.points[0] as Point;
+      const [d] = pathsOf(svg);
+      const begin = head(d as string);
+      expect(Math.hypot(first.x - begin.x, first.y - begin.y)).toBeCloseTo(12, 5);
+    });
   }
 
-  it('fills its marker from the theme: solid marks use the line colour, hollow ones the page colour', () => {
-    const svg = renderSvg(layout(pair('diamond-filled', 'triangle-open'), px), { theme: 'outline', legend: false });
-    expect(svg).toContain('.ursula-end-solid{fill:var(--ursula-line,#8f8c9b);stroke:var(--ursula-line,#8f8c9b)');
-    expect(svg).toContain('.ursula-end-hollow{fill:var(--ursula-zone,#ffffff);stroke:var(--ursula-line,#8f8c9b)');
+  it('fills its marker: solid marks use the line colour, hollow ones the page colour', () => {
+    const svg = renderSvg(layout(pair('diamond-filled', 'triangle-open'), px), { legend: false });
+    expect(svg).toContain('.ursula-end-solid{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554)');
+    expect(svg).toContain('.ursula-end-hollow{fill:var(--ursula-zone,#fcfcfa);stroke:var(--ursula-line,#565554)');
   });
 
   it('draws a mark in the accent colour on a thick line', () => {
@@ -267,14 +260,12 @@ describe('small texts at the ends of lines', () => {
     }
   });
 
-  it('draws a text at its place with the small size, in each theme', () => {
+  it('draws a text at its place with the small size', () => {
     const l = layout(pair('diamond-filled', 'none', { startLabel: '1', endLabel: '0..*' }), px);
-    for (const theme of THEMES) {
-      const svg = renderSvg(l, { theme, legend: false });
-      expect(svg.match(/<text class="ursula-end-label"/g)?.length).toBe(2);
-      expect(svg).toContain('.ursula-end-label{');
-      expect(svg).toContain('font-size:11px');
-    }
+    const svg = renderSvg(l, { legend: false });
+    expect(svg.match(/<text class="ursula-end-label"/g)?.length).toBe(2);
+    expect(svg).toContain('.ursula-end-label{');
+    expect(svg).toContain('font-size:11px');
     const start = l.edges[0]?.startLabel as NonNullable<LayoutEdge['startLabel']>;
     expect(renderSvg(l, { legend: false })).toContain(`x="${start.x + start.w / 2}" y="${start.y + start.h / 2}"`);
   });
@@ -315,21 +306,19 @@ describe('new node shapes', () => {
     }
   });
 
-  it('draw all six, in each theme, without a role colour', () => {
+  it('draw all six, without a role colour', () => {
     const g = graphOf(
       'LR',
       [shaped('s', 'start-dot'), shaped('n', 'note', 'Note'), shaped('f', 'bar'), shaped('e', 'ellipse', 'Do it'), shaped('a', 'actor', 'Who'), shaped('d', 'end-dot')],
       [link('s', 'f', 'arrow'), link('f', 'e', 'arrow'), link('a', 'e', 'arrow'), link('n', 'e', 'none', { style: 'dotted' }), link('e', 'd', 'arrow')],
     );
     const l = layout(g, px);
-    for (const theme of THEMES) {
-      const svg = renderSvg(l, { theme, legend: false });
-      for (const part of ['ursula-start-dot', 'ursula-end-ring', 'ursula-end-core', 'ursula-bar', 'ursula-note"', 'ursula-note-fold', 'ursula-actor"', 'ursula-actor-name', '<ellipse class="ursula-node-box"']) {
-        expect(svg, `${theme} ${part}`).toContain(part);
-      }
-      expect(svg).not.toMatch(/<g [^>]*data-role=/);
-      expect(svg).toContain(`data-theme="${theme}"`);
+    const svg = renderSvg(l, { legend: false });
+    for (const part of ['ursula-start-dot', 'ursula-end-ring', 'ursula-end-core', 'ursula-bar', 'ursula-note"', 'ursula-note-fold', 'ursula-actor"', 'ursula-actor-name', '<ellipse class="ursula-node-box"']) {
+      expect(svg, part).toContain(part);
     }
+    expect(svg).not.toMatch(/<g [^>]*data-role=/);
+    expect(svg).toContain('data-theme="band"');
   });
 
   it('draw a note with its corner folded by 8', () => {
@@ -391,20 +380,14 @@ describe('new node shapes', () => {
   });
 });
 
-describe('the three themes', () => {
-  it('draw every graph with every marker defined that a line refers to', () => {
+describe('markers', () => {
+  it('are defined for every graph wherever a line refers to one', () => {
     for (const make of [inheritance, relations, entities, states, usecases]) {
-      const l = layout(make(), px);
-      const sheets = new Set<string>();
-      for (const theme of THEMES) {
-        const svg = renderSvg(l, { theme, legend: false });
-        const defined = new Set([...svg.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]));
-        for (const m of svg.matchAll(/marker-(?:start|end)="url\(#([^)]+)\)"/g)) expect(defined.has(m[1] as string), `${theme} ${m[1]}`).toBe(true);
-        expect(svg).not.toContain('context-stroke');
-        expect(svg).toContain(`data-theme="${theme}"`);
-        sheets.add(svg.slice(svg.indexOf('<style>'), svg.indexOf('</style>')));
-      }
-      expect(sheets.size).toBe(THEMES.length);
+      const svg = renderSvg(layout(make(), px), { legend: false });
+      const defined = new Set([...svg.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]));
+      for (const m of svg.matchAll(/marker-(?:start|end)="url\(#([^)]+)\)"/g)) expect(defined.has(m[1] as string), m[1]).toBe(true);
+      expect(svg).not.toContain('context-stroke');
+      expect(svg).toContain('data-theme="band"');
     }
   });
 
@@ -488,16 +471,14 @@ describe('bands with columns', () => {
 });
 
 describe('the end with a circle and a plus', () => {
-  it('stops the line 12 short of a ring of 12 across, in each theme', () => {
-    for (const theme of THEMES) {
-      const l = layout(pair('circle-plus', 'none'), px);
-      const svg = renderSvg(l, { theme, legend: false });
-      expect(svg).toContain('<marker id="ursula-end-circle-plus"');
-      expect(svg).toContain('<circle class="ursula-end-hollow" cx="6" cy="0" r="6"/>');
-      expect(svg).toContain('M6 -6V6M0 0H12');
-      const first = (l.edges[0] as LayoutEdge).points[0] as Point;
-      expect(Math.hypot(first.x - head(pathsOf(svg)[0] as string).x, first.y - head(pathsOf(svg)[0] as string).y)).toBeCloseTo(12, 5);
-    }
+  it('stops the line 12 short of a ring of 12 across', () => {
+    const l = layout(pair('circle-plus', 'none'), px);
+    const svg = renderSvg(l, { legend: false });
+    expect(svg).toContain('<marker id="ursula-end-circle-plus"');
+    expect(svg).toContain('<circle class="ursula-end-hollow" cx="6" cy="0" r="6"/>');
+    expect(svg).toContain('M6 -6V6M0 0H12');
+    const first = (l.edges[0] as LayoutEdge).points[0] as Point;
+    expect(Math.hypot(first.x - head(pathsOf(svg)[0] as string).x, first.y - head(pathsOf(svg)[0] as string).y)).toBeCloseTo(12, 5);
   });
 
   it('is written ⊕ in the text drawing', () => {
@@ -605,11 +586,10 @@ describe('a rounded box', () => {
   });
 });
 
-describe('the rules between bands on a white face', () => {
-  it('are hairlines in a box that stands in a zone, not a white gap', () => {
-    const svg = renderSvg(layout(inheritance(), px), { theme: 'solid', legend: false });
-    expect(svg).toContain('.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#ecebf1);stroke-width:1}');
-    expect(svg).toContain('.ursula-rule{fill:none;stroke:var(--ursula-zone,#ffffff);stroke-width:2}');
+describe('the rules between bands of a box that stands in a zone', () => {
+  it('are hairlines', () => {
+    const svg = renderSvg(layout(inheritance(), px), { legend: false });
+    expect(svg).toContain('.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}');
   });
 });
 

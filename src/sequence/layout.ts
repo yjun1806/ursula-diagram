@@ -59,7 +59,7 @@ interface Look {
   arrow: SceneArrow;
 }
 
-/** Radius of the ring at the start of a message line, which only the card theme shows. */
+/** Radius of the ring at the start of a message line as the layout counts it; the drawing sizes the ring itself. */
 const PORT_R = 3.25;
 /** Distance of a frame's label tag from the corner of the frame. */
 const TAG_INSET = 8;
@@ -82,8 +82,8 @@ function lookOf(m: MessageStmt): Look {
 }
 
 /**
- * Roles of a message line in the themed drawing. Only a filled head comes from the theme; the open head of an
- * async message is drawn by {@link openHead}, so that it differs from the head of a call in every theme that fills heads.
+ * Roles of a message line in the drawing. Only a filled head is a marker of the renderer; the open head of an
+ * async message is drawn by {@link openHead}, so that it differs from the filled head of a call.
  */
 function lineRoles(look: Look, both = false): string[] {
   const filled = look.arrow === 'filled';
@@ -470,7 +470,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
     const style = p.kind === 'actor' ? 'actor' : 'box';
     if (symbols && p.kind === 'collections') {
       span(front.x, front.x + hw - S.stroke + STACK_STEP);
-      // The back box takes a dashed edge, so that the stack shows in the themes whose boxes have no edge.
+      // The back box takes a dashed edge, so that it reads as a box behind the front one.
       boxItems.push({ kind: 'box', style: 'box', x: front.x + STACK_STEP, y: front.y - STACK_STEP, w: hw, h: boxH, role: [...boxRole, 'box--pending'], data });
       boxItems.push({ kind: 'box', style: 'box', ...front, role: boxRole, data });
     } else if (symbols && p.kind === 'queue') {
@@ -536,7 +536,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
   const zonePad = Math.min(8, Math.floor(S.gapMsg / 2));
   let zoneEnd = -Infinity;
   /** A label backing takes the colour of the zone it lies in, or the page. */
-  // A nested highlight is painted in the plain zone colour, which is the page colour in every theme.
+  // A nested highlight is painted in the plain zone colour, which is the page colour.
   const groupSpans = groups.map((gr) => {
     const cols = gr.members.flatMap((m) => (col.has(m) ? [colOf(m)] : []));
     const lo = Math.min(...cols.map((c) => xs[c] ?? 0)) - half - GROUP_PAD;
@@ -680,7 +680,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
             ],
             tone: look.tone,
             dash: look.dash,
-            // The corner radius comes from the theme, except in the cell drawing, which has none.
+            // The corner radius comes from the renderer, except in the cell drawing, which has none.
             ...(S.loopR === 0 ? { radius: 0 } : {}),
             arrow: s.reverse ? 'none' : look.arrow,
             role: lineRoles(look),
@@ -1009,7 +1009,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
     });
   });
 
-  // Highlights: a tinted band with a dashed edge, so that it reads apart from frames and notes in every theme.
+  // Highlights: a tinted band with a dashed edge, so that it reads apart from frames and notes.
   // Nested ones step in from both sides and alternate with the page colour.
   const zoneItems: SceneItem[] = zones.flatMap((z): SceneItem[] => {
     const inset = z.depth * zonePad;

@@ -119,7 +119,6 @@ treeView-beta
             "src"
         "parser"`],
 ];
-const THEMES = ['solid', 'outline', 'card'] as const;
 const example = (n: string): string => EXAMPLES.find(([name]) => name.startsWith(n))?.[1] ?? '';
 /** The example without its configuration header, as the registry hands it to a front-end. */
 const body = (n: string): string => example(n).replace(/^---[\s\S]*?---\n/, '');
@@ -138,12 +137,10 @@ const sample = `treeView-beta
 
 describe('tree view svg', () => {
   for (const [name, src] of EXAMPLES) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('<svg');
-      }
+    it(`draws ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('<svg');
     });
   }
 
@@ -204,24 +201,20 @@ describe('tree view layout', () => {
   const ruler = pixelRuler();
   const model = parseTreeView(sample);
 
-  for (const theme of THEMES) {
-    it(`puts one item on each 28 px row and indents 28 per level (${theme})`, () => {
-      const { scene, columns, centres } = layoutTreeView(model, ruler, theme);
-      expect(scene.height).toBe(48 + 28 * model.items.length);
-      model.items.forEach((item, i) => {
-        expect(columns[i]).toBe(24 + 28 * item.depth);
-        expect(centres[i]).toBe(38 + 28 * i);
-      });
+  it(`puts one item on each 28 px row and indents 28 per level`, () => {
+    const { scene, columns, centres } = layoutTreeView(model, ruler);
+    expect(scene.height).toBe(48 + 28 * model.items.length);
+    model.items.forEach((item, i) => {
+      expect(columns[i]).toBe(24 + 28 * item.depth);
+      expect(centres[i]).toBe(38 + 28 * i);
     });
-  }
+  });
 
-  it('bends a guide by half the theme bend radius (the whole radius when it is 8 or less), at the last child only', () => {
-    for (const [theme, half] of [['solid', 8], ['outline', 6], ['card', 7], ['band', 8]] as const) {
-      const guides = layoutTreeView(model, ruler, theme).scene.items.filter((i) => i.kind === 'path');
-      const bent = guides.filter((g) => g.kind === 'path' && g.d.includes('Q'));
-      expect(bent).toHaveLength(3);
-      expect(bent.map((g) => (g.kind === 'path' ? g.d : ''))).toContain(`M28 50 V${38 + 28 * 9 - half} Q28 ${38 + 28 * 9} ${28 + half} ${38 + 28 * 9} H44`);
-    }
+  it('bends a guide by the bend radius of a line, at the last child only', () => {
+    const guides = layoutTreeView(model, ruler).scene.items.filter((i) => i.kind === 'path');
+    const bent = guides.filter((g) => g.kind === 'path' && g.d.includes('Q'));
+    expect(bent).toHaveLength(3);
+    expect(bent.map((g) => (g.kind === 'path' ? g.d : ''))).toContain(`M28 50 V${38 + 28 * 9 - 8} Q28 ${38 + 28 * 9} ${28 + 8} ${38 + 28 * 9} H44`);
   });
 
   it('keeps the guides of a deeper indent clear of the text', () => {

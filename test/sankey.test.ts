@@ -174,22 +174,13 @@ function textBoxes(items: readonly (SceneText | SceneBox | { kind: string })[]):
 
 describe('sankey: official examples', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
-    it(`draws ${name} in three themes`, () => {
+    it(`draws ${name}`, () => {
       expect(selectFrontEnd(src).name).toBe('sankey');
-      for (const theme of ['solid', 'outline', 'card'] as const) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toMatch(/ class="ursula-series-\d/);
-      }
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toMatch(/ class="ursula-series-\d/);
     });
   }
-
-  it('gives the same shapes in all three themes', () => {
-    const shapes = (svg: string): string[] => svg.match(/<(?:path|rect|text)\b[^>]*?(?:d|x|y)="[^"]*"/gu)?.map((m) => m.replace(/class="[^"]*"\s*/u, '')) ?? [];
-    const solid = shapes(render(EXAMPLES['basic'] ?? '', { theme: 'solid' }));
-    expect(shapes(render(EXAMPLES['basic'] ?? '', { theme: 'outline' }))).toEqual(solid);
-    expect(shapes(render(EXAMPLES['basic'] ?? '', { theme: 'card' }))).toEqual(solid);
-  });
 });
 
 describe('sankey: reading', () => {

@@ -191,11 +191,11 @@ describe('line ends', () => {
     expect(svg).not.toContain('ursula-dot');
   });
 
-  it('draws a plain line without an arrowhead and a line with ends in outline and card themes', () => {
-    const svg = render('flowchart LR\nA --- B\nB o--x C', { theme: 'outline' });
+  it('draws a plain line without an arrowhead and a line with ends', () => {
+    const svg = render('flowchart LR\nA --- B\nB o--x C');
     expect(svg.match(/marker-end=/g)).toHaveLength(1);
     expect(svg).toContain('marker-start="url(#ursula-dot)"');
-    expect(render('flowchart LR\nA --x B', { theme: 'card' })).toContain('marker-end="url(#ursula-cross)"');
+    expect(render('flowchart LR\nA --x B')).toContain('marker-end="url(#ursula-cross)"');
   });
 
   it('carries the ends to the layout', () => {

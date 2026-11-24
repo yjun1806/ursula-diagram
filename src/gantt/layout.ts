@@ -1,6 +1,5 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Gantt, GanttTask } from './model.ts';
 import { planTicks } from './ticks.ts';
@@ -69,7 +68,7 @@ export function chooseScale(span: number): number {
 /** A stretch along x, left and right edge. */
 type Span = [number, number];
 
-export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLayout {
+export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
   const w11 = (s: string): number => (ruler.textWidth(s, 'line') * 11) / 12;
   const w12 = (s: string): number => ruler.textWidth(s, 'line');
   const w13 = (s: string): number => ruler.textWidth(s, 'title');
@@ -369,7 +368,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler, theme?: Theme): GanttLay
   items.push(...portItems);
 
   const name = model.accTitle ?? (model.title === undefined ? 'gantt' : `gantt — ${model.title}`);
-  const scene: Scene = { width, height, title: name, items, ...(theme === undefined ? {} : { theme }) };
+  const scene: Scene = { width, height, title: name, items };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
 }
 

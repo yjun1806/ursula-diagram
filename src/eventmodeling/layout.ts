@@ -1,9 +1,6 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { HEAD_BAND, headBand } from '../render/head-band.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
-import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import { ZONE_NAMES, ZONE_ORDER, zoneOf } from './model.ts';
@@ -76,8 +73,7 @@ const hits = (r: Rect, a: Point, b: Point): boolean => {
   return x2 > r.x && x1 < r.x + r.w && y2 > r.y && y1 < r.y + r.h;
 };
 
-export function layoutEventModel(model: EventModel, ruler: Ruler, theme?: Theme): EventLayout {
-  const spec = SCENE_THEME_SPECS[theme ?? DEFAULT_THEME];
+export function layoutEventModel(model: EventModel, ruler: Ruler): EventLayout {
   const nameW = (s: string): number => ruler.textWidth(s, 'title');
   const lineW = (s: string): number => ruler.textWidth(s, 'line');
   const lanes = lanesOf(model);
@@ -89,15 +85,13 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, theme?: Theme)
   const labelArea = Math.max(LABEL_AREA, ceilTo(labelWidth + LABEL_PAD + LABEL_GAP));
 
   // Size of every box: the name, the kind tag and the data rows decide its width; data rows add a compartment.
-  const sizes = new Map<number, { w: number; h: number; rows: string[]; tagW: number }>();
+  const sizes = new Map<number, { w: number; h: number; rows: string[] }>();
   for (const f of model.frames) {
     const rows = f.data.flatMap((row) => wrapWords(row, DATA_WRAP, lineW, { longWord: 'keep' }));
     const tagBase = ceilTo(lineW(f.kind) + 16);
     const content = Math.max(nameW(f.name) + 2 * BOX_PAD, tagBase + 2 * BOX_PAD, ...rows.map((r) => lineW(r) + 2 * BOX_PAD));
     const w = Math.max(BOX_W, ceilTo(content));
-    let tagW = tagBase;
-    while ((w - tagW) % 8 !== 0) tagW += 4;
-    sizes.set(f.number, { w, h: rows.length === 0 ? BOX_H : BOX_H + 2 * DATA_PAD + DATA_ROW * rows.length, rows, tagW });
+    sizes.set(f.number, { w, h: rows.length === 0 ? BOX_H : BOX_H + 2 * DATA_PAD + DATA_ROW * rows.length, rows });
   }
 
   const left = MARGIN + labelArea;
@@ -202,16 +196,10 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, theme?: Theme)
     const role = ['box', ...(filled ? ['box--in-zone'] : []), ...(start ? ['box--start'] : [])];
     const data = { frame: frame.label, kind: frame.kind };
     boxItems.push({ kind: 'box', style: 'box', x: p.x, y: p.y, w: p.w, h: p.h, role, data });
-    if (spec.headBand) {
-      // The band stays grey on a start box too, so that the start colour fills only the body.
-      boxItems.push(headBand(p.x, p.y, p.w, spec, data));
-      boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
-    } else {
-      const tagX = p.x + (p.w - size.tagW) / 2;
-      boxItems.push({ kind: 'box', style: 'label', x: tagX, y: p.y + 8, w: size.tagW, h: 20, role: ['tag'], data });
-      boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + 18, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
-    }
-    const nameY = p.y + (spec.headBand ? NAME_UNDER_BAND : 48);
+    // The band stays grey on a start box too, so that the start colour fills only the body.
+    boxItems.push(headBand(p.x, p.y, p.w, data));
+    boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });
+    const nameY = p.y + NAME_UNDER_BAND;
     boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: nameY, text: frame.name, anchor: 'middle', role: start ? ['name', 'on-start'] : ['name'], data });
     if (size.rows.length > 0) {
       boxItems.push({ kind: 'line', points: [{ x: p.x, y: p.y + BOX_H }, { x: p.x + p.w, y: p.y + BOX_H }], role: filled ? ['rule', 'rule--in-zone'] : ['rule'], data });
@@ -222,6 +210,6 @@ export function layoutEventModel(model: EventModel, ruler: Ruler, theme?: Theme)
   }
 
   const title = model.accTitle ?? `eventmodeling — ${heading ?? 'Event Modeling'}`;
-  const scene: Scene = { width, height, title, items: [...items, ...edgeItems, ...boxItems, ...portItems], ...(theme === undefined ? {} : { theme }) };
+  const scene: Scene = { width, height, title, items: [...items, ...edgeItems, ...boxItems, ...portItems] };
   return { scene, lanes: placedLanes, columns, frames: placed, edges };
 }

@@ -27,15 +27,11 @@ const examples: Record<string, string> = {
   '15-timeline-3': "eventmodeling\n\ntimeframe 01 ui CartUI\ntimeframe 02 command AddItem\ntimeframe 03 event ItemAdded",
 };
 
-const themes = ['solid', 'outline', 'card'] as const;
-
 describe('eventmodeling svg', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
-      });
-    }
+    it(`${name} draws`, () => {
+      expect(render(src)).toContain('data-theme="band"');
+    });
   }
 
   it('draws the data rule of a box in a filled lane as an in-zone rule, and of other boxes as a plain rule', () => {

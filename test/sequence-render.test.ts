@@ -66,19 +66,15 @@ describe('sequence svg', () => {
     expect(out).toContain('>LOOP</text>');
   });
 
-  it('writes the theme on the root, the card shadow only in the card theme, and edge--msg on every message line', () => {
-    const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b';
-    for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
-      const out = body(render(src, { theme, legend: false }));
-      expect(out).toContain(`data-theme="${theme}"`);
-      expect(out.includes('filter="url(#ursula-shadow)"')).toBe(theme === 'card');
-      expect(out.match(/class="ursula-edge ursula-edge--msg ursula-edge--arrow/g)).toHaveLength(2);
-    }
-    expect(render(src)).toContain('data-theme="band"');
+  it('writes the look on the root, no shadow, and edge--msg on every message line', () => {
+    const out = body(render('sequenceDiagram\nA->>B: a\nB-->>A: b', { legend: false }));
+    expect(out).toContain('data-theme="band"');
+    expect(out).not.toContain('filter="url(');
+    expect(out.match(/class="ursula-edge ursula-edge--msg ursula-edge--arrow/g)).toHaveLength(2);
   });
 
-  it('draws the reply dashed and the ports that only the card theme shows', () => {
-    const out = body(render('sequenceDiagram\nA->>B: a\nB-->>A: b', { theme: 'card', legend: false }));
+  it('draws the reply dashed and a port at the start of each message', () => {
+    const out = body(render('sequenceDiagram\nA->>B: a\nB-->>A: b', { legend: false }));
     expect(out.match(/ursula-edge--pending/g)).toHaveLength(1);
     expect(out.match(/class="ursula-port ursula-port--msg"/g)).toHaveLength(2);
   });
@@ -176,7 +172,7 @@ describe('sequence svg stays as committed', () => {
     it(`renders ${name}-sequence.mmd to the committed svg`, () => {
       const src = readFileSync(new URL(`../examples/${name}-sequence.mmd`, import.meta.url), 'utf8');
       const svg = readFileSync(new URL(`../examples/${name}-sequence.svg`, import.meta.url), 'utf8');
-      expect(`${render(src, { theme: 'solid' })}\n`).toBe(svg);
+      expect(`${render(src)}\n`).toBe(svg);
     });
   }
 });

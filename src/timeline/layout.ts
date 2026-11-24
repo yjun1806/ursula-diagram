@@ -1,11 +1,8 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { TimelineModel } from './model.ts';
 import { pixelWidth, wrapLines } from './wrap.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 24;
 const BOX_MIN = 152;
@@ -29,13 +26,10 @@ const TITLE_Y = 40;
 const TITLE_SIZE_RATIO = 15 / 13;
 const DEFAULT_WIDTH_LIMIT = 1280;
 const TD_ROW_GAP = 24;
-const SERIES = 8;
 
 export interface TimelineLayoutOptions {
   /** Width at which a horizontal drawing folds into another row. */
   maxWidth?: number;
-  /** Colours each section, or each period when there is no section, with its own series; when absent, true unless the theme draws timelines plain. */
-  multicolor?: boolean;
 }
 
 export interface PlacedBox {
@@ -74,8 +68,6 @@ export interface TimelineLayout {
 
 
 interface Col {
-  /** Series role of the period's dot and boxes; absent when the drawing is in one scheme. */
-  series?: string;
   label: string[];
   events: string[][];
   w: number;
@@ -96,9 +88,9 @@ function widest(lines: readonly string[], width: (s: string) => number): number 
   return Math.max(0, ...lines.map(width));
 }
 
-function boxItems(box: PlacedBox, inZone: boolean, series: string | undefined): SceneItem[] {
+function boxItems(box: PlacedBox, inZone: boolean): SceneItem[] {
   const cx = box.x + box.w / 2;
-  const role = series !== undefined ? ['box', `${series}--tint`] : inZone ? ['box', 'box--in-zone'] : ['box'];
+  const role = inZone ? ['box', 'box--in-zone'] : ['box'];
   return [
     { kind: 'box', style: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role },
     ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + box.h / 2 + NAME_DROP + LINE * (i - (box.lines.length - 1) / 2), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' })),
@@ -200,31 +192,13 @@ function columns(model: TimelineModel, width: (s: string) => number): Col[][] {
   return raw.map((g) => g.map((c) => ({ label: c.label, events: c.events, w, heights: c.events.map((_, k) => heights[k] ?? 48) })));
 }
 
-/** The series of each period, by group and position: one per section when there are sections, else one per period. */
-function seriesOf(model: TimelineModel, multicolor: boolean): (string | undefined)[][] {
-  const bySection = model.groups.some((g) => g.name !== undefined);
-  let n = 0;
-  return model.groups.map((g, gi) =>
-    g.periods.map(() => {
-      if (!multicolor) return undefined;
-      const k = bySection ? gi : n++;
-      return `series-${(k % SERIES) + 1}`;
-    }),
-  );
-}
-
-const withSeries = (col: Col, series: string | undefined): Col => (series === undefined ? col : { ...col, series });
-
-const dotRole = (series: string | undefined): string[] => (series === undefined ? ['dot'] : ['dot', series]);
-
 function titleItems(title: string | undefined): SceneItem[] {
   return title === undefined ? [] : [{ kind: 'text', x: MARGIN, y: TITLE_Y, text: title, anchor: 'start', role: ['title'], baseline: 'alphabetic' }];
 }
 
-function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limit: number, multicolor: boolean): TimelineLayout {
+function layoutHorizontal(model: TimelineModel, ruler: Ruler, limit: number): TimelineLayout {
   const width = pixelWidth(ruler);
-  const series = seriesOf(model, multicolor);
-  const cols = columns(model, width).map((g, gi) => g.map((c, pi) => withSeries(c, series[gi]?.[pi])));
+  const cols = columns(model, width);
   const zones = model.groups.some((g) => g.name !== undefined);
   const nameLines = Math.max(1, ...cols.flat().map((c) => c.label.length));
   const sectionLines = Math.max(1, ...model.groups.map((g) => (g.name === undefined ? 0 : wrapLines(g.name, TEXT_MAX * 2, width).length)));
@@ -277,11 +251,11 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
           return box;
         });
         if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: cx, y: axis }, { x: cx, y: boxTop }], role: ['edge'] });
-        dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: dotRole(col.series) });
+        dotItems.push({ kind: 'circle', cx, cy: axis, r: DOT_R, role: ['dot'] });
         col.label.forEach((text, i) =>
           dotItems.push({ kind: 'text', x: cx, y: axis - NAME_RISE - LINE * (col.label.length - 1 - i), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' }),
         );
-        for (const b of boxes) contentItems.push(...boxItems(b, part.named, col.series));
+        for (const b of boxes) contentItems.push(...boxItems(b, part.named));
         periods.push({ label: col.label, dot: { x: cx, y: axis }, boxes, row: rowIndex });
       });
     });
@@ -297,7 +271,7 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
   const w = Math.max(sceneWidth, titleWidth);
   const h = bottom + MARGIN;
   return {
-    scene: { width: w, height: h, title: model.title ?? 'timeline', items, theme },
+    scene: { width: w, height: h, title: model.title ?? 'timeline', items },
     width: w,
     height: h,
     direction: 'LR',
@@ -306,9 +280,8 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, theme: Theme, limi
   };
 }
 
-function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multicolor: boolean): TimelineLayout {
+function layoutVertical(model: TimelineModel, ruler: Ruler): TimelineLayout {
   const width = pixelWidth(ruler);
-  const series = seriesOf(model, multicolor);
   const zones = model.groups.some((g) => g.name !== undefined);
   const labels = model.groups.map((g) => g.periods.map((p) => wrapLines(p.label, TEXT_MAX, width)));
   const nameW = Math.max(0, ...labels.flat().map((l) => widest(l, width)));
@@ -353,8 +326,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multic
       const dotY = y + r.h / 2;
       const label = labels[gi]?.[pi] ?? [];
       label.forEach((text, i) => dotItems.push({ kind: 'text', x: axisX - NAME_RISE, y: dotY + LINE * (i - (label.length - 1) / 2), text, anchor: 'end', role: ['name'] }));
-      const tone = series[gi]?.[pi];
-      dotItems.push({ kind: 'circle', cx: axisX, cy: dotY, r: DOT_R, role: dotRole(tone) });
+      dotItems.push({ kind: 'circle', cx: axisX, cy: dotY, r: DOT_R, role: ['dot'] });
       let x = boxLeft;
       const boxes: PlacedBox[] = r.lines.map((lines, k) => {
         const w = r.ws[k] ?? BOX_MIN;
@@ -364,7 +336,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multic
         return box;
       });
       if (boxes.length > 0) lineItems.push({ kind: 'line', points: [{ x: axisX, y: dotY }, { x: boxLeft, y: dotY }], role: ['edge'] });
-      for (const b of boxes) contentItems.push(...boxItems(b, g.name !== undefined, tone));
+      for (const b of boxes) contentItems.push(...boxItems(b, g.name !== undefined));
       periods.push({ label, dot: { x: axisX, y: dotY }, boxes, row: 0 });
       lastRowBottom = y + r.h;
       y += r.h + TD_ROW_GAP;
@@ -388,11 +360,10 @@ function layoutVertical(model: TimelineModel, ruler: Ruler, theme: Theme, multic
   const titleWidth = model.title === undefined ? 0 : ceilTo(ruler.textWidth(model.title, 'title') * TITLE_SIZE_RATIO) + 2 * MARGIN;
   const w = Math.max(contentRight + MARGIN, titleWidth);
   const h = bottom + MARGIN;
-  return { scene: { width: w, height: h, title: model.title ?? 'timeline', items, theme }, width: w, height: h, direction: 'TD', periods, zones: placedZones };
+  return { scene: { width: w, height: h, title: model.title ?? 'timeline', items }, width: w, height: h, direction: 'TD', periods, zones: placedZones };
 }
 
 /** Places a timeline: periods on an axis as dots, events stacked below (or beside) them, sections as zones. */
-export function layoutTimeline(model: TimelineModel, ruler: Ruler, theme: Theme = DEFAULT_THEME, opts: TimelineLayoutOptions = {}): TimelineLayout {
-  const multicolor = opts.multicolor ?? !SCENE_THEME_SPECS[theme].plainTimeline;
-  return model.direction === 'TD' ? layoutVertical(model, ruler, theme, multicolor) : layoutHorizontal(model, ruler, theme, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT, multicolor);
+export function layoutTimeline(model: TimelineModel, ruler: Ruler, opts: TimelineLayoutOptions = {}): TimelineLayout {
+  return model.direction === 'TD' ? layoutVertical(model, ruler) : layoutHorizontal(model, ruler, opts.maxWidth ?? DEFAULT_WIDTH_LIMIT);
 }

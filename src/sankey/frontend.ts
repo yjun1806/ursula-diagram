@@ -16,7 +16,7 @@ registerFrontEnd({
   headers: ['sankey-beta', 'sankey'],
   svg(src, opts) {
     const layout = layoutSankey(read(src, opts), pixelRuler());
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return sankeyTextLines(read(src, opts), maxWidth);

@@ -5,9 +5,7 @@ import type { Box, TextAnchor } from '../chart/label-place.ts';
 import { monotonePath, pathSamples } from '../chart/monotone.ts';
 import { niceTicks } from '../chart/ticks.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { SceneThemeSpec } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem, SceneText } from '../types.ts';
 import { UrsulaError } from '../types.ts';
@@ -137,8 +135,7 @@ export interface XyLayout {
   ticks: number[];
 }
 
-export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLayout {
-  const spec: SceneThemeSpec = SCENE_THEME_SPECS[theme];
+export function layoutXychart(chart: XyChart, ruler: Ruler): XyLayout {
   const horizontal = chart.horizontal;
   const cfg = chart.config;
   const px = (text: string, size: number, bold = false): number => widthOf(ruler, text, size, bold);
@@ -165,8 +162,8 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
   const barSeries = chart.series.map((s, i) => ({ s, i })).filter((e) => e.s.kind === 'bar');
   const lineSeries = chart.series.map((s, i) => ({ s, i })).filter((e) => e.s.kind === 'line');
   const strongBars = !single;
-  // Band: one bar series and at most one line are neutral, with the highest bar in the accent; more series take their own colours.
-  const neutral = spec.peakBar && barSeries.length <= 1 && lineSeries.length <= 1;
+  // One bar series and at most one line are neutral, with the highest bar in the accent; more series take their own colours.
+  const neutral = barSeries.length <= 1 && lineSeries.length <= 1;
 
   // value range
   const values = chart.series.flatMap((s) => s.points.map((p) => p.value));
@@ -312,7 +309,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
     const k = barSeries.length;
     const avail = horizontal ? band - 8 : band - 20;
     const gap = 4;
-    const barW = Math.max(4, Math.min(horizontal ? Math.min(spec.barWidth, 40) : spec.barWidth, 2 * Math.floor((avail - gap * (k - 1)) / k / 2)));
+    const barW = Math.max(4, Math.min(SCENE_THEME.barWidth, 2 * Math.floor((avail - gap * (k - 1)) / k / 2)));
     const groupW = k * barW + (k - 1) * gap;
     const barRects: { box: Box; len: number; series: number; i: number; end: number; centre: number }[] = [];
     barSeries.forEach(({ s, i: sIdx }, slot) => {
@@ -323,7 +320,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
         const c = catPos(i) - groupW / 2 + slot * (barW + gap) + barW / 2;
         const end = valPos(p.value);
         const len = Math.abs(end - base);
-        const radius = Math.min(spec.barTop, barW / 2, len);
+        const radius = Math.min(SCENE_THEME.barTop, barW / 2, len);
         const x0 = c - barW / 2;
         const x1 = c + barW / 2;
         if (len >= 0.5) {
@@ -352,15 +349,10 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       const pts = at.filter((p): p is Point => p !== undefined);
       polylines.push(pts);
       if (pts.length >= 2) {
-        let d: string;
-        if (spec.interpolation === 'linear') d = pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${round2(p.x)} ${round2(p.y)}`).join('');
-        else if (horizontal) {
-          const swapped = monotonePath(pts.map((p) => ({ x: p.y, y: p.x })));
-          d = swapped.replace(/(-?[\d.]+)[ ,](-?[\d.]+)/g, '$2 $1');
-        } else d = monotonePath(pts);
+        const d = horizontal ? monotonePath(pts.map((p) => ({ x: p.y, y: p.x }))).replace(/(-?[\d.]+)[ ,](-?[\d.]+)/g, '$2 $1') : monotonePath(pts);
         items.push({ kind: 'path', d, role: [neutral ? 'mark-line--ink' : single ? 'mark-line' : `series-${colour(sIdx)}--line`] });
       }
-      for (const p of pts) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: [neutral ? 'mark-dot--ink' : single ? 'mark-dot' : `series-${colour(sIdx)}--dot`] });
+      for (const p of pts) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: SCENE_THEME.dotRadius, role: [neutral ? 'mark-dot--ink' : single ? 'mark-dot' : `series-${colour(sIdx)}--dot`] });
     });
 
     // category names
@@ -411,22 +403,12 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
 
     // value labels
     const dotBoxes: Box[] = lineSeries.flatMap((_, li) =>
-      (marks[li]?.at ?? []).filter((p): p is Point => p !== undefined).map((p) => ({ x0: p.x - spec.dotRadius, x1: p.x + spec.dotRadius, y0: p.y - spec.dotRadius, y1: p.y + spec.dotRadius })),
+      (marks[li]?.at ?? []).filter((p): p is Point => p !== undefined).map((p) => ({ x0: p.x - SCENE_THEME.dotRadius, x1: p.x + SCENE_THEME.dotRadius, y0: p.y - SCENE_THEME.dotRadius, y1: p.y + SCENE_THEME.dotRadius })),
     );
     const lineSamples: Point[] = polylines.flatMap((pts) => {
-      if (spec.interpolation === 'monotone' && pts.length >= 2) {
-        if (!horizontal) return pathSamples(monotonePath(pts));
-        return pathSamples(monotonePath(pts.map((p) => ({ x: p.y, y: p.x })))).map((p) => ({ x: p.y, y: p.x }));
-      }
-      const out: Point[] = [];
-      for (let j = 1; j < pts.length; j++) {
-        const a = pts[j - 1];
-        const b = pts[j];
-        if (a === undefined || b === undefined) continue;
-        const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
-        for (let s = 0; s <= steps; s++) out.push({ x: a.x + ((b.x - a.x) * s) / steps, y: a.y + ((b.y - a.y) * s) / steps });
-      }
-      return out;
+      if (pts.length < 2) return [];
+      if (!horizontal) return pathSamples(monotonePath(pts));
+      return pathSamples(monotonePath(pts.map((p) => ({ x: p.y, y: p.x })))).map((p) => ({ x: p.y, y: p.x }));
     });
     const solidBars = strongBars ? barRects.map((b) => b.box) : [];
     const fixedObstacles = [...obstacles, ...dotBoxes, ...solidBars];
@@ -464,7 +446,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
         const trend = trendAt(s.points[i]?.value ?? 0, s.points[i - 1]?.value, s.points[i + 1]?.value);
         return trend === 'peak' ? [0, 1] : trend === 'valley' ? [0, -1] : trend === 'rising' ? [-1, 1] : [1, 1];
       };
-      const lineOff = Math.round(spec.dotRadius + 4);
+      const lineOff = Math.round(SCENE_THEME.dotRadius + 4);
       lineSeries.forEach(({ s }, li) => {
         s.points.forEach((p, i) => {
           const at = marks[li]?.at[i];
@@ -476,7 +458,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           if (!showValues) return;
           const key = `${i}:${p.value}`;
           const hasBar = barSeries.some(({ s: b }) => b.points[i]?.value === p.value);
-          if (hasBar && single && spec.valueLabel === 'inside') return; // the bar of the same series carries the value
+          if (hasBar && single) return; // the bar of the same series carries the value
           if (lineJobs.has(key) && !strongBars) return;
           lineJobs.set(key, true);
           const job: LabelJob = { text: p.raw, p: at, cat: i, side, off: lineOff, kind: 'line' };
@@ -489,16 +471,14 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
           const r = barRects.find((b) => b.series === chart.series.indexOf(s) && b.i === i);
           if (r === undefined) return;
           const hasLine = lineSeries.some(({ s: l }) => l.points[i]?.value === p.value);
-          if (hasLine && single && spec.valueLabel !== 'inside') return; // the line of the same series carries the value
           const w = valueText(p.raw);
           const wantOutside = cfg.showDataLabelOutsideBar === true;
-          const wantInside = cfg.showDataLabelOutsideBar !== true && (cfg.showDataLabel === true || spec.valueLabel === 'inside');
           const thickness = horizontal ? r.box.y1 - r.box.y0 : r.box.x1 - r.box.x0;
           const fits = !strongBars && (horizontal ? r.len >= w + 24 : r.len >= 24 && thickness >= w + 2);
           const tip: Point = horizontal ? { x: r.end, y: r.centre } : { x: r.centre, y: r.end };
-          const off = hasLine ? Math.round(spec.dotRadius + 4) : 4;
+          const off = hasLine ? Math.round(SCENE_THEME.dotRadius + 4) : 4;
           const job: LabelJob = { text: p.raw, p: tip, cat: i, side: [0, 1], off, kind: 'bar' };
-          if (!wantOutside && wantInside && fits) {
+          if (!wantOutside && fits) {
             const inner: Candidate[] = [0, 12, 24, 36].map((k) => (horizontal ? { x: r.end - 12 - k, y: r.centre, anchor: 'end' } : { x: r.centre, y: r.end + 20 + k, anchor: 'middle' }));
             // the line of the same series meets the bar only at its dot, so it does not push the value down
             valueJobs.push({ job, w, roles: ['value', 'value--plain'], inner, ownLine: hasLine && single });
@@ -526,7 +506,6 @@ export function layoutXychart(chart: XyChart, ruler: Ruler, theme: Theme): XyLay
       height: cursor + 32,
       title: chart.title === undefined ? 'xychart' : `xychart — ${chart.title}`,
       items,
-      theme,
     };
     // the panel and the size follow the content
     const panel = items[0];

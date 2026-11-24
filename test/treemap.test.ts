@@ -95,8 +95,6 @@ treemap-beta
     "Others": 0.25`,
 };
 
-const THEMES = ['solid', 'outline', 'card'] as const;
-
 /** What a front-end receives: the front-matter block turned into blank lines. */
 const body = (src: string): string => src.replace(/^---[\s\S]*?\n---\n/u, (m) => '\n'.repeat(m.split('\n').length - 1));
 
@@ -107,8 +105,8 @@ function layoutOf(src: string) {
 
 describe('treemap render', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
+      expect(render(src)).toContain('data-theme="band"');
     });
     it(`prints ${name} as a tree`, () => {
       const out = renderText(src, 80);

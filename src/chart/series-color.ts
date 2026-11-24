@@ -1,10 +1,10 @@
 /**
- * A colour the source asks for is never painted as it is: it takes the nearest of the theme's eight series colours, so
- * that it stays in harmony in the dark scheme and in all three themes.
+ * A colour the source asks for is never painted as it is: it takes the series whose reference hue is nearest, so that
+ * it stays in harmony with the other colours in the light and the dark scheme.
  */
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-
 const SERIES = 8;
+/** Reference hue of the first seven series; the eighth is the neutral one. */
+const HUES = ['#7447c8', '#0f9b95', '#d58d25', '#1f7dcf', '#399d57', '#dd5847', '#9ca73e'] as const;
 /** Below this saturation a colour reads as grey and takes the neutral last series. */
 const GREY = 0.18;
 
@@ -32,9 +32,9 @@ export function nearestSeries(hex: string, opts: { skipFirst?: boolean } = {}): 
   let best = first;
   let bestGap = Infinity;
   for (let n = first; n < SERIES; n++) {
-    const pair = SCENE_THEME_SPECS.solid.colors[`s${n}`];
-    if (pair === undefined) continue;
-    const gap = Math.abs(((hsl(pair[0]).h - want.h + 540) % 360) - 180);
+    const hue = HUES[n - 1];
+    if (hue === undefined) continue;
+    const gap = Math.abs(((hsl(hue).h - want.h + 540) % 360) - 180);
     if (gap < bestGap) {
       best = n;
       bestGap = gap;

@@ -132,17 +132,13 @@ const settingsOnly = `gantt
   tickInterval 1week
   weekday monday`;
 
-const themes = ['solid', 'outline', 'card'] as const;
-
 describe('gantt svg', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('ursula-grid');
-      });
-    }
+    it(`${name} draws`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('ursula-grid');
+    });
   }
 
   it('is picked by the header', () => {
@@ -159,11 +155,6 @@ describe('gantt svg', () => {
     expect(svg).toContain('<title>Plan</title>');
   });
 
-  it('gives the same lines in every theme apart from what a theme changes', () => {
-    const strip = (svg: string): string => svg.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<defs>[\s\S]*?<\/defs>/, '').replace(/data-theme="\w+"/, '');
-    const texts = (svg: string): string[] => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1] ?? '');
-    expect(texts(strip(render(examples['note'] ?? '', { theme: 'outline' })))).toEqual(texts(strip(render(examples['note'] ?? '', { theme: 'card' }))));
-  });
 });
 
 describe('gantt parse', () => {

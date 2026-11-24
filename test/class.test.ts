@@ -1,6 +1,6 @@
 // Examples adapted from the Mermaid documentation (MIT).
 import { describe, expect, it } from 'vitest';
-import { cellRuler, layout, pixelRuler, render, renderText, THEMES, UrsulaError } from '../src/index.ts';
+import { cellRuler, layout, pixelRuler, render, renderText, UrsulaError } from '../src/index.ts';
 import { genericsOf, parseClass } from '../src/class/parse.ts';
 import type { Layout, LayoutNode } from '../src/index.ts';
 
@@ -181,8 +181,8 @@ describe('class diagram: reading', () => {
 const SOURCES: Record<string, string> = { ANIMAL, DEFAULTS, KINDS, NAMESPACES, GENERIC, IGNORED };
 
 describe('class diagram: drawing', () => {
-  it.each(Object.entries(SOURCES))('draws %s in three themes', (_name, src) => {
-    for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+  it.each(Object.entries(SOURCES))('draws %s', (_name, src) => {
+    expect(render(src)).toContain('data-theme="band"');
   });
 
   it('keeps text inside the drawing and out of other text', () => {

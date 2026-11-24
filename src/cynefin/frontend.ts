@@ -9,10 +9,9 @@ registerFrontEnd({
   name: 'cynefin',
   headers: ['cynefin-beta'],
   svg(src, opts) {
-    const layout = layoutCynefin(parseCynefin(src, opts.heading), pixelRuler(), opts.theme);
+    const layout = layoutCynefin(parseCynefin(src, opts.heading), pixelRuler());
     return renderThemedScene(layout.scene, {
       ...(opts.title === undefined ? {} : { title: opts.title }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
   textLines(src, maxWidth, opts) {
@@ -20,6 +19,6 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseCynefin(src, opts.heading);
-    return { model, ...layoutCynefin(model, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme) };
+    return { model, ...layoutCynefin(model, mode === 'text' ? cellRuler() : pixelRuler()) };
   },
 });

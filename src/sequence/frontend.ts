@@ -31,7 +31,6 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, {
       ...(title === undefined ? {} : { title }),
       ...(drawTitle === undefined ? {} : { drawTitle }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
   textLines(src, maxWidth, opts) {

@@ -65,10 +65,10 @@ describe('node shapes in the drawing', () => {
   });
 
   it('draw each shape with its own element', () => {
-    const svg = (decl: string): string => render(`flowchart LR\n${decl}`, { theme: 'solid' });
+    const svg = (decl: string): string => render(`flowchart LR\n${decl}`);
     const polygons = (s: string): string[] => [...s.matchAll(/<polygon[^>]*points="([^"]*)"/g)].map((m) => m[1] ?? '');
     const roundH = layout(parse('flowchart LR\na(x)'), pixelRuler()).nodes[0]?.h ?? 0;
-    expect(svg('a(x)')).toContain(`rx="${Math.min(26, roundH / 2)}"`);
+    expect(svg('a(x)')).toContain(`rx="${Math.min(18, roundH / 2)}"`);
     expect(svg('a(x)')).not.toContain('<ellipse');
     expect(svg('a([x])')).toMatch(/<rect class="ursula-node-box"[^>]*rx="(\d+(\.\d+)?)"/);
     expect(svg('a((x))')).toContain('<ellipse');
@@ -82,7 +82,7 @@ describe('node shapes in the drawing', () => {
   it('give a stadium a corner radius of half its height', () => {
     const l = layout(parse('flowchart LR\na([x])'), pixelRuler());
     const h = l.nodes[0]?.h ?? 0;
-    expect(render('flowchart LR\na([x])', { theme: 'solid' })).toContain(`rx="${h / 2}"`);
+    expect(render('flowchart LR\na([x])')).toContain(`rx="${h / 2}"`);
   });
 
   it('end an edge that arrives off-centre on an ellipse, on the ellipse', () => {
@@ -90,7 +90,7 @@ describe('node shapes in the drawing', () => {
     const l = layout(parse(src), pixelRuler());
     const c = l.nodes.find((n) => n.id === 'c');
     if (!c) throw new Error('node c missing');
-    const svg = render(src, { theme: 'solid' });
+    const svg = render(src);
     const cx = c.x + c.w / 2;
     const cy = c.y + c.h / 2;
     let checked = 0;

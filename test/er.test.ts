@@ -377,12 +377,10 @@ erDiagram
 
 const example = (name: string): string => (EXAMPLES.find(([n]) => n === name) as [string, string])[1];
 const read = (name: string) => parseEr(blankFrontMatter(example(name)));
-const THEMES = ['solid', 'outline', 'card'] as const;
-
 describe('er: official examples', () => {
   for (const [name, src] of EXAMPLES) {
-    it(`draws ${name} in all three themes`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
+      expect(render(src)).toContain('data-theme="band"');
     });
   }
 

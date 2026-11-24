@@ -1,11 +1,9 @@
 import { ceilTo, floorTo, roundTo } from '../chart/grid.ts';
 import { cellWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Node, Railroad } from './model.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 24;
 const TITLE_LINE = 18;
@@ -245,10 +243,9 @@ function emit(out: Out, s: Sized, x: number, ay: number): void {
 }
 
 /** Places every rule: its name at the left, then its rail from the start dot to the end dot; rules stand one under the other. */
-export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEFAULT_THEME): RailroadLayout {
-  const spec = SCENE_THEME_SPECS[theme];
-  const dotR = spec.neutralDotRadius ?? spec.dotRadius;
-  const out: Out = { lines: [], marks: [], ports: [], bend: spec.bend, arrowLength: spec.arrow.length };
+export function layoutRailroad(model: Railroad, ruler: Ruler): RailroadLayout {
+  const dotR = SCENE_THEME.neutralDotRadius;
+  const out: Out = { lines: [], marks: [], ports: [], bend: SCENE_THEME.bend, arrowLength: SCENE_THEME.arrow.length };
   const sized = model.rules.map((r) => measure(r.body, ruler));
   const nameW = Math.max(...model.rules.map((r) => ruler.textWidth(r.name, 'title')));
   const railX = ceilTo(MARGIN + nameW + NAME_GAP, 4);
@@ -284,7 +281,6 @@ export function layoutRailroad(model: Railroad, ruler: Ruler, theme: Theme = DEF
     width,
     height,
     title: model.accTitle ?? model.title ?? 'railroad',
-    theme,
     items: [...items, ...names, ...out.lines, ...dots, ...out.marks, ...out.ports],
   };
   return { scene, axes };

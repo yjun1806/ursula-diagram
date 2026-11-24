@@ -101,13 +101,11 @@ describe('radar theme variables and shared values', () => {
 
 describe('radar rendering', () => {
   for (const [name, src] of examples) {
-    for (const theme of ['solid', 'outline', 'card'] as const) {
-      it(`draws example ${name} in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('<svg');
-      });
-    }
+    it(`draws example ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('<svg');
+    });
   }
 
   it('reads the title of a front matter block', () => {
@@ -208,13 +206,6 @@ describe('radar layout', () => {
       }
     });
   }
-
-  it('changes only the dot size between themes', () => {
-    const solid = layoutRadar(parseRadar(body(grades)), pixelRuler(), 'solid');
-    const card = layoutRadar(parseRadar(body(grades)), pixelRuler(), 'card');
-    expect(card.series).toEqual(solid.series);
-    expect(card.width).toBe(solid.width);
-  });
 });
 
 describe('radar text', () => {

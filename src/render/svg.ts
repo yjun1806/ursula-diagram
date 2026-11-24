@@ -1,13 +1,11 @@
 import { withLegend } from '../layout/legend.ts';
 import { pixelRuler } from '../metrics.ts';
-import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, faceLineHeights, FACE_PILL_GAP, FACE_PILL_PAD, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, COMPARTMENT_INSET, columnStarts, faceLineHeights, FACE_PILL_GAP, compartmentHeights, CYLINDER_CAP, END_CORE, hasCompartments, lineEmphasis, NOTE_FOLD, COMPARTMENT_LINE } from '../layout/records.ts';
 import type { LegendKind } from '../sequence/model.ts';
 import { asymPoints, diamondPoints, hexagonPoints, leanLeftPoints, parallelogramPoints, reachRoundedCorner, RING_GAP, roundedPolygonPath, trapBottomPoints, trapTopPoints, trimToOutline } from './shapes.ts';
-import { SCENE_THEME_SPECS } from './scene-theme.ts';
+import { SCENE_THEME } from './scene-theme.ts';
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
-import { DEFAULT_THEME, arrowFit, flowMarker, flowRules, recordRules, SHADOW_FILTER, THEME_SPECS, tokenVar } from './theme.ts';
-import type { Theme, ThemeSpec } from './theme.ts';
-import { UrsulaError } from '../types.ts';
+import { ARROW_TRIM, flowMarker, flowRules, recordRules, THEME, tokenVar } from './theme.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutCluster, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
 import { CLUSTER_NAME_INSET } from '../layout/clusters.ts';
 
@@ -27,8 +25,6 @@ export interface SvgOptions {
   legend?: false | Partial<Record<EdgeStyle | LegendKind, string>>;
   /** Title drawn above the drawing, left-aligned with its content; the canvas grows by one title row. Absent draws none. */
   drawTitle?: string;
-  /** Look of a flowchart: filled boxes (`solid`, the default), outlined boxes (`outline`) or cards with a shadow (`card`). */
-  theme?: Theme;
 }
 
 const TITLE_LINE = 18;
@@ -39,7 +35,6 @@ const DIAMOND_RADIUS = 12;
 /** Height of an edge label, and the room between its text and its sides. */
 const CHIP_HEIGHT = 24;
 const CHIP_PAD = 10;
-const HALO = 3;
 /** Diameter of a dot at the end of a line, and length of each stroke of a cross. */
 const DOT = 8;
 const CROSS = 8;
@@ -47,20 +42,6 @@ const CROSS = 8;
 /** Height of the end caps of a cylinder, and the inset of the bars of a subroutine. */
 const CAP = CYLINDER_CAP;
 const BAR = 8;
-
-/** Colour variables (`--ursula-<name>`) with their light and dark values; the values are the fallbacks written into the drawing. */
-export const TOKENS: Record<string, readonly [string, string]> = {
-  bg: ['transparent', 'transparent'],
-  fg: ['#1f2937', '#e8eaee'],
-  muted: ['#6b7280', '#a0a6b2'],
-  line: ['#9ca3af', '#8a909c'],
-  accent: ['#2563eb', '#6aa5ff'],
-  surface: ['#ffffff', '#1f232b'],
-  border: ['#d1d5db', '#3a404c'],
-  lane: ['#f3f4f6', '#22262e'],
-  zone: ['#ffffff', '#1a1d23'],
-  hair: ['#e5e7eb', '#2d333b'],
-};
 
 export const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
@@ -178,16 +159,13 @@ function hopsOf(edges: readonly LayoutEdge[]): Point[][] {
 
 type Role = 'start' | 'decision';
 
-/** What a drawing needs to know about its theme while it draws. */
+/** What a drawing needs to know about its nodes while it draws. */
 interface Paint {
-  spec: ThemeSpec;
   /** Role of a node: a diamond decides, a node nothing leads to starts; the others have none. */
   roles: Map<string, Role>;
   /** Nodes that stand in a lane drawn with a tint. */
   tinted: Set<string>;
 }
-
-const shadowAttr = (spec: ThemeSpec): string => (spec.shadow ? ' filter="url(#ursula-shadow)"' : '');
 
 /** Whether a node is one of the record shapes, which are coloured by their own rules and take no role. */
 const isRecordNode = (n: LayoutNode): boolean => hasCompartments(n) || RECORD_SHAPES.has(n.shape);
@@ -206,12 +184,12 @@ function rolesOf(layout: Layout): Map<string, Role> {
   return roles;
 }
 
-function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean, spec: ThemeSpec): string {
+function laneSvg(lane: LayoutLane, tint: boolean, centred: boolean): string {
   if (lane.label === '') return '';
   const box = lane.labelBox;
   return (
     `<g class="ursula-lane-group" data-lane="${escapeXml(lane.id)}">` +
-    `<rect class="ursula-lane${tint ? ' ursula-lane--tint' : ''}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
+    `<rect class="ursula-lane${tint ? ' ursula-lane--tint' : ''}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="${num(THEME.boxRadius + 4)}"/>` +
     `<text class="ursula-lane-label" x="${num(centred ? box.x + box.w / 2 : box.x)}" y="${num(box.y + box.h / 2)}"${centred ? ' text-anchor="middle"' : ''} dominant-baseline="central">${escapeXml(lane.label)}</text>` +
     '</g>'
   );
@@ -243,11 +221,11 @@ function tintUnder(edge: LayoutEdge, clusters: readonly LayoutCluster[]): 'tint-
 }
 
 /** A cluster box: tinted at odd depths, plain at even ones, or a dashed outline without a fill; its name stands in the gap of the top row the lines leave. */
-function clusterSvg(cluster: LayoutCluster, spec: ThemeSpec): string {
+function clusterSvg(cluster: LayoutCluster): string {
   const look = cluster.style === 'dashed' ? ` ursula-zone--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? ' ursula-zone--plain' : '';
   return (
     `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` +
-    `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(spec.boxRadius + 4)}"/>` +
+    `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(THEME.boxRadius + 4)}"/>` +
     (cluster.name?.knockout ? '' : nameText(cluster)) +
     '</g>'
   );
@@ -261,31 +239,30 @@ function knockoutSvg(cluster: LayoutCluster): string {
   return `<g class="ursula-cluster-name" data-cluster="${escapeXml(cluster.id)}"><rect class="ursula-zone-knock${look}" x="${num(name.x - 4)}" y="${num(name.y - 2)}" width="${num(name.w + 8)}" height="${num(name.h + 4)}"/>${nameText(cluster)}</g>`;
 }
 
-/** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene theme. */
 /**
- * The rules of what only a C4 drawing has: the pill of a kind and the technology of a relation. On `band` a boundary
- * name stands in ink over its muted subtitle, and the description of an element is muted under its name.
+ * The rules of what only a C4 drawing has: a boundary name stands in ink over its muted subtitle, the description of
+ * an element is muted under its name, and the technology of a relation is fainter than its label.
  */
-function faceRules(layout: Layout, spec: ThemeSpec, theme: Theme): string[] {
+function faceRules(layout: Layout): string[] {
   const faced = layout.nodes.some((n) => n.compartments?.some((c) => c.face === true));
   return [
-    ...(faced && !spec.headBand ? ['.ursula-cell-pill{fill:$hair}'] : []),
-    ...(faced && theme === 'band' ? ['.ursula-zone-name{fill:$fg;font-size:13px}', '.ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}', '.ursula-cell-body{fill:$muted}'] : []),
+    ...(faced ? ['.ursula-zone-name{fill:$fg;font-size:13px}', '.ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}', '.ursula-cell-body{fill:$muted}'] : []),
     ...(layout.edges.some((e) => e.label?.text.includes('\u2003')) ? ['.ursula-edge-label-tech{font-weight:400;opacity:.7}'] : []),
   ];
 }
 
-function clusterRules(clusters: readonly LayoutCluster[], theme: Theme): string[] {
+/** Rules for the cluster boxes, added only to a drawing that has some; the dashed zone takes its stroke from the scene colours. */
+function clusterRules(clusters: readonly LayoutCluster[]): string[] {
   if (clusters.length === 0) return [];
-  const m = SCENE_THEME_SPECS[theme].metrics;
+  const m = SCENE_THEME.metrics;
   return [
     '.ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}',
     '.ursula-zone--plain{fill:$zone}',
     ...(clusters.some((c) => c.style === 'dashed')
       ? [`.ursula-zone--dashed{fill:none;stroke:$zone-dash;stroke-width:${m['zone-dash-w'] ?? '1'};stroke-dasharray:${m['dash'] ?? 'none'};stroke-linecap:round}`]
       : []),
-    // A theme with fills by depth fills the dashed boundaries with them, a knockout of a name too.
-    ...(clusters.some((c) => c.style === 'dashed') && 'tint-outer' in THEME_SPECS[theme].tokens
+    // The dashed boundaries take a fill by depth, a knockout of a name too.
+    ...(clusters.some((c) => c.style === 'dashed')
       ? (['outer', 'mid', 'inner'] as const).flatMap((t) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:$tint-${t}${t === 'mid' ? ';stroke:$line;stroke-width:1;stroke-dasharray:none' : t === 'inner' ? ';stroke:$hair;stroke-width:1;stroke-dasharray:none' : ''}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:$tint-${t}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:$chip-${t}}`])
       : []),
     '.ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}',
@@ -335,8 +312,8 @@ function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | 
 }
 
 /** How far a line stops short of its end so that the mark there is not drawn over a line. */
-function endTrim(end: EdgeEnd, spec: ThemeSpec): number {
-  return end === 'arrow' ? arrowFit(spec).trim : end === 'none' ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+function endTrim(end: EdgeEnd): number {
+  return end === 'arrow' ? ARROW_TRIM : end === 'none' ? 0 : MARKS.has(end) ? MARK : DOT / 2;
 }
 
 /**
@@ -394,11 +371,11 @@ function edgeSvg(edge: LayoutEdge, nodes: Map<string, LayoutNode>, paint: Paint,
   const start = edge.startEnd ?? 'none';
   const endId = endMarkerId(end, accent, false);
   const startId = endMarkerId(start, accent, true);
-  const points = trimStart(trimmedPoints(edge, nodes), endTrim(start, paint.spec));
+  const points = trimStart(trimmedPoints(edge, nodes), endTrim(start));
   const junction = edge.trunk?.dot;
   return (
     `<path class="ursula-edge ursula-edge--${edge.style}${branch ? ' ursula-edge--branch' : ''}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` +
-    `d="${pathData(points, edge.trunk?.square ? 0 : paint.spec.bend, endTrim(end, paint.spec), hops)}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
+    `d="${pathData(points, edge.trunk?.square ? 0 : THEME.bend, endTrim(end), hops)}"${startId === undefined ? '' : ` marker-start="url(#${startId})"`}${endId === undefined ? '' : ` marker-end="url(#${endId})"`}/>` +
     (junction === undefined ? '' : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`)
   );
 }
@@ -429,7 +406,6 @@ function portRings(layout: Layout, nodes: Map<string, LayoutNode>): string {
 
 /** The markers (beyond the two arrowheads every drawing has) and style rules that the visible edges of a layout need. */
 function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: string[] } {
-  const spec = paint.spec;
   const wanted = new Map<string, string>();
   const reversed = (m: string): string => m.replace('orient="auto"', 'orient="auto-start-reverse"');
   let rules = false;
@@ -438,7 +414,7 @@ function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: st
     if (id === undefined || wanted.has(id)) return;
     const mod = accent ? '--accent' : '';
     if (end === 'arrow') {
-      if (atStart) wanted.set(id, reversed(flowMarker(spec, id, accent ? 'ursula-arrow ursula-arrow--accent' : 'ursula-arrow')));
+      if (atStart) wanted.set(id, reversed(flowMarker(id, accent ? 'ursula-arrow ursula-arrow--accent' : 'ursula-arrow')));
       return;
     }
     if (MARKS.has(end)) {
@@ -459,7 +435,7 @@ function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: st
     want(edge.end ?? 'arrow', accent, false);
     want(edge.startEnd ?? 'none', accent, true);
   }
-  const w = spec.lineWidth;
+  const w = THEME.lineWidth;
   return {
     markers: [...wanted.values()],
     rules: rules
@@ -481,7 +457,7 @@ function crossPath(): string {
   return `M${lo} ${lo}L${hi} ${hi}M${hi} ${lo}L${lo} ${hi}`;
 }
 
-/** The text of an edge label; what follows an em space is a technology, a span of its own so that a theme can paint it fainter. */
+/** The text of an edge label; what follows an em space is a technology, a span of its own so that it is painted fainter. */
 function labelText(line: string): string {
   const at = line.indexOf('\u2003');
   if (at < 0) return escapeXml(line);
@@ -497,13 +473,11 @@ function labelSvg(edge: LayoutEdge, paint: Paint, on?: 'tint-outer' | 'tint-mid'
   const h = CHIP_HEIGHT + (lines.length - 1) * BODY_LINE;
   const cx = l.x + l.w / 2;
   const cy = l.y + l.h / 2;
-  const chip = (cls: string, grow: number, extra: string): string =>
-    `<rect class="${cls}" x="${num(cx - w / 2 - grow)}" y="${num(cy - h / 2 - grow)}" width="${num(w + 2 * grow)}" height="${num(h + 2 * grow)}" rx="${num(CHIP_HEIGHT / 2 + grow)}"${extra}/>`;
+  const chip = `<rect class="ursula-edge-label-bg" x="${num(cx - w / 2)}" y="${num(cy - h / 2)}" width="${num(w)}" height="${num(h)}" rx="${num(CHIP_HEIGHT / 2)}"/>`;
   const emphasis = edge.style === 'thick' ? ' ursula-edge-label--thick' : paint.roles.get(edge.from) === 'decision' ? ' ursula-edge-label--branch' : '';
   return (
     `<g class="ursula-edge-label-group${on === undefined ? '' : ` ursula-edge-label--on-${on}`}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` +
-    (paint.spec.chipHalo ? chip('ursula-edge-label-halo', HALO, '') : '') +
-    chip('ursula-edge-label-bg', 0, shadowAttr(paint.spec)) +
+    chip +
     lines
       .map(
         (line, i, all) =>
@@ -532,31 +506,30 @@ function usesRecords(layout: Layout): boolean {
 
 const points = (pts: Point[]): string => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(' ');
 
-function boxSvg(node: LayoutNode, rx: number, extra = ''): string {
-  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"${extra}/>`;
+function boxSvg(node: LayoutNode, rx: number): string {
+  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"/>`;
 }
 
 /** The outline of a node inside its box. */
-function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
+function shapeSvg(node: LayoutNode): string {
   const { x, y, w, h } = node;
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const radius = spec.boxRadius;
-  const shadow = shadowAttr(spec);
+  const radius = THEME.boxRadius;
   switch (node.shape) {
     case 'round':
-      return boxSvg(node, Math.min(radius + 8, h / 2), shadow);
+      return boxSvg(node, Math.min(radius + 8, h / 2));
     case 'stadium':
-      return boxSvg(node, h / 2, shadow);
+      return boxSvg(node, h / 2);
     case 'circle':
     case 'ellipse':
-      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"${shadow}/>`;
+      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>`;
     case 'start-dot':
       return `<circle class="ursula-start-dot" cx="${num(cx)}" cy="${num(cy)}" r="${num(Math.min(w, h) / 2)}"/>`;
     case 'end-dot': {
       const outer = Math.min(w, h) / 2;
       return (
-        `<circle class="ursula-end-ring" cx="${num(cx)}" cy="${num(cy)}" r="${num(outer - spec.lineWidth / 2)}"/>` +
+        `<circle class="ursula-end-ring" cx="${num(cx)}" cy="${num(cy)}" r="${num(outer - THEME.lineWidth / 2)}"/>` +
         `<circle class="ursula-end-core" cx="${num(cx)}" cy="${num(cy)}" r="${num(END_CORE / 2)}"/>`
       );
     }
@@ -565,7 +538,7 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
     case 'note': {
       const fold = Math.min(NOTE_FOLD, w / 2, h / 2);
       return (
-        `<path class="ursula-note" d="M${num(x)} ${num(y)}H${num(x + w - fold)}L${num(x + w)} ${num(y + fold)}V${num(y + h)}H${num(x)}Z"${shadow}/>` +
+        `<path class="ursula-note" d="M${num(x)} ${num(y)}H${num(x + w - fold)}L${num(x + w)} ${num(y + fold)}V${num(y + h)}H${num(x)}Z"/>` +
         `<path class="ursula-note-fold" d="M${num(x + w - fold)} ${num(y)}V${num(y + fold)}H${num(x + w)}"/>`
       );
     }
@@ -577,25 +550,25 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
       );
     }
     case 'hexagon':
-      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"/>`;
     case 'parallelogram':
-      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"/>`;
     case 'lean-l':
-      return `<polygon class="ursula-node-box" points="${points(leanLeftPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(leanLeftPoints(node))}"/>`;
     case 'trap-b':
-      return `<polygon class="ursula-node-box" points="${points(trapBottomPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(trapBottomPoints(node))}"/>`;
     case 'trap-t':
-      return `<polygon class="ursula-node-box" points="${points(trapTopPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(trapTopPoints(node))}"/>`;
     case 'asym':
-      return `<polygon class="ursula-node-box" points="${points(asymPoints(node))}"${shadow}/>`;
+      return `<polygon class="ursula-node-box" points="${points(asymPoints(node))}"/>`;
     case 'dbl-circle':
       return (
-        `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"${shadow}/>` +
+        `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>` +
         `<ellipse class="ursula-node-box ursula-node-box--lined" cx="${num(cx)}" cy="${num(cy)}" rx="${num(Math.max(0, w / 2 - RING_GAP))}" ry="${num(Math.max(0, h / 2 - RING_GAP))}"/>`
       );
     case 'subroutine':
       return (
-        boxSvg(node, BAR, shadow) +
+        boxSvg(node, BAR) +
         [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box ursula-node-box--lined" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join('')
       );
     case 'cylinder': {
@@ -604,15 +577,15 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
       const bottom = y + h - CAP;
       return (
         `<path class="ursula-node-box ursula-node-box--lined" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` +
-        `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"${shadow}/>`
+        `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`
       );
     }
     case 'diamond':
       return node.outline
-        ? `<path class="ursula-node-box" d="${roundedPolygonPath(diamondPoints(node.outline), DIAMOND_RADIUS)}"${shadow}/>`
-        : boxSvg(node, radius, shadow);
+        ? `<path class="ursula-node-box" d="${roundedPolygonPath(diamondPoints(node.outline), DIAMOND_RADIUS)}"/>`
+        : boxSvg(node, radius);
     case 'rect':
-      return boxSvg(node, radius, shadow);
+      return boxSvg(node, radius);
   }
 }
 
@@ -621,8 +594,8 @@ function shapeSvg(node: LayoutNode, spec: ThemeSpec): string {
 const HEAD_BAND = 28;
 const HEAD_BAND_GAP = 10;
 
-function headBandSvg(node: LayoutNode, radius: number, height: number, spec: ThemeSpec): string {
-  const inset = spec.boxBorder / 2;
+function headBandSvg(node: LayoutNode, radius: number, height: number): string {
+  const inset = THEME.boxBorder / 2;
   const id = `ursula-band-${node.id.replace(/[^A-Za-z0-9_-]/g, '_')}-${num(node.x)}-${num(node.y)}-${num(node.w)}-${num(node.h)}`.replace(/\./g, '_');
   return (
     `<clipPath id="${id}"><rect x="${num(node.x + inset)}" y="${num(node.y + inset)}" width="${num(node.w - 2 * inset)}" height="${num(node.h - 2 * inset)}" rx="${num(Math.max(0, radius - inset))}"/></clipPath>` +
@@ -631,7 +604,7 @@ function headBandSvg(node: LayoutNode, radius: number, height: number, spec: The
 }
 
 /** The rules and texts of a box divided into compartments; the box is as tall as they are. */
-function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
+function compartmentsSvg(node: LayoutNode): string {
   const cells = node.compartments ?? [];
   const ruler = pixelRuler();
   const heights = compartmentHeights(cells, ruler);
@@ -640,13 +613,13 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
   const caps = cylinder ? 2 * CAP : 0;
   const spare = Math.max(0, node.h - caps - heights.reduce((a, b) => a + b, 0));
   heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
-  const outline = cylinder || node.shape === 'round' ? shapeSvg(node, spec) : boxSvg(node, spec.boxRadius, shadowAttr(spec));
+  const outline = cylinder || node.shape === 'round' ? shapeSvg(node) : boxSvg(node, THEME.boxRadius);
   const parts = [outline];
   // The band follows the corners of the outline, rounded further on a rounded box.
-  const bandRadius = node.shape === 'round' ? Math.min(spec.boxRadius + 8, node.h / 2) : spec.boxRadius;
-  const banded = spec.headBand && !cylinder;
+  const bandRadius = node.shape === 'round' ? Math.min(THEME.boxRadius + 8, node.h / 2) : THEME.boxRadius;
+  const banded = !cylinder;
   const hasFace = cells.some((c) => c.face === true);
-  if (banded && !hasFace && cells.length > 1) parts.push(headBandSvg(node, bandRadius, heights[0] ?? 0, spec));
+  if (banded && !hasFace && cells.length > 1) parts.push(headBandSvg(node, bandRadius, heights[0] ?? 0));
   let top = node.y + caps;
   cells.forEach((cell, i) => {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
@@ -666,11 +639,7 @@ function compartmentsSvg(node: LayoutNode, spec: ThemeSpec): string {
     cell.lines.forEach((line, k) => {
       const emphasis = lineEmphasis(cell, k, i);
       const y = num(cell.face === true ? faceY(k) : first + k * COMPARTMENT_LINE);
-      if (cell.face === true && k === 0) {
-        const pill = ruler.textWidth(line, 'line') + FACE_PILL_PAD;
-        if (banded) parts.push(headBandSvg(node, bandRadius, top + HEAD_BAND - node.y, spec));
-        else if (!spec.headBand) parts.push(`<rect class="ursula-cell-pill" x="${num(node.x + node.w / 2 - pill / 2)}" y="${num(first - 10)}" width="${num(pill)}" height="20" rx="10"/>`);
-      }
+      if (cell.face === true && k === 0 && banded) parts.push(headBandSvg(node, bandRadius, top + HEAD_BAND - node.y));
       const row = cell.columns?.[k];
       if (row === undefined) {
         if (line === '') return;
@@ -710,8 +679,8 @@ function nodeSvg(node: LayoutNode, hook: NodeHook | undefined, paint: Paint): st
   }
   const bare = node.shape === 'start-dot' || node.shape === 'end-dot' || node.shape === 'bar';
   const body = hasCompartments(node)
-    ? compartmentsSvg(node, paint.spec)
-    : shapeSvg(node, paint.spec) +
+    ? compartmentsSvg(node)
+    : shapeSvg(node) +
       (node.shape === 'actor'
         ? `<text class="ursula-actor-name" x="${num(cx)}" y="${num(node.y + ACTOR_H + ACTOR_NAME_GAP - 4)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>`
         : bare
@@ -729,12 +698,12 @@ function markerId(style: string): string {
   return style === 'thick' ? 'ursula-arrow-accent' : 'ursula-arrow';
 }
 
-function legendSvg(legend: Legend, margin: number, spec: ThemeSpec): string {
+function legendSvg(legend: Legend, margin: number): string {
   const parts = [
     `<line class="ursula-legend-rule" x1="${num(margin)}" y1="${num(legend.y)}" x2="${num(legend.w - margin)}" y2="${num(legend.y)}"/>`,
   ];
   for (const item of legend.items) {
-    const sample = pathData([{ x: item.x, y: item.y }, { x: item.x + item.sampleW, y: item.y }], 0, arrowFit(spec).trim);
+    const sample = pathData([{ x: item.x, y: item.y }, { x: item.x + item.sampleW, y: item.y }], 0, ARROW_TRIM);
     parts.push(
       `<path class="ursula-edge ursula-edge--${item.style}" d="${sample}" marker-end="url(#${markerId(item.style)})"/>` +
         `<text class="ursula-legend-text" x="${num(item.captionX)}" y="${num(item.y)}" dominant-baseline="central">${escapeXml(item.caption)}</text>`,
@@ -744,9 +713,6 @@ function legendSvg(legend: Legend, margin: number, spec: ThemeSpec): string {
 }
 
 export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
-  const theme = opts.theme ?? DEFAULT_THEME;
-  const spec = THEME_SPECS[theme];
-  if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${Object.keys(THEME_SPECS).join(', ')}.`, 'theme');
   const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);
   const heading = opts.drawTitle === undefined || opts.drawTitle === '' ? undefined : opts.drawTitle;
   const rowH = heading === undefined ? 0 : TITLE_ROW;
@@ -758,7 +724,6 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   // Named lanes take the light fill and the face of the page by turns, the first one filled.
   const tinted = (lane: LayoutLane): boolean => labelled.indexOf(lane) % 2 === 0;
   const paint: Paint = {
-    spec,
     roles: rolesOf(layout),
     tinted: new Set([
       ...labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id)),
@@ -769,25 +734,25 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), ...(layout.clusters ?? []).filter((c) => c.style === 'dashed').map((c) => c.x), layout.width);
   const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
   const h = num(layout.height + rowH);
-  // A colour the flow theme does not have (the dashed zone's stroke) comes from the scene theme of the same name.
-  const scene = SCENE_THEME_SPECS[theme].colors;
-  const lookup: Lookup = (name, mode) => (spec.tokens[name] === undefined && scene[name] !== undefined ? `var(--ursula-${name},${scene[name][mode]})` : tokenVar(spec, name, mode));
+  // A colour the layered drawing does not have (the dashed zone's stroke) is the scene colour of the same name.
+  const scene = SCENE_THEME.colors;
+  const lookup: Lookup = (name, mode) => (THEME.tokens[name] === undefined && scene[name] !== undefined ? `var(--ursula-${name},${scene[name][mode]})` : tokenVar(name, mode));
   const ends = extraEnds(layout, paint);
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(spec, FONT), ...clusterRules(layout.clusters ?? [], theme), ...ends.rules, ...(usesRecords(layout) ? recordRules(spec) : []), ...faceRules(layout, spec, theme), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
-    `<defs>${flowMarker(spec, 'ursula-arrow', 'ursula-arrow')}${flowMarker(spec, 'ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}${spec.shadow ? SHADOW_FILTER : ''}</defs>`,
+    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...(usesRecords(layout) ? recordRules() : []), ...faceRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])], lookup)}</style>`,
+    `<defs>${flowMarker('ursula-arrow', 'ursula-arrow')}${flowMarker('ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}</defs>`,
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
-    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'), spec)),
-    ...(layout.clusters ?? []).map((c) => clusterSvg(c, spec)),
+    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'))),
+    ...(layout.clusters ?? []).map(clusterSvg),
     ...((hops) => layout.edges.map((e, i) => edgeSvg(e, byId, paint, hops[i])))(hopsOf(layout.edges)),
     ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
-    ...(spec.portRing ? [portRings(layout, byId)] : []),
+    portRings(layout, byId),
     ...(layout.clusters ?? []).map(knockoutSvg),
     ...layout.edges.map((e) => labelSvg(e, paint, tintUnder(e, layout.clusters ?? []))),
     ...layout.edges.map(endLabelSvg),
-    ...(layout.legend ? [legendSvg(layout.legend, margin, spec)] : []),
+    ...(layout.legend ? [legendSvg(layout.legend, margin)] : []),
     ...(heading === undefined ? [] : ['</g>']),
     '</svg>',
   ].join('');

@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import { layout, pixelRuler, render, UrsulaError } from '../src/index.ts';
 import { parseState } from '../src/state/parse.ts';
-import type { Theme } from '../src/index.ts';
 
 const EXAMPLES: string[] = [
   `---
@@ -332,13 +331,9 @@ describe('state diagram: reading', () => {
 });
 
 describe('state diagram: official examples', () => {
-  it('draws every example in every theme', () => {
+  it('draws every example', () => {
     expect(EXAMPLES).toHaveLength(22);
-    for (const [i, src] of EXAMPLES.entries()) {
-      for (const theme of ['solid', 'outline', 'card'] as Theme[]) {
-        expect(render(src, { theme }), `example ${i + 1}`).toContain(`data-theme="${theme}"`);
-      }
-    }
+    for (const [i, src] of EXAMPLES.entries()) expect(render(src), `example ${i + 1}`).toContain('data-theme="band"');
   });
 });
 

@@ -103,18 +103,15 @@ const crowded = `cynefin-beta
   clear --> complicated`;
 
 const examples = { basic, withTransitions, empty, accessible, crossing, crowded };
-const themes = ['solid', 'outline', 'card'] as const;
 const ruler = pixelRuler();
 
 describe('cynefin svg', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('ursula-zone');
-      });
-    }
+    it(`${name} draws`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('ursula-zone');
+    });
   }
 
   it('is picked by render() when the source starts with the header', () => {
@@ -309,12 +306,6 @@ describe('cynefin layout', () => {
       });
     });
   }
-
-  it('gives the three themes the same coordinates, apart from corner radii and shadows', () => {
-    const geometry = (theme: (typeof themes)[number]): string[] => render(basic, { theme }).match(/<(?:rect|text|path|circle)[^>]*>/gu)?.filter((e) => !e.includes('ursula-bg')).map((e) => e.replace(/class="[^"]*"/u, '').replace(/ (?:rx|filter)="[^"]*"/gu, '')) ?? [];
-    expect(geometry('outline')).toEqual(geometry('solid'));
-    expect(geometry('card')).toEqual(geometry('solid'));
-  });
 });
 
 describe('cynefin errors', () => {

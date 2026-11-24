@@ -338,12 +338,10 @@ describe('usecase: official examples', () => {
   });
 
   EXAMPLES.forEach((src, i) => {
-    it(`draws ${NAMES[i]} in every theme`, () => {
-      for (const theme of ['solid', 'outline', 'card'] as const) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg.startsWith('<svg')).toBe(true);
-      }
+    it(`draws ${NAMES[i]}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg.startsWith('<svg')).toBe(true);
     });
 
     it(`draws ${NAMES[i]} as text`, () => {

@@ -10,10 +10,9 @@ registerFrontEnd({
   name: 'gantt',
   headers: ['gantt'],
   svg(src, opts) {
-    const layout = layoutGantt(parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter }), pixelRuler(), opts.theme);
+    const layout = layoutGantt(parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter }), pixelRuler());
     return renderThemedScene(layout.scene, {
       ...(opts.title === undefined ? {} : { title: opts.title }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
   textLines(src, maxWidth, opts) {
@@ -25,7 +24,7 @@ registerFrontEnd({
   json(src, mode, opts) {
     const model = parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter });
     if (mode === 'text') return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans) };
-    return { model, ...layoutGantt(model, pixelRuler(), opts.theme) };
+    return { model, ...layoutGantt(model, pixelRuler()) };
   },
 });
 

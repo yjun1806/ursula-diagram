@@ -49,7 +49,7 @@ registerFrontEnd({
   headers: ['erDiagram'],
   svg(src, opts) {
     const { title, ...laid } = pixels(src, opts);
-    return renderSvg(laid, { title, legend: false, ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
+    return renderSvg(laid, { title, legend: false, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     return titledLines(terminal(src, maxWidth, opts), opts.heading, maxWidth);

@@ -1,4 +1,3 @@
-import type { Theme } from './render/theme.ts';
 
 export type Direction = 'LR' | 'TD';
 export type EdgeStyle = 'normal' | 'thick' | 'dotted';
@@ -420,7 +419,7 @@ export interface SceneBox {
   h: number;
   /** Label tab on the top-left corner of a frame. */
   tab?: { text: string; w: number; h: number };
-  /** Corner radius; when absent the themed renderer takes it from the role and the theme. */
+  /** Corner radius; when absent the scene renderer takes it from the role. */
   radius?: number;
   /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
   role?: string[];
@@ -502,8 +501,6 @@ export interface Scene {
   height: number;
   title: string;
   items: SceneItem[];
-  /** Look of the themed renderer; defaults to `solid`. */
-  theme?: Theme;
 }
 
 /** How a run of terminal text is meant to look; the host decides how to draw each tone. */

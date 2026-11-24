@@ -5,11 +5,10 @@ import { render, renderText, UrsulaError } from '../src/index.ts';
 import { layoutRailroad } from '../src/railroad/layout.ts';
 import { parseRailroad } from '../src/railroad/parse.ts';
 import type { Node } from '../src/railroad/model.ts';
-import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
+import { SCENE_THEME } from '../src/render/scene-theme.ts';
 import type { Scene, SceneBox, SceneText } from '../src/types.ts';
 import { EXAMPLES } from './railroad-examples.ts';
 
-const THEMES = ['solid', 'outline', 'card'] as const;
 const names = Object.keys(EXAMPLES);
 const sourceOf = (name: string): string => EXAMPLES[name] as string;
 
@@ -21,8 +20,8 @@ describe('railroad examples', () => {
     expect(names).toHaveLength(14);
   });
   for (const name of names) {
-    it(`draws ${name} in three themes and as text`, () => {
-      for (const theme of THEMES) expect(render(sourceOf(name), { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}, as text too`, () => {
+      expect(render(sourceOf(name))).toContain('data-theme="band"');
       const text = renderText(sourceOf(name), 80);
       expect('lines' in text).toBe(true);
     });
@@ -194,27 +193,25 @@ describe('railroad layout', () => {
   });
 
   it('keeps every rail and arrowhead out of the tokens and every arrowhead clear of other rails', () => {
-    for (const theme of THEMES) {
-      for (const name of names) {
-        const { scene } = layoutRailroad(parseRailroad(sourceOf(name)), ruler, theme);
-        const boxesIn = scene.items.filter((i): i is SceneBox => i.kind === 'box');
-        const segs = segments(scene);
-        const len = SCENE_THEME_SPECS[theme].arrow.length;
-        for (const s of segs) {
-          for (const b of boxesIn) {
-            const inside = s.x0 < b.x + b.w - 1 && s.x1 > b.x + 1 && s.y0 < b.y + b.h - 1 && s.y1 > b.y + 1;
-            expect(inside, `${theme} ${name}: a rail passes through a box at ${b.x},${b.y}`).toBe(false);
-          }
+    for (const name of names) {
+      const { scene } = layoutRailroad(parseRailroad(sourceOf(name)), ruler);
+      const boxesIn = scene.items.filter((i): i is SceneBox => i.kind === 'box');
+      const segs = segments(scene);
+      const len = SCENE_THEME.arrow.length;
+      for (const s of segs) {
+        for (const b of boxesIn) {
+          const inside = s.x0 < b.x + b.w - 1 && s.x1 > b.x + 1 && s.y0 < b.y + b.h - 1 && s.y1 > b.y + 1;
+          expect(inside, `${name}: a rail passes through a box at ${b.x},${b.y}`).toBe(false);
         }
-        for (const item of scene.items) {
-          if (item.kind !== 'line' || !Array.isArray(item.role) || !item.role.includes('edge--arrow')) continue;
-          const tip = item.points[item.points.length - 1] as { x: number; y: number };
-          const head = { x0: tip.x, x1: tip.x + len, y0: tip.y - len / 2, y1: tip.y + len / 2 };
-          for (const b of boxesIn) expect(head.x0 < b.x + b.w && head.x1 > b.x && head.y0 < b.y + b.h && head.y1 > b.y, `${theme} ${name}: arrowhead on a box`).toBe(false);
-          for (const s of segs) {
-            if (s.y0 === s.y1) continue;
-            expect(s.x0 > head.x0 && s.x0 < head.x1 && s.y0 < head.y1 && s.y1 > head.y0, `${theme} ${name}: a rail crosses an arrowhead`).toBe(false);
-          }
+      }
+      for (const item of scene.items) {
+        if (item.kind !== 'line' || !Array.isArray(item.role) || !item.role.includes('edge--arrow')) continue;
+        const tip = item.points[item.points.length - 1] as { x: number; y: number };
+        const head = { x0: tip.x, x1: tip.x + len, y0: tip.y - len / 2, y1: tip.y + len / 2 };
+        for (const b of boxesIn) expect(head.x0 < b.x + b.w && head.x1 > b.x && head.y0 < b.y + b.h && head.y1 > b.y, `${name}: arrowhead on a box`).toBe(false);
+        for (const s of segs) {
+          if (s.y0 === s.y1) continue;
+          expect(s.x0 > head.x0 && s.x0 < head.x1 && s.y0 < head.y1 && s.y1 > head.y0, `${name}: a rail crosses an arrowhead`).toBe(false);
         }
       }
     }
@@ -296,19 +293,9 @@ describe('railroad layout', () => {
     }
   });
 
-  it('draws the same boxes in the three themes', () => {
-    const shape = (theme: 'solid' | 'outline' | 'card'): string[] =>
-      layoutRailroad(parseRailroad(sourceOf('railroad-ebnf/08-ebnf-examples')), ruler, theme).scene.items.filter((i) => i.kind === 'box').map((i) => JSON.stringify(i));
-    expect(shape('outline')).toEqual(shape('solid'));
-    expect(shape('card')).toEqual(shape('solid'));
-  });
-
-  it('rounds the bends by the theme', () => {
-    const radius = (theme: 'solid' | 'outline' | 'card'): number | undefined => {
-      const l = layoutRailroad(parseRailroad('railroad-ebnf-beta\nr = a | b ;'), ruler, theme).scene.items.find((i) => i.kind === 'line' && i.points.length > 2);
-      return l?.kind === 'line' ? l.radius : undefined;
-    };
-    expect([radius('outline'), radius('solid'), radius('card')]).toEqual([12, 16, 14]);
+  it('rounds the bends by the radius of every line', () => {
+    const l = layoutRailroad(parseRailroad('railroad-ebnf-beta\nr = a | b ;'), ruler).scene.items.find((i) => i.kind === 'line' && i.points.length > 2);
+    expect(l?.kind === 'line' ? l.radius : undefined).toBe(SCENE_THEME.bend);
   });
 });
 

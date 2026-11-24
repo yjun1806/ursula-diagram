@@ -10,14 +10,14 @@ registerFrontEnd({
   headers: ['block', 'block-beta'],
   svg(src, opts) {
     const model = parseBlock(src, opts.heading);
-    const layout = layoutBlock(model, pixelRuler(), opts.theme);
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    const layout = layoutBlock(model, pixelRuler());
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return blockTextLines(parseBlock(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseBlock(src, opts.heading);
-    return { model, ...layoutBlock(model, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme) };
+    return { model, ...layoutBlock(model, mode === 'text' ? cellRuler() : pixelRuler()) };
   },
 });

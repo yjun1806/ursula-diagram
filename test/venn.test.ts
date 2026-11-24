@@ -91,18 +91,12 @@ function textBoxes(src: string): { boxes: Box[]; width: number; height: number }
 
 describe('venn: drawing', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
-    it(`draws ${name} in the three themes`, () => {
-      for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('series-1--overlap');
-      }
+    it(`draws ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('series-1--overlap');
     });
   }
-
-  it('uses band when no theme is given', () => {
-    expect(render(DEFAULTS)).toContain('data-theme="band"');
-  });
 
   it('shows the front-matter title when the text has none', () => {
     const svg = selectFrontEnd('---\ntitle: From the header\n---\nvenn-beta\n  set A\n').svg('---\ntitle: From the header\n---\nvenn-beta\n  set A\n', {});
@@ -260,7 +254,7 @@ describe('venn: layout', () => {
     expect(l.labels[0]?.lines).toEqual(['Solo']);
   });
 
-  it('draws the styled example in theme colours and lists what it ignored', () => {
+  it('draws the styled example in its own colours and lists what it ignored', () => {
     const svg = render(STYLING);
     expect(svg).not.toContain('ff6b6b');
     expect(svg).not.toContain('style="');

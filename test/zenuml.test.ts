@@ -77,12 +77,10 @@ const ALL = [REPLY, DEMO, ALT, TRY, KINDS, CREATE, SYNC, LOOPS, COMMENT, ASSIGN]
 const texts = (svg: string): string[] => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/gu)].map((m) => m[1] ?? '');
 
 describe('zenuml render', () => {
-  it('draws every example in the three themes', () => {
+  it('draws every example', () => {
     for (const src of ALL) {
-      for (const theme of ['solid', 'outline', 'card'] as const) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-      }
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
     }
   });
 

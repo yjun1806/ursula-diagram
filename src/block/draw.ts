@@ -52,7 +52,7 @@ export function arrowBody(b: { x: number; y: number; w: number; h: number }, hea
 }
 
 /** The outline of a block and the line or lines that mark its kind, as scene items. */
-export function shapeItems(b: PlacedBlock, role: string[], arcRole: string[]): SceneItem[] {
+export function shapeItems(b: PlacedBlock, role: string[]): SceneItem[] {
   const { x, y, w, h } = b;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -71,7 +71,8 @@ export function shapeItems(b: PlacedBlock, role: string[], arcRole: string[]): S
       const arc = `A${n(w / 2)} ${CAP} 0 0`;
       return [
         path(`M${at({ x, y: y + CAP })} ${arc} 1 ${at({ x: x + w, y: y + CAP })} V${n(y + h - CAP)} ${arc} 1 ${at({ x, y: y + h - CAP })} Z`),
-        path(`M${at({ x, y: y + CAP })} ${arc} 0 ${at({ x: x + w, y: y + CAP })}`, arcRole),
+        // The front arc is a hairline: a rule has the colour of a box's fill and would not show on it.
+        path(`M${at({ x, y: y + CAP })} ${arc} 0 ${at({ x: x + w, y: y + CAP })}`, ['rule', 'rule--in-zone']),
       ];
     }
     case 'circle':

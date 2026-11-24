@@ -5,15 +5,14 @@ import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutWardley } from './layout.ts';
 import { parseWardley } from './parse.ts';
 import { wardleyTextLines } from './text.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 registerFrontEnd({
   name: 'wardley',
   headers: ['wardley-beta', 'wardley'],
   svg(src, opts) {
     const map = parseWardley(src, opts);
-    const layout = layoutWardley(map, pixelRuler(), opts.theme ?? DEFAULT_THEME);
-    const svg = renderThemedScene(layout.scene, { theme: opts.theme ?? DEFAULT_THEME, ...(opts.title === undefined ? {} : { title: opts.title }) });
+    const layout = layoutWardley(map, pixelRuler());
+    const svg = renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
     return withDescription(svg, map.accDescr);
   },
   textLines(src, maxWidth, opts) {
@@ -21,6 +20,6 @@ registerFrontEnd({
   },
   json(src, _mode, opts) {
     const map = parseWardley(src, opts);
-    return { model: map, ...layoutWardley(map, pixelRuler(), opts.theme ?? DEFAULT_THEME) };
+    return { model: map, ...layoutWardley(map, pixelRuler()) };
   },
 });

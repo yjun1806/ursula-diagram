@@ -3,7 +3,6 @@ import { renderHtml } from '../src/html.ts';
 import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import { BAKE_SOURCE, decodeSource, encodeSource, fileBase } from '../src/render/html.ts';
 import { sceneStyleSheet } from '../src/render/scene-svg.ts';
-import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
 
 const SRC = `swimlane-beta LR
   subgraph a[Alpha]
@@ -65,7 +64,7 @@ describe('renderHtml', () => {
     expect(decodeSource(encodeSource(SRC))).toBe(SRC);
   });
 
-  it('starts in the theme asked for', () => {
+  it('starts in the light or dark scheme asked for', () => {
     expect(renderHtml(SRC, { theme: 'dark' })).toContain('<html lang="en" data-theme="dark">');
     expect(renderHtml(SRC, { theme: 'light' })).toContain('data-theme="light"');
     expect(renderHtml(SRC)).not.toContain('data-theme="dark">');
@@ -120,7 +119,7 @@ describe('saving with baked colours', () => {
     const outer = page.slice(page.indexOf('<body'), page.indexOf('<svg '));
     const classes = values(outer, 'class').flatMap((v) => v.split(/\s+/));
     expect(classes.length).toBeGreaterThan(0);
-    const sheet = sceneStyleSheet(SCENE_THEME_SPECS.band);
+    const sheet = sceneStyleSheet();
     for (const name of classes) expect(sheet).not.toMatch(new RegExp(`\\.${name}[^a-z-]`));
   });
 });

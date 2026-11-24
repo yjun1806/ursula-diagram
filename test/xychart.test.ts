@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { pixelRuler } from '../src/metrics.ts';
 import { render, renderText, selectFrontEnd } from '../src/index.ts';
 import { blankFrontMatter } from '../src/registry.ts';
-import { THEMES } from '../src/render/theme.ts';
 import { UrsulaError } from '../src/types.ts';
 import type { Scene, SceneText } from '../src/types.ts';
 import { layoutXychart } from '../src/xychart/layout.ts';
@@ -107,8 +106,8 @@ const HORIZONTAL = `xychart horizontal
   line "b" [25 "up", 55, 65, 15]`;
 
 /** Scene of a source, drawn through the registered front-end. */
-function sceneOf(src: string, theme: (typeof THEMES)[number] = 'solid'): Scene {
-  const out = selectFrontEnd(src).json(src, 'svg', { theme }) as { layout: { scene: Scene } };
+function sceneOf(src: string): Scene {
+  const out = selectFrontEnd(src).json(src, 'svg', {}) as { layout: { scene: Scene } };
   return out.layout.scene;
 }
 
@@ -127,17 +126,12 @@ function boxes(scene: Scene): { t: SceneText; x0: number; x1: number; y0: number
 
 describe('xychart examples', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
-    for (const theme of THEMES) {
-      it(`draws ${name} in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg.startsWith('<svg')).toBe(true);
-      });
-    }
+    it(`draws ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg.startsWith('<svg')).toBe(true);
+    });
   }
-  it('draws band when no theme is given', () => {
-    expect(render(MONTHS)).toContain('data-theme="band"');
-  });
 });
 
 describe('xychart parse', () => {
@@ -236,7 +230,7 @@ describe('xychart layout', () => {
   });
   it('leaves the values of several different series out unless the settings ask for them', () => {
     for (const src of [LEGEND, COLORS]) {
-      for (const theme of THEMES) expect(sceneOf(src, theme).items.some((i) => i.kind === 'text' && i.role?.[0] === 'value')).toBe(false);
+      expect(sceneOf(src).items.some((i) => i.kind === 'text' && i.role?.[0] === 'value')).toBe(false);
     }
   });
   it('still writes the point labels of a chart with several series', () => {
@@ -277,36 +271,26 @@ describe('xychart layout', () => {
     expect(scene.height).toBe(600);
   });
   for (const [name, src] of Object.entries({ ...EXAMPLES, horizontal: HORIZONTAL })) {
-    for (const theme of THEMES) {
-      it(`keeps the texts of ${name} in ${theme} apart and inside the drawing`, () => {
-        const scene = sceneOf(src, theme);
-        const list = boxes(scene);
-        for (const b of list) {
-          expect(b.x0, b.t.text).toBeGreaterThanOrEqual(0);
-          expect(b.x1, b.t.text).toBeLessThanOrEqual(scene.width);
-          expect(b.y0, b.t.text).toBeGreaterThanOrEqual(0);
-          expect(b.y1, b.t.text).toBeLessThanOrEqual(scene.height);
+    it(`keeps the texts of ${name} apart and inside the drawing`, () => {
+      const scene = sceneOf(src);
+      const list = boxes(scene);
+      for (const b of list) {
+        expect(b.x0, b.t.text).toBeGreaterThanOrEqual(0);
+        expect(b.x1, b.t.text).toBeLessThanOrEqual(scene.width);
+        expect(b.y0, b.t.text).toBeGreaterThanOrEqual(0);
+        expect(b.y1, b.t.text).toBeLessThanOrEqual(scene.height);
+      }
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i];
+          const b = list[j];
+          if (a === undefined || b === undefined) continue;
+          const hit = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+          expect(hit, `${a.t.text} / ${b.t.text}`).toBe(false);
         }
-        for (let i = 0; i < list.length; i++) {
-          for (let j = i + 1; j < list.length; j++) {
-            const a = list[i];
-            const b = list[j];
-            if (a === undefined || b === undefined) continue;
-            const hit = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
-            expect(hit, `${a.t.text} / ${b.t.text}`).toBe(false);
-          }
-        }
-      });
-    }
+      }
+    });
   }
-  it('is a layout the theme only reshapes in its own settings', () => {
-    const solid = sceneOf(MONTHS, 'solid');
-    const card = sceneOf(MONTHS, 'card');
-    expect(card.width).toBe(solid.width);
-    expect(card.height).toBe(solid.height);
-    const ticks = (s: Scene): string[] => s.items.filter((i): i is SceneText => i.kind === 'text' && i.role?.[0] === 'tick').map((t) => `${t.text}@${t.x},${t.y}`);
-    expect(ticks(card)).toEqual(ticks(solid));
-  });
 });
 
 describe('xychart text', () => {
@@ -361,8 +345,7 @@ describe('xychart errors', () => {
 
 describe('xychart layout API', () => {
   it('lays out with the ruler it is given', () => {
-    const layout = layoutXychart(parseXychart(GENRES), pixelRuler(), 'outline');
-    expect(layout.scene.theme).toBe('outline');
+    const layout = layoutXychart(parseXychart(GENRES), pixelRuler());
     expect(layout.range).toEqual({ min: 0, max: 30 });
   });
 });

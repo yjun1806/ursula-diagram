@@ -14,9 +14,9 @@ export interface QuadrantPoint {
   x: number;
   /** 0 to 1 from the bottom. */
   y: number;
-  /** Radius in pixels from the point's own style or its class; absent when the theme decides. */
+  /** Radius in pixels from the point's own style or its class; absent for the default radius. */
   radius?: number;
-  /** Fill colour (`#rgb` or `#rrggbb`) from the point's own style or its class; absent when the theme decides. */
+  /** Fill colour (`#rgb` or `#rrggbb`) from the point's own style or its class; absent for the default colour. */
   color?: string;
   /** Source text of the coordinates, kept for the text table. */
   xText: string;

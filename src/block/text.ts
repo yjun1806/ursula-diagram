@@ -279,7 +279,7 @@ export function blockTextLines(model: BlockDiagram, maxWidth: number | undefined
   const { title, ...untitled } = model;
   void title;
   for (const compact of [false, true]) {
-    const body = render(layoutBlock(untitled, ruler, undefined, compact));
+    const body = render(layoutBlock(untitled, ruler, compact));
     const widest = Math.max(0, ...body.map(cellWidth));
     if (maxWidth === undefined || widest <= maxWidth) return [...titleRows, ...body];
   }

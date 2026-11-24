@@ -64,8 +64,6 @@ accTitle: Brakes
 accDescr: how the brakes are required
 `;
 
-const THEMES = ['solid', 'outline', 'card'] as const;
-
 describe('requirement parse', () => {
   it('reads the official example', () => {
     const m = parseRequirement(OFFICIAL);
@@ -144,8 +142,8 @@ describe('requirement graph', () => {
 
 describe('requirement render', () => {
   for (const [name, src] of [['official', OFFICIAL], ['rich', RICH]] as const) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
+      expect(render(src)).toContain('data-theme="band"');
     });
   }
 

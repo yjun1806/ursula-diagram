@@ -1,10 +1,6 @@
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
-import { SCENE_THEME_SPECS } from './scene-theme.ts';
-import type { Arrow, SceneThemeSpec } from './scene-theme.ts';
+import { SCENE_THEME } from './scene-theme.ts';
 import { escapeXml, num, pathData } from './svg.ts';
-import { DEFAULT_THEME, SHADOW_FILTER, THEMES } from './theme.ts';
-import type { Theme } from './theme.ts';
-import { UrsulaError } from '../types.ts';
 import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
 
 const FONT = "'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif";
@@ -13,23 +9,11 @@ const FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 const SERIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 /**
- * Every rule a themed drawing can need, written once with `$name` colour placeholders and `%name` metric placeholders.
+ * Every rule a scene drawing can need, written once with `$name` colour placeholders and `%name` metric placeholders.
  * A role `x` is the class `ursula-x`. A selector is a run of classes and nothing else, which is what `ruleFor` reads.
  */
-function sceneRules(spec: SceneThemeSpec): string[] {
-  const arrow = spec.arrow;
-  const head =
-    arrow.kind === 'filled'
-      ? [`.ursula-head{stroke-width:${arrow.stroke};stroke-linejoin:round}`, '.ursula-head--edge{fill:$edge;stroke:$edge}', '.ursula-head--accent{fill:$accent;stroke:$accent}', '.ursula-head--msg{fill:$edge-msg;stroke:$edge-msg}']
-      : [
-          '.ursula-head{fill:none;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
-          '.ursula-head--edge{stroke:$edge}',
-          '.ursula-head--accent{stroke:$accent}',
-          '.ursula-head--msg{stroke:$edge-msg}',
-        ];
-  // A message call whose head the theme fills while every other head is open.
-  const msg = spec.msgArrow;
-  const msgHead = msg?.kind === 'filled' ? [`.ursula-head.ursula-head--msg{fill:$edge-msg;stroke:$edge-msg;stroke-width:${msg.stroke};stroke-linejoin:round}`] : [];
+function sceneRules(): string[] {
+  const head = [`.ursula-head{stroke-width:${SCENE_THEME.arrow.stroke};stroke-linejoin:round}`, '.ursula-head--edge{fill:$edge;stroke:$edge}', '.ursula-head--accent{fill:$accent;stroke:$accent}', '.ursula-head--msg{fill:$edge-msg;stroke:$edge-msg}'];
   // A series mark is written `series-N--tint` or as the two roles `series-N`, `tint`; both reach the same rule.
   const seriesRules = SERIES.flatMap((n) => {
     const form = (modifier: string, body: string): string => `.ursula-series-${n}--${modifier},.ursula-series-${n}.ursula-${modifier}{${body}}`;
@@ -88,13 +72,13 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-rule--in-zone{stroke:$rule-in-zone;stroke-width:1}',
     '.ursula-tag{fill:$tag-fill}',
     '.ursula-tag--in-zone{fill:$tag-fill-zone}',
-    ...(spec.headBand ? ['.ursula-head-band{fill:$tag-fill}'] : []),
+    '.ursula-head-band{fill:$tag-fill}',
     '.ursula-edge{fill:none;stroke:$edge;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
     '.ursula-edge--accent{stroke:$accent}',
     '.ursula-edge--pending{stroke-dasharray:%dash}',
     '.ursula-edge--msg{stroke:$edge-msg}',
     '.ursula-edge--msg.ursula-edge--pending{stroke-dasharray:%dash-msg}',
-    '.ursula-port{display:%port;fill:$halo;stroke:$edge;stroke-width:%edge-w}',
+    '.ursula-port{display:inline;fill:$halo;stroke:$edge;stroke-width:%edge-w}',
     '.ursula-port--accent{stroke:$accent}',
     '.ursula-port--msg{stroke:$edge-msg}',
     '.ursula-end-open{fill:$bg;stroke:$edge;stroke-width:%edge-w;stroke-linejoin:round}',
@@ -118,25 +102,20 @@ function sceneRules(spec: SceneThemeSpec): string[] {
     '.ursula-mark-dot{fill:$dot-fill;stroke:$dot-stroke;stroke-width:%dot-w}',
     '.ursula-dot{fill:$dot-neutral}',
     // A neutral chart with an emphasised bar.
-    ...(spec.peakBar
-      ? [
-          '.ursula-mark--peak{fill:$accent-mid}',
-          '.ursula-mark--ink{fill:$ink}',
-          '.ursula-mark-line--ink{fill:none;stroke:$ink;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
-          '.ursula-mark-dot--ink{fill:$bg;stroke:$ink;stroke-width:1.5}',
-        ]
-      : []),
+    '.ursula-mark--peak{fill:$accent-mid}',
+    '.ursula-mark--ink{fill:$ink}',
+    '.ursula-mark-line--ink{fill:none;stroke:$ink;stroke-width:%data-w;stroke-linejoin:round;stroke-linecap:round}',
+    '.ursula-mark-dot--ink{fill:$bg;stroke:$ink;stroke-width:1.5}',
     ...seriesRules,
     ...head,
-    ...msgHead,
   ];
 }
 
 /** Fills a rule's `%metric` and `$colour` placeholders for one colour scheme. */
-function expand(rule: string, spec: SceneThemeSpec, mode: 0 | 1): string {
+function expand(rule: string, mode: 0 | 1): string {
   return rule
-    .replace(/%([a-z][a-z-]*)/g, (_, name: string) => spec.metrics[name] ?? 'inherit')
-    .replace(/\$([a-z][a-z0-9-]*)/g, (_, name: string) => `var(--ursula-${name},${spec.colors[name]?.[mode] ?? 'inherit'})`);
+    .replace(/%([a-z][a-z-]*)/g, (_, name: string) => SCENE_THEME.metrics[name] ?? 'inherit')
+    .replace(/\$([a-z][a-z0-9-]*)/g, (_, name: string) => `var(--ursula-${name},${SCENE_THEME.colors[name]?.[mode] ?? 'inherit'})`);
 }
 
 /** Classes written on the elements of `parts`, and the class of the root element. */
@@ -157,14 +136,14 @@ function ruleFor(rule: string, used: ReadonlySet<string>): string | undefined {
 }
 
 /**
- * The style sheet of a theme: once for the light scheme, once more for the dark one. Given the classes a drawing
+ * The style sheet of a scene drawing: once for the light scheme, once more for the dark one. Given the classes a drawing
  * carries, it holds only the rules that can reach one of them, in the order of the whole sheet.
  */
-export function sceneStyleSheet(spec: SceneThemeSpec, used?: ReadonlySet<string>): string {
-  const all = sceneRules(spec);
+export function sceneStyleSheet(used?: ReadonlySet<string>): string {
+  const all = sceneRules();
   const rules = used === undefined ? all : all.flatMap((rule) => ruleFor(rule, used) ?? []);
-  const light = rules.map((r) => expand(r, spec, 0)).join('\n');
-  const dark = rules.map((r) => expand(r, spec, 1)).join('\n');
+  const light = rules.map((r) => expand(r, 0)).join('\n');
+  const dark = rules.map((r) => expand(r, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;
 }
 
@@ -173,33 +152,25 @@ type End = 'end' | 'start';
 
 const markerId = (variant: Variant, end: End): string => `ursula-arrow-${variant}-${end}`;
 
-/** Head a line of `variant` takes. */
-const arrowOf = (spec: SceneThemeSpec, variant: Variant): Arrow => (variant === 'msg' ? (spec.msgArrow ?? spec.arrow) : spec.arrow);
-
 /** The arrowhead: the line stops `arrow.length` short of the tip and the marker draws the head from there. */
-function markerSvg(spec: SceneThemeSpec, variant: Variant, end: End): string {
-  const a = arrowOf(spec, variant);
+function markerSvg(variant: Variant, end: End): string {
+  const a = SCENE_THEME.arrow;
   const s = end === 'end' ? 1 : -1;
   const cy = a.width / 2;
-  const x = (v: number): string => num(s * v);
-  const path =
-    a.kind === 'filled'
-      ? `M0 0L${x(a.length)} ${num(cy)}L0 ${num(a.width)}Z`
-      : `M0 ${num(cy)}H${x(a.length)}M${x(a.length - a.wing)} 0L${x(a.length)} ${num(cy)}L${x(a.length - a.wing)} ${num(a.width)}`;
   const viewBoxX = end === 'end' ? 0 : -a.length;
   return (
     `<marker id="${markerId(variant, end)}" viewBox="${num(viewBoxX)} 0 ${num(a.length)} ${num(a.width)}" refX="0" refY="${num(cy)}" ` +
     `markerWidth="${num(a.length)}" markerHeight="${num(a.width)}" markerUnits="userSpaceOnUse" orient="auto" overflow="visible">` +
-    `<path class="ursula-head ursula-head--${variant}" d="${path}"/></marker>`
+    `<path class="ursula-head ursula-head--${variant}" d="M0 0L${num(s * a.length)} ${num(cy)}L0 ${num(a.width)}Z"/></marker>`
   );
 }
 
 /** Corner radius of a rectangle by role; the last matching entry wins, like the later rule of a style sheet. */
-function rectRadius(roles: readonly string[], spec: SceneThemeSpec): number | undefined {
+function rectRadius(roles: readonly string[]): number | undefined {
   const table: [string, number][] = [
-    ['panel', spec.zoneRadius],
-    ['box', spec.boxRadius],
-    ['box--round', spec.roundRadius],
+    ['panel', SCENE_THEME.zoneRadius],
+    ['box', SCENE_THEME.boxRadius],
+    ['box--round', SCENE_THEME.roundRadius],
     ['active', 4],
     ['note', 8],
     ['token', 8],
@@ -209,16 +180,13 @@ function rectRadius(roles: readonly string[], spec: SceneThemeSpec): number | un
     ['swatch', 3],
     ['tag', 10],
     ['chip', 12],
-    ['zone', spec.zoneRadius],
+    ['zone', SCENE_THEME.zoneRadius],
     ['frame', 12],
   ];
   let found: number | undefined;
   for (const [role, radius] of table) if (roles.includes(role)) found = radius;
   return found;
 }
-
-/** Roles that cast the card shadow. */
-const SHADOWED = ['box', 'tile', 'chip', 'panel', 'ellipse'];
 
 const cleanRole = (role: string): string => role.replace(/[^A-Za-z0-9_-]/g, '');
 
@@ -232,18 +200,11 @@ function dataAttrs(data: Record<string, string> | undefined): string {
     .join('');
 }
 
-function shadowAttr(roles: readonly string[], spec: SceneThemeSpec): string {
-  return spec.shadow && roles.some((r) => SHADOWED.includes(r)) ? ' filter="url(#ursula-shadow)"' : '';
-}
-
-function boxSvg(item: SceneBox, spec: SceneThemeSpec): string {
+function boxSvg(item: SceneBox): string {
   const roles = item.role ?? ['box'];
-  const rx = item.radius ?? rectRadius(roles, spec);
+  const rx = item.radius ?? rectRadius(roles);
   const round = rx === undefined ? '' : ` rx="${num(rx)}"`;
-  return (
-    `<rect class="${classOf(roles)}" x="${num(item.x)}" y="${num(item.y)}" width="${num(item.w)}" height="${num(item.h)}"${round}` +
-    `${shadowAttr(roles, spec)}${dataAttrs(item.data)}/>`
-  );
+  return `<rect class="${classOf(roles)}" x="${num(item.x)}" y="${num(item.y)}" width="${num(item.w)}" height="${num(item.h)}"${round}${dataAttrs(item.data)}/>`;
 }
 
 function spanSvg(span: SceneTextSpan): string {
@@ -281,38 +242,38 @@ function trimStart(points: readonly Point[], by: number): Point[] {
   return [{ x: a.x + ((b.x - a.x) / (len || 1)) * cut, y: a.y + ((b.y - a.y) / (len || 1)) * cut }, b, ...rest];
 }
 
-function lineSvg(item: SceneLine, spec: SceneThemeSpec): string {
+function lineSvg(item: SceneLine): string {
   const roles = Array.isArray(item.role) ? item.role : ['edge'];
   const { variant, end, start } = arrowsOf(roles);
-  const head = arrowOf(spec, variant).length;
+  const head = SCENE_THEME.arrow.length;
   const points = start ? trimStart(item.points, head) : item.points;
-  const d = pathData(points, item.radius ?? spec.bend, end ? head : 0);
+  const d = pathData(points, item.radius ?? SCENE_THEME.bend, end ? head : 0);
   const markers = `${start ? ` marker-start="url(#${markerId(variant, 'start')})"` : ''}${end ? ` marker-end="url(#${markerId(variant, 'end')})"` : ''}`;
   return `<path class="${classOf(roles)}" d="${d}"${markers}${dataAttrs(item.data)}/>`;
 }
 
-function pathSvg(item: ScenePath, spec: SceneThemeSpec): string {
-  return `<path class="${classOf(item.role)}" d="${item.d}"${shadowAttr(item.role, spec)}${dataAttrs(item.data)}/>`;
+function pathSvg(item: ScenePath): string {
+  return `<path class="${classOf(item.role)}" d="${item.d}"${dataAttrs(item.data)}/>`;
 }
 
-function circleSvg(item: SceneCircle, spec: SceneThemeSpec): string {
-  // A theme may size the ring at the start of a message line itself.
-  const r = item.role?.includes('port') === true && spec.metrics['port-r'] !== undefined ? spec.metrics['port-r'] : num(item.r);
+function circleSvg(item: SceneCircle): string {
+  // The ring at the start of a line has one size in every drawing.
+  const r = item.role?.includes('port') === true ? num(SCENE_THEME.portRadius) : num(item.r);
   return `<circle class="${classOf(item.role)}" cx="${num(item.cx)}" cy="${num(item.cy)}" r="${r}"${dataAttrs(item.data)}/>`;
 }
 
-function itemSvg(item: SceneItem, spec: SceneThemeSpec): string {
+function itemSvg(item: SceneItem): string {
   switch (item.kind) {
     case 'box':
-      return boxSvg(item, spec);
+      return boxSvg(item);
     case 'text':
       return textSvg(item);
     case 'line':
-      return lineSvg(item, spec);
+      return lineSvg(item);
     case 'path':
-      return pathSvg(item, spec);
+      return pathSvg(item);
     case 'circle':
-      return circleSvg(item, spec);
+      return circleSvg(item);
   }
 }
 
@@ -347,29 +308,26 @@ function contentLeft(scene: Scene): number {
   return xs.length === 0 ? 24 : Math.max(0, Math.min(...xs));
 }
 
-/** Draws a scene in one of the three themes; the colours are variables with dark values for `prefers-color-scheme`. */
-export function renderThemedScene(scene: Scene, opts: { title?: string; theme?: Theme; drawTitle?: string } = {}): string {
-  const theme = opts.theme ?? scene.theme ?? DEFAULT_THEME;
-  const spec = SCENE_THEME_SPECS[theme];
-  if (spec === undefined) throw new UrsulaError(`Unknown theme "${String(theme)}"; use one of ${THEMES.join(', ')}.`, 'theme');
+/** Draws a scene; the colours are variables with dark values for `prefers-color-scheme`. */
+export function renderThemedScene(scene: Scene, opts: { title?: string; drawTitle?: string } = {}): string {
   const heading = opts.drawTitle === undefined || opts.drawTitle === '' ? undefined : opts.drawTitle;
   const left = heading === undefined ? 0 : contentLeft(scene);
   const rowH = heading === undefined ? 0 : TITLE_ROW;
   const w = num(heading === undefined ? scene.width : widthWithTitle(scene.width, left, heading));
   const h = num(scene.height + rowH);
-  const defs = [...markersUsed(scene).map(([variant, end]) => markerSvg(spec, variant, end)), ...(spec.shadow ? [SHADOW_FILTER] : [])];
+  const defs = markersUsed(scene).map(([variant, end]) => markerSvg(variant, end));
   const body = [
     ...(defs.length > 0 ? [`<defs>${defs.join('')}</defs>`] : []),
     `<rect class="ursula-bg" x="0" y="0" width="${w}" height="${h}"/>`,
     ...(heading === undefined ? [] : [textSvg({ kind: 'text', x: left, y: TITLE_CENTRE, text: heading, anchor: 'start', role: ['title', 'diagram-title'] }), `<g transform="translate(0 ${rowH})">`]),
-    ...scene.items.map((it) => itemSvg(it, spec)),
+    ...scene.items.map(itemSvg),
     ...(heading === undefined ? [] : ['</g>']),
   ];
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="${theme}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(opts.title ?? scene.title)}</title>`,
     // Only the rules the elements below can use are written.
-    `<style>${sceneStyleSheet(spec, classesIn(body))}</style>`,
+    `<style>${sceneStyleSheet(classesIn(body))}</style>`,
     ...body,
     '</svg>',
   ].join('');

@@ -28,7 +28,7 @@ registerFrontEnd({
     const { layout: laid, title, shown } = draw(src, 'svg', opts.maxWidth);
     const heading = shown === undefined || shown === '' ? opts.heading : shown;
     const name = opts.title ?? title ?? opts.heading;
-    return renderSvg(laid, { ...(name === undefined ? {} : { title: name }), ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(heading === undefined ? {} : { drawTitle: heading }) });
+    return renderSvg(laid, { ...(name === undefined ? {} : { title: name }), ...(heading === undefined ? {} : { drawTitle: heading }) });
   },
   textLines(src, maxWidth, opts) {
     const { layout: laid, shown } = draw(src, 'text', maxWidth);

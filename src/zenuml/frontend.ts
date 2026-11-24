@@ -27,7 +27,6 @@ registerFrontEnd({
     const title = opts.title ?? model.accTitle ?? model.title;
     return renderThemedScene(layout.scene, {
       ...(title === undefined ? {} : { title }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
   textLines(src, maxWidth, opts) {

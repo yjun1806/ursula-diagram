@@ -30,7 +30,7 @@ registerFrontEnd({
   svg(src, opts) {
     const { layout: laid, title } = drawn(src, pixelRuler(), opts);
     const name = opts.title ?? title ?? opts.heading;
-    return renderSvg(laid, { ...(opts.theme === undefined ? {} : { theme: opts.theme }), ...(opts.node === undefined ? {} : { node: opts.node }), ...(name === undefined ? {} : { title: name }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
+    return renderSvg(laid, { ...(opts.node === undefined ? {} : { node: opts.node }), ...(name === undefined ? {} : { title: name }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     return titledLines(renderTextLayout(drawn(src, cellRuler(), { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }).layout), opts.heading, maxWidth);

@@ -11,7 +11,7 @@ export const vennFrontEnd: FrontEnd = {
   headers: ['venn-beta'],
   svg(src, opts) {
     const layout = layoutVenn(parseVenn(src, opts.heading), pixelRuler());
-    return renderThemedScene(layout.scene, { ...(opts.title === undefined ? {} : { title: opts.title }), ...(opts.theme === undefined ? {} : { theme: opts.theme }) });
+    return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
     return vennTextLines(parseVenn(src, opts.heading), maxWidth);

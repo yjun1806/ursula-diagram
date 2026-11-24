@@ -196,10 +196,8 @@ describe('wardley map drawing', () => {
   });
 
   for (const [f, src] of Object.entries(EXAMPLES)) {
-    it(`draws ${f} in three themes with its names inside and apart`, () => {
-      for (const theme of ['solid', 'outline', 'card'] as const) {
-        expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
-      }
+    it(`draws ${f} with its names inside and apart`, () => {
+      expect(render(src)).toContain('data-theme="band"');
       const l = layoutWardley(parseWardley(src), ruler);
       const boxes = textBoxes(l.scene);
       for (const [i, a] of boxes.entries()) {
@@ -264,13 +262,6 @@ describe('wardley map drawing', () => {
     expect(roles[3]).toContain('edge--arrow-start');
     expect(roles[3]).toContain('edge--arrow ');
     expect(roles[4]).toContain('edge--arrow');
-  });
-
-  it('gives different pictures only through the theme table', () => {
-    const solid = layoutWardley(parseWardley(BASIC), ruler, 'solid');
-    const card = layoutWardley(parseWardley(BASIC), ruler, 'card');
-    expect(solid.scene.width).toBe(card.scene.width);
-    expect(solid.nodes.map((n) => [n.cx, n.cy])).toEqual(card.nodes.map((n) => [n.cx, n.cy]));
   });
 
   it('writes accTitle and accDescr into title and desc', () => {

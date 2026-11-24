@@ -151,7 +151,6 @@ columns 1
   style A fill:#969,stroke:#333;`],
 ];
 
-const themes = ['solid', 'outline', 'card'] as const;
 const ruler = pixelRuler();
 const layoutOf = (src: string): ReturnType<typeof layoutBlock> => layoutBlock(parseBlock(src), ruler);
 const example = (prefix: string): string => EXAMPLES.find(([name]) => name.startsWith(prefix))?.[1] ?? '';
@@ -169,13 +168,11 @@ const nodes = (src: string): BlockNode[] => {
 
 describe('block svg', () => {
   for (const [name, src] of EXAMPLES) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('role="img"');
-      });
-    }
+    it(`${name} draws`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('role="img"');
+    });
     it(`${name} draws as text`, () => {
       const text = renderText(src, 400);
       expect('lines' in text).toBe(true);
@@ -551,11 +548,8 @@ describe('block arrows, labels and lines around the blocks', () => {
 
 describe('block cylinder front arc', () => {
   const arcOf = (scene: Scene) => scene.items.find((i) => i.kind === 'path' && i.data?.shape === 'cylinder' && i.role.includes('rule'));
-  it('draws the arc as a hairline where the theme rule has the colour of the box fill, and as the rule elsewhere', () => {
-    const src = 'block-beta\n  db[("Database")]';
-    const band = arcOf(layoutBlock(parseBlock(src), ruler, 'band').scene);
-    expect(band?.kind === 'path' ? band.role : undefined).toEqual(['rule', 'rule--in-zone']);
-    const solid = arcOf(layoutBlock(parseBlock(src), ruler, 'solid').scene);
-    expect(solid?.kind === 'path' ? solid.role : undefined).toEqual(['rule']);
+  it('draws the arc as a hairline, since a rule has the colour of the box fill', () => {
+    const arc = arcOf(layoutBlock(parseBlock('block-beta\n  db[("Database")]'), ruler).scene);
+    expect(arc?.kind === 'path' ? arc.role : undefined).toEqual(['rule', 'rule--in-zone']);
   });
 });

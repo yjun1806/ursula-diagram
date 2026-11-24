@@ -19,7 +19,7 @@ export const requirementFrontEnd: FrontEnd = {
     const summary = `Requirement diagram: ${requirements} requirements, ${model.nodes.length - requirements} elements, ${model.relations.length} relations`;
     const title = svgOpts.title ?? model.accTitle ?? opts.heading ?? summary;
     const laid = layout(requirementGraph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(quality === undefined ? {} : { quality }) });
-    return renderSvg(laid, { title, ...(svgOpts.theme === undefined ? {} : { theme: svgOpts.theme }), ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
+    return renderSvg(laid, { title, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     const ruler = cellRuler();

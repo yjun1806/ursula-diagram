@@ -1,6 +1,5 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Theme } from '../render/theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Ishikawa, IshikawaCategory, IshikawaCause } from './parse.ts';
 
@@ -147,7 +146,7 @@ function rowsOf(causes: IshikawaCause[], ruler: Ruler): Row[] {
   });
 }
 
-export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, heading?: string, opts: IshikawaOptions = {}): IshikawaLayout {
+export function layoutIshikawa(model: Ishikawa, ruler: Ruler, heading?: string, opts: IshikawaOptions = {}): IshikawaLayout {
   const nameW = (s: string): number => ceilTo(Math.max(BOX_MIN_W, ruler.textWidth(s, 'title') + BOX_PAD), 8);
   const sides = assignSides(model.categories, opts.assign ?? 'halves');
   const ranks = { top: 0, bottom: 0 };
@@ -265,7 +264,6 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, theme?: Theme, hea
     height,
     title: model.accTitle ?? heading ?? `ishikawa — ${model.head}`,
     items: [...titleItems, ...lines, ...boxes, ...texts, ...ports],
-    ...(theme === undefined ? {} : { theme }),
   };
   return { scene, bones, head, spine };
 }

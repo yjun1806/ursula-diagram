@@ -71,11 +71,9 @@ const scene = (src: string) => drawn(src).layout.scene;
 
 describe('packet render', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of ['solid', 'outline', 'card', 'band'] as const) {
-      it(`${name} draws in ${theme}`, () => {
-        expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
-      });
-    }
+    it(`${name} draws`, () => {
+      expect(render(src)).toContain('data-theme="band"');
+    });
     it(`${name} draws as text`, () => {
       const r = renderText(src, 100);
       expect('lines' in r).toBe(true);
@@ -225,11 +223,6 @@ describe('packet layout', () => {
     expect(lines.map((l) => l.text).join(' ')).toBe('Traffic Class Value');
     expect((lines[1]?.y ?? 0) - (lines[0]?.y ?? 0)).toBe(16);
     expect(s4.width).toBe(1200);
-  });
-
-  it('draws the same coordinates in all three themes', () => {
-    const strip = (x: string) => x.replace(/<style>[\s\S]*?<\/style>/, '').replace(/data-theme="\w+"/, '').replace(/<defs>[\s\S]*?<\/defs>/, '').replace(/ filter="[^"]*"/g, '');
-    expect(strip(render(udp, { theme: 'card' }))).toBe(strip(render(udp, { theme: 'solid' })));
   });
 });
 

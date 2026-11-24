@@ -42,17 +42,13 @@ kanban
 const blank = (src: string): string => src.replace(/^---[\s\S]*?---\n/, (m) => '\n'.repeat(m.split('\n').length - 1));
 
 const examples = { overview, metadataKeys, full };
-const themes = ['solid', 'outline', 'card'] as const;
-
 describe('kanban svg', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('ursula-tile');
-      });
-    }
+    it(`${name} draws`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('ursula-tile');
+    });
   }
 
   it('is picked by render() when the source starts with the header', () => {

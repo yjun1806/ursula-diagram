@@ -1,6 +1,5 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Theme } from '../render/theme.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import { DOMAIN_NAMES } from './model.ts';
 import type { Cynefin, CynefinTransition, Domain } from './model.ts';
@@ -84,7 +83,7 @@ const stackH = (n: number): number => ITEM_TOP + n * ITEM_H + (n - 1) * ITEM_GAP
  * Places the four domains as a 2 × 2 with the Confusion zone over the point where they meet.
  * Items stack in the outer column of each domain, so the Confusion zone never covers one.
  */
-export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): CynefinLayout {
+export function layoutCynefin(model: Cynefin, ruler: Ruler): CynefinLayout {
   const textW = (s: string): number => ruler.textWidth(s, 'title');
   const chipW = (label: string | undefined): number => (label === undefined ? BARE_CHIP_W : ceilTo(ruler.textWidth(label, 'line') + 16));
   const transitions = model.transitions;
@@ -241,7 +240,6 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler, theme?: Theme): Cyne
     height,
     title: name,
     items: [...titleItems, ...quadrants, ...arrows, ...confusionZone, ...boxes, ...ports, ...chips],
-    ...(theme === undefined ? {} : { theme }),
   };
   return { scene, zones, items: placed, transitions: out };
 }

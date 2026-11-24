@@ -29,15 +29,11 @@ pie showData
 
 /** What a front-end receives: the header rows blanked. */
 const BODY = CONFIG.replace(/^---[\s\S]*?\n---\n/, (m) => '\n'.repeat(m.split('\n').length - 1));
-const THEMES = ['solid', 'outline', 'card', 'band'] as const;
-
 describe('pie render', () => {
   for (const [name, src] of [['basic', BASIC], ['config + showData', CONFIG]] as const) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-      }
+    it(`draws ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
       expect(render(src)).toContain('data-theme="band"');
     });
   }

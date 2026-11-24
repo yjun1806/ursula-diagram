@@ -1,9 +1,6 @@
 import { ceilTo, roundTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
 import { HEAD_BAND, headBand } from '../render/head-band.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
-import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { ArchEdge, ArchGroup, Architecture, PlacedEdge, PlacedGroup, PlacedNode, Side } from './model.ts';
@@ -20,8 +17,6 @@ const ZONE_TOP = 72;
 const ZONE_GAP = 16;
 const NAME_LIMIT = 224;
 const BOX_MIN_W = 152;
-const TAG_TOP = 10;
-const TAG_H = 20;
 /** Centre of the first name line under a head band. */
 const NAME_UNDER_BAND = 46;
 const JUNCTION = 8;
@@ -206,7 +201,7 @@ function pullBack(points: Point[], by: number, atEnd: boolean): Point[] {
 }
 
 /** Places services and junctions on a grid of cells, wraps groups around their cells and draws the lines. */
-export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Theme): ArchLayout {
+export function layoutArchitecture(model: Architecture, ruler: Ruler): ArchLayout {
   const cells = placeCells(model);
   const groupById = new Map(model.groups.map((g) => [g.id, g]));
   const nodeById = new Map(model.nodes.map((n) => [n.id, n]));
@@ -372,7 +367,6 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Th
   for (const e of placedEdges) e.points = e.points.map(movePoint);
 
   const placedGroups: PlacedGroup[] = [];
-  const spec = SCENE_THEME_SPECS[theme ?? DEFAULT_THEME];
   const items: SceneItem[] = [];
   if (model.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: MARGIN + TITLE_BLOCK / 2 - 4, text: model.title, anchor: 'start', role: ['title'] });
   for (const g of [...model.groups].sort((a, b) => depthOf(a.id) - depthOf(b.id))) {
@@ -404,20 +398,15 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler, theme?: Th
     const names = nameLines.get(n.id) ?? [];
     const cx = n.x + n.w / 2;
     let firstLine = n.y + n.h / 2 - (LINE_STEP * (names.length - 1)) / 2;
-    if (def.icon !== undefined && spec.headBand) {
-      items.push(headBand(n.x, n.y, n.w, spec, data));
+    if (def.icon !== undefined) {
+      items.push(headBand(n.x, n.y, n.w, data));
       items.push({ kind: 'text', x: cx, y: n.y + HEAD_BAND / 2, text: def.icon, role: ['tag-text'], data });
       firstLine = n.y + NAME_UNDER_BAND;
-    } else if (def.icon !== undefined) {
-      const tw = tagWidth(def.icon);
-      items.push({ kind: 'box', style: 'label', x: cx - tw / 2, y: n.y + TAG_TOP, w: tw, h: TAG_H, role: ['tag'], data });
-      items.push({ kind: 'text', x: cx, y: n.y + TAG_TOP + TAG_H / 2, text: def.icon, role: ['tag-text'], data });
-      firstLine = n.y + 48;
     }
     names.forEach((line, i) => items.push({ kind: 'text', x: cx, y: firstLine + LINE_STEP * i, text: line, role: ['name'], data }));
   }
 
   const name = model.accTitle ?? model.title ?? `Architecture: ${services.length} ${services.length === 1 ? 'service' : 'services'}`;
-  const scene: Scene = { width, height, title: name, items, ...(theme === undefined ? {} : { theme }) };
+  const scene: Scene = { width, height, title: name, items };
   return { scene, nodes: placedNodes, groups: placedGroups, edges: placedEdges };
 }

@@ -4,13 +4,11 @@ import { anchoredBox, boxesOverlap } from '../chart/label-place.ts';
 import type { Box, TextAnchor } from '../chart/label-place.ts';
 import { niceTicks } from '../chart/ticks.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import { num } from '../render/svg.ts';
-import type { Theme } from '../render/theme.ts';
 import { UrsulaError } from '../types.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Radar } from './model.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Distance from the centre to the outer end of an axis. */
 export const RADIUS = 200;
@@ -116,8 +114,7 @@ export function radarScale(model: Radar): { min: number; max: number; rings: num
 }
 
 /** Places a radar chart: axes clockwise from 12 o'clock, rings, one polygon per curve, value labels and a legend. */
-export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_THEME): RadarLayout {
-  const spec = SCENE_THEME_SPECS[theme];
+export function layoutRadar(model: Radar, ruler: Ruler): RadarLayout {
   const n = model.axes.length;
   const R = RADIUS;
   const { min, max, rings } = radarScale(model);
@@ -280,7 +277,7 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_T
   polygons.forEach((pts, k) => {
     pts.forEach((p, i) => {
       const q = P(p);
-      items.push({ kind: 'circle', cx: q.x, cy: q.y, r: spec.dotRadius, role: [`series-${seriesNo(k)}--dot`], data: { series: model.curves[k]?.id ?? '', axis: model.axes[i]?.id ?? '' } });
+      items.push({ kind: 'circle', cx: q.x, cy: q.y, r: SCENE_THEME.dotRadius, role: [`series-${seriesNo(k)}--dot`], data: { series: model.curves[k]?.id ?? '', axis: model.axes[i]?.id ?? '' } });
     });
   });
   for (const l of values) items.push(text(l));
@@ -314,7 +311,7 @@ export function layoutRadar(model: Radar, ruler: Ruler, theme: Theme = DEFAULT_T
 
   const heading = model.title ?? `Radar chart: ${n} axes, ${model.curves.length} series`;
   return {
-    scene: { width, height, title: heading, items, theme },
+    scene: { width, height, title: heading, items },
     width,
     height,
     center: { x: cx, y: cy },

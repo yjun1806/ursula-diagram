@@ -153,7 +153,7 @@ describe('Mermaid documentation examples: what each one shows', () => {
     expect(inner.y).toBeGreaterThan(outer.y);
     expect(inner.y + inner.h).toBeLessThan(outer.y + outer.h);
     expect([outer.role, inner.role]).toEqual([['zone'], ['zone', 'zone--plain']]);
-    // Every highlight carries a dashed edge, which shows in the themes whose highlight fill is close to the page.
+    // Every highlight carries a dashed edge, which shows where the highlight fill is close to the page.
     expect(layoutOf('33-background-highlighting').scene.items.filter((it) => it.kind === 'box' && it.role?.includes('zone--dashed'))).toHaveLength(2);
   });
 

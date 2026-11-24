@@ -233,8 +233,8 @@ function endpointsAgainst(l: Layout, ruler: Ruler, graph: Graph): string[] {
   return bad;
 }
 
-/** How far the line of an edge stops short of the tip of its arrowhead in the default theme. */
-export const ARROW_TRIM = 9;
+/** How far the line of an edge stops short of the tip of its arrowhead. */
+export const ARROW_TRIM = 8;
 
 /** The tip of the arrowhead of an edge drawn with path data `d`: the end of the line plus the length the line stops short. */
 export function tipOf(d: string): Point {

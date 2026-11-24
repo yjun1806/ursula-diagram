@@ -58,17 +58,14 @@ const STYLING = `quadrantChart
   classDef class3 color: #f00fff, radius : 10
 `;
 
-const THEMES = ['solid', 'outline', 'card'] as const;
 const ruler = pixelRuler();
 
 describe('quadrant chart rendering', () => {
   for (const [name, src] of [['basic', BASIC], ['config', CONFIG], ['styling', STYLING]] as const) {
-    for (const theme of THEMES) {
-      it(`draws ${name} in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-      });
-    }
+    it(`draws ${name}`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+    });
   }
 });
 
@@ -124,15 +121,13 @@ describe('quadrant chart reading', () => {
 });
 
 describe('quadrant chart layout', () => {
-  for (const theme of THEMES) {
-    it(`puts every point at its value in ${theme}`, () => {
-      const l = layoutQuadrant(parseQuadrant(BASIC), ruler, theme);
-      for (const p of l.points) {
-        expect(Math.abs(p.cx - (l.plot.x + p.x * l.plot.w))).toBeLessThanOrEqual(1);
-        expect(Math.abs(p.cy - (l.plot.y + l.plot.h - p.y * l.plot.h))).toBeLessThanOrEqual(1);
-      }
-    });
-  }
+  it(`puts every point at its value`, () => {
+    const l = layoutQuadrant(parseQuadrant(BASIC), ruler);
+    for (const p of l.points) {
+      expect(Math.abs(p.cx - (l.plot.x + p.x * l.plot.w))).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.cy - (l.plot.y + l.plot.h - p.y * l.plot.h))).toBeLessThanOrEqual(1);
+    }
+  });
 
   it('uses the chart size for the plot', () => {
     expect(render(CONFIG)).toContain('viewBox="0 0 ');
@@ -142,11 +137,11 @@ describe('quadrant chart layout', () => {
     expect(Number(big?.[2]) - Number(m?.[2])).toBe(48);
   });
 
-  it('follows the radius of the style and the default radius of the theme', () => {
-    const l = layoutQuadrant(parseQuadrant(STYLING), ruler, 'card');
+  it('follows the radius of the style and the default radius', () => {
+    const l = layoutQuadrant(parseQuadrant(STYLING), ruler);
     expect(l.points.map((p) => p.r)).toEqual([12, 10, 25, 15, 10, 10]);
-    const plain = layoutQuadrant(parseQuadrant(BASIC), ruler, 'outline');
-    expect(new Set(plain.points.map((p) => p.r))).toEqual(new Set([4]));
+    const plain = layoutQuadrant(parseQuadrant(BASIC), ruler);
+    expect(new Set(plain.points.map((p) => p.r))).toEqual(new Set([3.5]));
   });
 
   for (const [name, src] of [['basic', BASIC], ['styling', STYLING]] as const) {

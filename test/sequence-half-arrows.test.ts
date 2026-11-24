@@ -1,6 +1,6 @@
 // Examples adapted from the Mermaid documentation (MIT).
 import { describe, expect, it } from 'vitest';
-import { layoutSequence, parseSequence, pixelRuler, render, renderText, THEMES } from '../src/index.ts';
+import { layoutSequence, parseSequence, pixelRuler, render, renderText } from '../src/index.ts';
 import type { MessageStmt, SceneItem } from '../src/index.ts';
 
 /** The half-arrow table of the documentation: arrow, dotted, side of the half head, head at the sender's end. */
@@ -86,15 +86,13 @@ describe('half arrows', () => {
     }
   });
 
-  it('dashes the dotted arrows, and gives no theme head to any of them in any theme', () => {
-    for (const theme of THEMES) {
-      const svg = render(doc, { theme, legend: false }).replace(/<style>[\s\S]*?<\/style>/, '');
-      expect(svg, theme).not.toContain('marker-end');
-      expect(svg, theme).not.toContain('marker-start');
-      const lines = svg.match(/<path class="[^"]*" d="[^"]*" data-message[^>]*>/g) ?? [];
-      expect(lines, theme).toHaveLength(TABLE.length * 3);
-      expect(lines.filter((l) => l.includes('ursula-edge--pending')), theme).toHaveLength(TABLE.length * 3 / 2);
-    }
+  it('dashes the dotted arrows, and gives none of them a marker head', () => {
+    const svg = render(doc, { legend: false }).replace(/<style>[\s\S]*?<\/style>/, '');
+    expect(svg).not.toContain('marker-end');
+    expect(svg).not.toContain('marker-start');
+    const lines = svg.match(/<path class="[^"]*" d="[^"]*" data-message[^>]*>/g) ?? [];
+    expect(lines).toHaveLength(TABLE.length * 3);
+    expect(lines.filter((l) => l.includes('ursula-edge--pending'))).toHaveLength(TABLE.length * 3 / 2);
   });
 
   it('draws the legend sample like the first half arrow', () => {

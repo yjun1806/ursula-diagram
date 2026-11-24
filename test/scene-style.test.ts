@@ -3,8 +3,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render } from '../src/index.ts';
 import { renderThemedScene, sceneStyleSheet } from '../src/render/scene-svg.ts';
-import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
-import { THEMES } from '../src/render/theme.ts';
 import type { Scene } from '../src/types.ts';
 import { EXAMPLES as RAILROAD } from './railroad-examples.ts';
 
@@ -39,14 +37,12 @@ const reaches = (selector: string, all: string[][]): boolean => {
 };
 
 /**
- * What is wrong with the style sheet written into `svg`, against the whole sheet of its theme: a rule that reaches an
+ * What is wrong with the style sheet written into `svg`, against the whole sheet: a rule that reaches an
  * element but was left out or cut, a rule that is not of the whole sheet, rules out of order, a class left without
  * the rules it had.
  */
 function faults(svg: string): string[] {
-  const theme = THEMES.find((t) => svg.includes(`data-theme="${t}"`));
-  if (theme === undefined) return ['no theme'];
-  const whole = schemes(sceneStyleSheet(SCENE_THEME_SPECS[theme]));
+  const whole = schemes(sceneStyleSheet());
   const written = schemes(sheetOf(svg));
   const all = elements(svg);
   const out: string[] = [];
@@ -124,42 +120,38 @@ function fileSources(dir: string): Record<string, string> {
   );
 }
 
-describe('style sheet of a themed scene', () => {
+describe('style sheet of a scene', () => {
   it('writes every selector of the whole sheet as a run of classes', () => {
-    for (const theme of THEMES) {
-      for (const rules of schemes(sceneStyleSheet(SCENE_THEME_SPECS[theme]))) {
-        expect(rules.length).toBeGreaterThan(100);
-        for (const rule of rules) for (const s of rule.selectors) expect(s, theme).toMatch(/^(\.[A-Za-z][A-Za-z0-9_-]*)+$/);
-      }
+    for (const rules of schemes(sceneStyleSheet())) {
+      expect(rules.length).toBeGreaterThan(100);
+      for (const rule of rules) for (const s of rule.selectors) expect(s).toMatch(/^(\.[A-Za-z][A-Za-z0-9_-]*)+$/);
     }
   });
 
   it('keeps the rules of the classes a drawing carries, in both schemes, and leaves the others out', () => {
-    for (const theme of THEMES) {
-      const svg = renderThemedScene(sample, { theme });
-      const [light, dark] = schemes(sheetOf(svg));
-      const selectors = light.map((r) => r.selectors.join(','));
-      expect(dark.map((r) => r.selectors.join(','))).toEqual(selectors);
-      // The font of the root, which no element below names.
-      expect(selectors[0]).toBe('.ursula');
-      expect(selectors).toContain('.ursula-bg');
-      expect(selectors).toContain('.ursula-box');
-      expect(selectors).toContain('.ursula-box--start');
-      expect(selectors).toContain('.ursula-end');
-      // A rule that needs two classes, a later rule that undoes an earlier one, and the head inside a marker.
-      expect(selectors).toContain('.ursula-edge--msg.ursula-edge--pending');
-      expect(selectors.indexOf('.ursula-value--bare')).toBeGreaterThan(selectors.indexOf('.ursula-value'));
-      expect(selectors).toContain('.ursula-head');
-      expect(selectors).toContain('.ursula-head--msg');
-      // A series mark in each of its two spellings keeps the selector that reaches it.
-      expect(selectors).toContain('.ursula-series-2.ursula-tint');
-      expect(selectors).toContain('.ursula-series-3--tint');
-      expect(selectors).toContain('.ursula-series-1');
-      expect(selectors).toContain('.ursula-dot');
-      for (const absent of ['.ursula-zone', '.ursula-note', '.ursula-series-4', '.ursula-head--accent', '.ursula-box--decision', '.ursula-start']) expect(selectors, absent).not.toContain(absent);
-      expect(selectors.some((s) => s.includes('series-5'))).toBe(false);
-      expect(faults(svg), theme).toEqual([]);
-    }
+    const svg = renderThemedScene(sample);
+    const [light, dark] = schemes(sheetOf(svg));
+    const selectors = light.map((r) => r.selectors.join(','));
+    expect(dark.map((r) => r.selectors.join(','))).toEqual(selectors);
+    // The font of the root, which no element below names.
+    expect(selectors[0]).toBe('.ursula');
+    expect(selectors).toContain('.ursula-bg');
+    expect(selectors).toContain('.ursula-box');
+    expect(selectors).toContain('.ursula-box--start');
+    expect(selectors).toContain('.ursula-end');
+    // A rule that needs two classes, a later rule that undoes an earlier one, and the head inside a marker.
+    expect(selectors).toContain('.ursula-edge--msg.ursula-edge--pending');
+    expect(selectors.indexOf('.ursula-value--bare')).toBeGreaterThan(selectors.indexOf('.ursula-value'));
+    expect(selectors).toContain('.ursula-head');
+    expect(selectors).toContain('.ursula-head--msg');
+    // A series mark in each of its two spellings keeps the selector that reaches it.
+    expect(selectors).toContain('.ursula-series-2.ursula-tint');
+    expect(selectors).toContain('.ursula-series-3--tint');
+    expect(selectors).toContain('.ursula-series-1');
+    expect(selectors).toContain('.ursula-dot');
+    for (const absent of ['.ursula-zone', '.ursula-note', '.ursula-series-4', '.ursula-head--accent', '.ursula-box--decision', '.ursula-start']) expect(selectors, absent).not.toContain(absent);
+    expect(selectors.some((s) => s.includes('series-5'))).toBe(false);
+    expect(faults(svg)).toEqual([]);
   });
 
   it('keeps the rule of the title of a drawing that has a heading', () => {
@@ -176,21 +168,19 @@ describe('style sheet of a themed scene', () => {
 
   const sources = { ...KINDS, ...Object.fromEntries(Object.entries(RAILROAD).map(([k, v]) => [`railroad ${k}`, v])), ...fileSources('sequence-official'), ...fileSources('../examples') };
 
-  it('leaves each class of a drawing every rule that reaches it, for every kind of scene in every theme', () => {
+  it('leaves each class of a drawing every rule that reaches it, for every kind of scene', () => {
     const kinds = new Set<string>();
     let scenes = 0;
     for (const [name, src] of Object.entries(sources)) {
-      for (const theme of THEMES) {
-        const svg = render(src, { theme });
-        // A drawing that is not made from a scene has no page rectangle of this class.
-        if (!svg.includes('<rect class="ursula-bg"')) continue;
-        scenes++;
-        if (name in KINDS) kinds.add(name);
-        expect(faults(svg), `${name} ${theme}`).toEqual([]);
-        expect(schemes(sheetOf(svg))[0].length, `${name} ${theme}`).toBeLessThan(80);
-      }
+      const svg = render(src);
+      // A drawing that is not made from a scene has no page rectangle of this class.
+      if (!svg.includes('<rect class="ursula-bg"')) continue;
+      scenes++;
+      if (name in KINDS) kinds.add(name);
+      expect(faults(svg), name).toEqual([]);
+      expect(schemes(sheetOf(svg))[0].length, name).toBeLessThan(80);
     }
     expect([...kinds].sort()).toEqual(Object.keys(KINDS).sort());
-    expect(scenes).toBeGreaterThan(200);
+    expect(scenes).toBeGreaterThan(50);
   });
 });

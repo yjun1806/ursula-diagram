@@ -1,13 +1,11 @@
 import { ceilTo, floorTo } from '../chart/grid.ts';
 import { nearestSeries } from '../chart/series-color.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 const MARGIN = 40;
 const DEFAULT_PLOT = 448;
@@ -72,12 +70,11 @@ function inside(inner: Rect, outer: Rect): boolean {
   return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
 }
 
-/** Computes the scene of a quadrant chart; the theme sets the default point radius. */
-export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme = DEFAULT_THEME): QuadrantLayout {
+/** Computes the scene of a quadrant chart. */
+export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler): QuadrantLayout {
   const body = (s: string): number => ruler.textWidth(s, 'line') * WEIGHT;
   const name = (s: string): number => ruler.textWidth(s, 'title') * WEIGHT;
   const plain = (s: string): number => ruler.textWidth(s, 'line');
-  const spec = SCENE_THEME_SPECS[theme];
 
   const plotW = chart.chartWidth ?? DEFAULT_PLOT;
   const plotH = chart.chartHeight ?? DEFAULT_PLOT;
@@ -147,7 +144,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   const dots = chart.points.map((p) => ({
     cx: plotX + p.x * plotW,
     cy: bottom - p.y * plotH,
-    r: p.radius ?? spec.dotRadius,
+    r: p.radius ?? SCENE_THEME.dotRadius,
   }));
   const obstacles: Rect[] = [
     { x: plotX + zw, y: top, w: ZONE_GAP, h: plotH },
@@ -207,6 +204,6 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler, theme: Theme 
   }
 
   items.unshift({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
-  const scene: Scene = { width, height, title: chart.accTitle ?? chart.title ?? 'Quadrant chart', items, theme };
+  const scene: Scene = { width, height, title: chart.accTitle ?? chart.title ?? 'Quadrant chart', items };
   return { scene, plot, zones, points: placed, ignored: chart.ignored };
 }

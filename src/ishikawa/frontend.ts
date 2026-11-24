@@ -11,10 +11,9 @@ registerFrontEnd({
   name: 'ishikawa',
   headers: ['ishikawa', 'ishikawa-beta'],
   svg(src, opts) {
-    const layout = layoutIshikawa(parseIshikawa(src), pixelRuler(), opts.theme, opts.heading);
+    const layout = layoutIshikawa(parseIshikawa(src), pixelRuler(), opts.heading);
     return renderThemedScene(layout.scene, {
       ...(opts.title === undefined ? {} : { title: opts.title }),
-      ...(opts.theme === undefined ? {} : { theme: opts.theme }),
     });
   },
   textLines(src, maxWidth, opts) {
@@ -25,6 +24,6 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseIshikawa(src);
-    return { model, ...layoutIshikawa(model, mode === 'text' ? cellRuler() : pixelRuler(), opts.theme, opts.heading) };
+    return { model, ...layoutIshikawa(model, mode === 'text' ? cellRuler() : pixelRuler(), opts.heading) };
   },
 });

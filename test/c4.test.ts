@@ -237,17 +237,12 @@ const EXAMPLES: string[] = [
     UpdateRelStyle(db, db2, $offsetY="-10")`,
 ];
 
-const THEMES = ['solid', 'outline', 'card'] as const;
-
 describe('c4 examples', () => {
   it('has the six documented examples', () => expect(EXAMPLES).toHaveLength(6));
   EXAMPLES.forEach((src, i) => {
-    for (const theme of THEMES) {
-      it(`example ${i + 1} draws with theme ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-      });
-    }
+    it(`example ${i + 1} draws`, () => {
+      expect(render(src)).toContain('data-theme="band"');
+    });
   });
 });
 
@@ -322,9 +317,10 @@ describe('c4 reading', () => {
     expect(g.clusters?.every((c) => c.subtitled === true)).toBe(true);
   });
 
-  it('draws the kind in a pill, the technology of a relation in a span of its own and the type of a boundary under its name', () => {
-    const svg = render(EXAMPLES[0] as string, { theme: 'solid' });
-    expect(svg).toContain('class="ursula-cell-pill"');
+  it('draws the kind on a head band, the technology of a relation in a span of its own and the type of a boundary under its name', () => {
+    const svg = render(EXAMPLES[0] as string);
+    expect(svg).toContain('class="ursula-head-band"');
+    expect(svg).not.toContain('ursula-cell-pill');
     expect(svg).toContain('<tspan class="ursula-edge-label-tech" role="note">');
     expect(svg).toContain('ursula-zone-name ursula-zone-sub');
   });
@@ -337,12 +333,11 @@ describe('c4 reading', () => {
     expect(Number(ys?.[2]) - Number(ys?.[1])).toBe(18);
   });
 
-  it('on band sets a boundary name in ink over a muted subtitle and a description muted under its name', () => {
-    const svg = render(EXAMPLES[1] as string, { theme: 'band' });
+  it('sets a boundary name in ink over a muted subtitle and a description muted under its name', () => {
+    const svg = render(EXAMPLES[1] as string);
     expect(svg).toMatch(/\.ursula-zone-name\{fill:var\(--ursula-fg[^}]*font-size:13px\}/);
     expect(svg).toMatch(/\.ursula-zone-sub\{fill:var\(--ursula-muted[^}]*font-size:12px;font-weight:500;opacity:1\}/);
     expect(svg).toMatch(/\.ursula-cell-body\{fill:var\(--ursula-muted/);
-    expect(render(EXAMPLES[1] as string, { theme: 'solid' })).not.toMatch(/\.ursula-cell-body\{fill:var\(--ursula-muted/);
   });
 
   it('sets the label of a line in the middle of the free gap it crosses, not of one cut short by a label moved later', () => {
@@ -415,16 +410,12 @@ describe('c4 shapes, boundaries and sizes', () => {
     }
   });
 
-  it('draws a dashed zone without a fill but in the band theme, there with a fill a step deeper each level, and the boxes in it on the page face', () => {
-    // The band theme is the default one and not in THEMES: `undefined` draws it.
-    for (const theme of [...THEMES, undefined]) {
-      const svg = render(EXAMPLES[0] as string, theme === undefined ? {} : { theme });
-      expect(svg.match(/class="ursula-zone ursula-zone--dashed ursula-zone--tint-[a-z]+"/g)).toHaveLength(4);
-      if (theme === undefined) for (const t of ['outer', 'mid']) expect(svg).toMatch(new RegExp(`\\.ursula-zone--dashed\\.ursula-zone--tint-${t}\\{fill:var\\(`));
-      else expect(svg).not.toContain('.ursula-zone--dashed.ursula-zone--tint');
-      expect(svg).toMatch(/\.ursula-zone--dashed\{fill:none;stroke:[^;]+;stroke-width:[\d.]+;stroke-dasharray:[\d. ]+;stroke-linecap:round\}/);
-      expect(svg).not.toContain('class="ursula-node ursula-node--on-lane');
-    }
+  it('draws a dashed zone with a fill a step deeper each level, and the boxes in it on the page face', () => {
+    const svg = render(EXAMPLES[0] as string);
+    expect(svg.match(/class="ursula-zone ursula-zone--dashed ursula-zone--tint-[a-z]+"/g)).toHaveLength(4);
+    for (const t of ['outer', 'mid']) expect(svg).toMatch(new RegExp(`\\.ursula-zone--dashed\\.ursula-zone--tint-${t}\\{fill:var\\(`));
+    expect(svg).toMatch(/\.ursula-zone--dashed\{fill:none;stroke:[^;]+;stroke-width:[\d.]+;stroke-dasharray:[\d. ]+;stroke-linecap:round\}/);
+    expect(svg).not.toContain('class="ursula-node ursula-node--on-lane');
   });
 
   it('leaves the clusters of a flowchart as they were', () => {

@@ -100,7 +100,6 @@ const ICONS = `architecture-beta
     disk2:T -- B:db`;
 
 const EXAMPLES = { BASIC, COLUMN, ROW, GRID, JUNCTIONS, ICONS };
-const THEMES = ['solid', 'outline', 'card', 'band'] as const;
 const ruler = pixelRuler();
 
 const WIDTH_ROLE: Record<string, 'title' | 'line'> = { name: 'title', 'zone-name': 'title', title: 'title', 'tag-text': 'line', 'zone-sub': 'line' };
@@ -118,8 +117,7 @@ const overlap = (a: { x: number; y: number; w: number; h: number }, b: { x: numb
 
 describe('architecture render', () => {
   for (const [name, src] of Object.entries(EXAMPLES)) {
-    it(`draws ${name} in three themes`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
       expect(render(src)).toContain('data-theme="band"');
     });
   }

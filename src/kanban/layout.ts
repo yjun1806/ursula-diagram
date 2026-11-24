@@ -1,6 +1,5 @@
 import { ceilTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import type { Theme } from '../render/theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { Kanban, KanbanCard, KanbanLayout, PlacedCard, PlacedColumn, PlacedTag } from './model.ts';
@@ -31,7 +30,7 @@ export function ticketHref(base: string | undefined, ticket: string): string | u
   return base !== undefined && base.includes('#TICKET#') ? base.replaceAll('#TICKET#', ticket) : undefined;
 }
 
-export function layoutKanban(model: Kanban, ruler: Ruler, theme?: Theme): KanbanLayout {
+export function layoutKanban(model: Kanban, ruler: Ruler): KanbanLayout {
   const tagWidth = (text: string): number => ceilTo(ruler.textWidth(text, 'line') + TAG_PAD);
   const widestTag = Math.max(0, ...model.columns.flatMap((c) => c.cards.flatMap((card) => tagsOf(card).map((t) => tagWidth(t.text)))));
   const inner = Math.max(MIN_INNER, widestTag);
@@ -116,7 +115,6 @@ export function layoutKanban(model: Kanban, ruler: Ruler, theme?: Theme): Kanban
     height,
     title: `kanban — ${model.columns.map((c) => c.title).join(', ')}`,
     items: [...items, ...cardItems],
-    ...(theme === undefined ? {} : { theme }),
   };
   return { scene, columns, cards };
 }

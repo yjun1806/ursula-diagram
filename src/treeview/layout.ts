@@ -1,10 +1,8 @@
 import { ceilTo, roundTo } from '../chart/grid.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import type { Scene, SceneItem } from '../types.ts';
 import type { IconSettings, TreeItem, TreeView } from './parse.ts';
-import { DEFAULT_THEME } from '../render/theme.ts';
 
 /** Height of a row and the margin around the drawing. */
 export const ROW = 28;
@@ -18,8 +16,6 @@ const GUIDE_GAP = 8;
 /** The guide leaves the parent's row this far below its centre. */
 const GUIDE_DROP = 12;
 const DESCRIPTION_GAP = 8;
-/** The largest theme bend radius a guide takes whole. */
-const SMALL_BEND = 8;
 const HIGHLIGHT_PAD = 6;
 const HIGHLIGHT_H = 24;
 /** Size of an item icon and the room from the item's left edge to its text. */
@@ -89,12 +85,10 @@ function indentOf(tree: TreeView): number {
 }
 
 /** Places each item on its own row and draws the guides from a parent down to its children. */
-export function layoutTreeView(tree: TreeView, ruler: Ruler, theme: Theme = DEFAULT_THEME): TreeViewLayout {
+export function layoutTreeView(tree: TreeView, ruler: Ruler): TreeViewLayout {
   const { items } = tree;
   const indent = indentOf(tree);
-  // A guide bends by half the theme's radius, or by the whole of a radius that is already small.
-  const themeBend = SCENE_THEME_SPECS[theme].bend;
-  const bend = themeBend <= SMALL_BEND ? themeBend : themeBend / 2;
+  const bend = SCENE_THEME.bend;
   const parents = parentsOf(items);
   const glyphs = items.map((item) => glyphOf(item, tree.icons));
   const columns = items.map((item) => PAD + indent * item.depth);

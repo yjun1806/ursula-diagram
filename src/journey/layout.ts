@@ -3,8 +3,7 @@ import { anchoredBox, clashCost, pickLeastClash, trendAt } from '../chart/label-
 import type { Box } from '../chart/label-place.ts';
 import { monotonePath, pathSamples } from '../chart/monotone.ts';
 import type { Ruler } from '../metrics.ts';
-import { SCENE_THEME_SPECS } from '../render/scene-theme.ts';
-import type { Theme } from '../render/theme.ts';
+import { SCENE_THEME } from '../render/scene-theme.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, Scene, SceneItem } from '../types.ts';
 import type { Journey } from './model.ts';
@@ -81,8 +80,7 @@ interface Plan {
 }
 
 /** Lays a journey out: sections over task boxes with their actors, and the scores as a line below. */
-export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts: JourneyLayoutOptions = {}): JourneyLayout {
-  const spec = SCENE_THEME_SPECS[theme];
+export function layoutJourney(journey: Journey, ruler: Ruler, opts: JourneyLayoutOptions = {}): JourneyLayout {
   const limit = opts.maxWidth ?? WIDTH_LIMIT;
   const nameW = (t: string): number => ruler.textWidth(t, 'title');
   const smallW = (t: string): number => (ruler.textWidth(t, 'line') * 11) / 12;
@@ -209,25 +207,16 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
 
   const dots = placed.map((t) => t.dot);
   if (dots.length > 1) {
-    const d = spec.interpolation === 'linear' ? dots.map((p, i) => `${i === 0 ? 'M' : 'L'}${round2(p.x)} ${round2(p.y)}`).join(' ') : monotonePath(dots);
-    // a theme that draws a lone value line in ink does so here too; the points stay hollow rings
-    items.push({ kind: 'path', d, role: [spec.peakBar ? 'mark-line--ink' : 'mark-line'] });
+    // the lone value line is drawn in ink; the points stay hollow rings
+    items.push({ kind: 'path', d: monotonePath(dots), role: ['mark-line--ink'] });
   }
-  for (const p of dots) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: spec.dotRadius, role: ['mark-dot'] });
+  for (const p of dots) items.push({ kind: 'circle', cx: p.x, cy: p.y, r: SCENE_THEME.dotRadius, role: ['mark-dot'] });
 
   // value labels: on the side of the dot the line does not pass
-  const off = spec.dotRadius < 5 ? 8 : 10;
+  const off = 8;
   const samples: Point[] = [];
-  if (spec.interpolation === 'linear') {
-    for (let i = 1; i < dots.length; i++) {
-      const a = dots[i - 1];
-      const b = dots[i];
-      if (a === undefined || b === undefined) continue;
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
-      for (let k = 0; k <= steps; k++) samples.push({ x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps });
-    }
-  } else if (dots.length > 1) samples.push(...pathSamples(monotonePath(dots)));
-  const dotBoxes: Box[] = dots.map((p) => ({ x0: p.x - spec.dotRadius, x1: p.x + spec.dotRadius, y0: p.y - spec.dotRadius, y1: p.y + spec.dotRadius }));
+  if (dots.length > 1) samples.push(...pathSamples(monotonePath(dots)));
+  const dotBoxes: Box[] = dots.map((p) => ({ x0: p.x - SCENE_THEME.dotRadius, x1: p.x + SCENE_THEME.dotRadius, y0: p.y - SCENE_THEME.dotRadius, y1: p.y + SCENE_THEME.dotRadius }));
   const bounds: Box = { x0: LEFT, x1: plotRight, y0: zoneTop + zoneH + 4, y1: height - 4 };
   const taken: Box[] = [];
   const boxOf = (x: number, y: number, w: number, anchor: 'start' | 'middle'): Box => anchoredBox(x, y, w, anchor, VALUE_H);
@@ -258,6 +247,6 @@ export function layoutJourney(journey: Journey, ruler: Ruler, theme: Theme, opts
   items.push(...labels);
 
   const sceneTitle = journey.accTitle !== undefined && journey.accTitle !== '' ? journey.accTitle : journey.title === undefined ? 'user-journey' : `user-journey — ${journey.title}`;
-  const scene: Scene = { width, height, title: sceneTitle, items, theme };
+  const scene: Scene = { width, height, title: sceneTitle, items };
   return { scene, width, height, sections, tasks: placed, overflow };
 }

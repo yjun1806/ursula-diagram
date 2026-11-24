@@ -56,7 +56,6 @@ const wide = `ishikawa
     Unclear message`;
 
 const examples = { syntax, headOnly, wide };
-const themes = ['solid', 'outline', 'card'] as const;
 const ruler = pixelRuler();
 
 const texts = (items: SceneItem[]): SceneText[] => items.filter((i): i is SceneText => i.kind === 'text');
@@ -81,13 +80,11 @@ const overlap = (a: Rect, b: Rect): boolean => a.x1 < b.x2 && b.x1 < a.x2 && a.y
 
 describe('ishikawa svg', () => {
   for (const [name, src] of Object.entries(examples)) {
-    for (const theme of themes) {
-      it(`${name} draws in ${theme}`, () => {
-        const svg = render(src, { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('ursula-edge');
-      });
-    }
+    it(`${name} draws`, () => {
+      const svg = render(src);
+      expect(svg).toContain('data-theme="band"');
+      expect(svg).toContain('ursula-edge');
+    });
   }
 
   it('is picked by the ishikawa and ishikawa-beta headers', () => {
@@ -171,7 +168,7 @@ describe('ishikawa layout', () => {
   for (const [name, src] of Object.entries(examples)) {
     for (const assign of ['halves', 'alternate', 'balanced'] as const) {
       describe(`${name} (${assign})`, () => {
-        const layout = layoutIshikawa(parseIshikawa(src), ruler, undefined, undefined, { assign });
+        const layout = layoutIshikawa(parseIshikawa(src), ruler, undefined, { assign });
         const items = layout.scene.items;
 
         it('has no two texts overlapping', () => {
@@ -281,21 +278,15 @@ describe('ishikawa layout', () => {
   });
 
   it('balanced puts each category on the side with fewer causes so far', () => {
-    const layout = layoutIshikawa(parseIshikawa(syntax), ruler, undefined, undefined, { assign: 'balanced' });
+    const layout = layoutIshikawa(parseIshikawa(syntax), ruler, undefined, { assign: 'balanced' });
     expect(layout.bones.map((b) => b.side)).toEqual(['top', 'bottom', 'bottom', 'top']);
   });
 
   it('draws a title above the drawing when a heading is given', () => {
     const plain = layoutIshikawa(parseIshikawa(syntax), ruler);
-    const titled = layoutIshikawa(parseIshikawa(syntax), ruler, undefined, 'Why blurry');
+    const titled = layoutIshikawa(parseIshikawa(syntax), ruler, 'Why blurry');
     expect(titled.scene.height).toBe(plain.scene.height + 40);
     expect(texts(titled.scene.items).some((t) => t.text === 'Why blurry')).toBe(true);
-  });
-
-  it('draws the same coordinates in the three themes', () => {
-    const a = JSON.stringify(layoutIshikawa(parseIshikawa(syntax), ruler, 'solid').scene.items);
-    expect(JSON.stringify(layoutIshikawa(parseIshikawa(syntax), ruler, 'outline').scene.items)).toBe(a);
-    expect(JSON.stringify(layoutIshikawa(parseIshikawa(syntax), ruler, 'card').scene.items)).toBe(a);
   });
 });
 

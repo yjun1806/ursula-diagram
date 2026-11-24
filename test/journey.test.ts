@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { pixelRuler, render, renderText, UrsulaError } from '../src/index.ts';
 import { layoutJourney } from '../src/journey/layout.ts';
 import { parseJourney } from '../src/journey/parse.ts';
-import { THEMES } from '../src/render/theme.ts';
 import type { SceneItem, SceneText } from '../src/types.ts';
 
 const OFFICIAL = 'journey\n    title My working day\n    section Go to work\n      Make tea: 5: Me\n      Go upstairs: 3: Me\n      Do work: 1: Me, Cat\n    section Go home\n      Go downstairs: 5: Me\n      Sit down: 5: Me';
@@ -25,8 +24,7 @@ function textBox(t: SceneText): { l: number; r: number; top: number; bottom: num
 
 describe('journey render', () => {
   for (const [name, src] of Object.entries(SAMPLES)) {
-    it(`draws ${name} in every theme`, () => {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
+    it(`draws ${name}`, () => {
       expect(render(src)).toContain('data-theme="band"');
     });
   }
@@ -82,46 +80,40 @@ describe('journey parse', () => {
 
 describe('journey layout', () => {
   for (const [name, src] of Object.entries(SAMPLES)) {
-    for (const theme of THEMES) {
-      it(`${name} (${theme}): heights follow the scores, texts stay apart and inside`, () => {
-        const layout = layoutJourney(parseJourney(src), ruler, theme);
-        const ys = layout.tasks.map((t) => t.dot.y);
-        const scores = layout.tasks.map((t) => t.score);
-        for (let i = 1; i < ys.length; i++) {
-          const dy = (ys[i - 1] ?? 0) - (ys[i] ?? 0);
-          const ds = (scores[i] ?? 0) - (scores[i - 1] ?? 0);
-          expect(Math.abs(dy - ds * 32)).toBeLessThanOrEqual(1);
+    it(`${name}: heights follow the scores, texts stay apart and inside`, () => {
+      const layout = layoutJourney(parseJourney(src), ruler);
+      const ys = layout.tasks.map((t) => t.dot.y);
+      const scores = layout.tasks.map((t) => t.score);
+      for (let i = 1; i < ys.length; i++) {
+        const dy = (ys[i - 1] ?? 0) - (ys[i] ?? 0);
+        const ds = (scores[i] ?? 0) - (scores[i - 1] ?? 0);
+        expect(Math.abs(dy - ds * 32)).toBeLessThanOrEqual(1);
+      }
+      const boxes = texts(layout.scene.items).map(textBox);
+      boxes.forEach((a, i) => {
+        expect(a.l).toBeGreaterThanOrEqual(0);
+        expect(a.r).toBeLessThanOrEqual(layout.width);
+        expect(a.top).toBeGreaterThanOrEqual(0);
+        expect(a.bottom).toBeLessThanOrEqual(layout.height);
+        for (const b of boxes.slice(i + 1)) {
+          expect(a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5).toBe(false);
         }
-        const boxes = texts(layout.scene.items).map(textBox);
-        boxes.forEach((a, i) => {
-          expect(a.l).toBeGreaterThanOrEqual(0);
-          expect(a.r).toBeLessThanOrEqual(layout.width);
-          expect(a.top).toBeGreaterThanOrEqual(0);
-          expect(a.bottom).toBeLessThanOrEqual(layout.height);
-          for (const b of boxes.slice(i + 1)) {
-            expect(a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5).toBe(false);
-          }
-        });
       });
-    }
+    });
   }
   it('gives the official example the ideal size and equal boxes', () => {
-    const layout = layoutJourney(parseJourney(OFFICIAL), ruler, 'solid');
+    const layout = layoutJourney(parseJourney(OFFICIAL), ruler);
     expect([layout.width, layout.height]).toEqual([1016, 420]);
     expect(new Set(layout.tasks.map((t) => `${t.w}x${t.h}`))).toEqual(new Set(['152x68']));
     expect(layout.tasks.map((t) => t.dot.x)).toEqual([156, 332, 508, 716, 892]);
     expect(layout.tasks.map((t) => t.dot.y)).toEqual([240, 304, 368, 240, 240]);
   });
-  it('draws straight lines in outline and a curve in solid', () => {
-    const d = (theme: 'solid' | 'outline'): string => {
-      const item = layoutJourney(parseJourney(OFFICIAL), ruler, theme).scene.items.find((i) => i.kind === 'path');
-      return item?.kind === 'path' ? item.d : '';
-    };
-    expect(d('outline')).not.toContain('C');
-    expect(d('solid')).toContain('C');
+  it('draws the score line as a curve', () => {
+    const item = layoutJourney(parseJourney(OFFICIAL), ruler).scene.items.find((i) => i.kind === 'path' && i.role.includes('mark-line--ink'));
+    expect(item?.kind === 'path' ? item.d : '').toContain('C');
   });
   it('wraps actor tags that do not fit the box onto another row', () => {
-    const layout = layoutJourney(parseJourney(FIVE_ACTORS), ruler, 'solid');
+    const layout = layoutJourney(parseJourney(FIVE_ACTORS), ruler);
     const first = layout.tasks[0];
     expect(new Set(first?.tags.map((t) => t.y)).size).toBeGreaterThan(1);
     for (const tag of first?.tags ?? []) {
@@ -131,10 +123,10 @@ describe('journey layout', () => {
   });
   it('narrows the boxes to keep many sections within the limit, and reports an overflow it cannot fix', () => {
     const wide = (n: number): string => `journey\n${Array.from({ length: n }, (_, i) => `  section S${i}\n    Visit the market place: 3: Me\n    Go: 2: Me`).join('\n')}`;
-    const fits = layoutJourney(parseJourney(wide(4)), ruler, 'solid');
+    const fits = layoutJourney(parseJourney(wide(4)), ruler);
     expect(fits.width).toBeLessThanOrEqual(1280);
     expect(fits.tasks[0]?.w).toBeLessThan(152);
-    const over = layoutJourney(parseJourney(wide(12)), ruler, 'solid');
+    const over = layoutJourney(parseJourney(wide(12)), ruler);
     expect(over.overflow).toBe(true);
   });
 });

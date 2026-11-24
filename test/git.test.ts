@@ -57,15 +57,13 @@ function parseGit(src: string, heading?: string, config?: Record<string, FrontVa
   const own = front['config'];
   return parseRaw(blank(src), heading ?? (typeof title === 'string' ? title : undefined), config ?? (own !== null && typeof own === 'object' ? own : undefined));
 }
-const THEMES = ['solid', 'outline', 'card', 'band'] as const;
 const MERGES = EXAMPLES[8] ?? '';
 const SHOWCASE = EXAMPLES[10] ?? '';
 
 describe('git render', () => {
-  it('draws every example in three themes', () => {
+  it('draws every example', () => {
     expect(EXAMPLES).toHaveLength(35);
     for (const src of EXAMPLES) {
-      for (const theme of THEMES) expect(render(src, { theme })).toContain(`data-theme="${theme}"`);
       expect(render(src)).toContain('data-theme="band"');
     }
   });

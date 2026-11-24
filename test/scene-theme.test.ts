@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderThemedScene, sceneStyleSheet } from '../src/render/scene-svg.ts';
-import { SCENE_THEME_SPECS } from '../src/render/scene-theme.ts';
-import { THEMES } from '../src/render/theme.ts';
+import { SCENE_THEME } from '../src/render/scene-theme.ts';
 import type { Scene } from '../src/types.ts';
 
 const scene: Scene = {
@@ -34,63 +33,57 @@ const contrast = (a: string, b: string): number => {
 
 const rects = (svg: string): string[] => svg.match(/<rect class="ursula-(?!bg)[^>]*>/g) ?? [];
 
-describe('themed scene', () => {
-  for (const theme of THEMES) {
-    describe(theme, () => {
-      const svg = renderThemedScene(scene, { theme });
+describe('scene drawing', () => {
+  const svg = renderThemedScene(scene);
 
-      it('names its theme and carries the root class', () => {
-        expect(svg).toContain(`data-theme="${theme}"`);
-        expect(svg).toContain('class="ursula"');
-      });
-
-      it('gives boxes the radius of their role and theme', () => {
-        const spec = SCENE_THEME_SPECS[theme];
-        const [box, start, tile] = rects(svg);
-        expect(box).toContain(`rx="${spec.boxRadius}"`);
-        expect(start).toContain(`rx="${spec.boxRadius}"`);
-        expect(tile).toContain('rx="8"');
-      });
-
-      it('writes class names that start with ursula- and leaves no id- in the style sheet', () => {
-        const classes = [...svg.matchAll(/class="([^"]+)"/g)].flatMap((m) => (m[1] ?? '').split(' '));
-        for (const c of classes) expect(c.startsWith('ursula')).toBe(true);
-        const css = svg.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
-        expect(css).not.toMatch(/\.id-|--id-|url\(#id-/);
-        expect(css).toContain('@media (prefers-color-scheme: dark)');
-        expect(css).toMatch(/var\(--ursula-box-fill,#/);
-      });
-
-      it('uses no context-stroke and ends the arrow line short of the tip', () => {
-        expect(svg).not.toContain('context-stroke');
-        expect(svg).toContain('marker-end="url(#ursula-arrow-edge-end)"');
-        const d = svg.match(/<path class="ursula-edge ursula-edge--arrow" d="([^"]+)"/)?.[1] ?? '';
-        const last = d.trim().split(/[ L]+/).slice(-2).map(Number);
-        expect(last[0]).toBeCloseTo(160 - SCENE_THEME_SPECS[theme].arrow.length, 1);
-      });
-
-      it('escapes text', () => {
-        expect(svg).toContain('a &lt; b');
-      });
-    });
-  }
-
-  it('hangs a shadow filter on the card theme only', () => {
-    for (const theme of THEMES) {
-      const svg = renderThemedScene(scene, { theme });
-      if (theme === 'card') {
-        expect(svg).toContain('<filter id="ursula-shadow"');
-        expect(svg).toContain('filter="url(#ursula-shadow)"');
-      } else {
-        expect(svg).not.toContain('filter');
-      }
-    }
+  it('names its look and carries the root class', () => {
+    expect(svg).toContain('data-theme="band"');
+    expect(svg).toContain('class="ursula"');
   });
 
-  it('takes the theme from the option, then the scene, then band', () => {
-    expect(renderThemedScene(scene)).toContain('data-theme="band"');
-    expect(renderThemedScene({ ...scene, theme: 'outline' })).toContain('data-theme="outline"');
-    expect(renderThemedScene({ ...scene, theme: 'outline' }, { theme: 'card' })).toContain('data-theme="card"');
+  it('gives boxes the radius of their role', () => {
+    const [box, start, tile] = rects(svg);
+    expect(box).toContain(`rx="${SCENE_THEME.boxRadius}"`);
+    expect(start).toContain(`rx="${SCENE_THEME.boxRadius}"`);
+    expect(tile).toContain('rx="8"');
+  });
+
+  it('writes class names that start with ursula- and leaves no id- in the style sheet', () => {
+    const classes = [...svg.matchAll(/class="([^"]+)"/g)].flatMap((m) => (m[1] ?? '').split(' '));
+    for (const c of classes) expect(c.startsWith('ursula')).toBe(true);
+    const css = svg.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
+    expect(css).not.toMatch(/\.id-|--id-|url\(#id-/);
+    expect(css).toContain('@media (prefers-color-scheme: dark)');
+    expect(css).toMatch(/var\(--ursula-box-fill,#/);
+  });
+
+  it('uses no context-stroke and ends the arrow line short of the tip', () => {
+    expect(svg).not.toContain('context-stroke');
+    expect(svg).toContain('marker-end="url(#ursula-arrow-edge-end)"');
+    const d = svg.match(/<path class="ursula-edge ursula-edge--arrow" d="([^"]+)"/)?.[1] ?? '';
+    const last = d.trim().split(/[ L]+/).slice(-2).map(Number);
+    expect(last[0]).toBeCloseTo(160 - SCENE_THEME.arrow.length, 1);
+  });
+
+  it('escapes text', () => {
+    expect(svg).toContain('a &lt; b');
+  });
+
+  it('casts no shadow', () => {
+    expect(svg).not.toContain('filter');
+  });
+
+  it('fills the head of every line, a message line too', () => {
+    const drawn = renderThemedScene({
+      ...scene,
+      items: [
+        { kind: 'line', points: [{ x: 10, y: 10 }, { x: 110, y: 10 }], role: ['edge', 'edge--arrow'] },
+        { kind: 'line', points: [{ x: 10, y: 40 }, { x: 110, y: 40 }], role: ['edge', 'edge--msg', 'edge--arrow'] },
+      ],
+    });
+    const head = (variant: string): string => drawn.match(new RegExp(`<marker id="ursula-arrow-${variant}-end"[^>]*><path [^>]*d="([^"]+)"`))?.[1] ?? '';
+    expect(head('edge')).toMatch(/Z$/);
+    expect(head('msg')).toBe(head('edge'));
   });
 
   it('lets a box radius override the role', () => {
@@ -99,19 +92,19 @@ describe('themed scene', () => {
   });
 
   it('draws a start arrow short of its tip and mirrors the head', () => {
-    const svg = renderThemedScene({
+    const drawn = renderThemedScene({
       ...scene,
       items: [{ kind: 'line', points: [{ x: 10, y: 10 }, { x: 110, y: 10 }], role: ['edge', 'edge--arrow-start'] }],
     });
-    expect(svg).toContain('marker-start="url(#ursula-arrow-edge-start)"');
-    expect(svg).toMatch(/d="M(19\.5|18|19) 10 L110 10"/);
+    expect(drawn).toContain('marker-start="url(#ursula-arrow-edge-start)"');
+    expect(drawn).toContain('d="M19 10 L110 10"');
   });
 
   it('styles a series tint written as two roles and as one', () => {
-    expect(sceneStyleSheet(SCENE_THEME_SPECS.solid)).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
+    expect(sceneStyleSheet()).toMatch(/\.ursula-series-2--tint,\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d2eef1\)/);
     // The sample writes it as two roles, so its own sheet keeps that selector alone.
-    const css = renderThemedScene(scene, { theme: 'solid' }).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
-    expect(css).toMatch(/\n\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d7f1ef\)/);
+    const css = svg.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
+    expect(css).toMatch(/\n\.ursula-series-2\.ursula-tint\{fill:var\(--ursula-s2-tint,#d2eef1\)/);
   });
 
   it('writes text spans as tspans of one text, with weight, slant and role', () => {
@@ -139,61 +132,34 @@ describe('themed scene', () => {
     expect(svg).toContain('<text class="ursula-body" x="40" y="50" dominant-baseline="central" transform="rotate(-45 40 50)">c1</text>');
   });
 
-  it('draws the rule of a box in a filled zone as a hairline that shows on that box in every theme and scheme', () => {
-    for (const theme of THEMES) {
-      const spec = SCENE_THEME_SPECS[theme];
-      for (const mode of [0, 1] as const) {
-        const rule = spec.colors['rule-in-zone']?.[mode] ?? '';
-        const face = spec.colors['box-in-zone']?.[mode] ?? '';
-        expect(contrast(rule, face), `${theme} ${mode}`).toBeGreaterThan(1.15);
-      }
-      const light = sceneStyleSheet(spec).split('@media')[0] ?? '';
-      expect(light.indexOf('.ursula-rule--in-zone{')).toBeGreaterThan(light.indexOf('.ursula-rule{'));
-      expect(light).toMatch(/\.ursula-rule--in-zone\{stroke:var\(--ursula-rule-in-zone,#[0-9a-f]{6}\);stroke-width:1\}/);
+  it('draws the rule of a box in a filled zone as a hairline that shows on that box in both schemes', () => {
+    for (const mode of [0, 1] as const) {
+      const rule = SCENE_THEME.colors['rule-in-zone']?.[mode] ?? '';
+      const face = SCENE_THEME.colors['box-in-zone']?.[mode] ?? '';
+      expect(contrast(rule, face), `${mode}`).toBeGreaterThan(1.15);
     }
-  });
-
-  it('fills the head of a call message in card, where every other head is two open strokes', () => {
-    const svg = renderThemedScene(
-      {
-        ...scene,
-        items: [
-          { kind: 'line', points: [{ x: 10, y: 10 }, { x: 110, y: 10 }], role: ['edge', 'edge--arrow'] },
-          { kind: 'line', points: [{ x: 10, y: 40 }, { x: 110, y: 40 }], role: ['edge', 'edge--msg', 'edge--arrow'] },
-        ],
-      },
-      { theme: 'card' },
-    );
-    const head = (variant: string): string => svg.match(new RegExp(`<marker id="ursula-arrow-${variant}-end"[^>]*><path [^>]*d="([^"]+)"`))?.[1] ?? '';
-    expect(head('edge')).not.toContain('Z');
-    expect(head('msg')).toMatch(/Z$/);
-    const light = (svg.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '').split('@media')[0] ?? '';
-    expect(light).toMatch(/\.ursula-head\.ursula-head--msg\{fill:var\(--ursula-edge-msg,#[0-9a-f]{6}\);stroke:var\(--ursula-edge-msg/);
+    const light = sceneStyleSheet().split('@media')[0] ?? '';
+    expect(light.indexOf('.ursula-rule--in-zone{')).toBeGreaterThan(light.indexOf('.ursula-rule{'));
+    expect(light).toMatch(/\.ursula-rule--in-zone\{stroke:var\(--ursula-rule-in-zone,#[0-9a-f]{6}\);stroke-width:1\}/);
   });
 
   it('has a zone face role that paints the zone colour without its outline', () => {
-    for (const theme of THEMES) {
-      const light = sceneStyleSheet(SCENE_THEME_SPECS[theme]).split('@media')[0] ?? '';
-      expect(light).toContain('.ursula-zone-face{fill:var(--ursula-zone-fill,');
-      expect(light).not.toMatch(/\.ursula-zone-face\{[^}]*stroke:var/);
-    }
+    const light = sceneStyleSheet().split('@media')[0] ?? '';
+    expect(light).toContain('.ursula-zone-face{fill:var(--ursula-zone-fill,');
+    expect(light).not.toMatch(/\.ursula-zone-face\{[^}]*stroke:var/);
   });
 
-  it('paints a note inside a zone apart from the zone in every theme and scheme', () => {
-    for (const theme of THEMES) {
-      const spec = SCENE_THEME_SPECS[theme];
-      for (const mode of [0, 1] as const) {
-        const note = spec.colors['note-in-zone']?.[mode] ?? '';
-        const zone = spec.colors['zone-fill']?.[mode] ?? '';
-        expect(contrast(note, zone), `${theme} ${mode}`).toBeGreaterThanOrEqual(1.05);
-      }
-      const light = sceneStyleSheet(spec).split('@media')[0] ?? '';
-      expect(light.indexOf('.ursula-note--in-zone{fill:var(--ursula-note-in-zone,')).toBeGreaterThan(light.indexOf('.ursula-note{'));
+  it('paints a note inside a zone apart from the zone in both schemes', () => {
+    for (const mode of [0, 1] as const) {
+      const note = SCENE_THEME.colors['note-in-zone']?.[mode] ?? '';
+      const zone = SCENE_THEME.colors['zone-fill']?.[mode] ?? '';
+      expect(contrast(note, zone), `${mode}`).toBeGreaterThanOrEqual(1.05);
     }
+    const light = sceneStyleSheet().split('@media')[0] ?? '';
+    expect(light.indexOf('.ursula-note--in-zone{fill:var(--ursula-note-in-zone,')).toBeGreaterThan(light.indexOf('.ursula-note{'));
   });
 
-  it('draws a round box rounder than a plain box in every theme', () => {
-    for (const spec of Object.values(SCENE_THEME_SPECS)) expect(spec.roundRadius).toBeGreaterThan(spec.boxRadius);
+  it('draws a round box rounder than a plain box', () => {
+    expect(SCENE_THEME.roundRadius).toBeGreaterThan(SCENE_THEME.boxRadius);
   });
 });
-

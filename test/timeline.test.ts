@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { pixelRuler, render, renderText, UrsulaError } from '../src/index.ts';
 import { layoutTimeline } from '../src/timeline/layout.ts';
 import { parseTimeline } from '../src/timeline/parse.ts';
-import { THEMES } from '../src/render/theme.ts';
 import type { SceneItem, SceneText } from '../src/types.ts';
 
 const EXAMPLES: Record<string, string> = {
@@ -40,11 +39,7 @@ const texts = (items: SceneItem[]): SceneText[] => items.filter((i): i is SceneT
 
 describe('timeline render', () => {
   for (const name of names) {
-    it(`draws ${name} in every theme`, () => {
-      for (const theme of THEMES) {
-        const svg = render(renderSrc(name), { theme });
-        expect(svg).toContain(`data-theme="${theme}"`);
-      }
+    it(`draws ${name}`, () => {
       expect(render(renderSrc(name))).toContain('data-theme="band"');
     });
   }
@@ -151,7 +146,7 @@ describe('timeline layout', () => {
     const l = layoutTimeline(parseTimeline(src('10-base-theme')), ruler);
     expect(l.periods.map((p) => p.row)).toEqual([0, 0, 0, 0, 1, 1, 1]);
     expect(l.width).toBeLessThanOrEqual(1280);
-    const narrow = layoutTimeline(parseTimeline(src('10-base-theme')), ruler, 'solid', { maxWidth: 480 });
+    const narrow = layoutTimeline(parseTimeline(src('10-base-theme')), ruler, { maxWidth: 480 });
     expect(narrow.width).toBeLessThanOrEqual(480);
     expect(Math.max(...narrow.periods.map((p) => p.row))).toBeGreaterThan(1);
   });
@@ -215,30 +210,9 @@ describe('timeline text', () => {
 });
 
 describe('timeline colour scheme', () => {
-  const seriesOf = (svg: string): string[] => [...svg.matchAll(/class="[^"]*ursula-series-(\d)--tint/g)].map((m) => m[1] ?? '');
-
-  it('gives each time period its own series when there is no section', () => {
-    const svg = render(renderSrc('07-styling-of-time-periods-and-events'), { theme: 'solid' });
-    // LinkedIn, Facebook, Google, YouTube, Twitter: the two 2004 events share the second series.
-    expect(seriesOf(svg)).toEqual(['1', '2', '2', '3', '4']);
-  });
-
-  it('draws every period in one scheme when disableMulticolor is set', () => {
-    expect(seriesOf(render(renderSrc('08-styling-of-time-periods-and-events'), { theme: 'solid' }))).toEqual([]);
-  });
-
-  it('gives every period of a section the series of the section', () => {
-    expect(seriesOf(render(renderSrc('03-grouping-of-time-periods-in-sections-ages'), { theme: 'solid' }))).toEqual(['1', '1', '1', '2', '2']);
-  });
-
-  it('colours the dot of a period with the series of its events', () => {
-    const svg = render(renderSrc('07-styling-of-time-periods-and-events'), { theme: 'solid' });
-    expect([...svg.matchAll(/<circle class="ursula-dot ursula-series-(\d)"/g)].map((m) => m[1])).toEqual(['1', '2', '3', '4']);
-  });
-
-  it('draws plain boxes and neutral dots in the band theme', () => {
-    for (const name of ['07-styling-of-time-periods-and-events', '03-grouping-of-time-periods-in-sections-ages']) {
-      const svg = render(renderSrc(name), { theme: 'band' });
+  it('draws plain boxes and neutral dots, with or without sections and whatever disableMulticolor says', () => {
+    for (const name of ['07-styling-of-time-periods-and-events', '08-styling-of-time-periods-and-events', '03-grouping-of-time-periods-in-sections-ages']) {
+      const svg = render(renderSrc(name));
       expect(svg).not.toMatch(/class="ursula-(box|dot) ursula-series-/);
       expect(svg).toMatch(/<rect class="ursula-box[ "]/);
     }

@@ -12,7 +12,7 @@ const CORNER = 24;
 const LABEL_ROOM = 12;
 /** Room an arrowhead or relation mark takes at the end of a line. */
 const MARK_ROOM = 14;
-/** Largest radius of a bend in any theme. */
+/** Room kept for the bend of a line; twice the radius a bend is drawn with. */
 const BEND = 16;
 const EPS = 1e-6;
 
