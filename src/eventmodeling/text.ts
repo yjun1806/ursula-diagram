@@ -35,7 +35,7 @@ export function layoutEventModelText(model: EventModel, maxWidth: number | undef
     if (!laneKeys.some((k) => k.zone === zone && k.namespace === f.namespace)) laneKeys.push({ zone, ...(f.namespace === undefined ? {} : { namespace: f.namespace }) });
   }
   const ordered = ZONE_ORDER.flatMap((zone) => laneKeys.filter((k) => k.zone === zone));
-  const numberWidth = Math.max(...model.frames.map((f) => f.label.length));
+  const numberWidth = model.frames.reduce((most, f) => Math.max(most, f.label.length), 0);
 
   for (const lane of ordered) {
     rows.push([]);
