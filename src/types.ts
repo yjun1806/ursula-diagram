@@ -1,4 +1,3 @@
-
 export type Direction = 'LR' | 'TD';
 export type EdgeStyle = 'normal' | 'thick' | 'dotted';
 
@@ -71,7 +70,7 @@ export interface Compartment {
   columnEmphasis?: Array<'title' | 'tag' | 'body'>;
   /**
    * The only band of a box that has no rules: its lines stand as one group in the middle of the box, and the first line
-   * (the kind of the box) is drawn in a small pill; the line after it is a little further down.
+   * (the kind of the box) stands in the head band; the line after it is a little further down.
    */
   face?: true;
 }
@@ -406,11 +405,9 @@ export interface SceneBox {
   y: number;
   w: number;
   h: number;
-  /** Label tab on the top-left corner of a frame. */
-  tab?: { text: string; w: number; h: number };
   /** Corner radius; when absent the scene renderer takes it from the role. */
   radius?: number;
-  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  /** Roles of the renderer, each naming a class `ursula-<role>`. */
   role?: string[];
   data?: Record<string, string>;
 }
@@ -424,7 +421,7 @@ export interface SceneText {
   anchor?: 'start' | 'middle' | 'end';
   /** Set for a text placed by its baseline, such as a heading or a number standing on a mark. */
   baseline?: 'alphabetic';
-  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  /** Roles of the renderer, each naming a class `ursula-<role>`. */
   role?: string[];
   /**
    * Runs of one line drawn in their own weight, slant or roles; `text` stays the whole line. Spaces between runs are
@@ -441,7 +438,7 @@ export interface SceneTextSpan {
   text: string;
   weight?: 'bold';
   italic?: true;
-  /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
+  /** Roles of the renderer, each naming a class `ursula-<role>`. */
   role?: string[];
   /** Space in pixels before the run, in place of a space in its text. */
   dx?: number;
@@ -450,7 +447,7 @@ export interface SceneTextSpan {
 export interface SceneLine {
   kind: 'line';
   points: Point[];
-  /** Roles of the themed renderer, each naming a class `ursula-<role>`; a line without any is drawn as `edge`. */
+  /** Roles of the renderer, each naming a class `ursula-<role>`; a line without any is drawn as `edge`. */
   role?: string[];
   /** Corner radius of the bends. */
   radius?: number;

@@ -629,7 +629,7 @@ function compartmentsSvg(node: LayoutNode): string {
   cells.forEach((cell, i) => {
     if (i > 0) parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
     const centred = (cell.align ?? (i === 0 ? 'center' : 'left')) === 'center' && cell.columns === undefined;
-    // A face is one group in the middle of the box: its first line stands in a pill and the next is a little further down.
+    // A face is one group in the middle of the box: its first line stands in the head band and the next is a little further down.
     const rows = faceLineHeights(cell.lines.length);
     const content = rows.reduce((a, b) => a + b, 0) + FACE_PILL_GAP;
     const rowTop = (k: number): number => rows.slice(0, k).reduce((a, b) => a + b, 0) + (k > 0 ? FACE_PILL_GAP : 0);

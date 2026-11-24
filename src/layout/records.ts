@@ -5,15 +5,14 @@ import type { Compartment, NodeShape } from '../types.ts';
 export const COMPARTMENT_LINE = 20;
 export const HEAD_PAD = 20;
 export const BODY_PAD = 16;
-/** Pixels: extra room between the pill of a face and the line under it, and the room the pill takes around the text of its kind. */
+/** Pixels: extra room between the kind of a face and the line under it. */
 export const FACE_PILL_GAP = 4;
-export const FACE_PILL_PAD = 16;
-/** Pixels: height of the pill and of the name of a face, of each line under the name, and the room a face adds around its lines in all (a cylinder's two caps come on top of it). */
+/** Pixels: height of the kind and of the name of a face, of each line under the name, and the room a face adds around its lines in all (a cylinder's two caps come on top of it). */
 export const FACE_HEAD_LINE = 20;
 export const FACE_TEXT_LINE = 16;
 export const FACE_PAD = 24;
 
-/** Height of each line of a face: the pill and the name, then the lines under it. */
+/** Height of each line of a face: the kind and the name, then the lines under it. */
 export const faceLineHeights = (lines: number): number[] => Array.from({ length: lines }, (_, k) => (k < 2 ? FACE_HEAD_LINE : FACE_TEXT_LINE));
 /** Pixels: room a compartment box adds around its widest line, and its least width. */
 export const COMPARTMENT_SIDE = 32;
