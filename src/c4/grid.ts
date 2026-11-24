@@ -280,7 +280,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
   }
   const finish = (wider: ReadonlyMap<number, number>): { layout: Layout; colX: number[] } => {
     const { width, height, nodes, laidClusters, edges, diagnostics, colX } = drawn(shiftOf, true, wider);
-    const laid: Layout = { width, height, direction: 'TD', laneAxis: 'across', lanes: [], clusters: laidClusters, nodes, edges, diagnostics };
+    const laid: Layout = { width, height, direction: graph.direction, laneAxis: 'across', lanes: [], clusters: laidClusters, nodes, edges, diagnostics };
     const every = new Set(laidClusters.map((c) => c.id));
     const subtitled = new Set(clusters.filter((c) => c.subtitled === true).map((c) => c.id));
     const named = { ...laid, clusters: placeNames(laid, ruler, every, subtitled).clusters };
