@@ -165,10 +165,8 @@ export interface Graph {
   /**
    * `groups` when the lanes are the subgraphs of a flowchart: they are parts of the flow, not owners, so an automatic
    * composition lays them one after another along the reading direction in the order they are written.
-   * `rows` when the lanes are the rows of a picture with a fixed order: they stand in the written order, a lane no
-   * line touches included.
    */
-  zones?: 'groups' | 'rows';
+  zones?: 'groups';
   /** Clusters drawn as boxes. The `from` and `to` of an edge may name one; a node names its innermost one in `cluster`. */
   clusters?: GraphCluster[];
   nodes: GraphNode[];

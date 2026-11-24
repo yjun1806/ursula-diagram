@@ -64,9 +64,7 @@ export function planZones(graph: Graph, requested: 'auto' | Composition = 'auto'
   for (const [a, b] of links.values()) if (b < a) back++;
   const groups = graph.zones === 'groups' && requested === 'auto' && active.length >= 2 && across > 0 && back * 3 <= links.size;
   const stages = requested === 'stages' || groups || (requested === 'auto' && active.length >= 2 && oneWay && across > 0 && across >= inside);
-  // Lanes that are rows of a fixed picture stand in the written order; otherwise the bands no line touches go last.
-  const written = Array.from({ length: lanes }, (_, i) => i);
-  if (!stages || active.length < 2) return { composition: requested === 'stages' ? 'stages' : 'lanes', order: graph.zones === 'rows' ? written : [...active, ...aside] };
+  if (!stages || active.length < 2) return { composition: requested === 'stages' ? 'stages' : 'lanes', order: [...active, ...aside] };
   const order = ranks
     ? [...active].sort((x, y) => (ranks.get(x) ?? 0) - (ranks.get(y) ?? 0) || Number(y === startLane) - Number(x === startLane) || x - y)
     : [...active];
