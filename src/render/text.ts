@@ -1,3 +1,4 @@
+import { clip } from '../text/fit.ts';
 import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
@@ -352,6 +353,9 @@ function drawLegend(c: Canvas, layout: Layout): void {
   }
 }
 
+/** The fewest cells of a lane name worth writing when it is cut. */
+const SHORT_NAME = 6;
+
 /**
  * Writes the name of every horizontal lane on its rule once everything else is drawn: `── name `. No line or label
  * is drawn over the name; where a line crosses the rule at that place the name moves to the right of the line (a
@@ -381,7 +385,25 @@ function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
       for (let k = x - 1; k <= Math.min(x + w, x1); k++) if (k < x0 || c.get(k, y) !== '─') return false;
       return true;
     };
-    const at = candidates.find(free) ?? candidates.find(past) ?? preferred;
+    const whole = candidates.find(free) ?? candidates.find(past);
+    if (whole === undefined) {
+      // No room for the whole name: it is cut to the longest free stretch of the rule, when that holds a few letters.
+      let best = { from: 0, len: 0 };
+      for (let x = x0, from = x0; x <= x1 + 1; x++) {
+        if (x <= x1 && c.get(x, y) === '─') continue;
+        if (x - from > best.len) best = { from, len: x - from };
+        from = x + 1;
+      }
+      if (best.len >= SHORT_NAME + 4) {
+        const cut = clip(lane.label, best.len - 4);
+        const start = best.from + 2;
+        c.put(start - 1, y, ' ');
+        c.text(start, y, cut);
+        c.put(start + cellWidth(cut), y, ' ');
+        continue;
+      }
+    }
+    const at = whole ?? preferred;
     c.widen(at + w);
     c.put(at - 1, y, ' ');
     c.text(at, y, lane.label);

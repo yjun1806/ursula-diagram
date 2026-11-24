@@ -161,6 +161,18 @@ describe('boxes in text', () => {
     expect(l.lanes.map((lane) => lane.label)).toEqual(['one', 'two', 'three']);
   });
 
+  it('draws an inner box as a band of its own, named by its path', () => {
+    const deep = layout(parse(DEEP), cellRuler());
+    const names = deep.lanes.map((lane) => lane.label);
+    expect(names).toContain('Platform / Edge');
+    expect(names).toContain('Platform / Core / Orders');
+  });
+
+  it('keeps the name of the box itself when the path is longer than 40 cells', () => {
+    const src = 'flowchart TB\n  subgraph Outer[A very long name of the outermost box]\n    subgraph Inner[Another long inner name]\n      a --> b\n    end\n  end';
+    expect(layout(parse(src), cellRuler()).lanes.map((lane) => lane.label)).toEqual(['… / Another long inner name']);
+  });
+
   it('ends a line to a box at a node in it, and keeps every line', () => {
     expect(l.edges).toHaveLength(parse(FLOW).edges.length);
     const ends = l.edges.map((e) => `${e.from}>${e.to}`);

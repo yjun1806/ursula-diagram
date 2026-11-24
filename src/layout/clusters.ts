@@ -1,5 +1,6 @@
 import { layeredRuler } from '../layered/index.ts';
 import { refineLabels } from '../layered/label-spot.ts';
+import { cellWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Direction, Graph, GraphEdge, GraphNode, Layout, LayoutCluster, LayoutEdge, LayoutNode, Point } from '../types.ts';
 import type { LayoutOptions } from './index.ts';
@@ -30,9 +31,12 @@ const tidy = (v: number): number => {
   return r === 0 ? 0 : r;
 };
 
+/** The widest name of a band that is written as a whole path, in cells. */
+const PATH_CELLS = 40;
+
 /**
- * The graph for a medium that draws no cluster boxes: every outermost cluster is a band (a lane) with its name, and
- * the nodes of the clusters in it stand in that band. A line that ends at a cluster ends at a node in it instead:
+ * The graph for a medium that draws no cluster boxes: every cluster that holds nodes of its own is a band (a lane)
+ * named by its path from the outermost cluster, and its nodes stand in that band. A line that ends at a cluster ends at a node in it instead:
  * one that comes in at the start dot, or else at the first node nothing in the cluster leads to; one that goes out
  * at the end dot, or else at the last node that leads to nothing in the cluster.
  */
@@ -71,18 +75,25 @@ export function bandClusters(graph: Graph): Graph {
     if (from === to && (e.from !== e.to || !known.has(e.from))) continue;
     edges.push(from === e.from && to === e.to ? e : { ...e, from, to });
   }
-  const top = [...new Set([...chains.values()].map((c) => c[0]).filter((c): c is string => c !== undefined))];
-  const order = (graph.clusters ?? []).map((c) => c.id).filter((id) => top.includes(id));
+  // A band for every cluster that holds nodes of its own, an inner one named by its path (`outer / inner`).
+  const own = new Set(graph.nodes.map((n) => chains.get(n.id)?.at(-1)).filter((c): c is string => c !== undefined));
+  const order = (graph.clusters ?? []).map((c) => c.id).filter((id) => own.has(id));
+  // A path longer than `PATH_CELLS` keeps the name of the cluster itself, after a mark that it stands in others.
+  const pathOf = (id: string): string => {
+    const names = chainOf(id).map((c) => all.get(c)?.label ?? c).filter((t) => t !== '');
+    const whole = names.join(' / ');
+    return names.length < 2 || cellWidth(whole) <= PATH_CELLS ? whole : `… / ${names[names.length - 1]}`;
+  };
   const home = graph.lanes[0] ?? { id: '', label: '' };
   const loose = graph.nodes.findIndex((n) => chains.get(n.id)?.length === 0);
   const banded = graph.nodes.findIndex((n) => (chains.get(n.id)?.length ?? 0) > 0);
-  const bands = order.map((id) => ({ id: `cluster:${id}`, label: all.get(id)?.label ?? id }));
+  const bands = order.map((id) => ({ id: `cluster:${id}`, label: pathOf(id) || id }));
   return {
     ...rest,
     lanes: loose < 0 ? bands : loose < banded ? [home, ...bands] : [...bands, home],
     ...(bands.length > 0 ? { zones: 'groups' as const } : {}),
     nodes: graph.nodes.map(({ cluster: _cluster, ...n }) => {
-      const band = chains.get(n.id)?.[0];
+      const band = chains.get(n.id)?.at(-1);
       return band === undefined ? { ...n, lane: home.id } : { ...n, lane: `cluster:${band}` };
     }),
     edges,
