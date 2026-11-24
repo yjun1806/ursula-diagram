@@ -110,7 +110,7 @@ function retag(base: SequenceLayout, model: ZenumlModel, ruler: Ruler, beside: R
     }
     return it.role?.includes('label') ? { ...it, text: unbracket(it.text) } : it;
   });
-  const firstFrame = items.findIndex((it) => it.kind === 'box' && it.style === 'frame');
+  const firstFrame = items.findIndex((it) => it.kind === 'box' && (it.role?.some((r) => r === 'frame' || r === 'zone') ?? false));
   const at = firstFrame < 0 ? items.length : firstFrame;
   const fitted = fitNotes(base, [...items.slice(0, at), ...backings, ...items.slice(at), ...added], ruler);
   return { ...base, notes: fitted.notes, scene: { ...base.scene, items: fitted.items } };
@@ -129,7 +129,7 @@ function fitNotes(base: SequenceLayout, items: SceneItem[], ruler: Ruler): { ite
     return { ...n, box: { ...n.box, x: centre - w / 2, w } };
   });
   const out = items.map((it): SceneItem => {
-    if (it.kind !== 'box' || it.style !== 'note') return it;
+    if (it.kind !== 'box' || !it.role?.includes('note')) return it;
     const k = Number(it.data?.['note']);
     const n = notes[k];
     return n === undefined ? it : { ...it, x: n.box.x, w: n.box.w };
