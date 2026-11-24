@@ -283,7 +283,7 @@ function itemSvg(item: SceneItem): string {
 function markersUsed(scene: Scene): [Variant, End][] {
   const found = new Set<string>();
   for (const it of scene.items) {
-    if (it.kind !== 'line' || !Array.isArray(it.role)) continue;
+    if (it.kind !== 'line' || it.role === undefined) continue;
     const { variant, end, start } = arrowsOf(it.role);
     if (end) found.add(`${variant}:end`);
     if (start) found.add(`${variant}:start`);

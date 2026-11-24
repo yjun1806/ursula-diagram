@@ -247,10 +247,10 @@ describe('zenuml layout', () => {
   });
 
   it('draws an async message and a creation as solid lines; only replies are dashed', () => {
-    const heads = layoutZenuml(parseZenuml('zenuml\n  A->B: hi\n  A.call()'), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && i.arrow !== undefined ? [i.arrow] : []));
-    expect(heads).toEqual(['open', 'filled']);
+    const heads = layoutZenuml(parseZenuml('zenuml\n  A->B: hi\n  A.call()'), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && i.data?.['message'] !== undefined ? [String(i.role?.includes('edge--arrow'))] : []));
+    expect(heads).toEqual(['false', 'true']);
     const dashedOf = (src: string): string[] =>
-      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--msg') && i.arrow !== undefined ? [String(i.role.includes('edge--pending'))] : []));
+      layoutZenuml(parseZenuml(src), pixelRuler()).scene.items.flatMap((i) => (i.kind === 'line' && Array.isArray(i.role) && i.role.includes('edge--msg') && i.data?.['message'] !== undefined ? [String(i.role.includes('edge--pending'))] : []));
     expect(dashedOf(DEMO)).toEqual(['false', 'false', 'false']);
     expect(dashedOf(CREATE)).toEqual(['false', 'false']);
     expect(dashedOf('zenuml\n  @return\n  A->B: result')).toEqual(['true']);
@@ -260,7 +260,7 @@ describe('zenuml layout', () => {
     const ruler = pixelRuler();
     const note = layout.notes[0];
     expect(note?.box.w).toBeLessThanOrEqual(Math.ceil((ruler.textWidth('return early', 'line') + 24) / 4) * 4 + 2);
-    const box = layout.scene.items.find((i) => i.kind === 'box' && i.style === 'note');
+    const box = layout.scene.items.find((i) => i.kind === 'box' && i.role?.includes('note'));
     expect(box?.kind === 'box' ? box.w : 0).toBe(note?.box.w);
     const text = textItems.find((t) => t.text === 'return early');
     expect(text?.x).toBeCloseTo((note?.box.x ?? 0) + (note?.box.w ?? 0) / 2, 0);

@@ -92,7 +92,7 @@ function boxItems(box: PlacedBox, inZone: boolean): SceneItem[] {
   const cx = box.x + box.w / 2;
   const role = inZone ? ['box', 'box--in-zone'] : ['box'];
   return [
-    { kind: 'box', style: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role },
+    { kind: 'box', x: box.x, y: box.y, w: box.w, h: box.h, role },
     ...box.lines.map((text, i): SceneItem => ({ kind: 'text', x: cx, y: box.y + box.h / 2 + NAME_DROP + LINE * (i - (box.lines.length - 1) / 2), text, anchor: 'middle', role: ['name'], baseline: 'alphabetic' })),
   ];
 }
@@ -236,7 +236,7 @@ function layoutHorizontal(model: TimelineModel, ruler: Ruler, limit: number): Ti
         const zone: PlacedZone = { x: rect.left, y: top, w: rect.right - rect.left, h: zoneBottom - top };
         if (part.first && names !== undefined) zone.name = names;
         placedZones.push(zone);
-        zoneItems.push({ kind: 'box', style: 'frame', x: zone.x, y: zone.y, w: zone.w, h: zone.h, role: ['zone'] });
+        zoneItems.push({ kind: 'box', x: zone.x, y: zone.y, w: zone.w, h: zone.h, role: ['zone'] });
         if (part.first && names !== undefined)
           names.forEach((text, i) => zoneItems.push({ kind: 'text', x: rect.left + ZONE_PAD, y: top + ZONE_PAD + 8 + LINE * i, text, anchor: 'start', role: ['zone-name'] }));
       }
@@ -345,7 +345,7 @@ function layoutVertical(model: TimelineModel, ruler: Ruler): TimelineLayout {
     if (names !== undefined) {
       const zone: PlacedZone = { x: MARGIN, y: rectTop, w: zoneRight - MARGIN, h: rectBottom - rectTop, name: names };
       placedZones.push(zone);
-      zoneItems.push({ kind: 'box', style: 'frame', x: zone.x, y: zone.y, w: zone.w, h: zone.h, role: ['zone'] });
+      zoneItems.push({ kind: 'box', x: zone.x, y: zone.y, w: zone.w, h: zone.h, role: ['zone'] });
       names.forEach((text, i) => zoneItems.push({ kind: 'text', x: MARGIN + ZONE_PAD, y: rectTop + ZONE_PAD + 8 + LINE * i, text, anchor: 'start', role: ['zone-name'] }));
     }
     bottom = g.name === undefined ? lastRowBottom : rectBottom;

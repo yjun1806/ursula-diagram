@@ -280,7 +280,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler): XyLayout {
     const pt = (i: number, v: number): Point => (horizontal ? { x: valPos(v), y: catPos(i) } : { x: catPos(i), y: valPos(v) });
 
     // panel and header
-    items.push({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
+    items.push({ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
     for (const r of rows) {
       text({ kind: 'text', x: MARGIN, y: r.y, text: r.text, anchor: 'start', role: r.role });
       obstacles.push(boxOf(MARGIN, r.y, px(r.text, r.role[0] === 'title' ? 15 : 12, true), 'start', 20));
@@ -394,7 +394,7 @@ export function layoutXychart(chart: XyChart, ruler: Ruler): XyLayout {
           row++;
         }
         const cy = top + row * 24 + 12;
-        items.push({ kind: 'box', style: 'frame', x, y: cy - 6, w: 12, h: 12, role: ['swatch', ...(neutral ? [s.kind === 'bar' ? 'mark' : 'mark--ink'] : [`series-${colour(i)}`])] });
+        items.push({ kind: 'box', x, y: cy - 6, w: 12, h: 12, role: ['swatch', ...(neutral ? [s.kind === 'bar' ? 'mark' : 'mark--ink'] : [`series-${colour(i)}`])] });
         text({ kind: 'text', x: x + 20, y: cy, text: name, anchor: 'start', role: ['legend'] });
         x += w + 24;
       }

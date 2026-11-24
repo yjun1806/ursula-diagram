@@ -178,7 +178,7 @@ export function layoutPie(pie: Pie, ruler: Ruler): PieLayout {
   const height = ceilTo(cy + maxY + MARGIN);
 
   const items: SceneItem[] = [
-    { kind: 'box', style: 'frame', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },
+    { kind: 'box', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },
   ];
   if (pie.title !== undefined) {
     items.push({ kind: 'text', x: MARGIN, y: MARGIN + TITLE_LINE / 2, text: pie.title, anchor: 'start', role: ['title'] });

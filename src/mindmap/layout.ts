@@ -423,7 +423,7 @@ export function layoutMindmap(map: Mindmap, ruler: Ruler, opts: MindmapLayoutOpt
     const data = { label: p.lines.join(' '), depth: String(p.depth) };
     if (shape === 'circle') items.push({ kind: 'circle', cx: x + p.w / 2, cy: y + p.h / 2, r: p.w / 2, role, data });
     else if (shape === 'bang' || shape === 'cloud' || shape === 'hexagon') items.push({ kind: 'path', d: outline(shape, x, y, p.w, p.h), role, data });
-    else items.push({ kind: 'box', style: 'box', x, y, w: p.w, h: p.h, role: shape === 'round' ? [...role, 'box--round'] : role, ...(shape === 'square' ? { radius: 4 } : {}), data });
+    else items.push({ kind: 'box', x, y, w: p.w, h: p.h, role: shape === 'round' ? [...role, 'box--round'] : role, ...(shape === 'square' ? { radius: 4 } : {}), data });
     p.lines.forEach((text, k) => {
       const spans = p.spans?.[k];
       items.push({ kind: 'text', x: x + p.w / 2, y: y + p.h / 2 + (k - (p.lines.length - 1) / 2) * LINE, text, anchor: 'middle', role: ['name'], ...(spans === undefined ? {} : { spans }) });

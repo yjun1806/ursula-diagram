@@ -498,7 +498,7 @@ describe('sequence backings and notes inside zones', () => {
 
   it('backs a label in a zone with the zone face, which has no outline', () => {
     const items = layoutSequence(parseSequence(src), pixelRuler()).scene.items;
-    const backs = items.filter((it) => it.kind === 'box' && it.style === 'label');
+    const backs = items.filter((it) => it.kind === 'box' && it.role?.some((r) => r === 'bg' || r === 'zone-face'));
     expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone-face'))).toBe(true);
     expect(backs.some((b) => b.kind === 'box' && b.role?.includes('zone'))).toBe(false);
   });

@@ -232,7 +232,7 @@ describe('layoutSequence geometry in pixels', () => {
       seqOf('sequenceDiagram\nA->>+B: x\nB->>+B: again\nB-->>-B: inner done\nB-->>-A: done'),
       ruler,
     );
-    const bars = l.scene.items.filter((i) => i.kind === 'box' && i.style === 'bar');
+    const bars = l.scene.items.filter((i) => i.kind === 'box' && i.role?.includes('active'));
     expect(bars).toHaveLength(2);
     const [a, b] = bars;
     if (a?.kind !== 'box' || b?.kind !== 'box') throw new Error('missing bars');
@@ -247,7 +247,7 @@ describe('layoutSequence geometry in pixels', () => {
 
   it('lets explicit activate and deactivate span the messages between them', () => {
     const l = layoutSequence(seqOf('sequenceDiagram\nactivate A\nA->>B: x\nB->>A: y\ndeactivate A'), ruler);
-    const bar = l.scene.items.find((i) => i.kind === 'box' && i.style === 'bar');
+    const bar = l.scene.items.find((i) => i.kind === 'box' && i.role?.includes('active'));
     if (bar?.kind !== 'box') throw new Error('missing bar');
     expect(bar.y).toBe(l.messages[0]?.y);
     expect(bar.y + bar.h).toBe(l.messages[1]?.y);
@@ -303,7 +303,7 @@ describe('layoutSequence geometry in pixels', () => {
 
   it('ends a bar that is never deactivated 16 below the last message that involves its participant', () => {
     const l = layoutSequence(seqOf('sequenceDiagram\nA->>+B: x\nB-->>A: y\nA->>C: z\nC->>A: w'), ruler);
-    const bar = l.scene.items.find((i) => i.kind === 'box' && i.style === 'bar');
+    const bar = l.scene.items.find((i) => i.kind === 'box' && i.role?.includes('active'));
     if (bar?.kind !== 'box') throw new Error('missing bar');
     expect(bar.y + bar.h).toBe((l.messages[1]?.y ?? 0) + ruler.sequence.barTail + ruler.sequence.stroke);
     expect(bar.y + bar.h).toBeLessThan(l.height - ruler.sequence.margin - ruler.sequence.tail);
@@ -367,7 +367,7 @@ describe('layoutSequence geometry in pixels', () => {
 
   it('adds a legend with the kinds in use, renamed or removed on request', () => {
     const src = 'sequenceDiagram\nA->>B: a\nB-->>A: b\nA-xB: c';
-    const texts = (l: SequenceLayout): string[] => l.scene.items.flatMap((i) => (i.kind === 'text' && i.font === 'caption' ? [i.text] : []));
+    const texts = (l: SequenceLayout): string[] => l.scene.items.flatMap((i) => (i.kind === 'text' && i.role?.includes('legend') ? [i.text] : []));
     const l = layoutSequence(seqOf(src), ruler);
     expect(l.legend.map((e) => e.kind)).toEqual(['call', 'reply', 'failed']);
     expect(texts(l)).toEqual(['Call', 'Reply', 'Failed']);

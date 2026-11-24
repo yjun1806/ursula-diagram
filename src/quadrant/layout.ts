@@ -109,7 +109,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler): QuadrantLayo
     const text = chart.quadrants[quadrant - 1] ?? '';
     const lines = text === '' ? [] : wrapWords(text, zw - 2 * ZONE_PAD, name);
     zones.push({ x, y, w: zw, h: zh, quadrant, lines });
-    items.push({ kind: 'box', style: 'frame', x, y, w: zw, h: zh, role: (col + row) % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'] });
+    items.push({ kind: 'box', x, y, w: zw, h: zh, role: (col + row) % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'] });
   }
   for (const z of zones) {
     z.lines.forEach((line, i) => items.push({ kind: 'text', x: z.x + ZONE_PAD, y: z.y + 28 + i * LINE_H, text: line, anchor: 'start', role: ['zone-name'], baseline: 'alphabetic' }));
@@ -203,7 +203,7 @@ export function layoutQuadrant(chart: QuadrantChart, ruler: Ruler): QuadrantLayo
     width = Math.max(width, ceilTo(l.x + l.w + MARGIN));
   }
 
-  items.unshift({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
+  items.unshift({ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
   const scene: Scene = { width, height, title: chart.accTitle ?? chart.title ?? 'Quadrant chart', items };
   return { scene, plot, zones, points: placed, ignored: chart.ignored };
 }

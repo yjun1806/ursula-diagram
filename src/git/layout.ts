@@ -339,7 +339,7 @@ function buildGit(graph: GitGraph, ruler: Ruler, delays: ReadonlyMap<string, num
   const shapes: Shape[] = [];
   const flat = (x0: number, x1: number, y0: number, y1: number, t: number): Shape => ({ x0, x1, y0, y1, turn: 0, ax: 0, ay: 0, t });
   const chip = (x0: number, y: number, w: number, tag: string, t: number): void => {
-    labels.push({ kind: 'box', style: 'label', x: x0, y: y - CHIP_H / 2, w, h: CHIP_H, role: ['tag'] });
+    labels.push({ kind: 'box', x: x0, y: y - CHIP_H / 2, w, h: CHIP_H, role: ['tag'] });
     labels.push({ kind: 'text', x: x0 + w / 2, y, text: tag, anchor: 'middle', role: ['tag-text'] });
     shapes.push(flat(x0, x0 + w, y - CHIP_H / 2, y + CHIP_H / 2, t));
   };
@@ -353,7 +353,7 @@ function buildGit(graph: GitGraph, ruler: Ruler, delays: ReadonlyMap<string, num
     if (c.type === 'HIGHLIGHT') {
       // A filled square in the colour of the branch.
       r = radius + 2;
-      dots.push({ kind: 'box', style: 'label', x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r, radius: 2, role: [`series-${n}--dot`], data });
+      dots.push({ kind: 'box', x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r, radius: 2, role: [`series-${n}--dot`], data });
     } else if (c.type === 'REVERSE') {
       r = radius + 2;
       dots.push({ kind: 'circle', cx: p.x, cy: p.y, r, role: ['end-ring'], data });

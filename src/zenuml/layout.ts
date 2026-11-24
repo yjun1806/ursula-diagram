@@ -96,8 +96,8 @@ function retag(base: SequenceLayout, model: ZenumlModel, ruler: Ruler, beside: R
         const x = pill.x + pill.w + CONDITION_GAP;
         const w = ruler.textWidth(text, 'edge') * ruler.sequence.captionScale;
         // A backing in the page colour keeps the lifelines from striking through the condition.
-        backings.push({ kind: 'box', style: 'label', role: ['bg'], x: x - pad, y: pill.y, w: Math.ceil(w + 2 * pad), h: pill.h });
-        added.push({ kind: 'text', x, y: pill.y + pill.h / 2, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
+        backings.push({ kind: 'box', role: ['bg'], x: x - pad, y: pill.y, w: Math.ceil(w + 2 * pad), h: pill.h });
+        added.push({ kind: 'text', x, y: pill.y + pill.h / 2, text, anchor: 'start', role: ['label'] });
       }
       return pill;
     }

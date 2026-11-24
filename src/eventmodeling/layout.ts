@@ -138,7 +138,7 @@ export function layoutEventModel(model: EventModel, ruler: Ruler): EventLayout {
     items.push({ kind: 'text', x: col.x + col.w / 2, y: TICK_Y + shift, text: frame?.label ?? String(col.number), anchor: 'middle', role: ['tick'] });
   }
   placedLanes.forEach((lane, i) => {
-    items.push({ kind: 'box', style: 'frame', x: lane.x, y: lane.y, w: lane.w, h: lane.h, role: i % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'], data: { zone: lane.zone } });
+    items.push({ kind: 'box', x: lane.x, y: lane.y, w: lane.w, h: lane.h, role: i % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'], data: { zone: lane.zone } });
     const spec = lanes[i];
     if (spec === undefined) return;
     labelLines(spec).forEach((t, li) => {
@@ -180,7 +180,7 @@ export function layoutEventModel(model: EventModel, ruler: Ruler): EventLayout {
       }
     }
     edges.push({ from: rel.from, to: rel.to, points });
-    edgeItems.push({ kind: 'line', points, role: ['edge', 'edge--arrow'], arrow: 'filled', data: { from: String(rel.from), to: String(rel.to) } });
+    edgeItems.push({ kind: 'line', points, role: ['edge', 'edge--arrow'], data: { from: String(rel.from), to: String(rel.to) } });
     portItems.push({ kind: 'circle', cx: startPort.x, cy: startPort.y, r: PORT_R, role: ['port'] });
   }
 
@@ -195,7 +195,7 @@ export function layoutEventModel(model: EventModel, ruler: Ruler): EventLayout {
     const start = !incoming.has(p.number) && outgoing.has(p.number);
     const role = ['box', ...(filled ? ['box--in-zone'] : []), ...(start ? ['box--start'] : [])];
     const data = { frame: frame.label, kind: frame.kind };
-    boxItems.push({ kind: 'box', style: 'box', x: p.x, y: p.y, w: p.w, h: p.h, role, data });
+    boxItems.push({ kind: 'box', x: p.x, y: p.y, w: p.w, h: p.h, role, data });
     // The band stays grey on a start box too, so that the start colour fills only the body.
     boxItems.push(headBand(p.x, p.y, p.w, data));
     boxItems.push({ kind: 'text', x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: 'middle', role: ['tag-text'], data });

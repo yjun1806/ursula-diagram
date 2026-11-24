@@ -141,7 +141,7 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler): CynefinLayout {
       const by = y + ITEM_TOP + index * ROW;
       placed.push({ domain, index, text, x, y: by, w: itemW, h: ITEM_H });
       const data = { domain, item: String(index) };
-      boxes.push({ kind: 'box', style: 'box', x, y: by, w: itemW, h: ITEM_H, role: inZone ? ['box', 'box--in-zone'] : ['box'], data });
+      boxes.push({ kind: 'box', x, y: by, w: itemW, h: ITEM_H, role: inZone ? ['box', 'box--in-zone'] : ['box'], data });
       boxes.push({ kind: 'text', x: x + itemW / 2, y: by + ITEM_H / 2, text, role: ['name'], data });
     });
   };
@@ -150,14 +150,14 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler): CynefinLayout {
     const z = zoneAt[domain];
     const px = pillarX(z);
     zones.push({ domain, name: DOMAIN_NAMES[domain], x: z.x, y: z.y, w: zoneW, h: zoneH });
-    quadrants.push({ kind: 'box', style: 'frame', x: z.x, y: z.y, w: zoneW, h: zoneH, role: ['zone', 'zone--plain'], data: { domain } });
+    quadrants.push({ kind: 'box', x: z.x, y: z.y, w: zoneW, h: zoneH, role: ['zone', 'zone--plain'], data: { domain } });
     quadrants.push({ kind: 'text', x: px, y: z.y + NAME_Y, text: DOMAIN_NAMES[domain], anchor: 'start', role: ['zone-name'], data: { domain }, baseline: 'alphabetic' });
     stack(domain, px, z.y, false);
   }
   const confusionX = centreX - confusionW / 2;
   const confusionY = centreY - confusionH / 2;
   zones.push({ domain: 'confusion', name: DOMAIN_NAMES.confusion, x: confusionX, y: confusionY, w: confusionW, h: confusionH });
-  confusionZone.push({ kind: 'box', style: 'frame', x: confusionX, y: confusionY, w: confusionW, h: confusionH, role: ['zone'], data: { domain: 'confusion' } });
+  confusionZone.push({ kind: 'box', x: confusionX, y: confusionY, w: confusionW, h: confusionH, role: ['zone'], data: { domain: 'confusion' } });
   confusionZone.push({ kind: 'text', x: confusionX + PAD, y: confusionY + NAME_Y, text: DOMAIN_NAMES.confusion, anchor: 'start', role: ['zone-name'], data: { domain: 'confusion' }, baseline: 'alphabetic' });
   stack('confusion', confusionX + PAD, confusionY, true);
 
@@ -226,7 +226,7 @@ export function layoutCynefin(model: Cynefin, ruler: Ruler): CynefinLayout {
     arrows.push({ kind: 'line', points, role: ['edge', 'edge--arrow'], data: { from: t.from, to: t.to } });
     if (start !== undefined) ports.push({ kind: 'circle', cx: start.x, cy: start.y, r: PORT_R, role: ['port'] });
     if (chip !== undefined) {
-      chips.push({ kind: 'box', style: 'label', x: chip.x, y: chip.y, w: chip.w, h: chip.h, role: ['chip'], data: { from: t.from, to: t.to } });
+      chips.push({ kind: 'box', x: chip.x, y: chip.y, w: chip.w, h: chip.h, role: ['chip'], data: { from: t.from, to: t.to } });
       chips.push({ kind: 'text', x: chip.x + chip.w / 2, y: chip.y + chip.h / 2, text: chip.text, role: ['label'], data: { from: t.from, to: t.to } });
     }
     out.push({ from: t.from, to: t.to, ...(t.label === undefined ? {} : { label: t.label }), points, ...(chip === undefined ? {} : { chip }), route });

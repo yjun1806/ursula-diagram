@@ -144,7 +144,7 @@ describe('eventmodeling layout', () => {
 
   it('keeps each name inside its box', () => {
     const { scene } = place(examples['04-data-block'] ?? '');
-    const boxes = scene.items.filter((i): i is SceneBox => i.kind === 'box' && (i.data?.['frame'] !== undefined) && i.style === 'box');
+    const boxes = scene.items.filter((i): i is SceneBox => i.kind === 'box' && (i.data?.['frame'] !== undefined) && !i.role?.includes('tag'));
     const names = scene.items.filter((i): i is SceneText => i.kind === 'text' && i.role?.includes('name') === true);
     for (const n of names) {
       const w = pixelRuler().textWidth(n.text, 'title');

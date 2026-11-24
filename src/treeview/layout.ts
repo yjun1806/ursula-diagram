@@ -112,7 +112,7 @@ export function layoutTreeView(tree: TreeView, ruler: Ruler): TreeViewLayout {
     const labelW = ruler.textWidth(item.label, item.folder ? 'title' : 'line');
     let end = x + labelW;
     if (item.highlight) {
-      boxes.push({ kind: 'box', style: 'label', x: left - HIGHLIGHT_PAD, y: cy - HIGHLIGHT_H / 2, w: x - left + labelW + 2 * HIGHLIGHT_PAD, h: HIGHLIGHT_H, role: ['active'], data: { line: String(item.line) } });
+      boxes.push({ kind: 'box', x: left - HIGHLIGHT_PAD, y: cy - HIGHLIGHT_H / 2, w: x - left + labelW + 2 * HIGHLIGHT_PAD, h: HIGHLIGHT_H, role: ['active'], data: { line: String(item.line) } });
       end += HIGHLIGHT_PAD;
     }
     texts.push({ kind: 'text', x, y: cy, text: item.label, anchor: 'start', role: item.folder ? ['name'] : ['body'], data: { line: String(item.line) } });

@@ -1,5 +1,5 @@
 import type { Ruler, TextRole } from '../metrics.ts';
-import type { Diagnostic, SceneArrow, SceneItem, SceneTone } from '../types.ts';
+import type { Diagnostic, SceneItem } from '../types.ts';
 import { kindOf } from './model.ts';
 import type {
   Box,
@@ -53,10 +53,10 @@ interface MessageText {
   w: number;
 }
 
+/** How a message line is drawn: dashed or not, and the head at its end. */
 interface Look {
-  tone: SceneTone;
   dash: boolean;
-  arrow: SceneArrow;
+  arrow: 'none' | 'filled' | 'open' | 'cross';
 }
 
 /** Radius of the ring at the start of a message line as the layout counts it; the drawing sizes the ring itself. */
@@ -67,17 +67,17 @@ const TAG_INSET = 8;
 const LEGEND_KINDS: readonly LegendKind[] = ['call', 'reply', 'async', 'failed'];
 const LEGEND_CAPTIONS: Record<LegendKind, string> = { call: 'Call', reply: 'Reply', async: 'Async', failed: 'Failed' };
 const LEGEND_LOOKS: Record<LegendKind, Look> = {
-  call: { tone: 'soft', dash: false, arrow: 'filled' },
-  reply: { tone: 'muted', dash: true, arrow: 'filled' },
-  async: { tone: 'muted', dash: true, arrow: 'open' },
-  failed: { tone: 'muted', dash: true, arrow: 'cross' },
+  call: { dash: false, arrow: 'filled' },
+  reply: { dash: true, arrow: 'filled' },
+  async: { dash: true, arrow: 'open' },
+  failed: { dash: true, arrow: 'cross' },
 };
 
 function lookOf(m: MessageStmt): Look {
   const kind: MessageKind = kindOf(m);
-  if (kind === 'failed') return { tone: 'muted', dash: m.dashed, arrow: 'cross' };
-  if (kind === 'async') return { tone: 'muted', dash: m.dashed, arrow: 'open' };
-  if (kind === 'plain') return { tone: m.dashed ? 'muted' : 'soft', dash: m.dashed, arrow: 'none' };
+  if (kind === 'failed') return { dash: m.dashed, arrow: 'cross' };
+  if (kind === 'async') return { dash: m.dashed, arrow: 'open' };
+  if (kind === 'plain') return { dash: m.dashed, arrow: 'none' };
   return LEGEND_LOOKS[kind];
 }
 
@@ -437,7 +437,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
     const nameH = p.lines.length * lhT;
     const sym = symbolOf(p.kind);
     const line = (top: number, k: number, text: string): SceneItem => ({
-      kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text, anchor: 'middle', font: 'title', tone: 'fg', role: ['name'],
+      kind: 'text', x: lx, y: top + k * lhT + lhT / 2, text, anchor: 'middle', role: ['name'],
     });
     if (sym !== undefined) {
       // Symbol above, name below on the bottom line.
@@ -467,18 +467,17 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
     }
     // Boxes sit on the bottom line, so that they touch their lifeline.
     const front: Box = { x: lx - half, y: bottomY - boxH, w: hw, h: boxH };
-    const style = p.kind === 'actor' ? 'actor' : 'box';
     if (symbols && p.kind === 'collections') {
       span(front.x, front.x + hw - S.stroke + STACK_STEP);
       // The back box takes a dashed edge, so that it reads as a box behind the front one.
-      boxItems.push({ kind: 'box', style: 'box', x: front.x + STACK_STEP, y: front.y - STACK_STEP, w: hw, h: boxH, role: [...boxRole, 'box--pending'], data });
-      boxItems.push({ kind: 'box', style: 'box', ...front, role: boxRole, data });
+      boxItems.push({ kind: 'box', x: front.x + STACK_STEP, y: front.y - STACK_STEP, w: hw, h: boxH, role: [...boxRole, 'box--pending'], data });
+      boxItems.push({ kind: 'box', ...front, role: boxRole, data });
     } else if (symbols && p.kind === 'queue') {
       span(front.x, front.x + hw - S.stroke);
       later(boxItems, (dx) => ({ kind: 'path', d: queuePath(front.x + dx, front.x + dx + hw, front.y, boxH), role: boxRole, data }));
     } else {
       span(front.x, front.x + hw - S.stroke);
-      boxItems.push({ kind: 'box', style, ...front, role: boxRole, data });
+      boxItems.push({ kind: 'box', ...front, role: boxRole, data });
     }
     p.lines.forEach((l, k) => textItems.push(line(front.y + (boxH - nameH) / 2, k, l)));
     return front;
@@ -516,7 +515,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
       level: bar.level,
       item: {
         kind: 'box',
-        style: 'bar',
         role: ['active'],
         x: lx - hb + bar.level * S.barNest,
         y: bar.y1,
@@ -583,32 +581,32 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
     const w = captionW(text);
     const bx = down(x - S.labelBgPad);
     const by = down(cy - S.condH / 2);
-    backItems.push({ kind: 'box', style: 'label', role: backRole(x + w / 2), x: bx, y: by, w: up(x + w + S.labelBgPad) - bx, h: up(S.condH) });
-    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
+    backItems.push({ kind: 'box', role: backRole(x + w / 2), x: bx, y: by, w: up(x + w + S.labelBgPad) - bx, h: up(S.condH) });
+    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', role: ['label'] });
   };
 
   /** A caption on the border row of a frame (cell drawings): the backing keeps a space on both sides. */
   const inlineCaption = (x: number, cy: number, text: string): void => {
     const w = Math.ceil(captionW(text));
-    boxItems.push({ kind: 'box', style: 'label', role: backRole(x + w / 2), x: x - S.labelBgPad, y: down(cy), w: w + 2 * S.labelBgPad, h: g });
-    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', font: 'caption', tone: 'muted', role: ['label'] });
+    boxItems.push({ kind: 'box', role: backRole(x + w / 2), x: x - S.labelBgPad, y: down(cy), w: w + 2 * S.labelBgPad, h: g });
+    textItems.push({ kind: 'text', x, y: cy, text, anchor: 'start', role: ['label'] });
   };
 
   /** Draws a message label on a backing; `x` is its centre or its left end. */
-  const emitLabel = (info: MessageText, x: number, anchor: 'middle' | 'start', top: number, tone: SceneTone, idx: number): Box => {
+  const emitLabel = (info: MessageText, x: number, anchor: 'middle' | 'start', top: number, idx: number): Box => {
     const left = anchor === 'middle' ? x - info.w / 2 : x;
     const bx = down(left - S.labelBgPad);
     const box: Box = { x: bx, y: top, w: up(left + info.w + S.labelBgPad) - bx, h: info.lines.length * lhE };
-    backItems.push({ kind: 'box', style: 'label', role: backRole(box.x + box.w / 2), ...box });
+    backItems.push({ kind: 'box', role: backRole(box.x + box.w / 2), ...box });
     const data = { message: String(idx) };
     info.lines.forEach((line, k) => {
       const cy = top + k * lhE + lhE / 2;
       if (k === 0 && info.numText !== '') {
         const sx = anchor === 'middle' ? x - (info.numExtra + R.textWidth(line, 'edge')) / 2 : x;
-        textItems.push({ kind: 'text', x: sx, y: cy, text: info.numText, anchor: 'start', font: 'num', tone: 'fg', role: ['label'], data });
-        if (line !== '') textItems.push({ kind: 'text', x: sx + info.numExtra, y: cy, text: line, anchor: 'start', font: 'label', tone, role: ['body'], data });
+        textItems.push({ kind: 'text', x: sx, y: cy, text: info.numText, anchor: 'start', role: ['label'], data });
+        if (line !== '') textItems.push({ kind: 'text', x: sx + info.numExtra, y: cy, text: line, anchor: 'start', role: ['body'], data });
       } else {
-        textItems.push({ kind: 'text', x, y: cy, text: line, anchor, font: 'label', tone, role: ['body'], data });
+        textItems.push({ kind: 'text', x, y: cy, text: line, anchor, role: ['body'], data });
       }
     });
     return box;
@@ -678,11 +676,8 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
               { x: xv, y: lineY + S.loopH },
               { x: e.right, y: lineY + S.loopH },
             ],
-            tone: look.tone,
-            dash: look.dash,
             // The corner radius comes from the renderer, except in the cell drawing, which has none.
             ...(S.loopR === 0 ? { radius: 0 } : {}),
-            arrow: s.reverse ? 'none' : look.arrow,
             role: lineRoles(look),
             data,
           });
@@ -693,7 +688,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
           span(e.left, xv);
           let right = Math.max(lx1 + half, xv);
           if (nl > 0) {
-            label = emitLabel(info, xv + S.stroke + S.loopGap, 'start', labelTop, look.tone, messageIndex);
+            label = emitLabel(info, xv + S.stroke + S.loopGap, 'start', labelTop, messageIndex);
             span(label.x, label.x + label.w - S.stroke);
             right = Math.max(right, label.x + label.w - S.stroke);
           }
@@ -719,9 +714,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
               { x: x1, y: lineY },
               { x: x2, y: lineY },
             ],
-            tone: look.tone,
-            dash: look.dash,
-            arrow: s.reverse ? 'none' : look.arrow,
             role: lineRoles(look, s.both),
             data,
           });
@@ -756,7 +748,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
           if (nl > 0) {
             const first = (lx1 + (xs[a + dir] ?? lx2)) / 2;
             const cx = createdUpper > 0 && a + dir === b ? (x1 + x2) / 2 : info.w + S.labelPad <= pitch ? first : (lx1 + lx2) / 2;
-            label = emitLabel(info, cx, 'middle', labelTop, look.tone, messageIndex);
+            label = emitLabel(info, cx, 'middle', labelTop, messageIndex);
             span(label.x, label.x + label.w - S.stroke);
           }
           after = Math.max(lineY + S.stroke, createdBottom);
@@ -806,7 +798,7 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
         }
         const top = cursor + gapFor('note');
         const box: Box = { x: bx, y: top, w: bw, h: sz.h };
-        boxItems.push({ kind: 'box', style: 'note', role: onZone(box.x + box.w / 2) ? ['note', 'note--in-zone'] : ['note'], ...box, data: { note: String(notes.length) } });
+        boxItems.push({ kind: 'box', role: onZone(box.x + box.w / 2) ? ['note', 'note--in-zone'] : ['note'], ...box, data: { note: String(notes.length) } });
         span(box.x, box.x + box.w - S.stroke);
         frameSpan(box.x, box.x + box.w - S.stroke);
         const nl = Math.max(1, lines.length);
@@ -819,8 +811,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
             y: textTop + k * lhL + lhL / 2,
             text: line,
             anchor: centred ? 'middle' : 'start',
-            font: 'body',
-            tone: 'fg',
             role: ['sub'],
           }),
         );
@@ -939,26 +929,22 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
         frames.push(box);
         frameItems.unshift({
           kind: 'box',
-          style: 'frame',
           role: ['frame'],
           x: box.x,
           y: box.y,
           w: box.w,
           h: box.h,
-          tab: f.tab,
           data: { block: f.block, frame: String(f.index) },
         });
         // The tag is as high as the grid allows: 20 on the pixel grid, where the layout reserves 18.
         const tagH = up(f.tab.h);
-        boxItems.push({ kind: 'box', style: 'label', role: ['tag'], x: box.x + TAG_INSET, y: box.y + TAG_INSET, w: f.tab.w, h: tagH });
+        boxItems.push({ kind: 'box', role: ['tag'], x: box.x + TAG_INSET, y: box.y + TAG_INSET, w: f.tab.w, h: tagH });
         textItems.push({
           kind: 'text',
           x: box.x + TAG_INSET + f.tab.w / 2,
           y: box.y + TAG_INSET + tagH / 2,
           text: f.tab.text,
           anchor: 'middle',
-          font: 'caption',
-          tone: 'muted',
           role: ['tag-text'],
         });
         if (f.condition !== '') {
@@ -973,7 +959,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
               { x: right - S.dividerInset, y: d.y },
             ],
             role: ['frame-split'],
-            dash: true,
           });
           if (d.text === '') continue;
           if (inline) inlineCaption(box.x + S.condInset, d.y + S.stroke / 2, d.text);
@@ -1004,7 +989,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
         { x: p.x, y: lifeEnd[i] ?? bottom - S.stroke },
       ],
       role: ['lifeline'],
-      dash: true,
       data: { participant: p.id },
     });
   });
@@ -1020,17 +1004,17 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
       h: z.bottom - z.top,
     };
     return [
-      { kind: 'box', style: 'frame', role: z.depth % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'], ...rect },
-      { kind: 'box', style: 'frame', role: ['zone', 'zone--dashed'], ...rect },
+      { kind: 'box', role: z.depth % 2 === 0 ? ['zone'] : ['zone', 'zone--plain'], ...rect },
+      { kind: 'box', role: ['zone', 'zone--dashed'], ...rect },
     ];
   });
   // `box` groups: a tinted band from the top margin to below the lifelines, its label in the band above the headers.
   const groupFoot = groups.length > 0 ? GROUP_FOOT : 0;
   const groupItems: SceneItem[] = groupSpans.flatMap((gs): SceneItem[] => [
-    { kind: 'box', style: 'frame', role: ['zone'], x: gs.lo, y: margin, w: gs.hi - gs.lo + S.stroke, h: bottom + groupFoot - margin },
+    { kind: 'box', role: ['zone'], x: gs.lo, y: margin, w: gs.hi - gs.lo + S.stroke, h: bottom + groupFoot - margin },
     ...(gs.label === ''
       ? []
-      : [{ kind: 'text', x: gs.lo + GROUP_PAD, y: margin + GROUP_PAD + lhT / 2, text: gs.label, anchor: 'start', font: 'title', tone: 'fg', role: ['zone-name'] } satisfies SceneItem]),
+      : [{ kind: 'text', x: gs.lo + GROUP_PAD, y: margin + GROUP_PAD + lhT / 2, text: gs.label, anchor: 'start', role: ['zone-name'] } satisfies SceneItem]),
   ]);
   const barItems = [...barDrafts].sort((a, b) => a.level - b.level).map((d) => d.item);
   const items: SceneItem[] = [...groupItems, ...zoneItems, ...lifeItems, ...barItems, ...backItems, ...frameItems, ...lineItems, ...boxItems, ...textItems];
@@ -1079,9 +1063,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
           { x, y: rowY },
           { x: look.arrow === 'cross' ? x2 - S.failGap : x2, y: rowY },
         ],
-        tone: look.tone,
-        dash: look.dash,
-        arrow: shape?.reverse ? 'none' : look.arrow,
         role: lineRoles(look),
       });
       if (look.arrow === 'cross') sceneItems.push(...crossMark(x2 - S.failGap, rowY));
@@ -1092,8 +1073,6 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
         y: rowY,
         text: e.caption,
         anchor: 'start',
-        font: 'caption',
-        tone: 'muted',
         role: ['legend'],
       });
       x = up(x + (widths[k] ?? 0) + R.legendGap);

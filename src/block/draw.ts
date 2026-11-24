@@ -61,10 +61,10 @@ export function shapeItems(b: PlacedBlock, role: string[]): SceneItem[] {
   const box: Box = { x, y, w, h, shape: b.shape === 'group' || b.shape === 'arrow' || b.shape === 'subroutine' || b.shape === 'cylinder' ? 'rect' : b.shape };
   switch (b.shape) {
     case 'stadium':
-      return [{ kind: 'box', style: 'box', x, y, w, h, radius: h / 2, role }];
+      return [{ kind: 'box', x, y, w, h, radius: h / 2, role }];
     case 'subroutine':
       return [
-        { kind: 'box', style: 'box', x, y, w, h, role },
+        { kind: 'box', x, y, w, h, role },
         ...[x + BAR_INSET, x + w - BAR_INSET].map((bx): SceneItem => ({ kind: 'line', points: [{ x: bx, y }, { x: bx, y: y + h }], role: ['rule'] })),
       ];
     case 'cylinder': {
@@ -97,6 +97,6 @@ export function shapeItems(b: PlacedBlock, role: string[]): SceneItem[] {
     case 'arrow':
       return [polygon(arrowOutline(b, b.heads ?? ['right']), 4)];
     default:
-      return [{ kind: 'box', style: 'box', x, y, w, h, role }];
+      return [{ kind: 'box', x, y, w, h, role }];
   }
 }

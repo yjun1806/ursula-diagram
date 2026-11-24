@@ -19,9 +19,9 @@ interface Rect {
   what: string;
 }
 
-/** Box of a text item, measured with the ruler role its font is drawn in. */
+/** Box of a text item, measured with the ruler role its text is drawn in: names as titles, note lines as lines. */
 function textRect(t: Extract<SceneItem, { kind: 'text' }>): Rect {
-  const role = t.font === 'title' ? 'title' : t.font === 'body' ? 'line' : 'edge';
+  const role = t.role?.some((r) => r === 'name' || r === 'zone-name') ? 'title' : t.role?.includes('sub') ? 'line' : 'edge';
   const w = ruler.textWidth(t.text, role);
   const h = ruler.lineHeight(role) - 4;
   const x1 = t.anchor === 'middle' ? t.x - w / 2 : t.anchor === 'end' ? t.x - w : t.x;
@@ -106,7 +106,7 @@ describe('Mermaid documentation examples: what each one shows', () => {
 
   it('17: each box group is a labelled band around its own participants, without its colour word', () => {
     const l = layoutOf('17-grouping-box');
-    const bands = l.scene.items.filter((it) => it.kind === 'box' && it.style === 'frame' && it.role?.includes('zone'));
+    const bands = l.scene.items.filter((it) => it.kind === 'box' && it.role?.includes('zone'));
     const labels = l.scene.items.flatMap((it) => (it.kind === 'text' && it.role?.includes('zone-name') ? [it.text] : []));
     expect(labels).toEqual(['Alice & John', 'Another Group']);
     expect(bands).toHaveLength(2);
@@ -135,7 +135,7 @@ describe('Mermaid documentation examples: what each one shows', () => {
   });
 
   it('19 and 20: an `activate` line after a message starts the bar at that message, like the `+` shortcut', () => {
-    const bars = (name: string) => layoutOf(name).scene.items.filter((it) => it.kind === 'box' && it.style === 'bar');
+    const bars = (name: string) => layoutOf(name).scene.items.filter((it) => it.kind === 'box' && it.role?.includes('active'));
     expect(bars('19-activations')).toEqual(bars('20-activations-2'));
     const l = layoutOf('19-activations');
     const bar = bars('19-activations')[0];
@@ -144,7 +144,7 @@ describe('Mermaid documentation examples: what each one shows', () => {
 
   it('33: a nested highlight steps in from its parent and is painted apart from it', () => {
     const zones = layoutOf('33-background-highlighting').scene.items.filter(
-      (it) => it.kind === 'box' && it.style === 'frame' && it.role?.includes('zone') && !it.role.includes('zone--dashed'),
+      (it) => it.kind === 'box' && it.role?.includes('zone') && !it.role.includes('zone--dashed'),
     );
     const [outer, inner] = zones;
     if (outer?.kind !== 'box' || inner?.kind !== 'box') throw new Error('zones');

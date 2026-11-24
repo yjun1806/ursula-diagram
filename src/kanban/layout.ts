@@ -95,15 +95,15 @@ export function layoutKanban(model: Kanban, ruler: Ruler): KanbanLayout {
   model.columns.forEach((column, ci) => {
     const x = stacks[ci]?.x ?? 0;
     columns.push({ title: column.title, x, y: MARGIN, w: zoneW, h: zoneH });
-    items.push({ kind: 'box', style: 'frame', x, y: MARGIN, w: zoneW, h: zoneH, role: ['zone'], data: { column: String(ci) } });
+    items.push({ kind: 'box', x, y: MARGIN, w: zoneW, h: zoneH, role: ['zone'], data: { column: String(ci) } });
     items.push({ kind: 'text', x: x + ZONE_PAD, y: MARGIN + 24, text: column.title, role: ['zone-name'] });
   });
   for (const card of cards) {
-    cardItems.push({ kind: 'box', style: 'box', x: card.x, y: card.y, w: card.w, h: card.h, role: ['tile', 'tile--in-zone'], data: { column: String(card.column), card: String(card.index) } });
+    cardItems.push({ kind: 'box', x: card.x, y: card.y, w: card.w, h: card.h, role: ['tile', 'tile--in-zone'], data: { column: String(card.column), card: String(card.index) } });
     for (const line of card.lines) cardItems.push({ kind: 'text', x: line.x, y: line.y, text: line.text, role: ['name', 'start'] });
     for (const tag of card.tags) {
       const data = { tag: tag.key, ...(tag.href === undefined ? {} : { href: tag.href }) };
-      cardItems.push({ kind: 'box', style: 'label', x: tag.x, y: tag.y, w: tag.w, h: tag.h, role: ['tag'], data });
+      cardItems.push({ kind: 'box', x: tag.x, y: tag.y, w: tag.w, h: tag.h, role: ['tag'], data });
       cardItems.push({ kind: 'text', x: tag.x + tag.w / 2, y: tag.y + 10, text: tag.text, role: ['tag-text'], data });
     }
   }

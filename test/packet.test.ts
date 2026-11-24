@@ -167,7 +167,7 @@ describe('packet layout', () => {
   it('draws every name and no text overlaps another or leaves the drawing', () => {
     const ruler = pixelRuler();
     const rect = (t: SceneText) => {
-      const w = ruler.textWidth(t.text, 'line') * (t.font === 'title' || t.role?.includes('title') ? 15 / 12 : 1);
+      const w = ruler.textWidth(t.text, 'line') * (t.role?.includes('title') ? 15 / 12 : 1);
       const x0 = t.anchor === 'middle' ? t.x - w / 2 : t.anchor === 'end' ? t.x - w : t.x;
       return { x0, x1: x0 + w, y0: t.y - 6, y1: t.y + 6 };
     };

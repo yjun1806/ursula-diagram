@@ -109,7 +109,7 @@ export function layoutPacket(packet: Packet, ruler: Ruler): PacketLayout {
     const h = (c.row1 - c.row0 + 1) * ROW_H;
     const range = c.left === c.right ? `${c.left}` : `${Math.min(c.left, c.right)}-${Math.max(c.left, c.right)}`;
     const data = { field: String(c.field), bits: range };
-    items.push({ kind: 'box', style: 'box', x, y, w, h, role: ['box', 'tile'], data });
+    items.push({ kind: 'box', x, y, w, h, role: ['box', 'tile'], data });
     if (bits) {
       if (c.left === c.right) {
         items.push({ kind: 'text', x: x + w / 2, y: y - NUMBER_RISE, text: String(c.left), anchor: 'middle', role: ['mono'], data, baseline: 'alphabetic' });

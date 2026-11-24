@@ -261,7 +261,7 @@ function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[]
   const depthOf = new Map(blocks.filter((g) => g.kind === 'group').map((g) => [g.id, g.depth] as const));
   if (model.title !== undefined) items.push({ kind: 'text', x: u.margin, y: u.margin + 9, text: model.title, anchor: 'start', role: ['title'] });
   for (const b of blocks.filter((g) => g.kind === 'group')) {
-    items.push({ kind: 'box', style: 'frame', x: b.x, y: b.y, w: b.w, h: b.h, role: b.depth % 2 === 1 ? ['zone'] : ['zone', 'zone--plain'], data: { block: b.id } });
+    items.push({ kind: 'box', x: b.x, y: b.y, w: b.w, h: b.h, role: b.depth % 2 === 1 ? ['zone'] : ['zone', 'zone--plain'], data: { block: b.id } });
   }
   for (const link of links) {
     if (link.invisible || link.points.length < 2) continue;
@@ -284,7 +284,7 @@ function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[]
   for (const link of links) {
     if (link.chip === undefined) continue;
     const c = link.chip;
-    items.push({ kind: 'box', style: 'label', x: c.x, y: c.y, w: c.w, h: c.h, role: ['chip'], data: { from: link.from, to: link.to } });
+    items.push({ kind: 'box', x: c.x, y: c.y, w: c.w, h: c.h, role: ['chip'], data: { from: link.from, to: link.to } });
     items.push({ kind: 'text', x: c.x + c.w / 2, y: c.y + c.h / 2, text: c.text, role: ['label'], data: { from: link.from, to: link.to } });
   }
   for (const link of links) {

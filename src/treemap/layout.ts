@@ -232,14 +232,13 @@ export function layoutTreemap(map: Treemap, ruler: Ruler): TreemapLayout {
 
   const width = CONTENT_W + 2 * margin;
   const height = ceilTo(y + regionH + margin);
-  const items: SceneItem[] = [{ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] }];
+  const items: SceneItem[] = [{ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] }];
   if (titleShown !== undefined) items.push({ kind: 'text', x: margin, y: titleY, text: titleShown, anchor: 'start', role: ['title'] });
   if (rootLabel !== undefined) items.push({ kind: 'text', x: margin, y: rootY, text: rootLabel, anchor: 'start', role: ['zone-name'], baseline: 'alphabetic' });
   for (const g of groups) items.push({ kind: 'text', x: g.x, y: g.y, text: g.shown, anchor: 'start', role: ['zone-name'], data: { label: g.label }, baseline: 'alphabetic' });
   for (const t of tiles) {
     items.push({
       kind: 'box',
-      style: 'frame',
       x: t.x,
       y: t.y,
       w: t.w,

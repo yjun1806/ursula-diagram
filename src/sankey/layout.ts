@@ -375,7 +375,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
     return { source: from.name, target: to.name, value: l.value, series, thickness: t, fromY, toY, d };
   });
 
-  const items: SceneItem[] = [{ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height_ - 32, role: ['panel'] }];
+  const items: SceneItem[] = [{ kind: 'box', x: 16, y: 16, w: width - 32, h: height_ - 32, role: ['panel'] }];
   if (map.title !== undefined) {
     const t = shrinkToFit(map.title, width - 2 * MARGIN, (s) => (nameW(s) * TITLE_SIZE) / 13);
     if (t !== undefined) items.push({ kind: 'text', x: MARGIN, y: MARGIN + TITLE_H / 2, text: t, anchor: 'start', role: ['title'] });
@@ -384,7 +384,7 @@ export function layoutSankey(map: Sankey, ruler: Ruler): SankeyLayout {
     items.push({ kind: 'path', d: b.d, role: [`series-${b.series}--tint`], data: { source: b.source, target: b.target, value: valueText(b.value) } });
   }
   for (const n of placed) {
-    items.push({ kind: 'box', style: 'bar', x: n.x, y: round2(n.y), w: n.w, h: round2(n.h), radius: 0, role: [`series-${n.series}`], data: { name: n.name, value: n.valueText } });
+    items.push({ kind: 'box', x: n.x, y: round2(n.y), w: n.w, h: round2(n.h), radius: 0, role: [`series-${n.series}`], data: { name: n.name, value: n.valueText } });
   }
   for (const n of placed) {
     const anchor = n.label.nameAnchor;

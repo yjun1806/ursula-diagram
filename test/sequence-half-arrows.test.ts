@@ -100,7 +100,7 @@ describe('half arrows', () => {
     const lines = items.filter((it): it is Line => it.kind === 'line');
     const rule = lines.find((l) => Array.isArray(l.role) && l.role.includes('rule'));
     const below = lines.filter((l) => l.data === undefined && (l.points[0]?.y ?? 0) > (rule?.points[0]?.y ?? Infinity));
-    const sample = below.find((l) => l.dash === true);
+    const sample = below.find((l) => l.role?.includes('edge--pending'));
     const tip = sample?.points[1];
     if (!tip) throw new Error('no async sample');
     const heads = below.filter((l) => l !== sample && l.points.some((p) => p.x === tip.x && p.y === tip.y));

@@ -1,7 +1,7 @@
 import { clip } from '../text/fit.ts';
 import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
-import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, Scene, SceneArrow, SceneBox, SceneLine, SceneText, TextSpan, TextTone } from '../types.ts';
+import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
 const E = 2;
@@ -424,116 +424,6 @@ export function renderTextLayout(layout: Layout, maxWidth?: number): string[] {
   for (const n of layout.nodes) drawNode(c, n);
   drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
-  const lines = c.lines();
-  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-  return lines;
-}
-
-const VERTICAL = new Set(['│', '┆', '┃']);
-const ARROWS: Record<SceneArrow, readonly [string, string, string, string]> = {
-  none: ['', '', '', ''],
-  filled: ['▶', '◀', '▼', '▲'],
-  open: ['▷', '◁', '▽', '△'],
-  cross: ['×', '×', '×', '×'],
-};
-
-function cellOfPoint(v: number): number {
-  return Math.floor(v + 1e-9);
-}
-
-function sceneBox(c: Canvas, b: SceneBox): void {
-  const x0 = Math.round(b.x);
-  const y0 = Math.round(b.y);
-  const w = Math.round(b.w);
-  const h = Math.round(b.h);
-  if (b.style === 'bar' || b.style === 'label') {
-    const ch = b.style === 'bar' ? '┃' : ' ';
-    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) c.put(x, y, ch);
-    return;
-  }
-  for (let y = y0; y < y0 + h; y++) {
-    for (let x = x0; x < x0 + w; x++) {
-      const top = y === y0;
-      const bottom = y === y0 + h - 1;
-      const left = x === x0;
-      const right = x === x0 + w - 1;
-      let ch: string | undefined = b.style === 'frame' ? undefined : ' ';
-      if (top && left) ch = '┌';
-      else if (top && right) ch = '┐';
-      else if (bottom && left) ch = '└';
-      else if (bottom && right) ch = '┘';
-      else if (top || bottom) ch = '─';
-      else if (left || right) ch = '│';
-      if (ch !== undefined) c.put(x, y, ch);
-    }
-  }
-  if (b.tab) c.text(x0 + 1, y0, ` ${b.tab.text} `);
-}
-
-function sceneLine(c: Canvas, l: SceneLine): void {
-  if (l.role === 'rule') return;
-  const pts = l.points.map((p) => [cellOfPoint(p.x), cellOfPoint(p.y)] as const);
-  const dir = (i: number): [number, number] => {
-    const a = pts[i];
-    const b = pts[i + 1];
-    return a && b ? [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])] : [0, 0];
-  };
-  const bitOf = (d: [number, number]): number => (d[0] > 0 ? E : d[0] < 0 ? W : d[1] > 0 ? S : N);
-  const opposite = (d: [number, number]): [number, number] => [-d[0], -d[1]];
-  const startCell = pts[0] ? c.get(pts[0][0], pts[0][1]) : ' ';
-  const endCell = pts[pts.length - 1] ? c.get(pts[pts.length - 1]?.[0] ?? 0, pts[pts.length - 1]?.[1] ?? 0) : ' ';
-  for (let i = 0; i + 1 < pts.length; i++) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    if (!a || !b) continue;
-    const d = dir(i);
-    if (d[0] === 0 && d[1] === 0) continue;
-    const ch = d[0] !== 0 ? (l.dash ? '┄' : '─') : l.dash ? '┆' : '│';
-    let x = a[0];
-    let y = a[1];
-    while (x !== b[0] || y !== b[1]) {
-      if (!(i > 0 && x === a[0] && y === a[1])) c.put(x, y, ch);
-      x += d[0];
-      y += d[1];
-    }
-    c.put(b[0], b[1], ch);
-  }
-  for (let i = 1; i + 1 < pts.length; i++) {
-    const p = pts[i];
-    if (!p) continue;
-    const din = dir(i - 1);
-    const dout = dir(i);
-    if (din[0] === dout[0] && din[1] === dout[1]) continue;
-    c.put(p[0], p[1], LIGHT[bitOf(opposite(din)) | bitOf(dout)] ?? '┼');
-  }
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  const d0 = dir(0);
-  if (first && d0[1] === 0 && d0[0] !== 0 && VERTICAL.has(startCell)) c.put(first[0], first[1], d0[0] > 0 ? '├' : '┤');
-  if (last && pts.length >= 2) {
-    const dl = dir(pts.length - 2);
-    if (dl[1] === 0 && dl[0] !== 0 && VERTICAL.has(endCell)) c.put(last[0], last[1], dl[0] > 0 ? '┤' : '├');
-    const glyphs = ARROWS[l.arrow ?? 'none'];
-    const g = dl[0] > 0 ? glyphs[0] : dl[0] < 0 ? glyphs[1] : dl[1] > 0 ? glyphs[2] : glyphs[3];
-    if (g !== '') c.put(last[0], last[1], g);
-  }
-}
-
-function sceneText(c: Canvas, t: SceneText): void {
-  const tw = cellWidth(t.text);
-  const x = Math.round(t.x) - (t.anchor === 'middle' ? Math.floor(tw / 2) : t.anchor === 'end' ? tw : 0);
-  const y = cellOfPoint(t.y);
-  c.text(x, y, t.text);
-}
-
-/** Draws a scene made with the cell ruler; returns one string per terminal row. */
-export function renderTextScene(scene: Scene): string[] {
-  const c = new Canvas(Math.ceil(scene.width), Math.ceil(scene.height));
-  for (const item of scene.items) {
-    if (item.kind === 'box') sceneBox(c, item);
-    else if (item.kind === 'line') sceneLine(c, item);
-    else if (item.kind === 'text') sceneText(c, item);
-  }
   const lines = c.lines();
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;

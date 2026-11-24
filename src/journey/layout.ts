@@ -166,7 +166,7 @@ export function layoutJourney(journey: Journey, ruler: Ruler, opts: JourneyLayou
     const w = zoneW[si] ?? 0;
     const zone: PlacedSection = { ...(sec.name === undefined ? {} : { name: sec.name }), x: cursor, y: zoneTop, w, h: zoneH };
     sections.push(zone);
-    items.push({ kind: 'box', style: 'frame', x: zone.x, y: zone.y, w, h: zoneH, role: ['zone'] });
+    items.push({ kind: 'box', x: zone.x, y: zone.y, w, h: zoneH, role: ['zone'] });
     if (sec.name !== undefined) items.push({ kind: 'text', x: zone.x + 16, y: zoneTop + 24, text: sec.name, anchor: 'start', role: ['zone-name'] });
     const group = sec.tasks.length * boxW + Math.max(0, sec.tasks.length - 1) * BOX_GAP;
     const start = cursor + (w - group) / 2;
@@ -197,10 +197,10 @@ export function layoutJourney(journey: Journey, ruler: Ruler, opts: JourneyLayou
   }
 
   for (const t of placed) {
-    items.push({ kind: 'box', style: 'box', x: t.x, y: t.y, w: t.w, h: t.h, role: ['box', 'box--in-zone'] });
+    items.push({ kind: 'box', x: t.x, y: t.y, w: t.w, h: t.h, role: ['box', 'box--in-zone'] });
     t.name.forEach((text, i) => items.push({ kind: 'text', x: t.x + t.w / 2, y: t.y + 26 + LINE * i, text, anchor: 'middle', role: ['name'] }));
     for (const tag of t.tags) {
-      items.push({ kind: 'box', style: 'label', x: tag.x, y: tag.y, w: tag.w, h: TAG_H, role: ['tag'] });
+      items.push({ kind: 'box', x: tag.x, y: tag.y, w: tag.w, h: TAG_H, role: ['tag'] });
       items.push({ kind: 'text', x: tag.x + tag.w / 2, y: tag.y + TAG_H / 2, text: tag.text, anchor: 'middle', role: ['tag-text'] });
     }
   }

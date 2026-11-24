@@ -254,7 +254,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
     role,
   });
 
-  items.push({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
+  items.push({ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
   if (model.title !== undefined) items.push({ kind: 'text', x: LEFT, y: 52, text: model.title, role: ['title'] });
 
   // Excluded days, as columns behind the grid
@@ -265,7 +265,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
       if (runStart === undefined) return;
       const a = xOf(Math.max(runStart * DAY, t0));
       const b = xOf(Math.min(endDay * DAY, t1));
-      if (b > a) items.push({ kind: 'box', style: 'frame', x: a, y: gridTop, w: b - a, h: gridBottom - gridTop, radius: 0, role: ['zone'], data: { excluded: 'true' } });
+      if (b > a) items.push({ kind: 'box', x: a, y: gridTop, w: b - a, h: gridBottom - gridTop, radius: 0, role: ['zone'], data: { excluded: 'true' } });
       runStart = undefined;
     };
     for (let d = floorDiv(t0, DAY); d <= floorDiv(t1, DAY); d++) {
@@ -352,7 +352,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
       items.push({ kind: 'path', d, role: [series], data });
       if (t.crit) items.push({ kind: 'path', d: diamondOutline(bar.cx, bar.cy), role: ['edge', 'edge--accent'], data });
     } else {
-      items.push({ kind: 'box', style: 'frame', x: bar.x, y: bar.y, w: bar.w, h: bar.h, role: ['band', t.active ? series : `${series}--tint`], data });
+      items.push({ kind: 'box', x: bar.x, y: bar.y, w: bar.w, h: bar.h, role: ['band', t.active ? series : `${series}--tint`], data });
       if (t.crit) items.push({ kind: 'path', d: roundedOutline(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2, Math.min(5, (bar.w - 2) / 2)), role: ['edge', 'edge--accent'], data });
     }
     const label = labels.get(bar.task);
@@ -361,7 +361,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
     else if (rows[bar.row]?.[0] !== bar.task) items.push({ kind: 'text', x: bar.x + INNER_PAD, y: bar.cy, text: t.label, role: ['body'], data });
     items.push({ kind: 'text', x: label.dur.x, y: bar.cy, text: label.dur.text, role: ['tick', 'start'] });
     for (const chip of label.chips) {
-      items.push({ kind: 'box', style: 'label', x: chip.x, y: bar.cy - 10, w: chip.w, h: 20, role: ['tag'] });
+      items.push({ kind: 'box', x: chip.x, y: bar.cy - 10, w: chip.w, h: 20, role: ['tag'] });
       items.push({ kind: 'text', x: chip.x + chip.w / 2, y: bar.cy, text: chip.text, role: ['tag-text'] });
     }
   }

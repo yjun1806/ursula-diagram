@@ -146,12 +146,12 @@ const pt = (x: number, y: number): Point => ({ x, y });
 
 function token(out: Out, x: number, ay: number, w: number, text: string, kind: 'terminal' | 'nonterminal' | 'special'): void {
   const role = kind === 'terminal' ? ['token', 'token--terminal'] : kind === 'special' ? ['token', 'box--pending'] : ['token'];
-  out.marks.push({ kind: 'box', style: 'box', x, y: ay - TOKEN_H / 2, w, h: TOKEN_H, role });
+  out.marks.push({ kind: 'box', x, y: ay - TOKEN_H / 2, w, h: TOKEN_H, role });
   out.marks.push({ kind: 'text', x: x + w / 2, y: ay, text, anchor: 'middle', role: [kind === 'nonterminal' ? 'body' : 'mono'] });
 }
 
 function chip(out: Out, x: number, cy: number, w: number, text: string): void {
-  out.marks.push({ kind: 'box', style: 'label', x, y: cy - CHIP_H / 2, w, h: CHIP_H, radius: CHIP_H / 2, role: ['tag'] });
+  out.marks.push({ kind: 'box', x, y: cy - CHIP_H / 2, w, h: CHIP_H, radius: CHIP_H / 2, role: ['tag'] });
   out.marks.push({ kind: 'text', x: x + w / 2, y: cy, text, anchor: 'middle', role: ['tag-text'] });
 }
 

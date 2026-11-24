@@ -443,7 +443,7 @@ export function layoutVenn(venn: Venn, ruler: Ruler): VennLayout {
   const height = ceilTo(oy + maxY + MARGIN);
 
   const items: SceneItem[] = [
-    { kind: 'box', style: 'frame', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },
+    { kind: 'box', x: PANEL_INSET, y: PANEL_INSET, w: width - 2 * PANEL_INSET, h: height - 2 * PANEL_INSET, role: ['panel'] },
   ];
   if (venn.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: MARGIN + 9, text: venn.title, anchor: 'start', role: ['title'] });
 

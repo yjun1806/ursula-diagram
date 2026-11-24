@@ -9,9 +9,9 @@ const scene: Scene = {
   height: 200,
   title: 'Sample',
   items: [
-    { kind: 'box', style: 'box', x: 10, y: 10, w: 100, h: 48, role: ['box'] },
-    { kind: 'box', style: 'box', x: 130, y: 10, w: 100, h: 48, role: ['box', 'box--start'] },
-    { kind: 'box', style: 'box', x: 250, y: 10, w: 100, h: 48, role: ['tile'] },
+    { kind: 'box', x: 10, y: 10, w: 100, h: 48, role: ['box'] },
+    { kind: 'box', x: 130, y: 10, w: 100, h: 48, role: ['box', 'box--start'] },
+    { kind: 'box', x: 250, y: 10, w: 100, h: 48, role: ['tile'] },
     { kind: 'path', d: 'M10 100L60 100L60 150Z', role: ['series-2', 'tint'] },
     { kind: 'circle', cx: 200, cy: 130, r: 12, role: ['series-1', 'dot'] },
     {
@@ -88,7 +88,7 @@ describe('scene drawing', () => {
   });
 
   it('lets a box radius override the role', () => {
-    const svg = renderThemedScene({ ...scene, items: [{ kind: 'box', style: 'box', x: 0, y: 0, w: 10, h: 10, role: ['box'], radius: 3 }] });
+    const svg = renderThemedScene({ ...scene, items: [{ kind: 'box', x: 0, y: 0, w: 10, h: 10, role: ['box'], radius: 3 }] });
     expect(svg).toContain('rx="3"');
   });
 

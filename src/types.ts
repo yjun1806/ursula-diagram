@@ -400,19 +400,8 @@ export class UrsulaError extends Error {
   }
 }
 
-/** Arrowhead drawn at the last point of a scene line. */
-export type SceneArrow = 'none' | 'filled' | 'open' | 'cross';
-
-/** Colour weight: full foreground, foreground at about three quarters, or the muted colour. */
-export type SceneTone = 'fg' | 'soft' | 'muted';
-
 export interface SceneBox {
   kind: 'box';
-  /**
-   * `box`: header with a strong border; `actor`: the same with a tinted fill; `note`: surface with a quiet border;
-   * `bar`: narrow activation bar; `frame`: tinted body with a quiet border; `label`: plain backing behind a text.
-   */
-  style: 'box' | 'actor' | 'note' | 'bar' | 'frame' | 'label';
   x: number;
   y: number;
   w: number;
@@ -435,8 +424,6 @@ export interface SceneText {
   anchor?: 'start' | 'middle' | 'end';
   /** Set for a text placed by its baseline, such as a heading or a number standing on a mark. */
   baseline?: 'alphabetic';
-  font?: 'title' | 'body' | 'label' | 'num' | 'caption';
-  tone?: SceneTone;
   /** Roles of the themed renderer, each naming a class `ursula-<role>`. */
   role?: string[];
   /**
@@ -463,16 +450,10 @@ export interface SceneTextSpan {
 export interface SceneLine {
   kind: 'line';
   points: Point[];
-  /**
-   * A name (`message` by default is drawn in the tone; `life` and `divider` are faint dashed guides; `rule` is a thin
-   * separator) for the plain renderer, or a list of roles for the themed renderer.
-   */
-  role?: 'message' | 'life' | 'divider' | 'rule' | string[];
-  tone?: SceneTone;
-  dash?: boolean;
+  /** Roles of the themed renderer, each naming a class `ursula-<role>`; a line without any is drawn as `edge`. */
+  role?: string[];
   /** Corner radius of the bends. */
   radius?: number;
-  arrow?: SceneArrow;
   data?: Record<string, string>;
 }
 

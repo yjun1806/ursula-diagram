@@ -258,7 +258,7 @@ export function layoutRadar(model: Radar, ruler: Ruler): RadarLayout {
     ...(l.data === undefined ? {} : { data: l.data }),
   });
 
-  items.push({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
+  items.push({ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
   if (model.title !== undefined) items.push({ kind: 'text', x: MARGIN, y: titleY, text: model.title, anchor: 'start', role: ['title'] });
   for (const v of rings) {
     const r = ((v - min) / (max - min)) * R;
@@ -288,7 +288,7 @@ export function layoutRadar(model: Radar, ruler: Ruler): RadarLayout {
     for (const k of row) {
       const c = model.curves[k];
       if (c === undefined) continue;
-      items.push({ kind: 'box', style: 'label', x, y: y - SWATCH / 2, w: SWATCH, h: SWATCH, role: [`series-${seriesNo(k)}`, 'swatch'] });
+      items.push({ kind: 'box', x, y: y - SWATCH / 2, w: SWATCH, h: SWATCH, role: [`series-${seriesNo(k)}`, 'swatch'] });
       items.push({ kind: 'text', x: x + SWATCH + 8, y, text: c.label, anchor: 'start', role: ['legend'] });
       x += (itemW[k] ?? 0) + LEGEND_GAP;
     }

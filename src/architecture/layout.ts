@@ -375,7 +375,7 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler): ArchLayou
     const r = move(raw);
     const depth = depthOf(g.id);
     placedGroups.push({ id: g.id, label: g.label, ...(g.icon === undefined ? {} : { icon: g.icon }), depth, ...r });
-    items.push({ kind: 'box', style: 'frame', ...r, role: depth % 2 === 1 ? ['zone'] : ['zone', 'zone--plain'], data: { group: g.id } });
+    items.push({ kind: 'box', ...r, role: depth % 2 === 1 ? ['zone'] : ['zone', 'zone--plain'], data: { group: g.id } });
     items.push({ kind: 'text', x: r.x + 20, y: r.y + 28, text: g.label, role: ['zone-name'], data: { group: g.id } });
     if (g.icon !== undefined) items.push({ kind: 'text', x: r.x + 20, y: r.y + 46, text: g.icon, role: ['zone-sub'], data: { group: g.id } });
   }
@@ -394,7 +394,7 @@ export function layoutArchitecture(model: Architecture, ruler: Ruler): ArchLayou
     }
     const inFilled = def.parent !== undefined && depthOf(def.parent) % 2 === 1;
     const data = { service: n.id };
-    items.push({ kind: 'box', style: 'box', x: n.x, y: n.y, w: n.w, h: n.h, role: inFilled ? ['box', 'box--in-zone'] : ['box'], data });
+    items.push({ kind: 'box', x: n.x, y: n.y, w: n.w, h: n.h, role: inFilled ? ['box', 'box--in-zone'] : ['box'], data });
     const names = nameLines.get(n.id) ?? [];
     const cx = n.x + n.w / 2;
     let firstLine = n.y + n.h / 2 - (LINE_STEP * (names.length - 1)) / 2;

@@ -252,10 +252,10 @@ export function layoutIshikawa(model: Ishikawa, ruler: Ruler, heading?: string, 
         texts.push({ kind: 'text', x: cause.textX, y: cause.textY, text: cause.text, role: ['sub'], data });
       }
     }
-    boxes.push({ kind: 'box', style: 'box', x: bone.box.x, y: bone.box.y, w: bone.box.w, h: bone.box.h, role: ['box'], data: { bone: String(bi) } });
+    boxes.push({ kind: 'box', x: bone.box.x, y: bone.box.y, w: bone.box.w, h: bone.box.h, role: ['box'], data: { bone: String(bi) } });
     texts.push({ kind: 'text', x: bone.box.x + bone.box.w / 2, y: bone.box.y + bone.box.h / 2, text: bone.name, role: ['name'], data: { bone: String(bi) } });
   });
-  boxes.push({ kind: 'box', style: 'box', x: head.x, y: head.y, w: head.w, h: head.h, role: ['box'], data: { part: 'head' } });
+  boxes.push({ kind: 'box', x: head.x, y: head.y, w: head.w, h: head.h, role: ['box'], data: { part: 'head' } });
   texts.push({ kind: 'text', x: head.x + head.w / 2, y: spineY, text: model.head, role: ['name'], data: { part: 'head' } });
   const titleItems: SceneItem[] = heading === undefined ? [] : [{ kind: 'text', x: MARGIN, y: MARGIN + 8, text: heading, role: ['title', 'start'] }];
 

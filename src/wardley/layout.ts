@@ -322,7 +322,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler): WardleyLayout {
     }
     // The list sits on a note panel, so stage lines and links behind it do not run through its text.
     const panel = inflate(list, LIST_PAD);
-    annItems.push({ kind: 'box', style: 'note', x: panel.x0, y: panel.y0, w: panel.x1 - panel.x0, h: panel.y1 - panel.y0, role: ['note'], data: { annotations: 'list' } });
+    annItems.push({ kind: 'box', x: panel.x0, y: panel.y0, w: panel.x1 - panel.x0, h: panel.y1 - panel.y0, role: ['note'], data: { annotations: 'list' } });
     annSorted.forEach((a, i) => {
       const cy = list.y0 + ROW / 2 + i * ROW;
       annItems.push({ kind: 'circle', cx: list.x0 + MARKER_R, cy, r: MARKER_R, role: ['end-ring'], data: { annotation: String(a.number), list: 'true' } });
@@ -420,7 +420,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler): WardleyLayout {
     const { lines, box } = best;
     placed.push(box);
     notes.push({ text: nt.text, box, lines });
-    noteItems.push({ kind: 'box', style: 'note', x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0, role: ['note'] });
+    noteItems.push({ kind: 'box', x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0, role: ['note'] });
     const cx = (box.x0 + box.x1) / 2;
     lines.forEach((l, i) => noteItems.push({ kind: 'text', x: cx, y: box.y0 + LINE_H + i * LINE_H, text: l, anchor: 'middle', role: ['sub'] }));
   }
@@ -445,7 +445,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler): WardleyLayout {
   items.push({ kind: 'line', points: [{ x: plotX, y: bottom }, { x: plotX + plotW, y: bottom }], role: ['axis'] });
   stageRows.forEach((r) => r.lines.forEach((l, i) => items.push({ kind: 'text', x: r.x, y: tickTop + i * LINE_H, text: l, anchor: 'middle', role: ['tick'] })));
   items.push(...linkItems);
-  pipeBoxes.forEach((b, i) => items.push({ kind: 'box', style: 'frame', x: b.x0, y: b.y0, w: b.x1 - b.x0, h: b.y1 - b.y0, radius: 8, role: ['zone--dashed'], data: { pipeline: map.pipelines[i]?.name ?? '' } }));
+  pipeBoxes.forEach((b, i) => items.push({ kind: 'box', x: b.x0, y: b.y0, w: b.x1 - b.x0, h: b.y1 - b.y0, radius: 8, role: ['zone--dashed'], data: { pipeline: map.pipelines[i]?.name ?? '' } }));
   items.push(...evolveItems.filter((it) => it.kind === 'line'), ...forceItems, ...noteItems);
   for (const n of nodes) {
     if (n.kind === 'anchor') continue;
@@ -479,7 +479,7 @@ export function layoutWardley(map: WardleyMap, ruler: Ruler): WardleyLayout {
   items.push(...linkLabelItems);
   for (const b of placed) width = Math.max(width, ceilTo(b.x1 + MARGIN / 2));
 
-  items.unshift({ kind: 'box', style: 'frame', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
+  items.unshift({ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] });
   const scene: Scene = { width, height, title: map.accTitle ?? map.title ?? 'Wardley map', items };
   return { scene, plot: { x0: plotX, x1: plotX + plotW, y0: top, y1: bottom }, boundaries, nodes, notes, ignored: map.ignored };
 }

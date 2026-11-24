@@ -73,7 +73,7 @@ const sample: Scene = {
   height: 200,
   title: 'Sample',
   items: [
-    { kind: 'box', style: 'box', x: 10, y: 10, w: 100, h: 48, role: ['box', 'box--start'] },
+    { kind: 'box', x: 10, y: 10, w: 100, h: 48, role: ['box', 'box--start'] },
     { kind: 'path', d: 'M10 100L60 100L60 150Z', role: ['series-2', 'tint'] },
     { kind: 'path', d: 'M70 100L120 100L120 150Z', role: ['series-3--tint'] },
     { kind: 'circle', cx: 200, cy: 130, r: 12, role: ['series-1'] },
