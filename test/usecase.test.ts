@@ -4,8 +4,10 @@ import { layout, render, renderText, selectFrontEnd, UrsulaError } from '../src/
 import { cellRuler, pixelRuler } from '../src/metrics.ts';
 import { blankFrontMatter } from '../src/registry.ts';
 import { parseUsecase } from '../src/usecase/parse.ts';
+import { faults, worse } from '../src/usecase/faults.ts';
+import { emptySpec } from '../src/c4/grid-rows.ts';
 import { geometryViolations } from './helpers.ts';
-import type { Layout } from '../src/types.ts';
+import type { Graph, Layout, Point } from '../src/types.ts';
 
 const EXAMPLES: string[] = [
   `usecase-beta
@@ -638,8 +640,237 @@ describe('usecase actor column', () => {
     expect(geometryViolations(l).filter((v) => /Support/.test(v))).toEqual([]);
   });
 
+  const line = (l: Layout, from: string, to: string) => {
+    const e = l.edges.find((x) => (x.from === from && x.to === to) || (x.from === to && x.to === from));
+    if (!e) throw new Error(`no line ${from} ${to}`);
+    return e.points;
+  };
+  const nameOf = (l: Layout, id: string) => {
+    const n = l.nodes.find((x) => x.id === id);
+    if (!n) throw new Error(`no node ${id}`);
+    const w = pixelRuler().textWidth(n.title, 'line');
+    return { x: n.x + n.w / 2 - w / 2, y: n.y + n.h, w, h: 30 };
+  };
+  const overName = (l: Layout): string[] =>
+    l.nodes
+      .filter((n) => n.shape === 'actor')
+      .flatMap((n) => {
+        const r = nameOf(l, n.id);
+        return l.edges.filter((e) => e.points.slice(1).some((q, i) => {
+          const p = e.points[i] as { x: number; y: number };
+          return Math.max(p.x, q.x) > r.x + 1 && Math.min(p.x, q.x) < r.x + r.w - 1 && Math.max(p.y, q.y) > r.y + 1 && Math.min(p.y, q.y) < r.y + r.h - 1;
+        })).map((e) => `${e.from}-${e.to} over ${n.id}`);
+      });
+
+  it('stands an actor with no use case of its own level with the one it shares, its line straight beside the branch', () => {
+    const src = 'usecase-beta\ndirection LR\nactor Customer\nactor Support\nsystemBoundary Storefront\n  Browse("Browse catalogue")\n  Checkout("Checkout")\nend\nsystemBoundary Fulfilment\n  Track("Track delivery")\nend\nCustomer --> Browse\nCustomer --> Checkout\nCustomer --> Track\nSupport --> Track\nCheckout ..> : include Browse';
+    const l = drawn(src);
+    const straight = line(l, 'Support', 'Track');
+    expect(straight).toHaveLength(2);
+    expect(line(l, 'Customer', 'Checkout')).toHaveLength(2);
+    const branch = line(l, 'Customer', 'Track');
+    expect(Math.abs((branch.at(-1)?.y ?? 0) - (straight[1]?.y ?? 0))).toBeGreaterThanOrEqual(12);
+  });
+
+  it('leaves an actor by a side and keeps every line off the names under the actors', () => {
+    const many = drawn('usecase-beta\nactor Normal("Normal actor")\nactor Hollow("Hollow actor")\nactor Awesome("Awesome actor")\nNormal --> Manage\nHollow --> Manage\nAwesome --> Manage');
+    expect(overName(many)).toEqual([]);
+    for (const id of ['Hollow', 'Awesome']) expect(line(many, id, 'Manage')).toHaveLength(3);
+    const marks = drawn('usecase-beta\nactor User\nactor Support\nStart\nFinish\nUser --> Start\nStart <-- Support\nStart -- Finish\nUser --o Start\nStart o-- Support\nUser --x Finish\nFinish x-- Support');
+    expect(overName(marks)).toEqual([]);
+    for (const e of marks.edges) for (const [id, p] of [[e.from, e.points[0]], [e.to, e.points.at(-1)]] as const) {
+      const n = marks.nodes.find((x) => x.id === id);
+      if (n?.shape === 'actor' && e.trunk === undefined) expect(p?.y).toBeGreaterThan(n.y);
+    }
+  });
+
+  it('stands an actor whose lines do not fork level with one of its use cases, and one whose lines fork in their middle', () => {
+    const marks = drawn('usecase-beta\nactor User\nStart\nFinish\nUser --o Start\nUser --x Finish');
+    expect(line(marks, 'User', 'Start')).toHaveLength(2);
+    const fork = drawn('usecase-beta\nactor User\nStart\nFinish\nUser --> Start\nUser --> Finish');
+    const y = (id: string): number => { const n = fork.nodes.find((x) => x.id === id); return n ? n.y + n.h / 2 : NaN; };
+    expect(y('User')).toBe((y('Start') + y('Finish')) / 2);
+  });
+
+  it('stands an actor level with the middle one of its use cases whatever the heights of the rows', () => {
+    const l = drawn('usecase-beta\nactor A\nOne\nTwo\nBig[A box with a tag] <<Record>>\nFour\nFive\nA --> One\nA --> Two\nA --> Big\nA --> Four\nA --> Five');
+    expect(line(l, 'A', 'Big')).toHaveLength(2);
+  });
+
   it('leaves a drawing with a note or an actor inside a boundary to the layered engine', () => {
     const noted = drawn('usecase-beta\nnote for Login "Needs a session"\nactor User\nLogin("Sign in")\nUser --> Login');
     expect(noted.edges.reduce((sum, e) => sum + Math.max(0, e.points.length - 2), 0)).toBe(0);
+  });
+
+  // Pairs of runs of two lines side by side for more than 8 and closer than `gap`: one on the other counts, unless both are of one trunk.
+  const sideBySide = (l: Layout, gap: number): string[] => {
+    const runs = l.edges.map((e) => e.points.slice(1).map((q, i) => [e.points[i] as Point, q] as const));
+    const out: string[] = [];
+    runs.forEach((a, i) => runs.slice(i + 1).forEach((b, k) => {
+      const [e, o] = [l.edges[i], l.edges[i + 1 + k]];
+      if (e?.trunk !== undefined && e.trunk.id === o?.trunk?.id) return;
+      for (const [p, q] of a) for (const [r, t] of b) for (const [at, along] of [[(v: Point) => v.y, (v: Point) => v.x], [(v: Point) => v.x, (v: Point) => v.y]] as const) {
+        if (at(p) !== at(q) || at(r) !== at(t) || Math.abs(at(p) - at(r)) >= gap) continue;
+        if (Math.min(Math.max(along(p), along(q)), Math.max(along(r), along(t))) - Math.max(Math.min(along(p), along(q)), Math.min(along(r), along(t))) > 8) out.push(`${e?.from}-${e?.to} beside ${o?.from}-${o?.to}`);
+      }
+    }));
+    return out;
+  };
+  const middle = (l: Layout, id: string): number => {
+    const n = l.nodes.find((x) => x.id === id);
+    if (!n) throw new Error(`no node ${id}`);
+    return n.y + n.h / 2;
+  };
+  // Where the branch of a trunk ends on the use case `id`.
+  const branchInto = (l: Layout, id: string): number | undefined => {
+    const e = l.edges.find((x) => x.trunk !== undefined && (x.from === id || x.to === id));
+    return (e?.from === id ? e.points[0] : e?.points.at(-1))?.y;
+  };
+  const count = (l: Layout): number[] => faults(l, (name) => pixelRuler().textWidth(name, 'line'));
+  const MARKS = 'usecase-beta\nactor User\nactor Support\nStart\nFinish\nUser --> Start\nStart <-- Support\nStart -- Finish\nUser --o Start\nStart o-- Support\nUser --x Finish\nFinish x-- Support';
+  const BOUNDARIES = 'usecase-beta\ndirection LR\nactor Customer\nactor Support\nsystemBoundary Storefront\n  Browse("Browse catalogue")\n  Checkout("Checkout")\nend\nsystemBoundary Fulfilment\n  Track("Track delivery")\nend\nCustomer --> Browse\nCustomer --> Checkout\nCustomer --> Track\nSupport --> Track\nCheckout ..> : include Browse';
+  // Drawings found by trying inputs at random: one actor with four lines to two use cases, and three actors on two.
+  const FOUR_LINES = 'usecase-beta\nactor A0("Al")\nU0("Use 0")\nU1("Use 1")\nA0 --> U1\nA0 -- U1\nA0 --x U0\nA0 --x U1';
+  const THREE_ACTORS = 'usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Q")\nactor A2("Cy")\nU0("Use 0")\nU1("Use 1")\nA0 --> U1\nA2 -- U0\nA1 --> U0\nA2 -- U1\nA2 --> U1';
+
+  it('keeps two lines a line apart where they run side by side, and never one on the other', () => {
+    for (const src of [MARKS, BOUNDARIES, THREE_ACTORS]) expect(sideBySide(drawn(src), 12)).toEqual([]);
+  });
+
+  it('ends a branch in the middle of its use case where the lines beside it keep their distance', () => {
+    const l = drawn(MARKS);
+    // Start: the branch from Support between the two straight lines of User, each a line apart from it.
+    expect(branchInto(l, 'Start')).toBe(middle(l, 'Start'));
+    const beside = [line(l, 'User', 'Start').at(-1)?.y, l.edges.filter((e) => e.from === 'User' && e.to === 'Start')[1]?.points.at(-1)?.y];
+    for (const y of beside) expect(Math.abs((y ?? 0) - middle(l, 'Start'))).toBeGreaterThanOrEqual(12);
+    // Finish: the line of User ends a mark's width off the middle, so the branch keeps the middle.
+    expect(branchInto(l, 'Finish')).toBe(middle(l, 'Finish'));
+    expect(Math.abs((line(l, 'User', 'Finish').at(-1)?.y ?? 0) - middle(l, 'Finish'))).toBeGreaterThanOrEqual(16);
+  });
+
+  it('moves a branch off the middle only for a straight line into it, to the side of its dot and within a third of the ellipse', () => {
+    const l = drawn(BOUNDARIES);
+    const track = l.nodes.find((n) => n.id === 'Track');
+    if (!track) throw new Error('no Track');
+    expect(line(l, 'Support', 'Track').map((p) => p.y)).toEqual([middle(l, 'Track'), middle(l, 'Track')]);
+    // The dot of Customer stands above Track: the branch ends above the middle.
+    expect(line(l, 'Customer', 'Track').at(-1)?.y).toBe(middle(l, 'Track') - 16);
+    for (const src of [MARKS, BOUNDARIES, FOUR_LINES, THREE_ACTORS]) {
+      const d = drawn(src);
+      for (const e of d.edges.filter((x) => x.trunk !== undefined)) for (const [id, p] of [[e.from, e.points[0]], [e.to, e.points.at(-1)]] as const) {
+        const n = d.nodes.find((x) => x.id === id);
+        if (n?.shape === 'ellipse') expect(Math.abs((p?.y ?? 0) - (n.y + n.h / 2))).toBeLessThanOrEqual(n.h / 3);
+      }
+    }
+  });
+
+  it('leaves an actor by the side toward its use cases, a third line at the corner of the figure', () => {
+    const l = drawn(MARKS);
+    const user = l.nodes.find((n) => n.id === 'User');
+    if (!user) throw new Error('no User');
+    const starts = l.edges.filter((e) => e.from === 'User').map((e) => e.points[0] as Point);
+    expect(starts.map((p) => p.x)).toEqual([user.x + user.w, user.x + user.w, user.x + user.w]);
+    expect(starts.map((p) => p.y - user.y).sort((a, b) => a - b)).toEqual([12, 36, 48]);
+    expect(count(l).slice(1, 7)).toEqual([2, 0, 0, 0, 0, 0]);
+    expect(line(l, 'User', 'Start')).toHaveLength(2);
+  });
+
+  it('keeps the drawing with the actor in the middle where the other one bends or crosses more', () => {
+    const l = drawn(FOUR_LINES);
+    const actor = l.nodes.find((n) => n.id === 'A0');
+    if (!actor) throw new Error('no actor');
+    // No line leaves the actor by its left and goes round it.
+    for (const e of l.edges) expect((e.points[1]?.x ?? 0) >= (e.points[0]?.x ?? 0)).toBe(true);
+    const [turns, crossings] = count(l);
+    expect(turns).toBeLessThanOrEqual(6);
+    expect(crossings).toBe(0);
+    expect(middle(l, 'A0')).toBe((middle(l, 'U0') + middle(l, 'U1')) / 2);
+  });
+
+  it('draws three actors on two use cases with no line over a name and none beside another', () => {
+    const l = drawn(THREE_ACTORS);
+    expect(overName(l)).toEqual([]);
+    const [turns, crossings, near, touching, covered, named, away] = count(l);
+    expect([near, touching, covered, named, away]).toEqual([0, 0, 0, 0, 0]);
+    expect(turns).toBeLessThanOrEqual(6);
+    expect(crossings).toBeLessThanOrEqual(1);
+  });
+
+  // Drawings found by trying inputs at random, where standing each actor beside a use case drew lines closer, marks on
+  // each other or a line over a label. With each: the pairs of runs closer than a line apart, the pairs of lines drawn
+  // so for a stretch, the pairs of marks on each other and the pieces over a label that the drawing with each actor in
+  // the middle of its use cases has.
+  const CLOSER: [string, number[]][] = [
+    // Marks of two actors on one place of the ellipse.
+    ['usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Quincy III")\nactor A2("Cy")\nactor A3("Dee Dee")\nU0("Pay 0")\nA3 --> U0\nA0 -- U0\nU0 o-- A2\nA1 --> U0\nA0 --x U0\nU0 x-- A1\nA2 --> U0\nU0 x-- A3', [0, 0, 0, 0]],
+    // Two arrowheads on one place under the ellipse.
+    ['usecase-beta\nactor A0("User")\nactor A1("Back office clerk")\nU0\nU0 x-- A0\nA1 --> U0\nA1 --> U0\nU0 x-- A1\nU0 x-- A1\nU0 <-- A0', [0, 0, 0, 0]],
+    // Upright lines into the bottom of a box closer than a line apart.
+    ['usecase-beta\nactor A0("User")\nactor A1("Back office clerk")\nactor A2("Op")\nU0[Box 0]\nU0 -- A2\nU0 <-- A0\nU0 <-- A2\nA0 --> U0\nA2 --o U0\nA2 --> U0\nU0 x-- A1\nU0 o-- A0\nA2 --> U0', [0, 0, 1, 0]],
+    // The same with three actors on the box.
+    ['usecase-beta\nactor A0("User")\nactor A1("Back office clerk")\nactor A2("Op")\nU0[Box 0]\nU0 o-- A2\nA0 --x U0\nU0 <-- A2\nU0 <-- A1\nU0 -- A1\nA2 -- U0\nA0 --> U0\nA2 --> U0\nU0 o-- A0', [0, 0, 1, 0]],
+    // One more pair of lines side by side into an ellipse.
+    ['usecase-beta\nactor A0("User")\nactor A1("Back office clerk")\nactor A2("Op")\nU0\nU0 x-- A1\nA0 --x U0\nA1 --> U0\nU0 -- A1\nA2 -- U0\nA1 --x U0\nU0 o-- A1\nA2 --> U0', [6, 4, 3, 0]],
+    // One more pair among six actors.
+    ['usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Quincy III")\nactor A2("Cy")\nactor A3("Dee Dee")\nactor A4("Operations manager")\nactor A5("X")\nU0("Review the monthly order report 0")\nU1("Pay 1")\nU1 -- A0\nA2 --> U0\nU1 <-- A5\nU1 o-- A0\nU0 x-- A0\nU1 x-- A0\nA5 --o U0\nA2 --x U0\nU1 <-- A0\nA4 --> U1\nA5 --> U0\nA1 --x U1\nU1 o-- A4\nA3 --> U0\nA1 -- U1\nA1 --o U1\nU0 -- A1\nU1 x-- A3\nU0 ..> : include U1', [12, 11, 13, 0]],
+    // A line through the label of an include.
+    ['usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Quincy III")\nactor A2("Cy")\nsystemBoundary S["First"]\n  U0("Use 0")\nend\nsystemBoundary T["Second"]\n  U1("Use 1")\n  U2("Pay 2")\n  U3("Pay 3")\nend\nA0 -- "does it" --> U0\nA1 --x U3\nA1 -- U2\nA1 -- U3\nA2 --x U0\nA0 --o U2\nA1 --> U2\nU3 -- A0\nA1 --x U2\nU3 ..> : include U3\nU2 ..> : extend U1\nU1 --|> U2', [0, 0, 1, 0]],
+    // A bend on the corner of a label.
+    ['usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Quincy III")\nactor A2("Cy")\nactor A3("Dee Dee")\nactor A4("Operations manager")\nactor A5("X")\nU0("Track parcel 0")\nU1("Track parcel 1")\nU2("Use 2")\nU3("Use 3")\nU4("Pay 4")\nU5("Track parcel 5")\nU6("Use 6")\nU7("Pay 7")\nU1 o-- A3\nA5 --> U6\nA2 --> U7\nA4 --x U1\nA1 --> U3\nA4 -- "does it" --> U2\nU1 <-- A4\nA2 -- U3\nA0 -- "does it" --> U1\nA5 --o U2\nU0 <-- A3\nU5 x-- A4\nA4 --x U3\nA0 -- "does it" --> U5\nU1 x-- A4\nU7 ..> : include U0\nU0 --> U7', [5, 5, 8, 0]],
+    // The same inside a boundary.
+    ['usecase-beta\nactor A0("Al")\nactor A1("Bartholomew Quincy III")\nactor A2("Cy")\nactor A3("Dee Dee")\nsystemBoundary S\n  U0("Use 0")\n  U1("Review the monthly order report 1")\nend\nA3 -- "does it" --> U1\nA3 -- U1\nA0 -- "does it" --> U0\nU0 o-- A3\nU1 <-- A1\nA2 --> U1\nA3 --> U0\nU1 o-- A3\nA3 --x U1\nA0 -- U0\nA0 --> U1\nU1 -- A0\nA0 --o U1', [0, 0, 9, 0]],
+  ];
+
+  it('keeps the drawing with the actor in the middle where the other one has lines closer, marks on each other or a line over a label', () => {
+    for (const [src, most] of CLOSER) {
+      const [, , near, , , , , beside, crowded, labelled] = count(drawn(src));
+      [near, beside, crowded, labelled].forEach((n, i) => expect(n).toBeLessThanOrEqual(most[i] as number));
+    }
+  });
+
+  it('counts what makes a drawing harder to read', () => {
+    const node = (id: string, shape: 'actor' | 'ellipse', x: number, y: number, w: number, h: number) => ({ id, lane: '_', rank: 0, span: 1, row: 0, x, y, w, h, title: id, lines: [], shape });
+    const edge = (from: string, to: string, points: Point[]) => ({ from, to, style: 'normal' as const, points });
+    const l: Layout = {
+      width: 400,
+      height: 300,
+      direction: 'LR',
+      laneAxis: 'across',
+      lanes: [],
+      nodes: [node('A', 'actor', 100, 100, 24, 48), node('U', 'ellipse', 300, 100, 80, 48), node('V', 'ellipse', 300, 200, 80, 48)],
+      edges: [
+        // Straight; then out of the left of the figure, under it over its name and on; then a run 4 beside the first that crosses the second twice.
+        edge('A', 'U', [{ x: 124, y: 124 }, { x: 300, y: 124 }]),
+        edge('A', 'V', [{ x: 100, y: 124 }, { x: 80, y: 124 }, { x: 80, y: 160 }, { x: 200, y: 160 }, { x: 200, y: 224 }, { x: 300, y: 224 }]),
+        edge('A', 'U', [{ x: 124, y: 128 }, { x: 150, y: 128 }, { x: 150, y: 180 }, { x: 294, y: 180 }, { x: 294, y: 128 }, { x: 300, y: 128 }]),
+      ],
+      diagnostics: [],
+    };
+    // Turns, crossings, runs closer than 12, runs at 6 or closer, runs one on the other, runs over a name, lines leaving away,
+    // lines drawn side by side for more than 24, marks on each other, pieces over a label, area. The two lines into U end 4 apart.
+    expect(faults(l, () => 40)).toEqual([8, 2, 1, 1, 0, 1, 1, 0, 1, 0, 400 * 300]);
+    // A line 10 under the straight one for 68, to another use case, and its label on the straight one.
+    const under = { ...edge('A', 'V', [{ x: 124, y: 134 }, { x: 200, y: 134 }, { x: 200, y: 224 }, { x: 300, y: 224 }]), label: { text: 'x', x: 220, y: 114, w: 40, h: 24 } };
+    expect(faults({ ...l, edges: [l.edges[0] as Layout['edges'][number], under] }, () => 40)).toEqual([2, 0, 1, 0, 0, 0, 0, 1, 0, 1, 400 * 300]);
+    expect(worse([1, 0, 0], [0, 5, 5])).toBe(true);
+    expect(worse([1, 2, 3], [1, 2, 3])).toBe(false);
+  });
+
+  it('makes room for a straight line into a top face the same way', () => {
+    const box = (id: string): Graph['nodes'][number] => ({ id, title: id, lines: [], shape: 'rect', lane: '_' });
+    const arrow = (from: string, to: string, trunk: boolean): Graph['edges'][number] => ({ from, to, style: 'normal', ...(trunk ? { trunk: { end: 'from' as const, kind: 'k' } } : {}) });
+    const graph: Graph = { direction: 'TD', lanes: [{ id: '_', label: '' }], nodes: ['Over', 'Top', 'Left', 'Right'].map(box), edges: [arrow('Top', 'Left', true), arrow('Top', 'Right', true), arrow('Over', 'Left', false)] };
+    const cells = { Over: { r: 0, c: 0 }, Top: { r: 0, c: 1 }, Left: { r: 1, c: 0 }, Right: { r: 1, c: 2 } };
+    const lay = (figureSides: boolean): Layout => layout({ ...graph, placer: 'c4-grid', grid: { ...emptySpec(graph), cells, ...(figureSides ? { figureSides } : {}) } }, pixelRuler(), { legend: false });
+    const into = (l: Layout): { branch: number; straight: number; mid: number } => {
+      const left = l.nodes.find((n) => n.id === 'Left');
+      if (!left) throw new Error('no Left');
+      return { branch: line(l, 'Top', 'Left').at(-1)?.x ?? NaN, straight: line(l, 'Over', 'Left').at(-1)?.x ?? NaN, mid: left.x + left.w / 2 };
+    };
+    const apart = into(lay(true));
+    expect(apart.straight).toBe(apart.mid);
+    expect(apart.branch).toBe(apart.mid + 16);
+    const plain = into(lay(false));
+    expect(plain.branch).toBe(plain.mid);
   });
 });

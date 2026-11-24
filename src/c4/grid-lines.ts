@@ -10,6 +10,8 @@ const BUDGET = 64;
 const CLEAR = 8;
 const RUN = 16;
 const LANE = 16;
+/** The least two lines side by side keep between them. */
+export const LINE_GAP = 12;
 /** Distance between two places a bent line may cross over at, and how far a line going round may stand out. */
 const STEP = 8;
 const ROUND = 80;
@@ -67,6 +69,15 @@ export interface LineScene {
   labelOf: (i: number) => { w: number; h: number } | undefined;
   /** Where the name of a cluster will be written: a line keeps off it. */
   nameOf?: (id: string) => Rect | undefined;
+  /** What is written outside the boxes (the name under a figure): a line keeps off it. */
+  captions?: readonly Rect[];
+  /** True when a line leaves a figure by a side only, and the lines on that side take it from corner to corner. */
+  figureSides?: boolean;
+  /**
+   * Lines drawn already, by edge, each from a face of one end to a face of the other: they stand, and the others keep off
+   * them and off their places on those faces. One that `yields` moves off its last place for a straight line into it.
+   */
+  given?: ReadonlyMap<number, { path: readonly Point[]; yields: boolean }>;
 }
 
 interface End {
@@ -207,6 +218,11 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
   for (const c of clusters) boxOf.set(c.id, { x: c.x, y: c.y, w: c.w, h: c.h });
   const nodeIds = new Set(nodes.map((n) => n.id));
   const clusterIds = new Set(clusters.map((c) => c.id));
+  const captions = scene.captions ?? [];
+  // A figure has its head on top and its name below: a line leaves it by a side.
+  const figures = new Set(scene.figureSides === true ? nodes.filter((n) => n.shape === 'actor').map((n) => n.id) : []);
+  const bySide = (e: { from: string; to: string }, o: readonly [Face, Face]): boolean => (!figures.has(e.from) || o[0] % 2 === 0) && (!figures.has(e.to) || o[1] % 2 === 0);
+  const figureSide = (id: string, face: Face): boolean => figures.has(id) && face % 2 === 0;
   const boxes = [...nodes.map((n) => ({ id: n.id, box: boxOf.get(n.id) as Rect, cluster: false })), ...clusters.map((c) => ({ id: c.id, box: boxOf.get(c.id) as Rect, cluster: true }))];
   const names = clusters.flatMap((c) => {
     const r = scene.nameOf?.(c.id);
@@ -239,6 +255,11 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     const a = boxOf.get(e.from);
     const b = boxOf.get(e.to);
     if (a === undefined || b === undefined) return;
+    const drawn = scene.given?.get(i);
+    if (drawn !== undefined) {
+      fixed.set(i, [...drawn.path]);
+      return;
+    }
     if (e.from === e.to) {
       const [x, y] = [a.x + a.w, a.y + a.h / 2];
       fixed.set(i, [{ x, y: y - LOOP / 2 }, { x: x + LOOP, y: y - LOOP / 2 }, { x: x + LOOP, y: y + LOOP / 2 }, { x, y: y + LOOP / 2 }]);
@@ -323,6 +344,7 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
         }
       }
       for (const n of names) if (hits(r, n, -4)) cost += ALONG;
+      for (const c of captions) if (hits(r, c, 0)) cost += ALONG;
       // Room beside a box or a border it runs along: a lane's worth, or half its label and a gap when it is wider.
       const want = Math.max(ROOM, r.h ? 0 : (size?.w ?? 0) / 2 + LABEL_CLEAR);
       for (const { box } of boxes) {
@@ -340,7 +362,30 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     return { penalty: cost, soft };
   };
 
-  const count = new Map<string, number>();
+  // The places the lines drawn already hold on the faces they leave and enter, and the side each comes to its place from.
+  // `firm` are the places that stay when a straight line wants them.
+  const reserved = new Map<string, number[]>();
+  const firm = new Map<string, number[]>();
+  const comesFrom = new Map<string, number>();
+  for (const [i, { path, yields }] of scene.given ?? []) {
+    const e = graph.edges[i];
+    if (e === undefined || path.length < 2) continue;
+    for (const [p, q, r, stays] of [[path[0], path[1], path[2], true], [path[path.length - 1], path[path.length - 2], path[path.length - 3], !yields]] as Array<[Point, Point, Point | undefined, boolean]>) {
+      const far = (id: string): number => {
+        const box = boxOf.get(id) as Rect;
+        return Math.max(box.x - p.x, p.x - box.x - box.w, 0) + Math.max(box.y - p.y, p.y - box.y - box.h, 0);
+      };
+      const id = far(e.from) <= far(e.to) ? e.from : e.to;
+      const box = boxOf.get(id) as Rect;
+      const face: Face = Math.abs(q.x - p.x) > Math.abs(q.y - p.y) ? (q.x > p.x ? 0 : 2) : q.y > p.y ? 1 : 3;
+      const off = tidy(face % 2 === 0 ? p.y - box.y - box.h / 2 : p.x - box.x - box.w / 2);
+      const k = `${id}:${face}`;
+      if (!(reserved.get(k) ?? []).includes(off)) reserved.set(k, [...(reserved.get(k) ?? []), off]);
+      if (stays && !(firm.get(k) ?? []).includes(off)) firm.set(k, [...(firm.get(k) ?? []), off]);
+      if (r !== undefined) comesFrom.set(k, (comesFrom.get(k) ?? 0) + Math.sign(face % 2 === 0 ? r.y - q.y : r.x - q.x));
+    }
+  }
+  const count = new Map<string, number>([...reserved].map(([k, offs]) => [k, offs.length]));
   natural.forEach((f, i) => {
     const e = graph.edges[i];
     if (f === undefined || e === undefined) return;
@@ -383,9 +428,11 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     add([side(a, b), side(b, a)]);
     add([0, 0]);
     add([2, 2]);
+    const sided = out.filter((o) => bySide(e, o));
+    const allowed = sided.length > 0 ? sided : out;
     // The pairs of faces with a clear shape between their middles, in that order; all of them when none has one.
-    const clear = out.filter(([fa, fb]) => shapes({ ...pointOn(a, fa, 0), d: fa }, { ...pointOn(b, fb, 0), d: fb }).some((sh) => ownCost(sh.pts, i) !== undefined));
-    const list = clear.length > 0 ? clear : out;
+    const clear = allowed.filter(([fa, fb]) => shapes({ ...pointOn(a, fa, 0), d: fa }, { ...pointOn(b, fb, 0), d: fb }).some((sh) => ownCost(sh.pts, i) !== undefined));
+    const list = clear.length > 0 ? clear : allowed;
     if (!give) return list;
     const first = list[0] as [Face, Face];
     for (const [id, was, now] of [[e.from, f[0], first[0]], [e.to, f[1], first[1]]] as const) {
@@ -416,7 +463,10 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
     });
     const pitchOf = (id: string, face: Face): number => {
       const box = boxOf.get(id) as Rect;
-      return Math.min(PITCH, (face % 2 === 1 ? box.w : box.h) / ((ends.get(`${id}:${face}`)?.length ?? 1) + 1));
+      const n = (ends.get(`${id}:${face}`)?.length ?? 1) + (reserved.get(`${id}:${face}`)?.length ?? 0);
+      const even = Math.min(PITCH, (face % 2 === 1 ? box.w : box.h) / (n + 1));
+      // The side of a figure is short: its lines take it from corner to corner, a line's gap apart while they fit.
+      return figureSide(id, face) && n > 1 ? Math.max(even, Math.min(LINE_GAP, box.h / 2 / Math.floor(n / 2))) : even;
     };
     // Straight lines of one pair of nodes share their offsets at both ends.
     const pairs = new Map<string, number[]>();
@@ -431,7 +481,15 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
       const e = graph.edges[list[0] as number] as { from: string; to: string };
       const f = faces[list[0] as number] as [Face, Face];
       const pitch = Math.min(pitchOf(e.from, f[0]), pitchOf(e.to, f[1]));
-      symmetric(list.length, pitch).forEach((off, k) => {
+      // Beside the places that stay on either face: one more place than lines, the middle left out, on the side the
+      // lines that hold them do not come from.
+      const both = [`${e.from}:${f[0]}`, `${e.to}:${f[1]}`];
+      const held = both.flatMap((k) => firm.get(k) ?? []);
+      const even = symmetric(list.length, pitch);
+      const wide = symmetric(list.length + 1, pitch).filter((off) => off !== 0);
+      const below = both.reduce((sum, k) => sum + (comesFrom.get(k) ?? 0), 0) < 0;
+      const places = !even.some((off) => held.some((h) => Math.abs(h - off) < 1)) ? even : below ? wide.slice(-list.length) : wide.slice(0, list.length);
+      places.forEach((off, k) => {
         const i = list[k] as number;
         const g = graph.edges[i] as { from: string; to: string };
         const h = faces[i] as [Face, Face];
@@ -447,7 +505,9 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
       const mid = face % 2 === 1 ? box.x + box.w / 2 : box.y + box.h / 2;
       const pitch = pitchOf(id, face);
       // A crowded face keeps less from its corners, so that every line has a place of its own on it.
-      const half = (face % 2 === 1 ? box.w : box.h) / 2 - Math.min(CORNER, pitch / 2);
+      const half = (face % 2 === 1 ? box.w : box.h) / 2 - (figureSide(id, face) ? 0 : Math.min(CORNER, pitch / 2));
+      // Beside a line that holds its place on the side of a figure, the next keeps a line's gap.
+      const beside = figureSide(id, face) ? LINE_GAP - 1e-6 : 1;
       const held = list.filter((x) => x.straight);
       for (const x of held) offset.set(`${x.edge}:${k}`, fixedOf.get(`${x.edge}:${k}`) ?? 0);
       // Left to right (top to bottom on a side): by where the other end is; of two toward one place, the nearer one outside.
@@ -456,13 +516,14 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
         .filter((x) => !x.straight)
         .sort((x, y) => (asked === undefined ? x.toward - y.toward || (x.toward < mid ? x.far - y.far : y.far - x.far) || x.edge - y.edge : asked.indexOf(x.edge) - asked.indexOf(y.edge)));
       let offs: number[];
-      if (held.length === 0) offs = symmetric(rest.length, pitch);
+      const kept = reserved.get(k) ?? [];
+      if (held.length === 0 && kept.length === 0) offs = symmetric(rest.length, pitch);
       else {
         // Beside the straight lines: as many on the low side as look to it, nearest the middle first; a full side sends the rest over.
-        const used = held.map((x) => fixedOf.get(`${x.edge}:${k}`) ?? 0);
+        const used = [...held.map((x) => fixedOf.get(`${x.edge}:${k}`) ?? 0), ...kept];
         const slots = (sign: number): number[] => {
           const out: number[] = [];
-          for (let n = 1; n * pitch <= half + 1e-6; n++) if (used.every((u) => Math.abs(u - sign * n * pitch) > 1)) out.push(sign * n * pitch);
+          for (let n = 1; n * pitch <= half + 1e-6; n++) if (used.every((u) => Math.abs(u - sign * n * pitch) > beside)) out.push(sign * n * pitch);
           return out;
         };
         const lows = rest.filter((x) => (x.toward < mid) !== flips.has(`${x.edge}:${k}`)).length;
@@ -557,6 +618,8 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
       penalty += own?.penalty ?? 0;
       soft += own?.soft ?? 0;
       for (let j = i + 1; j < runs.length; j++) {
+        // Two lines drawn already stand as they are: they share their trunk.
+        if (scene.given?.has(i) === true && scene.given.has(j)) continue;
         const t = between(runs[i] as Run[], runs[j] as Run[]);
         penalty += t.penalty;
         cross += t.cross;
@@ -595,12 +658,12 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
       const o = options[i] as Array<[Face, Face]>;
       for (let k = 0; k < o.length; k++) if (k !== choice[i]) tries.push(() => ({ choice: choice.map((c, j) => (j === i ? k : c)), orders, flips }));
     }
-    // A bent line beside a straight one may stand on the other side of it.
+    // A bent line beside a straight one, or beside one drawn already, may stand on the other side of it.
     graph.edges.forEach((e, i) => {
       const f = options[i]?.[choice[i] as number];
       if (f === undefined || straight.has(i)) return;
       for (const k of [`${e.from}:${f[0]}`, `${e.to}:${f[1]}`]) {
-        const held = graph.edges.some((o, j) => straight.has(j) && [`${o.from}:${options[j]?.[0]?.[0]}`, `${o.to}:${options[j]?.[0]?.[1]}`].includes(k));
+        const held = reserved.has(k) || graph.edges.some((o, j) => straight.has(j) && [`${o.from}:${options[j]?.[0]?.[0]}`, `${o.to}:${options[j]?.[0]?.[1]}`].includes(k));
         if (!held) continue;
         const flag = `${i}:${k}`;
         tries.push(() => {

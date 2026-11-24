@@ -8,6 +8,7 @@ import type { NodeHook } from '../render/svg.ts';
 import { renderTextLayout } from '../render/text.ts';
 import type { GridSpec, Layout, LayoutNode } from '../types.ts';
 import { emptySpec } from '../c4/grid-rows.ts';
+import { faults, worse } from './faults.ts';
 import type { UsecaseModel } from './model.ts';
 import { parseUsecase } from './parse.ts';
 import { titledLines } from '../front/title.ts';
@@ -49,7 +50,6 @@ const crossingsIn = (l: Layout): number =>
   l.diagnostics.reduce((sum, d) => sum + (d.kind !== 'crossing' ? 0 : Number(/\((\d+) times\)/.exec(d.message)?.[1] ?? 1)), 0);
 
 function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean): Layout {
-  const grid = text ? undefined : actorColumns(model);
   const draw = (columns: GridSpec | undefined): Layout =>
     layout(columns === undefined ? model.graph : { ...model.graph, placer: 'c4-grid', grid: columns }, text ? cellRuler() : pixelRuler(), {
       ...(opts.engine === undefined ? {} : { engine: opts.engine }),
@@ -58,11 +58,25 @@ function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean): Layou
       ...(text ? { fold: true } : {}),
       legend: false,
     });
-  if (grid === undefined) return draw(undefined);
-  const columns = draw(grid);
+  const plain = text ? undefined : actorColumns(model, false);
+  if (plain === undefined) return draw(undefined);
+  const amid = orLayered(model, draw(plain), draw);
+  const beside = actorColumns(model, true);
+  if (beside === undefined) return amid;
+  // Each actor beside one of its use cases and left by a side, unless that drawing has more of any fault than the one
+  // with each actor in the middle of its use cases.
+  const sided = draw(beside);
+  const count = (l: Layout): number[] => faults(l, (name) => pixelRuler().textWidth(name, 'line'));
+  return worse(count(sided), count(amid)) ? amid : sided;
+}
+
+/**
+ * The drawing in columns, or the one of the layered engine. Lines between two use cases can run a way round in the
+ * columns: the drawing of the layered engine is kept when it bends less, crosses no more and stands every actor to the
+ * left of what it is joined to as well.
+ */
+function orLayered(model: UsecaseModel, columns: Layout, draw: (columns: GridSpec | undefined) => Layout): Layout {
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
-  // Lines between two use cases can run a way round in the columns: the drawing of the layered engine is kept when it
-  // bends less, crosses no more and stands every actor to the left of what it is joined to as well.
   if (!model.graph.edges.some((e) => kind(e.from) !== 'actor' && kind(e.to) !== 'actor')) return columns;
   const free = draw(undefined);
   const astray = (l: Layout): number => {
@@ -100,12 +114,13 @@ const APART = 48;
 
 /**
  * The cells of a drawing that reads from left to right with every actor outside the boundaries and no line between two
- * actors: the actors in the first column, each in the middle of its use cases, and what they are joined to in the
- * second, grouped by boundary and then by actor in the order written. What no actor is joined to stands in the next
- * column beside the first element a line joins it to, or below the rest. A boundary covers the cells of what it holds.
- * Undefined for any other drawing, and when a boundary would cover an element that is not in it: the layered engine draws those.
+ * actors: the actors in the first column, each beside one of its use cases when `sided` and else in the middle of them,
+ * and what they are joined to in the second, grouped by boundary and then by actor in the order written. What no actor
+ * is joined to stands in the next column beside the first element a line joins it to, or below the rest. A boundary
+ * covers the cells of what it holds. Undefined for any other drawing, and when a boundary would cover an element that
+ * is not in it: the layered engine draws those.
  */
-function actorColumns(model: UsecaseModel): GridSpec | undefined {
+function actorColumns(model: UsecaseModel, sided: boolean): GridSpec | undefined {
   const g = model.graph;
   const kind = (id: string): string | undefined => model.meta.get(id)?.kind;
   const actor = (id: string): boolean => kind(id) === 'actor';
@@ -159,25 +174,25 @@ function actorColumns(model: UsecaseModel): GridSpec | undefined {
     cells[n.id] = { r: rows++, c: 1 };
   }
 
-  // The first column: each actor in the middle of its use cases, pushed down where two would stand closer than a row.
-  const shift: Record<string, number> = {};
-  let floor = 0;
-  const wish = (a: string): number => {
-    const at = second.flatMap((u, r) => (owner.get(u) === a ? [r] : []));
-    return at.length === 0 ? Infinity : ((at[0] as number) + (at[at.length - 1] as number)) / 2;
+  // The first column. The cell of an actor is the row of its first use case and the rest a shift, so the figure adds no
+  // height to a row between.
+  const ownRows = (a: string): number[] => second.flatMap((u, r) => (owner.get(u) === a ? [r] : []));
+  const joinedTo = (a: string): string[] => [...new Set(g.edges.flatMap((e) => (e.from === a ? [e.to] : e.to === a ? [e.from] : [])))];
+  const forks = (a: string): boolean => {
+    const kinds = g.edges.flatMap((e) => (e.trunk !== undefined && e[e.trunk.end] === a ? [e.trunk.kind] : []));
+    return kinds.some((k, i) => kinds.indexOf(k) !== i);
   };
-  for (const a of [...actors].sort((x, y) => wish(x.id) - wish(y.id))) {
-    // An actor with no use case of its own stands below every row, and so does one pushed past the last: each takes a whole row.
-    const wished = Number.isFinite(wish(a.id)) ? Math.max(floor, wish(a.id)) : Math.max(floor, rows);
-    const at = wished > rows - 1 ? Math.ceil(wished) : wished;
+  const column = { actors: actors.map((a) => ({ id: a.id, rows: ownRows(a.id), level: joinedTo(a.id).length === 1 ? second.indexOf(joinedTo(a.id)[0] as string) : -1, forks: forks(a.id) })), rows };
+  const stood = sided ? besideUseCases(column) : amidUseCases(column);
+  const shift: Record<string, number> = {};
+  for (const [a, at] of stood.at) {
     rows = Math.max(rows, Math.floor(at) + 1);
-    // The cell is the row of its first use case and the rest a shift, so the figure adds no height to a row between.
-    const first = second.findIndex((u) => owner.get(u) === a.id);
+    const first = second.findIndex((u) => owner.get(u) === a);
     const r = first === -1 || first > at ? Math.floor(at) : first;
-    cells[a.id] = { r, c: 0 };
-    if (at !== r) shift[a.id] = at - r;
-    floor = at + 1;
+    cells[a] = { r, c: 0 };
+    if (at !== r) shift[a] = at - r;
   }
+  for (const r of stood.apart) rowGaps[r] = APART;
   for (let r = Math.max(1, second.length); r < rows; r++) rowGaps[r] ??= APART;
 
   // A boundary covers the cells of what it holds; it may hold nothing else, and two may not share a cell.
@@ -191,5 +206,67 @@ function actorColumns(model: UsecaseModel): GridSpec | undefined {
     if (placed.some((n) => n.cluster !== q.id && within(q, cells[n.id] as { r: number; c: number }))) return undefined;
     if (rects.some((o) => o !== q && o.r0 <= q.r1 && q.r0 <= o.r1 && o.c0 <= q.c1 && q.c0 <= o.c1)) return undefined;
   }
-  return { ...emptySpec(g), cells, shift, rowGaps, ...(rects.length === 0 ? {} : { rects: Object.fromEntries(rects.map(({ id, ...q }) => [id, q])) }) };
+  return { ...emptySpec(g), cells, shift, rowGaps, ...(sided ? { figureSides: true } : {}), ...(rects.length === 0 ? {} : { rects: Object.fromEntries(rects.map(({ id, ...q }) => [id, q])) }) };
+}
+
+/** The actors of the first column: the rows of the use cases each one owns, the row of the only element it is joined to (or -1), whether its lines fork from a trunk; and the rows there are. */
+interface ActorColumn {
+  actors: ReadonlyArray<{ id: string; rows: readonly number[]; level: number; forks: boolean }>;
+  rows: number;
+}
+/** The row each actor stands at (a half between two), and the rows that need the wider gap above them. */
+interface Stood {
+  at: Map<string, number>;
+  apart: number[];
+}
+
+const middleOf = (rows: readonly number[]): number => (rows.length === 0 ? Infinity : ((rows[0] as number) + (rows[rows.length - 1] as number)) / 2);
+
+/**
+ * Each actor in the middle of its use cases, pushed down where two would stand closer than a row. An actor with no use
+ * case of its own stands below every row, and so does one pushed past the last: each takes a whole row.
+ */
+function amidUseCases(column: ActorColumn): Stood {
+  const at = new Map<string, number>();
+  let [floor, rows] = [0, column.rows];
+  for (const a of [...column.actors].sort((x, y) => middleOf(x.rows) - middleOf(y.rows))) {
+    const wished = Math.max(floor, a.rows.length === 0 ? rows : middleOf(a.rows));
+    const row = wished > rows - 1 ? Math.ceil(wished) : wished;
+    at.set(a.id, row);
+    rows = Math.max(rows, Math.floor(row) + 1);
+    floor = row + 1;
+  }
+  return { at, apart: [] };
+}
+
+/**
+ * Each actor beside its use cases: in their middle when its lines fork from one trunk, and else level with the one
+ * nearest that middle, the upper of two, so that the line to it runs straight. Two actors keep a row between them. An
+ * actor with no use case of its own stands level with the only one it is joined to, where no other actor is within a
+ * row of it; the rest stand below every row, each on a row of its own.
+ */
+function besideUseCases(column: ActorColumn): Stood {
+  const at = new Map<string, number>();
+  const apart: number[] = [];
+  let [floor, rows] = [0, column.rows];
+  const stand = (id: string, row: number): void => {
+    at.set(id, row);
+    rows = Math.max(rows, Math.floor(row) + 1);
+  };
+  const wish = (a: ActorColumn['actors'][number]): number => (a.forks ? middleOf(a.rows) : a.rows.reduce((best, r) => (Math.abs(r - middleOf(a.rows)) < Math.abs(best - middleOf(a.rows)) ? r : best)));
+  for (const a of column.actors.filter((x) => x.rows.length > 0).sort((x, y) => wish(x) - wish(y))) {
+    // One pushed past the last row takes a whole row.
+    const wished = Math.max(floor, wish(a));
+    const row = wished > rows - 1 ? Math.ceil(wished) : wished;
+    stand(a.id, row);
+    floor = row + 1;
+  }
+  for (const a of column.actors) {
+    if (at.has(a.id) || a.level === -1 || [...at.values()].some((row) => Math.abs(row - a.level) < 1)) continue;
+    // The name under the upper of two figures a row apart needs the wider gap.
+    for (const row of at.values()) if (Math.abs(row - a.level) === 1) apart.push(Math.max(row, a.level));
+    stand(a.id, a.level);
+  }
+  for (const a of column.actors) if (!at.has(a.id)) stand(a.id, Math.max(Math.ceil(floor), rows));
+  return { at, apart };
 }

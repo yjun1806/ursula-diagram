@@ -9,9 +9,9 @@ import type { Graph, GridSpec, Layout, LayoutCluster, LayoutNode, Point } from '
 import type { Cell, CellRect, GridCells } from './grid-place.ts';
 import { placeCells } from './grid-place.ts';
 import { emptySpec, gridRows } from './grid-rows.ts';
-import { drawLines } from './grid-lines.ts';
+import { drawLines, LINE_GAP } from './grid-lines.ts';
 import { measureNodes } from '../layout/place.ts';
-import { ACTOR_H, ACTOR_W } from '../layout/records.ts';
+import { ACTOR_H, ACTOR_NAME_GAP, ACTOR_NAME_H, ACTOR_W } from '../layout/records.ts';
 import type { Rect } from './grid-lines.ts';
 
 /** Gaps between cells: across, down, and around the drawing. */
@@ -41,6 +41,8 @@ const NAME_CLEAR = 12;
 const NAME_SHIFT = 24;
 /** Where the text of a name starts below the top border. */
 const NAME_TOP = 12;
+/** What a line keeps from either end of the name under a figure. */
+const CAPTION_CLEAR = 8;
 
 /**
  * Lays out a C4 drawing on one grid: every element in a cell of the size every element shares, every boundary on a range
@@ -64,6 +66,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     graph = { ...given, nodes: given.nodes.map((n) => ({ ...n, box })) };
   }
   const spec = graph.grid ?? emptySpec(graph);
+  const sides = spec.figureSides === true;
   const rows = gridRows(graph, spec);
   // Cells given outright stand as they are; otherwise a drawing that reads from left to right stands its rows as columns.
   const given_ = spec.cells;
@@ -215,6 +218,12 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
     const width = (colX.at(-1) ?? 0) + bw + (colGap.at(-1) ?? MARGIN);
     const height = (rowY.at(-1) ?? 0) + (rowH.at(-1) ?? bh) + (rowGap.at(-1) ?? MARGIN);
 
+    // The top of a box `h` high in the middle of row `r`, moved `part` of the way to the next row.
+    const yOf = (r: number, part: number, h: number): number => {
+      const top = (rowY[r] ?? 0) + ((rowH[r] ?? bh) - h) / 2;
+      return part === 0 ? top : top + part * ((rowY[r + 1] ?? (rowY[r] ?? 0) + bh + GAP_Y) - (rowY[r] ?? 0));
+    };
+    const down = (id: string): number => spec.shift?.[id] ?? 0;
     const nodes: LayoutNode[] = graph.nodes.map((n) => {
       const p = cellOf(n.id) as Cell;
       return {
@@ -225,7 +234,7 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
         row: p.c,
         // A box of its own size (an actor) stands in the middle of its cell.
         x: (colX[p.c] as number) + (bw - (own.get(n.id)?.w ?? bw)) / 2,
-        y: (rowY[p.r] as number) + (spec.shift?.[n.id] ?? 0) * ((rowY[p.r + 1] ?? (rowY[p.r] as number) + bh + GAP_Y) - (rowY[p.r] as number)) + ((rowH[p.r] as number) - (own.get(n.id)?.h ?? bh)) / 2,
+        y: sides ? yOf(p.r + Math.floor(down(n.id)), down(n.id) % 1, own.get(n.id)?.h ?? bh) : yOf(p.r, down(n.id), own.get(n.id)?.h ?? bh),
         w: own.get(n.id)?.w ?? bw,
         h: own.get(n.id)?.h ?? bh,
         title: n.title,
@@ -256,9 +265,16 @@ export function layoutC4Grid(given: Graph, ruler: Ruler, opts: LayoutOptions): L
       const c = laidClusters.find((k) => k.id === id);
       return c === undefined ? undefined : { x: c.x + NAME_INSET, y: c.y + NAME_TOP, w: nameWidth(c.label), h: NAME - NAME_TOP };
     };
-    const drawnLines = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf, ...(names ? { nameOf } : {}) });
+    const captions = nodes.flatMap((n) => {
+      if (!sides || n.shape !== 'actor') return [];
+      const w = ruler.textWidth(n.title, 'line');
+      return [{ x: n.x + n.w / 2 - w / 2 - CAPTION_CLEAR, y: n.y + n.h, w: w + 2 * CAPTION_CLEAR, h: ACTOR_NAME_GAP + ACTOR_NAME_H }];
+    });
+    // With figures left by their sides, the trunks are drawn first and the other lines keep off them.
+    const branches = trunkBranches(graph, nodes);
+    const drawnLines = drawLines({ graph, nodes, clusters: laidClusters, width, height, holds, labelOf, captions, figureSides: sides, ...(sides ? { given: new Map(branches.map((b) => [b.i, { path: b.path, yields: turnsIn(b) }])) } : {}), ...(names ? { nameOf } : {}) });
     const { diagnostics } = drawnLines;
-    const edges = trunked(graph, nodes, drawnLines.edges);
+    const edges = trunked(graph, drawnLines.edges, sides ? besideOthers(branches, drawnLines.edges) : branches);
     return { width, height, nodes, laidClusters, colX, edges, diagnostics };
   };
   // A line down the first column of a cluster that runs over its name moves the columns inside right, as far as the name needs.
@@ -532,9 +548,9 @@ const HAND = 12;
 /**
  * Lines that ask for a trunk at one end (`trunk` on the graph edge) and whose other ends all stand in one column to the
  * right: one run out of the middle of the right face of the shared box to a dot, then a branch to the middle of the left
- * face of each other box. Other lines stay as drawn.
+ * face of each other box. The same downward for other ends in one row below.
  */
-function trunked(graph: Graph, nodes: readonly LayoutNode[], edges: Layout['edges']): Layout['edges'] {
+function trunkBranches(graph: Graph, nodes: readonly LayoutNode[]): Branch[] {
   const boxOf = new Map(nodes.map((n) => [n.id, n]));
   const groups = new Map<string, number[]>();
   graph.edges.forEach((e, i) => {
@@ -543,7 +559,7 @@ function trunked(graph: Graph, nodes: readonly LayoutNode[], edges: Layout['edge
     const k = `${at}|${e.trunk.kind}`;
     groups.set(k, [...(groups.get(k) ?? []), i]);
   });
-  const out = [...edges];
+  const found: Branch[] = [];
   for (const [k, list] of groups) {
     const at = boxOf.get(k.slice(0, k.indexOf('|')));
     if (at === undefined || list.length < 2) continue;
@@ -555,19 +571,101 @@ function trunked(graph: Graph, nodes: readonly LayoutNode[], edges: Layout['edge
     if (run === undefined) continue;
     list.forEach((i, n) => {
       const e = graph.edges[i] as Graph['edges'][number];
-      const dedup = (run.paths[n] as Point[]).filter((p, j, all) => j === 0 || p.x !== (all[j - 1] as Point).x || p.y !== (all[j - 1] as Point).y);
-      // A point in the middle of a straight run is no corner.
-      const way = dedup.filter((p, j, all) => {
-        const [a, b] = [all[j - 1], all[j + 1]];
-        return a === undefined || b === undefined || !((a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y));
-      });
-      const points = e.trunk?.end === 'from' ? way : [...way].reverse();
-      // Only the lead line draws the mark at the shared end.
-      const shared = n === 0 ? {} : e.trunk?.end === 'from' ? { startEnd: 'none' as const } : { end: 'none' as const };
-      out[i] = { ...(out[i] as Layout['edges'][number]), points, trunk: { id: k, lead: n === 0, dot: run.dot }, ...shared };
+      const mark = e.trunk?.end === 'from' ? (e.end ?? 'arrow') : (e.startEnd ?? 'none');
+      found.push({ i, k, lead: n === 0, dot: run.dot, path: run.paths[n] as Point[], end: ends[n] as LayoutNode, marked: mark !== 'none' });
     });
   }
+  return found;
+}
+
+/** The lines with those of the trunks drawn along their branches; the other lines stay as drawn. */
+function trunked(graph: Graph, edges: Layout['edges'], branches: readonly Branch[]): Layout['edges'] {
+  const out = [...edges];
+  for (const b of branches) {
+    const e = graph.edges[b.i] as Graph['edges'][number];
+    const dedup = b.path.filter((p, j, all) => j === 0 || p.x !== (all[j - 1] as Point).x || p.y !== (all[j - 1] as Point).y);
+    // A point in the middle of a straight run is no corner.
+    const way = dedup.filter((p, j, all) => {
+      const [a, c] = [all[j - 1], all[j + 1]];
+      return a === undefined || c === undefined || !((a.x === p.x && p.x === c.x) || (a.y === p.y && p.y === c.y));
+    });
+    const points = e.trunk?.end === 'from' ? way : [...way].reverse();
+    // Only the lead line draws the mark at the shared end.
+    const shared = b.lead ? {} : e.trunk?.end === 'from' ? { startEnd: 'none' as const } : { end: 'none' as const };
+    out[b.i] = { ...(out[b.i] as Layout['edges'][number]), points, trunk: { id: b.k, lead: b.lead, dot: b.dot }, ...shared };
+  }
   return out;
+}
+
+/** A line of a trunk: the edge, its trunk, the dot it leaves, its path from the shared box and the box it ends on, with a mark or without. */
+interface Branch {
+  i: number;
+  k: string;
+  lead: boolean;
+  dot: Point;
+  path: Point[];
+  end: LayoutNode;
+  marked: boolean;
+}
+
+/** True when the branch turns into its last run: it comes from one side, and can end off the middle on that side. */
+function turnsIn(b: Branch): boolean {
+  const z = b.path[b.path.length - 1] as Point;
+  return b.dot.x !== z.x && b.dot.y !== z.y;
+}
+
+/** What two lines side by side keep where both end with a mark on one box. */
+const MARK_GAP = 16;
+
+/**
+ * The branches with room made for the other lines, into a left face and into a top face alike. A branch ends in the
+ * middle of a face. Where another line runs beside its last run closer than two lines keep (`LINE_GAP`, or `MARK_GAP`
+ * where both end with a mark on that box), the branch ends `MARK_GAP` off the middle instead, on the side its dot
+ * stands, when the gap holds there and it crosses no more lines than before; else it stays in the middle. On an
+ * ellipse the place stays within a third of the height about the middle, where the outline still stands across the
+ * line. One branch after the other, each against the lines as the ones before it left them.
+ */
+function besideOthers(branches: readonly Branch[], edges: Layout['edges']): Branch[] {
+  const mine = new Set(branches.map((b) => b.i));
+  // Every other line: its path, and the boxes it ends on with a mark, each with the place of that end.
+  const drawn = edges.flatMap((e, i) => {
+    if (mine.has(i)) return [];
+    const marks = [...((e.startEnd ?? 'none') !== 'none' ? [{ id: e.from, at: e.points[0] as Point }] : []), ...((e.end ?? 'arrow') !== 'none' ? [{ id: e.to, at: e.points[e.points.length - 1] as Point }] : [])];
+    return [{ path: e.points, marks }];
+  });
+  const runs = (path: readonly Point[]): Array<[Point, Point]> => path.slice(1).map((q, j) => [path[j] as Point, q]);
+  return branches.reduce<Branch[]>((done, b, n) => {
+    const last = b.path.length - 1;
+    const [a, z] = [b.path[last - 1] as Point, b.path[last] as Point];
+    const across = a.y === z.y;
+    const at = (p: Point): number => (across ? p.y : p.x);
+    const along = (p: Point): number => (across ? p.x : p.y);
+    const mid = across ? b.end.y + b.end.h / 2 : b.end.x + b.end.w / 2;
+    const size = across ? b.end.h : b.end.w;
+    const off = Math.sign(at(b.dot) - mid) * Math.min(MARK_GAP, b.end.shape === 'ellipse' ? size / 3 : size / 2 - MARK_GAP / 2);
+    // Level with its dot, or the dot nearer than the place: it stays.
+    if (Math.abs(at(b.dot) - mid) <= Math.abs(off)) return [...done, b];
+    const others = [...done, ...branches.slice(n + 1)].filter((o) => o.k !== b.k).map((o) => ({ path: o.path, marks: o.marked ? [{ id: o.end.id, at: o.path[o.path.length - 1] as Point }] : [] }));
+    const rest = [...drawn, ...others];
+    const [lo, hi] = [Math.min(along(a), along(z)), Math.max(along(a), along(z))];
+    const crowded = (place: number): boolean =>
+      rest.some((o) => {
+        const gap = b.marked && o.marks.some((m) => m.id === b.end.id && Math.abs(along(m.at) - along(z)) < 0.5) ? MARK_GAP : LINE_GAP;
+        return runs(o.path).some(([p, q]) => at(p) === at(q) && Math.abs(at(p) - place) < gap - 1e-6 && Math.min(hi, Math.max(along(p), along(q))) - Math.max(lo, Math.min(along(p), along(q))) > 0.5);
+      });
+    if (!crowded(mid)) return [...done, b];
+    const moved = b.path.map((p, j) => (j < last - 1 ? p : across ? { x: p.x, y: mid + off } : { x: mid + off, y: p.y }));
+    const crossings = (path: readonly Point[]): number => runs(path).reduce((sum, [p, q]) => sum + rest.reduce((m, o) => m + runs(o.path).filter(([r, s]) => crossesRun(p, q, r, s)).length, 0), 0);
+    return [...done, crowded(mid + off) || crossings(moved) > crossings(b.path) ? b : { ...b, path: moved }];
+  }, []);
+}
+
+/** True when one of two runs stands across the other and passes through its inside. */
+function crossesRun(p: Point, q: Point, r: Point, s: Point): boolean {
+  const flat = (a: Point, b: Point): boolean => a.y === b.y;
+  if (flat(p, q) === flat(r, s)) return false;
+  const [[h0, h1], [v0, v1]] = flat(p, q) ? [[p, q], [r, s]] : [[r, s], [p, q]];
+  return v0.x > Math.min(h0.x, h1.x) + 1 && v0.x < Math.max(h0.x, h1.x) - 1 && h0.y > Math.min(v0.y, v1.y) + 1 && h0.y < Math.max(v0.y, v1.y) - 1;
 }
 
 /**

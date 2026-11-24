@@ -212,6 +212,12 @@ export interface GridSpec {
   shift?: Record<string, number>;
   /** Per row from the second: the gap above it, when it differs from the usual one. */
   rowGaps?: Record<number, number>;
+  /**
+   * With `cells`: a line leaves a figure by a side only and keeps off the name under it, a branch of a trunk makes room
+   * for another line into its face, and `shift` counts the rows as they stand. Unset, `shift` counts the distance to the
+   * row after the cell.
+   */
+  figureSides?: boolean;
 }
 
 export interface Point {
