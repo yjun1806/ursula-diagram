@@ -232,7 +232,10 @@ export function parseEr(src: string, heading?: string): ErModel {
       const b = refOf(right);
       touch(a);
       touch(b);
-      edges.push({ from: a.id, to: b.id, style: dashed ? 'dotted' : 'normal', startEnd, end, ...(label === '' ? {} : { label }) });
+      // The side of one stands before the side of many: a line written from the many side is kept from the one side.
+      const many = (v: EdgeEnd): boolean => v === 'zero-many' || v === 'one-many';
+      const turned = many(startEnd) && !many(end);
+      edges.push({ from: turned ? b.id : a.id, to: turned ? a.id : b.id, style: dashed ? 'dotted' : 'normal', startEnd: turned ? end : startEnd, end: turned ? startEnd : end, ...(label === '' ? {} : { label }) });
       continue;
     }
     const open = BLOCK_OPEN.exec(text);

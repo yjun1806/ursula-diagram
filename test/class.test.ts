@@ -107,8 +107,9 @@ describe('class diagram: reading', () => {
     expect(edge(g, 'classK', 'classL')).toMatchObject({ startEnd: 'arrow-open', style: 'dotted' });
     expect(edge(g, 'classM', 'classN')).toMatchObject({ startEnd: 'triangle-open', style: 'dotted' });
     expect(edge(g, 'classO', 'classP')).toMatchObject({ end: 'none', style: 'dotted' });
-    expect(edge(g, 'classQ', 'classR')).toMatchObject({ end: 'triangle-open' });
-    expect(edge(g, 'classS', 'classT')).toMatchObject({ end: 'triangle-open', style: 'dotted' });
+    // Written from the child: kept as the line from the parent.
+    expect(edge(g, 'classR', 'classQ')).toMatchObject({ startEnd: 'triangle-open', end: 'none' });
+    expect(edge(g, 'classT', 'classS')).toMatchObject({ startEnd: 'triangle-open', end: 'none', style: 'dotted' });
     expect(edge(g, 'Animal', 'Zebra')).toMatchObject({ startEnd: 'triangle-open', end: 'triangle-open' });
   });
 
@@ -230,5 +231,20 @@ describe('class diagram: interfaces on stubs and tags', () => {
     const head = parseClass('classDiagram\n  class Payment {\n    <<interface>>\n    +pay()\n  }').nodes[0]?.compartments?.[0];
     expect(head?.lines).toEqual(['«interface»', 'Payment']);
     expect(head?.lineEmphasis).toEqual(['tag', 'title']);
+  });
+});
+
+describe('a parent written at the end of a line', () => {
+  it('is read as the line from the parent, with the counts on the ends they were written at', () => {
+    const g = parseClass('classDiagram\n  Duck "1" --|> "0..1" Animal : is a\n  Impl ..|> Api');
+    expect(g.edges[0]).toMatchObject({ from: 'Animal', to: 'Duck', startEnd: 'triangle-open', end: 'none', startLabel: '0..1', endLabel: '1', label: 'is a' });
+    expect(g.edges[1]).toMatchObject({ from: 'Api', to: 'Impl', startEnd: 'triangle-open', end: 'none', style: 'dotted' });
+  });
+
+  it('stands above its child', () => {
+    const l = layout(parseClass('classDiagram\n  Duck --|> Animal\n  Fish --|> Animal'), pixelRuler());
+    const y = (id: string): number => l.nodes.find((n) => n.id === id)?.y ?? NaN;
+    expect(y('Animal')).toBeLessThan(y('Duck'));
+    expect(y('Animal')).toBeLessThan(y('Fish'));
   });
 });

@@ -545,3 +545,11 @@ describe('er: errors', () => {
     }
   });
 });
+
+describe('a relation written from the side of many', () => {
+  it('is kept from the side of one, with the ends swapped', () => {
+    const g = parseEr('erDiagram\n  PERSON o{--|| HOUSE : has\n  PERSON ||--|| CAR : owns').graph;
+    expect(g.edges[0]).toMatchObject({ from: 'HOUSE', to: 'PERSON', startEnd: 'one', end: 'zero-many', label: 'has' });
+    expect(g.edges[1]).toMatchObject({ from: 'PERSON', to: 'CAR', startEnd: 'one', end: 'one' });
+  });
+});

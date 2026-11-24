@@ -254,17 +254,22 @@ export function parseClass(src: string, config: ClassConfig = DEFAULT_CLASS_CONF
       const to = classOf(right as string);
       const startEnd = m?.[1] === undefined ? undefined : START_ENDS[m[1]];
       const end = m?.[3] === undefined ? 'none' : (FINISH_ENDS[m[3]] ?? 'none');
+      // A parent stands above its children: a line written from the child (`Child --|> Parent`) is kept from the parent, as `Parent <|-- Child` is.
+      const turned = end === 'triangle-open' && startEnd !== 'triangle-open';
+      const [first, second] = turned ? [to, from] : [from, to];
+      const [firstEnd, secondEnd] = turned ? [end, startEnd ?? 'none'] : [startEnd, end];
+      const [firstCount, secondCount] = turned ? [toCount, fromCount] : [fromCount, toCount];
       edges.push({
-        from: from.id,
-        to: to.id,
+        from: first.id,
+        to: second.id,
         style,
-        end,
-        ...(startEnd === undefined ? {} : { startEnd }),
+        end: secondEnd,
+        ...(firstEnd === undefined ? {} : { startEnd: firstEnd }),
         // Inheritance and realization lines that end at one parent share a trunk.
-        ...((startEnd === 'triangle-open') !== (end === 'triangle-open') ? { trunk: { end: startEnd === 'triangle-open' ? ('from' as const) : ('to' as const), kind: 'triangle-open' } } : {}),
+        ...((firstEnd === 'triangle-open') !== (secondEnd === 'triangle-open') ? { trunk: { end: firstEnd === 'triangle-open' ? ('from' as const) : ('to' as const), kind: 'triangle-open' } } : {}),
         ...(label === undefined || label.trim() === '' ? {} : { label: genericsOf(label.trim()) }),
-        ...(fromCount === undefined ? {} : { startLabel: fromCount }),
-        ...(toCount === undefined ? {} : { endLabel: toCount }),
+        ...(firstCount === undefined ? {} : { startLabel: firstCount }),
+        ...(secondCount === undefined ? {} : { endLabel: secondCount }),
       });
       return;
     }
