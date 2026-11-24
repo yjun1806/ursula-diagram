@@ -19,6 +19,7 @@ import { separateTwoWay } from './two-way.ts';
 import { arrangeLanes, laneBorders } from './lane-gaps.ts';
 import { crossedLabels, crowdedLabels, refineLabels } from './label-spot.ts';
 import { headRoom } from './head-room.ts';
+import { clearLabels } from './label-clear.ts';
 import { crossings } from '../layout/check.ts';
 import { offCentreEnds } from './centre.ts';
 import { settleMixedSides } from './vertex.ts';
@@ -682,7 +683,10 @@ export function layoutLayered(source: Graph, ruled: Ruler, options: LayeredOptio
         break;
       }
     }
-    if (opts.nested !== true) drawn = headRoom(drawn, layeredRuler(given, opts.gap, opts.share !== false).nodeGrid, opts.maxWidth);
+    if (opts.nested !== true) {
+      const step = layeredRuler(given, opts.gap, opts.share !== false).nodeGrid;
+      drawn = headRoom(clearLabels(drawn, given, step, laneBorders, opts.maxWidth), step, opts.maxWidth);
+    }
     return withQuestions(source, drawn, given, opts);
   }
   // A wider gap makes room for more lines between boxes at two cells a line, where a line of its own costs a whole column.

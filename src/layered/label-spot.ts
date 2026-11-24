@@ -84,8 +84,10 @@ export function segmentToRect(s: Segment, r: Rect): number {
 
 const nearestLine = (r: Rect, foreign: Segment[]): number => foreign.reduce((m, s) => Math.min(m, segmentToRect(s, r)), Infinity);
 
-/** Pixels: the chip a label is drawn on, which is larger than its text box. A terminal draws the text alone. */
-const chipOf = (r: Rect, q: SpotQuery): Rect => (q.ruler.uniform ? r : { x: r.x - CHIP_GROW_X, y: r.y - CHIP_GROW_Y, w: r.w + 2 * CHIP_GROW_X, h: r.h + 2 * CHIP_GROW_Y });
+/** Pixels: the chip a label is drawn on, which is larger than its text box `r`. */
+export const chipOfLabel = (r: Rect): Rect => ({ x: r.x - CHIP_GROW_X, y: r.y - CHIP_GROW_Y, w: r.w + 2 * CHIP_GROW_X, h: r.h + 2 * CHIP_GROW_Y });
+/** The chip of a label in the drawing asked about: a terminal draws the text alone. */
+const chipOf = (r: Rect, q: SpotQuery): Rect => (q.ruler.uniform ? r : chipOfLabel(r));
 
 /** Distance of the box to the lines of other edges, whether it overlaps something, and whether it is clean in the sense of `chooseSpot`. */
 function measure(r: Rect, q: SpotQuery): { line: number; clean: boolean; overlap: boolean; marked: boolean } {
@@ -312,29 +314,50 @@ export function crowdedLabels(layout: Pick<Layout, 'nodes' | 'edges'>): number {
   for (const e of layout.edges) {
     const l = e.label;
     if (!l || e.invisible) continue;
-    const chip: Rect = { x: l.x - CHIP_GROW_X, y: l.y - CHIP_GROW_Y, w: l.w + 2 * CHIP_GROW_X, h: l.h + 2 * CHIP_GROW_Y };
+    const chip = chipOfLabel(l);
     if (layout.nodes.some((n) => overlaps(chip, n)) || endTexts.some((t) => overlaps(l, t))) count++;
   }
   return count;
 }
 
+/** Pixels: whether a stretch of another line runs through the chip of the label of edge `i`. */
+export function crossedLabel(layout: Pick<Layout, 'edges'>, i: number): boolean {
+  const e = layout.edges[i];
+  const l = e?.label;
+  if (!e || !l || e.invisible) return false;
+  const chip = chipOfLabel(l);
+  return layout.edges.some((o, k) => {
+    if (k === i || o.invisible) return false;
+    for (let s = 0; s + 1 < o.points.length; s++) {
+      const p = o.points[s] as { x: number; y: number };
+      const q = o.points[s + 1] as { x: number; y: number };
+      if (Math.max(p.x, q.x) > chip.x + 1 && Math.min(p.x, q.x) < chip.x + chip.w - 1 && Math.max(p.y, q.y) > chip.y + 1 && Math.min(p.y, q.y) < chip.y + chip.h - 1) return true;
+    }
+    return false;
+  });
+}
+
 /** Pixels: labels of a finished drawing whose chip a stretch of another line runs through. */
 export function crossedLabels(layout: Pick<Layout, 'edges'>): number {
-  let count = 0;
-  layout.edges.forEach((e, i) => {
-    const l = e.label;
-    if (!l || e.invisible) return;
-    const chip: Rect = { x: l.x - CHIP_GROW_X, y: l.y - CHIP_GROW_Y, w: l.w + 2 * CHIP_GROW_X, h: l.h + 2 * CHIP_GROW_Y };
-    const through = layout.edges.some((o, k) => {
-      if (k === i || o.invisible) return false;
-      for (let s = 0; s + 1 < o.points.length; s++) {
-        const p = o.points[s] as { x: number; y: number };
-        const q = o.points[s + 1] as { x: number; y: number };
-        if (Math.max(p.x, q.x) > chip.x + 1 && Math.min(p.x, q.x) < chip.x + chip.w - 1 && Math.max(p.y, q.y) > chip.y + 1 && Math.min(p.y, q.y) < chip.y + chip.h - 1) return true;
-      }
-      return false;
-    });
-    if (through) count++;
-  });
-  return count;
+  return layout.edges.filter((_, i) => crossedLabel(layout, i)).length;
+}
+
+/**
+ * The label of edge `ei` placed again in a finished drawing, against everything else as it stands. Undefined when no
+ * place along its line is clean in the sense of `chooseSpot`.
+ */
+export function placeAgain(layout: Layout, ei: number, ruler: Ruler, avoid: Rect[] = []): Layout | undefined {
+  const edge = layout.edges[ei];
+  const label = edge?.label;
+  if (!edge || !label) return undefined;
+  const segsOf = (points: Point[]): Segment[] => points.slice(1).map((q, i) => [points[i] as Point, q] as Segment);
+  const own = segsOf(edge.points);
+  const foreign = layout.edges.flatMap((e, k) => (k === ei || e.invisible ? [] : segsOf(e.points)));
+  const placed: Rect[] = layout.edges.flatMap((e, k) => [k === ei ? undefined : e.label, e.startLabel, e.endLabel].flatMap((t) => (t === undefined ? [] : [{ x: t.x, y: t.y, w: t.w, h: t.h }])));
+  const basic: Rect = { x: label.x, y: label.y, w: label.w, h: label.h };
+  const near = own.map((sg) => segmentToRect(sg, basic));
+  const q: SpotQuery = { own, foreign, nodes: layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h })), placed, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) };
+  const spot = chooseSpot(q);
+  if (!measure(spot.rect, q).clean) return undefined;
+  return { ...layout, edges: layout.edges.map((e, k) => (k === ei ? { ...e, label: { ...label, x: spot.rect.x, y: spot.rect.y } } : e)) };
 }
