@@ -74,7 +74,7 @@ function columnRows(model: Kanban, index: number, width: number): Row[] {
 export function layoutKanbanText(model: Kanban, maxWidth: number | undefined): Row[] {
   const n = model.columns.length;
   const limit = maxWidth ?? Number.POSITIVE_INFINITY;
-  if (limit < MIN_INNER + 4) throw new UrsulaError(`A kanban drawing needs at least ${MIN_INNER + 4} columns of width; the limit is ${limit}.`, 'kanban-width');
+  if (limit < MIN_INNER + 4) throw new UrsulaError(`A kanban drawing needs at least ${MIN_INNER + 4} columns of width; the limit is ${limit}.`, 'kanban-width', undefined, { minWidth: MIN_INNER + 4 });
   const fit = maxWidth === undefined ? DEFAULT_COLUMN : Math.min(WIDE_COLUMN, Math.floor((maxWidth - COLUMN_GAP * (n - 1)) / n));
   let rows: Row[];
   if (fit >= NARROW_COLUMN || n === 1) {
