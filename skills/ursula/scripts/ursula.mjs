@@ -12539,6 +12539,27 @@ function cellsOfLine(e, nodes) {
   return out;
 }
 function labelsInSight(given, limit, cutting = true) {
+  return sight(sight(given, limit, cutting, false), limit, cutting, true);
+}
+var edgesByCell = new WeakMap;
+function linesAt(l) {
+  const byEdges = edgesByCell.get(l.nodes) ?? new WeakMap;
+  edgesByCell.set(l.nodes, byEdges);
+  const known = byEdges.get(l.edges);
+  if (known !== undefined)
+    return known;
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  const out = new Map;
+  l.edges.forEach((e, k) => {
+    if (e.invisible || e.points.length < 2)
+      return;
+    for (const [x, y] of cellsOfLine(e, nodes))
+      out.set(`${x},${y}`, [...out.get(`${x},${y}`) ?? [], k]);
+  });
+  byEdges.set(l.edges, out);
+  return out;
+}
+function sight(given, limit, cutting, off) {
   let l = given;
   const within = (w) => limit === undefined || !Number.isFinite(limit) || w <= limit;
   for (let ei = 0;ei < l.edges.length; ei++) {
@@ -12550,11 +12571,22 @@ function labelsInSight(given, limit, cutting = true) {
     const [lx, ly] = [Math.round(label.x), Math.round(label.y)];
     const tw = cellWidth(label.text);
     const lw = Math.max(Math.round(label.w), tw);
+    const from = lx + Math.floor((lw - tw) / 2);
+    if (off) {
+      if (lx < 0 || ly < 0)
+        continue;
+      const lines = linesAt(now);
+      const onOther = Array.from({ length: tw }, (_, k) => lines.get(`${from + k},${ly}`) ?? []).some((list) => !list.includes(ei) && list.length > 0);
+      if (!onOther)
+        continue;
+    }
     const boxes = now.nodes.map((n) => ({ x: Math.round(n.x), y: Math.round(n.y), w: Math.round(n.w), h: Math.round(n.h) }));
     const texts = now.edges.flatMap((o, k) => o.invisible ? [] : [k === ei ? undefined : o.label, o.startLabel, o.endLabel]).flatMap((t) => t === undefined ? [] : [{ x: Math.round(t.x), y: Math.round(t.y), w: Math.max(1, Math.round(t.w)), h: 1 }]);
     const stands = (x, row, w) => [...boxes, ...texts].some((r) => row >= r.y && row < r.y + r.h && x + w > r.x && x < r.x + r.w);
-    const from = lx + Math.floor((lw - tw) / 2);
-    if (lx >= 0 && ly >= 0 && !stands(from, ly, tw)) {
+    if (off) {
+      if (stands(from, ly, tw))
+        continue;
+    } else if (lx >= 0 && ly >= 0 && !stands(from, ly, tw)) {
       if (from + tw <= now.width)
         continue;
       if (within(from + tw)) {
@@ -12616,6 +12648,8 @@ function labelsInSight(given, limit, cutting = true) {
       l = put(place.x, place.y);
       continue;
     }
+    if (off)
+      continue;
     if (ly < 0) {
       l = grow(now, -Infinity, -ly, true);
       ei--;
@@ -15581,7 +15615,7 @@ var CORNERS2 = {
   round: ["╭", "╮", "╰", "╯"],
   note: ["┌", "┒", "└", "┘"]
 };
-var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging"];
+var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging", "overwritten"];
 function runsOf2(edge, nodes) {
   const cellAt = (index) => {
     const p = edge.points[index] ?? { x: 0, y: 0 };
@@ -15948,6 +15982,26 @@ function breaksOf(layout, lines, labels, notes) {
       }
     }
   });
+  let overwritten = 0;
+  const textAt = new Set;
+  runs.forEach((run, i) => {
+    const ends = run?.cells.length ?? 0;
+    run?.cells.forEach(([x, y], k) => {
+      const key = `${x},${y}`;
+      const ch = at(x, y);
+      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS.has(ch) || inBox(x, y))
+        return;
+      if ((byCell.get(key) ?? [i]).some((j) => {
+        const s = spots[j];
+        return s !== undefined && s.y === y && x >= s.x0 && x <= s.x1;
+      }))
+        return;
+      textAt.add(key);
+      overwritten++;
+    });
+  });
+  if (overwritten > 0)
+    note(`${overwritten} cells of lines written over`);
   const room = roomViolations(lines, grid);
   const asked = labels ?? drawn.flatMap((e) => e.label === undefined ? [] : e.label.lines ?? [e.label.text]);
   return {
@@ -15963,7 +16017,8 @@ function breaksOf(layout, lines, labels, notes) {
     forks,
     crossMarks,
     mixedNets,
-    hugging
+    hugging,
+    overwritten
   };
 }
 var breaksMore = (a, b) => BREAK_KINDS.some((k) => a[k] > b[k]);
