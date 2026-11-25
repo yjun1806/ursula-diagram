@@ -4,7 +4,7 @@
 
 <p align="center"><b>Mermaid 글을 SVG와 터미널 글자 그림으로 그립니다. 브라우저도, 실행 의존성도 필요 없습니다.</b></p>
 
-<p align="center"><a href="https://yjun1806.github.io/ursula-diagram/">문서와 플레이그라운드</a> · <a href="https://yjun1806.github.io/ursula-diagram/playground">브라우저에서 해 보기</a> (영어)</p>
+<p align="center"><a href="https://yjun1806.github.io/ursula-diagram/ko/">문서와 플레이그라운드</a> · <a href="https://yjun1806.github.io/ursula-diagram/ko/playground">브라우저에서 해 보기</a></p>
 
 <p align="center">
   <a href="#왜-만들었나">왜 만들었나</a> ·

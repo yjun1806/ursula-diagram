@@ -4,7 +4,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { existsSync } from 'node:fs';
 import { TABS, decodeState, draw, encodeState } from '../.vitepress/theme/playground/draw.js';
+import { GALLERY_EN, GALLERY_KO } from '../.vitepress/theme/playground/gallery-texts.js';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -31,6 +33,35 @@ for (const name of readdirSync(dir).filter((f) => f.endsWith('.mmd'))) {
   const back = await decodeState(`#${await encodeState({ src, tab: 'ascii', width: 120 })}`);
   if (back.src !== src || back.tab !== 'ascii' || back.width !== 120) fail(`${name}: the link does not bring the text back`);
   else console.log(`ok   ${name} link`);
+}
+
+for (const [lang, gallery] of [['en', GALLERY_EN], ['ko', GALLERY_KO]]) {
+  for (const [name, src] of Object.entries(gallery)) {
+    for (const { id } of TABS) {
+      const out = draw(engine, src, id, 100);
+      if (out.error) fail(`${lang} gallery ${name} ${id}: ${out.error}`);
+    }
+  }
+  console.log(`ok   ${lang} gallery: ${Object.keys(gallery).length} texts in ${TABS.length} outputs`);
+}
+
+// The built pages: both playground routes carry the component, and every English page has a Korean twin.
+const built = join(site, '.vitepress', 'dist');
+if (existsSync(built)) {
+  for (const [page, words] of [['playground.html', ['Copy link', 'Example']], ['ko/playground.html', ['링크 복사', '예시']]]) {
+    const html = readFileSync(join(built, page), 'utf8');
+    const missing = ['pg-input', ...words].filter((w) => !html.includes(w));
+    if (missing.length) fail(`${page} lacks ${missing.join(', ')}`);
+    else console.log(`ok   ${page}`);
+  }
+  const pages = (d, rel = '') =>
+    readdirSync(join(d, rel), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? (rel === '' && ['ko', 'assets'].includes(e.name) ? [] : pages(d, join(rel, e.name))) : e.name.endsWith('.html') && e.name !== '404.html' ? [join(rel, e.name)] : [],
+    );
+  const missingKo = pages(built).filter((p) => !existsSync(join(built, 'ko', p)));
+  if (missingKo.length) fail(`no Korean page for ${missingKo.join(', ')}`);
+  else console.log('ok   every English page has a Korean page');
+  if (!readFileSync(join(built, 'index.html'), 'utf8').includes('ursula-lang')) fail('the language redirect is not in the page head');
 }
 
 const text = readFileSync(join(dir, 'order-flow.mmd'), 'utf8');

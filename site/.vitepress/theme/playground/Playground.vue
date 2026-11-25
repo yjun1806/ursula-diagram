@@ -1,15 +1,20 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { withBase } from 'vitepress';
+import { useData, withBase } from 'vitepress';
 import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, TABS, clampWidth, decodeState, draw, encodeState } from './draw.js';
-import { EXAMPLES } from './examples.js';
+import { examplesFor } from './examples.js';
+import { STRINGS, langOf } from './strings.js';
+
+const { lang } = useData();
+const t = STRINGS[langOf(lang.value)];
+const EXAMPLES = examplesFor(langOf(lang.value));
 
 const src = ref(EXAMPLES[0].src);
 const exampleId = ref(EXAMPLES[0].id);
 const tab = ref('svg');
 const width = ref(DEFAULT_WIDTH);
 const result = ref(null);
-const status = ref('Loading the engine…');
+const status = ref(t.loading);
 const copied = ref(false);
 
 let engine = null;
@@ -24,8 +29,8 @@ function loadEngine() {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = withBase('/ursula.global.js');
-    script.onload = () => (window.ursula ? resolve(window.ursula) : reject(new Error('The engine did not load.')));
-    script.onerror = () => reject(new Error('The engine script could not be fetched.'));
+    script.onload = () => (window.ursula ? resolve(window.ursula) : reject(new Error(t.engineMissing)));
+    script.onerror = () => reject(new Error(t.engineFetch));
     document.head.appendChild(script);
   });
 }
@@ -83,9 +88,22 @@ function setWidth(event) {
   width.value = clampWidth(event.target.value);
 }
 
+/** The hash to start from: the address, or the drawing carried over by the language menu. */
+function startHash() {
+  let carried = '';
+  try {
+    carried = sessionStorage.getItem('ursula-carry-hash') ?? '';
+    sessionStorage.removeItem('ursula-carry-hash');
+  } catch {
+    // No storage: only the address counts.
+  }
+  return location.hash || carried;
+}
+
 async function readHash() {
-  if (!location.hash) return;
-  const state = await decodeState(location.hash);
+  const hash = startHash();
+  if (!hash) return;
+  const state = await decodeState(hash);
   if (state.src !== undefined) {
     src.value = state.src;
     exampleId.value = EXAMPLES.find((e) => e.src === state.src)?.id ?? '';
@@ -117,18 +135,18 @@ onBeforeUnmount(() => {
   <div class="pg">
     <div class="pg-bar">
       <label class="pg-field">
-        <span>Example</span>
+        <span>{{ t.example }}</span>
         <select v-model="exampleId" @change="pickExample">
-          <option v-if="exampleId === ''" value="">Your text</option>
+          <option v-if="exampleId === ''" value="">{{ t.yourText }}</option>
           <option v-for="e in EXAMPLES" :key="e.id" :value="e.id">{{ e.label }}</option>
         </select>
       </label>
-      <label class="pg-field" :class="{ 'pg-off': !usesWidth }" title="Terminal columns, for the text outputs">
-        <span>Width</span>
+      <label class="pg-field" :class="{ 'pg-off': !usesWidth }" :title="t.widthTitle">
+        <span>{{ t.width }}</span>
         <input type="range" :min="MIN_WIDTH" :max="MAX_WIDTH" :value="width" :disabled="!usesWidth" @input="setWidth" />
         <input class="pg-num" type="number" :min="MIN_WIDTH" :max="MAX_WIDTH" :value="width" :disabled="!usesWidth" @change="setWidth" />
       </label>
-      <button class="pg-button" type="button" @click="copyLink">{{ copied ? 'Link copied' : 'Copy link' }}</button>
+      <button class="pg-button" type="button" @click="copyLink">{{ copied ? t.copied : t.copyLink }}</button>
     </div>
 
     <div class="pg-panes">
@@ -139,7 +157,7 @@ onBeforeUnmount(() => {
           spellcheck="false"
           autocapitalize="off"
           autocomplete="off"
-          aria-label="Mermaid text"
+          :aria-label="t.input"
           @input="exampleId = ''"
         ></textarea>
       </div>
@@ -147,15 +165,15 @@ onBeforeUnmount(() => {
       <div class="pg-pane">
         <div class="pg-tabs" role="tablist">
           <button
-            v-for="t in TABS"
-            :key="t.id"
+            v-for="x in TABS"
+            :key="x.id"
             type="button"
             role="tab"
-            :aria-selected="tab === t.id"
-            :class="{ active: tab === t.id }"
-            @click="tab = t.id"
+            :aria-selected="tab === x.id"
+            :class="{ active: tab === x.id }"
+            @click="tab = x.id"
           >
-            {{ t.label }}
+            {{ t.tabs[x.id] }}
           </button>
         </div>
 
@@ -166,9 +184,7 @@ onBeforeUnmount(() => {
           <pre v-else-if="result && result.lines" class="pg-text"><template v-for="(line, i) in result.lines" :key="i"><span v-for="(s, j) in line" :key="j" :class="`tone-${s.tone}`">{{ s.text }}</span>{{ '\n' }}</template></pre>
         </div>
         <p v-if="tab === 'text' || tab === 'ascii'" class="pg-note">
-          A text drawing keeps its columns only where every character is as wide as the engine counts it. A browser
-          font often draws Korean, Chinese or Japanese characters and some arrowheads at another width; the
-          <a href="#" @click.prevent="tab = 'text-svg'">text-svg</a> tab draws the same drawing with fixed columns.
+          {{ t.noteBefore }}<a href="#" @click.prevent="tab = 'text-svg'">text-svg</a>{{ t.noteAfter }}
         </p>
       </div>
     </div>

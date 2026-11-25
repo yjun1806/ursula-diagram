@@ -1,10 +1,13 @@
 import DefaultTheme from 'vitepress/theme';
+import { inBrowser } from 'vitepress';
 import Playground from './playground/Playground.vue';
+import { watchLanguageChoice } from './language-choice.js';
 import './custom.css';
 
 export default {
   extends: DefaultTheme,
-  enhanceApp({ app }) {
+  enhanceApp({ app, siteData }) {
     app.component('Playground', Playground);
+    if (inBrowser) watchLanguageChoice(siteData.value.base);
   },
 };
