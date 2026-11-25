@@ -12,7 +12,7 @@ import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
 import { closeSpareRows, openTextColumns, openTextRows } from './text-room.ts';
-import { clearUprightLabels, closeTextColumns, closeTextRows, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
+import { clearUprightLabels, closeTextColumns, closeTextRows, cutLeftLabels, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
@@ -273,17 +273,17 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
   const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
-  // A quick drawing is what a caller chooses a setting on, and a caller that names the engine, the composition or the ports gets what it names: neither is drawn another way.
-  const plain = given.terminal !== true || opts.nested === true || opts.quick === true || opts.engine === 'grid' || (opts.composition ?? 'auto') !== 'auto' || opts.sharePorts !== undefined;
+  // A quick drawing is what a caller chooses a setting on, a drawing without room is one to compare, and a caller that names the engine, the composition or the ports gets what it names: none is drawn another way.
+  const plain = given.terminal !== true || opts.nested === true || opts.quick === true || opts.room === false || opts.engine === 'grid' || (opts.composition ?? 'auto') !== 'auto' || opts.sharePorts !== undefined;
   const limit = opts.maxWidth ?? given.defaultWidth;
   const ranks = plain || opts.ranked === false ? undefined : layoutRanks(graph, given, limit);
   const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
   if (ranked !== undefined && opts.ranked === true) return ranked;
   const flow = out(layoutShared(graph, given, opts));
   if (ranked !== undefined) return worthIt(textCost(ranked), textCost(flow)) ? ranked : flow;
-  // The subgraphs of a flowchart are drawn as bands that follow one another, their boxes set across the flow, or as bands that run alongside it. The
+  // The subgraphs of a flowchart written across are drawn as bands that follow one another, their boxes set across the flow, or as bands that run alongside it. The
   // bands alongside are kept when more lines then lead the way the flow is written, unless they do not fit the width, are much longer, or lose something.
-  if (plain || graph.zones !== 'groups' || flow.composition !== 'stages') return flow;
+  if (plain || graph.zones !== 'groups' || flow.composition !== 'stages' || graph.direction !== 'LR') return flow;
   const alongside = out(layoutShared(graph, given, { ...opts, composition: 'lanes' }));
   const cost = textCost(alongside);
   const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, cost.width) <= limit;
@@ -300,9 +300,9 @@ function onward(l: Layout): number {
   }).length;
 }
 
-/** What a drawing made another way may not cost more than the drawing it replaces, and how much longer it may be: 15% and two rows. Its width is held by the limit alone. */
+/** What a drawing made another way may not cost more than the drawing it replaces, and how much longer it may be: 10% and two rows. Its width is held by the limit alone. */
 const KEPT: ReadonlyArray<keyof TextCost> = ['crossings', 'touches', 'cut', 'blank', 'hidden', 'crossed'];
-const roomFor = (rows: number): number => rows * 1.15 + 2;
+const roomFor = (rows: number): number => rows * 1.1 + 2;
 
 /** Whether a drawing made another way replaces the usual one: it costs no more where a reader loses something, and is not much longer. */
 function worthIt(other: TextCost, usual: TextCost): boolean {
@@ -361,8 +361,15 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
       return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
     };
     const narrow = fit();
-    // Last of all, every label is brought to where it is written in full: before the parts are packed, so that a part is measured as it is drawn, and again after.
-    const packed = (l: Layout): Layout => labelsInSight(packParts(labelsInSight(l, limit), limit), limit);
+    // Last of all, every label is brought to where it is written in full: before the parts are packed, so that a part is measured as it is drawn, and again after, when a label that still has no room is cut.
+    // A label left of the drawing that takes rows to show in full, by keeping a part from standing beside another, keeps its end only.
+    const packed = (l: Layout): Layout => {
+      const full = labelsInSight(packParts(labelsInSight(l, limit, false), limit), limit);
+      if (!l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0)) return full;
+      const short = labelsInSight(packParts(cutLeftLabels(l), limit), limit);
+      const wide = (d: Layout): boolean => limit !== undefined && Number.isFinite(limit) && d.width > limit;
+      return (wide(full) && !wide(short)) || Math.ceil(short.height) < Math.ceil(full.height) ? short : full;
+    };
     if (!room) return packed(narrow);
     // The columns an arrowhead on the side of a box asks for never take a drawing over the limit.
     const wider = openTextColumns(narrow, limit);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderText } from '../src/index.ts';
+import { cellRuler, layout, parse, renderText, renderTextLayout } from '../src/index.ts';
 
 const lines = (src: string, width = 100): string[] => {
   const r = renderText(src, width);
@@ -11,6 +11,9 @@ describe('labels of a terminal drawing', () => {
   it('leave a cell of line before the label and a cell of line and the arrowhead after it', () => {
     const text = lines('flowchart LR\nA -->|no way| C').join('\n');
     expect(text).toContain('│─ no way ─▶│');
+    // A line on the side of a box in a flow drawn downward, as the drawing by layers sets it.
+    const side = renderTextLayout(layout(parse('flowchart TD\nA --> B\nA -->|no way| C'), cellRuler(), { maxWidth: 100, ranked: false })).join('\n');
+    expect(side).toContain('│─ no way ─▶│');
   });
 
   it('keep the marks of a relation on both sides of the label', () => {

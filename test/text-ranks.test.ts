@@ -159,7 +159,7 @@ describe('the choice between a drawing by ranks and the usual one', () => {
         continue;
       }
       const [other, cost] = [textCost(byRanks), textCost(usual)];
-      const wins = KEPT.every((k) => other[k] <= cost[k]) && other.rows <= cost.rows * 1.15 + 2;
+      const wins = KEPT.every((k) => other[k] <= cost[k]) && other.rows <= cost.rows * 1.1 + 2;
       expect(renderTextLayout(chosen)).toEqual(renderTextLayout(wins ? byRanks : usual));
       if (wins) taken++;
     }
@@ -198,5 +198,41 @@ describe('the bands of the subgraphs of a flowchart in a terminal', () => {
   it('follow one another when the bands alongside the flow do not fit the width', () => {
     const src = 'graph LR\n  subgraph a[접수]\n  A[요청] --> B[검증]\n  end\n  subgraph b[처리]\n  C[저장] --> D[알림]\n  end\n  B --> C';
     expect(text(src, 21)[0]).toMatch(/^접수 +처리$/);
+  });
+});
+
+describe('the drawing by ranks of a terminal flow', () => {
+  const LOGIN = [
+    'flowchart TD',
+    '  start[Start] --> input[Enter email and password]',
+    '  input --> valid{Format valid?}',
+    '  valid -- No --> err1[Show format error]',
+    '  err1 --> input',
+    '  valid -- Yes --> auth{Credentials match?}',
+    '  auth -- No --> count{Three failures?}',
+    '  count -- No --> err2[Show wrong password]',
+    '  err2 --> input',
+    '  count -- Yes --> lock[Lock account]',
+    '  lock --> mail[Send unlock email]',
+    '  mail --> done[End]',
+    '  auth -- Yes --> mfa{Two-factor on?}',
+    '  mfa -- Yes --> code[Ask for code]',
+    '  code --> check{Code correct?}',
+    '  check -- No --> err2',
+    '  check -- Yes --> home[Open home]',
+    '  mfa -- No --> home',
+    '  home --> done',
+  ].join('\n');
+
+  it('is not taken where it is longer than the usual drawing by more than a tenth and two rows', () => {
+    const usual = renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100, ranked: false }));
+    const byRanks = renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100, ranked: true }));
+    expect(byRanks.length).toBeGreaterThan(usual.length * 1.1 + 2);
+    expect(renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100 }))).toEqual(usual);
+  });
+
+  it('is left out of a drawing made without room', () => {
+    const src = 'graph TD\n  A[요청] --> B{검증}\n  B -->|통과| C[저장]\n  B -->|실패| D[에러]\n  C --> E[알림]\n  D --> E';
+    expect(layout(parse(src), cellRuler(), { maxWidth: 90, room: false })).toEqual(layout(parse(src), cellRuler(), { maxWidth: 90, room: false, ranked: false }));
   });
 });

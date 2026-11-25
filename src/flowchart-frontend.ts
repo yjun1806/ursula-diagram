@@ -1,4 +1,6 @@
 import { layout } from './layout/index.ts';
+import { textCost } from './layout/text-cost.ts';
+import { hiddenLabels } from './layout/text-tidy.ts';
 import type { LegendOption } from './layout/legend.ts';
 import { cellRuler, pixelRuler } from './metrics.ts';
 import { parse } from './parse.ts';
@@ -101,6 +103,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
     a: Attempt;
     quick: { lines: string[]; layout: Layout };
     cost: number;
+    hidden: number;
   }
   const best = (list: Attempt[]): Fit | undefined => {
     const options = distinct(list);
@@ -116,14 +119,19 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
       } else lo = mid + 1;
     }
     if (first < 0) return undefined;
-    let winner: Fit | undefined;
+    const fits: Fit[] = [];
     for (const a of options.slice(first)) {
       const quick = draw(a, false, true, composition, false);
       if (widest(quick.lines) > maxWidth) continue;
-      const cost = figureLines(quick) + (a.list ? listLines : 0);
-      if (!winner || cost < winner.cost) winner = { a, quick, cost };
+      fits.push({ a, quick, cost: figureLines(quick) + (a.list ? listLines : 0), hidden: hiddenLabels(quick.layout) });
     }
-    return winner;
+    const fewest = fits.reduce<Fit | undefined>((w, f) => (w === undefined || f.cost < w.cost ? f : w), undefined);
+    if (fewest === undefined || fewest.hidden === 0) return fewest;
+    // A drawing that hides a label gives way to one that hides fewer and crosses no more lines.
+    const crossings = (f: Fit): number => textCost(f.quick.layout).crossings;
+    const most = crossings(fewest);
+    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most);
+    return clearer.reduce<Fit>((w, f) => (f.hidden < w.hidden || (f.hidden === w.hidden && f.cost < w.cost) ? f : w), clearer[0] ?? fewest);
   };
   const textual = detail === 'auto' || detail === 'full' || detail === 'narrow' ? best([...(detail === 'narrow' ? [] : stepAttempts.full), ...(detail === 'full' ? [] : stepAttempts.narrow)]) : undefined;
   const titles = detail === 'auto' || detail === 'title' ? best(stepAttempts.title) : undefined;

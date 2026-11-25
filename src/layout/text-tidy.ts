@@ -131,8 +131,10 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
   }
   // Texts that reach past the right side: the drawing grows to hold them, up to the limit; past it a label is cut.
   let right = Math.max(l.width, 0);
-  const texts = l.edges.flatMap((e) => (e.invisible ? [] : [e.label, e.startLabel, e.endLabel])).filter((t) => t !== undefined);
+  // The blank after the text of a label is not drawn at the end of a row: a label reaches as far as its text.
+  const texts = l.edges.flatMap((e) => (e.invisible ? [] : [e.startLabel, e.endLabel])).filter((t) => t !== undefined);
   for (const t of texts) right = Math.max(right, Math.ceil(t.x + t.w));
+  for (const e of l.edges) if (e.label !== undefined && !e.invisible) right = Math.max(right, textEnd(e.label));
   for (const lane of l.lanes) if (lane.label !== '') right = Math.max(right, Math.ceil(lane.labelBox.x) + cellWidth(lane.label));
   // Past the limit the drawing is as wide as its boxes and lines need, and the labels that reach further are cut.
   const solid = Math.max(0, ...l.nodes.map((n) => Math.ceil(n.x + n.w)), ...l.edges.flatMap((e) => (e.invisible ? [] : e.points.map((p) => Math.floor(p.x + 1e-9) + 1))), ...(l.legend?.items ?? []).map((item) => Math.ceil(item.captionX) + cellWidth(item.caption)));
@@ -141,8 +143,10 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
     const t = e.label;
     // A label that starts left of the drawing is left as it is: it is brought into sight once the drawing is finished.
     if (t === undefined || e.invisible || t.x < 0 || Math.ceil(t.x + t.w) <= width) return e;
+    // Only the blank after the text lies past the drawing: nothing is cut. A text cut to its ellipsis alone is left to be brought into sight.
+    if (textEnd(t) <= width) return e;
     const room = Math.floor(width - t.x);
-    return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
+    return room >= 4 && cut(t.text, room - 2) !== '…' ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
   };
   return { ...l, width, edges: l.edges.map(fitted) };
 }
@@ -603,6 +607,26 @@ export function clearUprightLabels(given: Layout, marks = false): Layout {
   return l;
 }
 
+/** Terminal drawings: a label that starts left of the drawing keeps its end, cut to the cells left of where it ends, when four or more are. */
+export function cutLeftLabels(l: Layout): Layout {
+  const fitted = (e: LayoutEdge): LayoutEdge => {
+    const t = e.label;
+    if (t === undefined || e.invisible || t.x >= 0) return e;
+    const room = Math.floor(t.x + t.w);
+    const tail = [...t.text];
+    let kept = '';
+    while (tail.length > 0 && cellWidth(`…${tail[tail.length - 1]}${kept}`) <= room - 2) kept = `${tail.pop()}${kept}`;
+    return room >= 4 ? { ...e, label: { ...t, text: `…${kept.trimStart()}`, x: 0, w: room } } : e;
+  };
+  return { ...l, edges: l.edges.map(fitted) };
+}
+
+/** The column after the last cell of the text of a label, which is drawn in the middle of its box. */
+function textEnd(t: { x: number; w: number; text: string }): number {
+  const tw = cellWidth(t.text);
+  return Math.ceil(t.x + Math.floor((t.w - tw) / 2) + tw);
+}
+
 /** The cells one line of a drawing is drawn in. */
 function cellsOfLine(e: LayoutEdge, nodes: Map<string, LayoutNode>): Array<[number, number]> {
   const corners = e.points.map((_, i) => cellOf(e, nodes, i));
@@ -628,9 +652,9 @@ function cellsOfLine(e: LayoutEdge, nodes: Map<string, LayoutNode>): Array<[numb
  * whose text a box or another text stands on, moves to a place along its own line where nothing stands: beside an upright stretch, to
  * its right before its left, or on a level stretch that leaves a cell of line on either side. Failing that the
  * drawing gets the columns the label needs, as far as `limit` lets it, and failing that the label is cut to the
- * widest room beside its line.
+ * widest room beside its line. A label is cut only when `cutting`: parts packed after a pass without it may yet leave it room.
  */
-export function labelsInSight(given: Layout, limit: number | undefined): Layout {
+export function labelsInSight(given: Layout, limit: number | undefined, cutting = true): Layout {
   let l = given;
   const within = (w: number): boolean => limit === undefined || !Number.isFinite(limit) || w <= limit;
   for (let ei = 0; ei < l.edges.length; ei++) {
@@ -658,16 +682,18 @@ export function labelsInSight(given: Layout, limit: number | undefined): Layout 
     const taken = lineCells(now);
     const foreign = new Set(now.edges.flatMap((o, k) => (k === ei || o.invisible || o.points.length < 2 ? [] : cellsOfLine(o, nodes).map(([x, y]) => `${x},${y}`))));
     const ends = markCells(now);
-    /** Whether a label of `w` cells may start at `x` in `row`: on no box, text or mark, on no other line and, unless `on`, not on its own. */
-    const clear = (x: number, row: number, w: number, on: boolean): boolean => {
-      if (x < 0 || row < 0 || !within(x + w) || stands(x, row, w)) return false;
+    /** Whether a label of `w` cells may start at `x` in `row`: on no box, text or mark, on no other line and, unless `on`, not on its own. Its last `tail` cells, blank, may lie past the limit. */
+    const clear = (x: number, row: number, w: number, on: boolean, tail = 0): boolean => {
+      if (x < 0 || row < 0 || !within(x + w - tail) || stands(x, row, w)) return false;
       for (let c = x; c < x + w; c++) {
         const key = `${c},${row}`;
         if (ends.has(key) || foreign.has(key) || (taken.has(key) && !on)) return false;
       }
       return true;
     };
-    const put = (x: number, y: number, text = label.text, w = lw): Layout => ({ ...now, width: Math.max(now.width, x + w), edges: now.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, text, x, y, w } } : o)) });
+    // The blank after the text of a label may lie past the limit: the drawing is as wide as the text.
+    const tail = lw - tw - Math.floor((lw - tw) / 2);
+    const put = (x: number, y: number, text = label.text, w = lw): Layout => ({ ...now, width: Math.max(now.width, textEnd({ x, w, text })), edges: now.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, text, x, y, w } } : o)) });
     const corners = e.points.map((_, i) => cellOf(e, nodes, i));
     const upright: Array<{ x: number; top: number; bottom: number }> = [];
     const level: Array<{ y: number; left: number; right: number }> = [];
@@ -685,7 +711,7 @@ export function labelsInSight(given: Layout, limit: number | undefined): Layout 
       }
     }
     for (const run of level) for (let x = run.left + 1; x + lw - 1 < run.right; x++) places.push({ x, y: run.y, on: true, far: near(run.y, ly) + near(x, lx) });
-    const place = places.sort((p, q) => p.far - q.far).find((p) => clear(p.x, p.y, lw, p.on));
+    const place = places.sort((p, q) => p.far - q.far).find((p) => clear(p.x, p.y, lw, p.on, tail));
     if (place !== undefined) {
       l = put(place.x, place.y);
       continue;
@@ -725,16 +751,19 @@ export function labelsInSight(given: Layout, limit: number | undefined): Layout 
       l = { ...wider, edges: wider.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, x: widest.left + 2, y: widest.y, w: lw } } : o)) };
       continue;
     }
+    if (!cutting) continue;
     // Failing that it is cut to the widest room beside an upright stretch of its line: right of it, or left of it with the drawing moved to the right as far as the limit lets it.
     const spare = limit === undefined || !Number.isFinite(limit) ? 0 : Math.max(0, limit - room);
     let best: { x: number; y: number; w: number; shift: number } | undefined;
+    // A label cut to nothing but its ellipsis says nothing.
+    const shows = (w: number): boolean => cut(label.text, w - 2) !== '…';
     for (const run of upright) {
       for (let row = run.top; row <= run.bottom; row++) {
         let w = 0;
-        while (w < lw && clear(run.x + 1, row, w + 1, false)) w++;
-        if (w >= 4 && (best === undefined || w > best.w)) best = { x: run.x + 1, y: row, w, shift: 0 };
+        while (w < lw && clear(run.x + 1, row, w + 1, false, 1)) w++;
+        if (w >= 4 && shows(w) && (best === undefined || w > best.w)) best = { x: run.x + 1, y: row, w, shift: 0 };
         const before = run.x === 0 || clear(0, row, run.x, false) ? Math.min(lw, run.x + spare) : 0;
-        if (before >= 4 && (best === undefined || before > best.w)) best = { x: 0, y: row, w: before, shift: before - run.x };
+        if (before >= 4 && shows(before) && (best === undefined || before > best.w)) best = { x: 0, y: row, w: before, shift: before - run.x };
       }
     }
     if (best !== undefined && best.shift > 0) {
@@ -747,6 +776,22 @@ export function labelsInSight(given: Layout, limit: number | undefined): Layout 
     else if (lx < 0) l = put(Math.max(0, (upright[0]?.x ?? 0) - Math.floor(lw / 2)), ly);
   }
   return l;
+}
+
+/** Terminal drawings: how many labels are not written in full, because they lie partly outside the drawing or a box or another text stands on them. */
+export function hiddenLabels(l: Layout): number {
+  const rect = (r: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } => ({ x: Math.round(r.x), y: Math.round(r.y), w: Math.max(1, Math.round(r.w)), h: Math.max(1, Math.round(r.h)) });
+  const boxes = l.nodes.map(rect);
+  const shown = l.edges.filter((e) => !e.invisible);
+  return shown.filter((e) => {
+    const t = e.label;
+    if (t === undefined || Math.round(t.h) !== 1) return false;
+    const tw = cellWidth(t.text);
+    const [x, y] = [Math.round(t.x) + Math.floor((Math.round(t.w) - tw) / 2), Math.round(t.y)];
+    if (x < 0 || y < 0 || x + tw > Math.ceil(l.width)) return true;
+    const others = shown.flatMap((o) => [o === e ? undefined : o.label, o.startLabel, o.endLabel]).flatMap((o) => (o === undefined ? [] : [rect(o)]));
+    return [...boxes, ...others].some((r) => y >= r.y && y < r.y + r.h && x + tw > r.x && x < r.x + r.w);
+  }).length;
 }
 
 /** The columns the texts of a drawing reach to, beyond its own width where one does. */
