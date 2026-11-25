@@ -1,13 +1,14 @@
 ---
 name: ursula
 description: Draw a diagram from Mermaid text as a terminal drawing, an SVG, or a one-file HTML page. Use when asked to draw, sketch, visualize or diagram a flow, process, architecture, sequence, state machine, class or data model, timeline, chart or any other Mermaid diagram type, or to show a picture of how something works while explaining it. Placement is computed by the bundled engine, so write Mermaid only and never coordinates.
+compatibility: Requires Node.js 22 or later. Needs no network and installs nothing.
 ---
 
 # ursula
 
-Write the diagram as Mermaid text and let the bundled command draw it. The command is the file `ursula.mjs` next to
-this file; it needs Node 24 or later and nothing else. In the commands below, `URSULA` stands for
-`node <the folder of this file>/ursula.mjs`.
+Write the diagram as Mermaid text and let the bundled command draw it. The command is the file
+`scripts/ursula.mjs` in the folder of this file; it needs Node 22 or later and nothing else. In the commands below,
+`URSULA` stands for `node <the folder of this file>/scripts/ursula.mjs`.
 
 ## Steps
 

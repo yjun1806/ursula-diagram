@@ -104,7 +104,7 @@ and follows a page that sets the variables. Each has a light and a dark value; t
 ## Agent skill
 
 `skills/ursula` is a skill for coding agents: `SKILL.md` tells the agent how to write the text and which output to
-give, and `ursula.mjs` beside it is the command as one file, so the skill runs with Node alone. Copy the folder into
+give, and `scripts/ursula.mjs` is the command as one file, so the skill runs with Node alone. Copy the folder into
 the skills folder of the agent.
 
 ## Development
@@ -117,4 +117,5 @@ npm run test:rewrite  # the slow comparisons of the layered engine, about a quar
 bun scripts/build.ts  # dist/ and the command inside the skill; run it again when a drawing changes
 ```
 
-Node 24 or later runs the TypeScript sources directly.
+The built files run on Node 22 or later. Node 24 or later also runs the TypeScript sources directly, which is how
+the commands above are written.
