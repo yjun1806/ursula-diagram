@@ -10,7 +10,7 @@ describe('the agent skill', () => {
 
   // The skill carries the command as one built file. Rebuild it (`bun scripts/build.ts`) when a drawing changes.
   it.each(examples)('draws %s as the sources do', (name) => {
-    for (const args of [['--format', 'svg'], ['--format', 'text', '--width', '100'], ['--format', 'check']]) {
+    for (const args of [['--format', 'svg'], ['--format', 'text', '--width', '100'], ['--format', 'text', '--width', '100', '--charset', 'ascii'], ['--format', 'text-svg', '--width', '100'], ['--format', 'check']]) {
       expect(run('skills/ursula/scripts/ursula.mjs', [`${root}examples/${name}`, ...args])).toBe(run('src/cli.ts', [`${root}examples/${name}`, ...args]));
     }
   });

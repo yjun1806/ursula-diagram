@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { renderHtml } from './html.ts';
-import { checkLines, selectFrontEnd, sequenceCheckLines, spansToAnsi, UrsulaError } from './index.ts';
+import { checkLines, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg, UrsulaError } from './index.ts';
 import type { SequenceLayout } from './sequence/model.ts';
 import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: ursula [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]\n');
+  process.stderr.write('usage: ursula [file.mmd] [--format svg|text|text-svg|json|check|html] [--width N] [--charset unicode|ascii] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]\n');
   process.exit(2);
 }
 
@@ -15,6 +15,7 @@ let format = 'svg';
 let width: number | undefined;
 let legend = true;
 let color = false;
+let charset: 'unicode' | 'ascii' | undefined;
 let questions = true;
 let elbows = true;
 let engine: 'grid' | 'layered' | undefined;
@@ -29,7 +30,11 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--width') width = Number(args[++i] ?? usage());
   else if (a === '--no-legend') legend = false;
   else if (a === '--color') color = true;
-  else if (a === '--no-questions') questions = false;
+  else if (a === '--charset') {
+    const v = args[++i];
+    if (v !== 'unicode' && v !== 'ascii') usage();
+    charset = v;
+  } else if (a === '--no-questions') questions = false;
   else if (a === '--no-elbows') elbows = false;
   else if (a === '--composition') {
     const v = args[++i];
@@ -57,12 +62,12 @@ for (let i = 0; i < args.length; i++) {
   else if (a !== undefined && !a.startsWith('--') && file === undefined) file = a;
   else usage();
 }
-if (!['svg', 'text', 'json', 'check', 'html'].includes(format) || (width !== undefined && !Number.isFinite(width))) usage();
+if (!['svg', 'text', 'text-svg', 'json', 'check', 'html'].includes(format) || (width !== undefined && !Number.isFinite(width))) usage();
 
 try {
   const src = readFileSync(file ?? 0, 'utf8');
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }), ...(detail === undefined ? {} : { detail }), ...(quality === undefined ? {} : { quality }) };
+  const opts = { ...(width === undefined ? {} : { maxWidth: width }), ...(legend ? {} : { legend: false as const }), ...(engine === undefined ? {} : { engine }), ...(composition === undefined ? {} : { composition }), ...(questions ? {} : { questions: false }), ...(elbows ? {} : { elbows: false }), ...(detail === undefined ? {} : { detail }), ...(quality === undefined ? {} : { quality }), ...(charset === undefined ? {} : { charset }) };
   if (format === 'html') {
     process.stdout.write(renderHtml(src, { ...(title === undefined ? {} : { title }), ...(width === undefined ? {} : { maxWidth: width }), ...(theme === undefined ? {} : { theme }) }));
   } else if (format === 'check') {
@@ -73,6 +78,9 @@ try {
     const rows =
       color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
     process.stdout.write(`${rows.join('\n')}\n`);
+  } else if (format === 'text-svg') {
+    const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: 'normal' as const }]);
+    process.stdout.write(`${spansToSvg(spans)}\n`);
   } else if (format === 'json') {
     process.stdout.write(`${JSON.stringify(frontEnd.json(src, 'svg', opts), null, 2)}\n`);
   } else {

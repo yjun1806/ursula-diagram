@@ -16796,6 +16796,130 @@ function readFrontMatter(src) {
   return root;
 }
 
+// src/render/ascii.ts
+var BOX = "-=|#.=:#.=:#" + "+++#+++#+++#+++#+++++++#+++++++#+++++++#+++++++#+++++++++++++++#" + ".=:#" + "=#".padEnd(29, "#") + "/\\/\\/\\x" + "-|-|=#=#-|-|";
+var SHAPES2 = {
+  9670: "*",
+  9671: "o",
+  9672: "*",
+  9673: "@",
+  9674: "o",
+  9675: "O",
+  9676: "O",
+  9678: "@",
+  9679: "*"
+};
+var ARROWS = { 8592: "<", 8593: "^", 8595: "v", 8596: "-", 8597: "|", 8656: "<", 8657: "^", 8659: "v", 8660: "=" };
+var OTHERS = {
+  183: ".",
+  215: "x",
+  8195: " ",
+  8211: "-",
+  8212: "-",
+  8230: "~",
+  8745: "&",
+  8853: "@",
+  8855: "x"
+};
+function asciiOf(ch) {
+  const cp = ch.codePointAt(0) ?? 0;
+  if (cp < 128)
+    return ch;
+  if (cp >= 9472 && cp <= 9599)
+    return BOX[cp - 9472] ?? "+";
+  if (cp >= 9600 && cp <= 9631)
+    return cp === 9601 ? "_" : cp === 9620 ? "-" : cp === 9614 || cp === 9615 || cp === 9621 ? "|" : "#";
+  if (cp >= 9632 && cp <= 9727) {
+    if (cp >= 9650 && cp <= 9653)
+      return "^";
+    if (cp >= 9654 && cp <= 9659)
+      return ">";
+    if (cp >= 9660 && cp <= 9663)
+      return "v";
+    if (cp >= 9664 && cp <= 9669)
+      return "<";
+    return SHAPES2[cp] ?? (cp <= 9649 ? "#" : "o");
+  }
+  if (cp >= 8592 && cp <= 8703)
+    return ARROWS[cp] ?? ">";
+  return OTHERS[cp] ?? ch;
+}
+function isLine(ch) {
+  const cp = ch?.codePointAt(0) ?? 0;
+  return cp >= 9472 && cp <= 9584;
+}
+var BESIDE_BAR = new Set("─━┬┴┌┐└┘╭╮╰╯^v");
+var REACHES_RIGHT = new Set("─━┄┈╌┌└├┬┴┼┏┗┣┳┻╋╭╰");
+var REACHES_LEFT = new Set("─━┄┈╌┐┘┤┬┴┼┓┛┫┳┻╋╮╯┒");
+function indexAt(row, column) {
+  if (row === undefined)
+    return -1;
+  let at = 0;
+  for (let i = 0;i < row.length; i++) {
+    if (at === column)
+      return i;
+    if (at > column)
+      return -1;
+    at += cellWidthOf(row[i]?.codePointAt(0) ?? 0);
+  }
+  return -1;
+}
+function asciiRows(rows) {
+  const out = rows.map((row) => row.map(asciiOf));
+  const bar = (r, i, ch) => {
+    const target = out[r];
+    if (target !== undefined && i >= 0 && isLine(rows[r]?.[i]))
+      target[i] = ch;
+  };
+  const over = (r, column) => rows[r]?.[indexAt(rows[r], column)] ?? "";
+  const lone = (r, column) => {
+    const row = rows[r] ?? [];
+    const i = indexAt(row, column);
+    if (row[i] !== "┼")
+      return false;
+    let first = i;
+    let last = i;
+    while (row[first - 1] === "┼")
+      first -= 1;
+    while (row[last + 1] === "┼")
+      last += 1;
+    return !REACHES_RIGHT.has(row[first - 1] ?? "") && !REACHES_LEFT.has(row[last + 1] ?? "");
+  };
+  const atBox = (r, column) => lone(r, column) && (BESIDE_BAR.has(over(r - 1, column)) || BESIDE_BAR.has(over(r + 1, column)));
+  rows.forEach((row, r) => {
+    let column = 0;
+    row.forEach((ch, i) => {
+      if (ch === "▷")
+        bar(r, i - 1, "|");
+      else if (ch === "◁")
+        bar(r, i + 1, "|");
+      else if (ch === "▽")
+        bar(r - 1, indexAt(rows[r - 1], column), "-");
+      else if (ch === "△")
+        bar(r + 1, indexAt(rows[r + 1], column), "-");
+      else if (ch === "┼" && (atBox(r, column) || lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))
+        bar(r, i, "-");
+      column += cellWidthOf(ch.codePointAt(0) ?? 0);
+    });
+  });
+  return out;
+}
+function toAscii(lines) {
+  return asciiRows(lines.map((line) => [...line])).map((row) => row.join(""));
+}
+function spansToAscii(lines) {
+  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])));
+  return lines.map((line, r) => {
+    let at = 0;
+    return line.map((span) => {
+      const length = [...span.text].length;
+      const text = (rows[r] ?? []).slice(at, at + length).join("");
+      at += length;
+      return { ...span, text };
+    });
+  });
+}
+
 // src/registry.ts
 var frontEnds = [];
 function registerFrontEnd(frontEnd) {
@@ -16839,9 +16963,17 @@ function selectFrontEnd(src) {
   return {
     ...found,
     svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
-    textLines: (s, w, o) => found.textLines(blankFrontMatter(s), w, head(s, o)),
+    textLines: (s, w, o) => {
+      const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
+      return o.charset === "ascii" ? toAscii(lines) : lines;
+    },
     json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
-    ...spans ? { textSpans: (s, w, o) => spans.call(found, blankFrontMatter(s), w, head(s, o)) } : {}
+    ...spans ? {
+      textSpans: (s, w, o) => {
+        const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
+        return o.charset === "ascii" ? spansToAscii(lines) : lines;
+      }
+    } : {}
   };
 }
 
@@ -23939,7 +24071,7 @@ function layoutMindmap(map, ruler, opts = {}) {
 function fail6(message, line, code = "syntax") {
   throw new UrsulaError(message, code, line);
 }
-var SHAPES2 = [
+var SHAPES3 = [
   ["circle", /^([^\s()[\]{}]*)\(\(([\s\S]*)\)\)$/u],
   ["bang", /^([^\s()[\]{}]*)\)\)([\s\S]*)\(\($/u],
   ["hexagon", /^([^\s()[\]{}]*)\{\{([\s\S]*)\}\}$/u],
@@ -23987,7 +24119,7 @@ function withoutClasses(text) {
 }
 function readNode2(content, line) {
   const text = withoutClasses(content.trim());
-  for (const [shape, re] of SHAPES2) {
+  for (const [shape, re] of SHAPES3) {
     const m = re.exec(text);
     if (m === null)
       continue;
@@ -37007,6 +37139,265 @@ registerFrontEnd({
     return { ...model, tags: [...model.tags], layout: layoutZenuml(model, ruler, layoutOptions4(opts.maxWidth, opts.legend)) };
   }
 });
+
+// src/render/text-svg.ts
+var CW = 8;
+var CH = 17;
+var FONT_SIZE = 13;
+var BASELINE = 13;
+var PAD5 = 8;
+var FONT3 = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'D2Coding', 'Nanum Gothic Coding', monospace";
+function arms(sides, weight, round = false) {
+  return { ...Object.fromEntries([...sides].map((side) => [side, weight])), ...round ? { round } : {} };
+}
+var LINES = {
+  "─": arms("ew", "light"),
+  "│": arms("ns", "light"),
+  "┌": arms("se", "light"),
+  "┐": arms("sw", "light"),
+  "└": arms("ne", "light"),
+  "┘": arms("nw", "light"),
+  "├": arms("nse", "light"),
+  "┤": arms("nsw", "light"),
+  "┬": arms("esw", "light"),
+  "┴": arms("new", "light"),
+  "┼": arms("nesw", "light"),
+  "━": arms("ew", "heavy"),
+  "┃": arms("ns", "heavy"),
+  "┏": arms("se", "heavy"),
+  "┓": arms("sw", "heavy"),
+  "┗": arms("ne", "heavy"),
+  "┛": arms("nw", "heavy"),
+  "┣": arms("nse", "heavy"),
+  "┫": arms("nsw", "heavy"),
+  "┳": arms("esw", "heavy"),
+  "┻": arms("new", "heavy"),
+  "╋": arms("nesw", "heavy"),
+  "┒": { w: "light", s: "heavy" },
+  "┄": arms("ew", "dash3"),
+  "┆": arms("ns", "dash3"),
+  "┈": arms("ew", "dash4"),
+  "┊": arms("ns", "dash4"),
+  "╌": arms("ew", "dash2"),
+  "╎": arms("ns", "dash2"),
+  "╭": arms("se", "light", true),
+  "╮": arms("sw", "light", true),
+  "╰": arms("ne", "light", true),
+  "╯": arms("nw", "light", true)
+};
+var SHAPES4 = new Set("▶◀▼▲▷◁▽△◆◇●○◉⊕⊗█▏╱╲");
+function grid(lines) {
+  return lines.map((line) => line.flatMap((span) => [...span.text].flatMap((ch) => {
+    const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
+    return wide ? [{ ch, tone: span.tone, span: 2 }, undefined] : [{ ch, tone: span.tone, span: 1 }];
+  })));
+}
+
+class Strokes {
+  tracks = new Map;
+  add(tone, weight, upright, at, from, to) {
+    const key = `${tone} ${weight} ${upright ? "v" : "h"} ${at}`;
+    const track = this.tracks.get(key) ?? [];
+    const last = track[track.length - 1];
+    if (last !== undefined && Math.abs(last[1] - from) < 0.000000001)
+      last[1] = to;
+    else
+      track.push([from, to]);
+    this.tracks.set(key, track);
+  }
+  paths() {
+    const out = new Map;
+    for (const [key, track] of this.tracks) {
+      const [tone, weight, way, at] = key.split(" ");
+      const d = track.map(([from, to]) => way === "v" ? `M${at} ${num(from)}V${num(to)}` : `M${num(from)} ${at}H${num(to)}`).join("");
+      const group = `${tone} ${weight}`;
+      out.set(group, (out.get(group) ?? "") + d);
+    }
+    return out;
+  }
+}
+var toneClass = (base, tone) => tone === "normal" ? "" : ` ${base}--${tone}`;
+function shape(ch, x, y, joins) {
+  const cx = x + CW / 2;
+  const cy = y + CH / 2;
+  const right = x + CW;
+  const bottom = y + CH;
+  const head = 8;
+  const half = 4;
+  const r = 3.5;
+  const stubs = (joins.n ? `M${num(cx)} ${num(y)}V${num(cy - r)}` : "") + (joins.s ? `M${num(cx)} ${num(bottom)}V${num(cy + r)}` : "") + (joins.w ? `M${num(x)} ${num(cy)}H${num(cx - r)}` : "") + (joins.e ? `M${num(right)} ${num(cy)}H${num(cx + r)}` : "");
+  const circle = `M${num(cx - r)} ${num(cy)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+  const diamond = `M${num(x)} ${num(cy)}L${num(cx)} ${num(cy - r - 1)}L${num(right)} ${num(cy)}L${num(cx)} ${num(cy + r + 1)}Z`;
+  const upright = (joins.n ? `M${num(cx)} ${num(y)}V${num(cy - r - 1)}` : "") + (joins.s ? `M${num(cx)} ${num(bottom)}V${num(cy + r + 1)}` : "");
+  switch (ch) {
+    case "▶":
+    case "▷": {
+      const d = `M${num(x)} ${num(cy - half)}L${num(right)} ${num(cy)}L${num(x)} ${num(cy + half)}Z`;
+      return ch === "▶" ? { fill: d } : { stroke: d };
+    }
+    case "◀":
+    case "◁": {
+      const d = `M${num(right)} ${num(cy - half)}L${num(x)} ${num(cy)}L${num(right)} ${num(cy + half)}Z`;
+      return ch === "◀" ? { fill: d } : { stroke: d };
+    }
+    case "▼":
+    case "▽": {
+      const d = `M${num(cx - half)} ${num(bottom - head)}L${num(cx)} ${num(bottom)}L${num(cx + half)} ${num(bottom - head)}Z`;
+      const stub = joins.n ? `M${num(cx)} ${num(y)}V${num(bottom - head)}` : "";
+      return ch === "▼" ? { fill: d, stroke: stub } : { stroke: d + stub };
+    }
+    case "▲":
+    case "△": {
+      const d = `M${num(cx - half)} ${num(y + head)}L${num(cx)} ${num(y)}L${num(cx + half)} ${num(y + head)}Z`;
+      const stub = joins.s ? `M${num(cx)} ${num(bottom)}V${num(y + head)}` : "";
+      return ch === "▲" ? { fill: d, stroke: stub } : { stroke: d + stub };
+    }
+    case "◆":
+      return { fill: diamond, stroke: upright };
+    case "◇":
+      return { stroke: diamond + upright };
+    case "●":
+      return { fill: circle, stroke: stubs };
+    case "○":
+      return { stroke: circle + stubs };
+    case "◉":
+      return { fill: `M${num(cx - 1.5)} ${num(cy)}a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z`, stroke: circle + stubs };
+    case "⊕":
+      return { stroke: `${circle}M${num(cx - r)} ${num(cy)}H${num(cx + r)}M${num(cx)} ${num(cy - r)}V${num(cy + r)}${stubs}` };
+    case "⊗": {
+      const k = r * Math.SQRT1_2;
+      return { stroke: `${circle}M${num(cx - k)} ${num(cy - k)}L${num(cx + k)} ${num(cy + k)}M${num(cx + k)} ${num(cy - k)}L${num(cx - k)} ${num(cy + k)}${stubs}` };
+    }
+    case "█": {
+      const top = joins.n ? y : y + 3;
+      const low = joins.s ? bottom : bottom - 3;
+      return { fill: `M${num(x)} ${num(top)}H${num(right)}V${num(low)}H${num(x)}Z` };
+    }
+    case "▏":
+      return { fill: `M${num(x)} ${num(y)}H${num(x + 1.5)}V${num(bottom)}H${num(x)}Z` };
+    case "╱":
+      return { stroke: `M${num(x)} ${num(bottom)}L${num(right)} ${num(y)}` };
+    case "╲":
+      return { stroke: `M${num(x)} ${num(y)}L${num(right)} ${num(bottom)}` };
+    default:
+      return {};
+  }
+}
+function rules() {
+  return [
+    `.ursula-text{background:$bg;font-family:${FONT3};font-size:${FONT_SIZE}px}`,
+    ".ursula-tt{fill:$fg}",
+    ".ursula-tt--dim{fill:$muted}",
+    ".ursula-tt--bold{font-weight:700}",
+    ".ursula-tt--accent{fill:$accent}",
+    ".ursula-tl{fill:none;stroke:$line;stroke-width:1;stroke-linecap:square;stroke-linejoin:miter}",
+    ".ursula-tl--heavy{stroke-width:2.5}",
+    ".ursula-tl--dash3{stroke-dasharray:2 2;stroke-linecap:butt}",
+    ".ursula-tl--dash2{stroke-dasharray:4 4;stroke-linecap:butt}",
+    ".ursula-tl--dash4{stroke-dasharray:1 3;stroke-linecap:butt}",
+    ".ursula-tl--round{stroke-linecap:butt}",
+    ".ursula-tl--dim{stroke:$faint}",
+    ".ursula-tl--bold{stroke:$fg}",
+    ".ursula-tl--accent{stroke:$accent}",
+    ".ursula-ts{fill:$line;stroke:none}",
+    ".ursula-ts--dim{fill:$faint}",
+    ".ursula-ts--bold{fill:$fg}",
+    ".ursula-ts--accent{fill:$accent}"
+  ];
+}
+function renderTextSvg(lines) {
+  const cells = grid(lines);
+  const columns = Math.max(0, ...cells.map((row) => row.length));
+  const width = columns * CW + 2 * PAD5;
+  const height = cells.length * CH + 2 * PAD5;
+  const at = (r, c) => cells[r]?.[c];
+  const arm = (r, c, side) => LINES[at(r, c)?.ch ?? ""]?.[side];
+  const strokes = new Strokes;
+  const curves = new Map;
+  const outlines = new Map;
+  const fills = new Map;
+  const texts = [];
+  const append = (map, tone, d) => {
+    if (d !== undefined && d !== "")
+      map.set(tone, (map.get(tone) ?? "") + d);
+  };
+  cells.forEach((row, r) => {
+    const y = PAD5 + r * CH;
+    const cy = y + CH / 2;
+    let run;
+    const flush = () => {
+      if (run === undefined)
+        return;
+      texts.push(`<text${run.tone === "normal" ? "" : ` class="${toneClass("ursula-tt", run.tone).trim()}"`} x="${num(PAD5 + run.from * CW)}" y="${num(y + BASELINE)}" textLength="${num(run.cells * CW)}" lengthAdjust="spacingAndGlyphs">${escapeXml(run.text)}</text>`);
+      run = undefined;
+    };
+    row.forEach((cell, c) => {
+      if (cell === undefined)
+        return;
+      const x = PAD5 + c * CW;
+      const cx = x + CW / 2;
+      const line = LINES[cell.ch];
+      if (line !== undefined) {
+        flush();
+        if (line.round === true) {
+          const down = line.s !== undefined;
+          const east = line.e !== undefined;
+          const k = CW / 2;
+          append(curves, cell.tone, `M${num(cx)} ${num(down ? y + CH : y)}V${num(down ? cy + k : cy - k)}Q${num(cx)} ${num(cy)} ${num(east ? cx + k : cx - k)} ${num(cy)}`);
+          return;
+        }
+        if (line.w !== undefined)
+          strokes.add(cell.tone, line.w, false, cy, x, cx);
+        if (line.e !== undefined)
+          strokes.add(cell.tone, line.e, false, cy, cx, x + CW);
+        if (line.n !== undefined)
+          strokes.add(cell.tone, line.n, true, cx, y, cy);
+        if (line.s !== undefined)
+          strokes.add(cell.tone, line.s, true, cx, cy, y + CH);
+        return;
+      }
+      if (SHAPES4.has(cell.ch)) {
+        flush();
+        const solid = cell.ch === "█";
+        const drawn = shape(cell.ch, x, y, {
+          n: solid ? at(r - 1, c)?.ch === "█" : arm(r - 1, c, "s") !== undefined,
+          s: solid ? at(r + 1, c)?.ch === "█" : arm(r + 1, c, "n") !== undefined,
+          w: arm(r, c - 1, "e") !== undefined,
+          e: arm(r, c + 1, "w") !== undefined
+        });
+        append(fills, cell.tone, drawn.fill);
+        append(outlines, cell.tone, drawn.stroke);
+        return;
+      }
+      if (cell.ch === " ") {
+        flush();
+        return;
+      }
+      const wide = cell.span === 2;
+      if (run !== undefined && (run.tone !== cell.tone || run.wide !== wide))
+        flush();
+      run = run === undefined ? { from: c, cells: cell.span, text: cell.ch, tone: cell.tone, wide } : { ...run, cells: run.cells + cell.span, text: run.text + cell.ch };
+    });
+    flush();
+  });
+  const paths = [
+    ...[...strokes.paths()].map(([group, d]) => {
+      const [tone, weight] = group.split(" ");
+      return `<path class="ursula-tl${weight === "light" ? "" : ` ursula-tl--${weight}`}${toneClass("ursula-tl", tone)}" d="${d}"/>`;
+    }),
+    ...[...curves].map(([tone, d]) => `<path class="ursula-tl ursula-tl--round${toneClass("ursula-tl", tone)}" d="${d}"/>`),
+    ...[...outlines].map(([tone, d]) => `<path class="ursula-tl ursula-tl--round${toneClass("ursula-tl", tone)}" d="${d}"/>`),
+    ...[...fills].map(([tone, d]) => `<path class="ursula-ts${toneClass("ursula-ts", tone)}" d="${d}"/>`)
+  ];
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula ursula-text" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img">`,
+    `<title>Text drawing: ${cells.length} rows, ${columns} columns</title>`,
+    `<style>${styleSheet(rules())}</style>`,
+    ...paths,
+    `<g class="ursula-tt">${texts.join("")}</g>`,
+    "</svg>"
+  ].join("");
+}
 // src/sequence/check.ts
 function overlaps3(a, b) {
   return Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
@@ -37286,7 +37677,7 @@ function renderHtml(src, opts = {}) {
 
 // src/cli.ts
 function usage() {
-  process.stderr.write(`usage: ursula [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]
+  process.stderr.write(`usage: ursula [file.mmd] [--format svg|text|text-svg|json|check|html] [--width N] [--charset unicode|ascii] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]
 `);
   process.exit(2);
 }
@@ -37296,6 +37687,7 @@ var format = "svg";
 var width;
 var legend = true;
 var color = false;
+var charset;
 var questions = true;
 var elbows = true;
 var engine;
@@ -37314,7 +37706,12 @@ for (let i = 0;i < args.length; i++) {
     legend = false;
   else if (a === "--color")
     color = true;
-  else if (a === "--no-questions")
+  else if (a === "--charset") {
+    const v = args[++i];
+    if (v !== "unicode" && v !== "ascii")
+      usage();
+    charset = v;
+  } else if (a === "--no-questions")
     questions = false;
   else if (a === "--no-elbows")
     elbows = false;
@@ -37350,12 +37747,12 @@ for (let i = 0;i < args.length; i++) {
   else
     usage();
 }
-if (!["svg", "text", "json", "check", "html"].includes(format) || width !== undefined && !Number.isFinite(width))
+if (!["svg", "text", "text-svg", "json", "check", "html"].includes(format) || width !== undefined && !Number.isFinite(width))
   usage();
 try {
   const src = readFileSync(file ?? 0, "utf8");
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...width === undefined ? {} : { maxWidth: width }, ...legend ? {} : { legend: false }, ...engine === undefined ? {} : { engine }, ...composition === undefined ? {} : { composition }, ...questions ? {} : { questions: false }, ...elbows ? {} : { elbows: false }, ...detail === undefined ? {} : { detail }, ...quality2 === undefined ? {} : { quality: quality2 } };
+  const opts = { ...width === undefined ? {} : { maxWidth: width }, ...legend ? {} : { legend: false }, ...engine === undefined ? {} : { engine }, ...composition === undefined ? {} : { composition }, ...questions ? {} : { questions: false }, ...elbows ? {} : { elbows: false }, ...detail === undefined ? {} : { detail }, ...quality2 === undefined ? {} : { quality: quality2 }, ...charset === undefined ? {} : { charset } };
   if (format === "html") {
     process.stdout.write(renderHtml(src, { ...title === undefined ? {} : { title }, ...width === undefined ? {} : { maxWidth: width }, ...theme === undefined ? {} : { theme } }));
   } else if (format === "check") {
@@ -37368,6 +37765,10 @@ try {
     const rows = color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
     process.stdout.write(`${rows.join(`
 `)}
+`);
+  } else if (format === "text-svg") {
+    const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
+    process.stdout.write(`${renderTextSvg(spans)}
 `);
   } else if (format === "json") {
     process.stdout.write(`${JSON.stringify(frontEnd.json(src, "svg", opts), null, 2)}

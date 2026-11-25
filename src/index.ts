@@ -36,6 +36,7 @@ import './xychart/frontend.ts';
 import './zenuml/frontend.ts';
 import { UrsulaError } from './types.ts';
 import type { TextSpan } from './types.ts';
+import { renderTextSvg as drawTextSvg } from './render/text-svg.ts';
 
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
@@ -47,6 +48,8 @@ export type { Ruler, TextRole } from './metrics.ts';
 export { renderSvg } from './render/svg.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
 export { renderTextLayout, spansToAnsi } from './render/text.ts';
+export { spansToAscii, toAscii } from './render/ascii.ts';
+export { renderTextSvg as spansToSvg } from './render/text-svg.ts';
 export { registerFrontEnd, selectFrontEnd } from './registry.ts';
 export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
 export { layoutSequenceText } from './sequence/text.ts';
@@ -62,7 +65,7 @@ export type * from './types.ts';
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { lines: string[] } | { error: string } {
   try {
     const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
@@ -82,7 +85,7 @@ export function renderText(
 export function renderTextSpans(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { lines: TextSpan[][] } | { error: string } {
   try {
     const frontEnd = selectFrontEnd(src);
@@ -99,6 +102,19 @@ export function renderTextSpans(
     if (err instanceof UrsulaError) return { error: err.message };
     throw err;
   }
+}
+
+/**
+ * Like `renderText`, as one inline SVG: lines and arrowheads are drawn as shapes and every word is set on the grid of
+ * cells, so the drawing keeps its columns in any font. Colours are the CSS variables of the other pictures.
+ */
+export function renderTextSvg(
+  src: string,
+  maxWidth: number,
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
+): { svg: string } | { error: string } {
+  const drawn = renderTextSpans(src, maxWidth, opts);
+  return 'error' in drawn ? drawn : { svg: drawTextSvg(drawn.lines) };
 }
 
 /** Picks the front-end by the header of `src`, lays it out in pixels and returns inline SVG. */

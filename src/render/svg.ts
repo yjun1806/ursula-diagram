@@ -50,7 +50,7 @@ export const FONT_STACK =
 const FONT = FONT_STACK;
 
 /** Rules are written once with $name placeholders and expanded per colour scheme. */
-function styleSheet(rules: readonly string[]): string {
+export function styleSheet(rules: readonly string[]): string {
   const light = rules.map((r) => fillColors(r, 0)).join('\n');
   const dark = rules.map((r) => fillColors(r, 1)).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}`;

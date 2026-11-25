@@ -2,6 +2,7 @@ import type { SvgOptions } from './render/svg.ts';
 import type { TextSpan } from './types.ts';
 import { frontMatterRows, readFrontMatter } from './front-matter.ts';
 import type { FrontValue } from './front-matter.ts';
+import { spansToAscii, toAscii } from './render/ascii.ts';
 
 export interface RenderOptions extends SvgOptions {
   /** Title from a leading front-matter block (`title: ...`); a front-end draws it when the diagram text gives none. */
@@ -35,6 +36,8 @@ export interface TextOptions {
   quality?: 'fast' | 'best';
   /** How much of every box a terminal drawing keeps; 'auto' (the default) takes the fullest step that fits the width. */
   detail?: 'auto' | 'full' | 'narrow' | 'title';
+  /** The characters boxes and lines are drawn with: box-drawing characters ('unicode', the default) or ASCII only. */
+  charset?: 'unicode' | 'ascii';
 }
 
 /** One diagram syntax with the pipeline that turns its source into output. */
@@ -106,8 +109,18 @@ export function selectFrontEnd(src: string): FrontEnd {
   return {
     ...found,
     svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
-    textLines: (s, w, o) => found.textLines(blankFrontMatter(s), w, head(s, o)),
+    textLines: (s, w, o) => {
+      const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
+      return o.charset === 'ascii' ? toAscii(lines) : lines;
+    },
     json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
-    ...(spans ? { textSpans: (s: string, w: number | undefined, o: TextOptions) => spans.call(found, blankFrontMatter(s), w, head(s, o)) } : {}),
+    ...(spans
+      ? {
+          textSpans: (s: string, w: number | undefined, o: TextOptions) => {
+            const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
+            return o.charset === 'ascii' ? spansToAscii(lines) : lines;
+          },
+        }
+      : {}),
   };
 }
