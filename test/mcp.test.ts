@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { TERMINAL_NOTE } from '../src/command/draw.ts';
 import { lineSplitter } from '../src/mcp/lines.ts';
 import { VERSION } from '../src/version.ts';
 
@@ -78,7 +77,7 @@ describe('ursula-diagram mcp', () => {
   it('draws text 100 wide when no format or width is given, and adds the check on request', () => {
     const [, r] = talk([hello, call(1, 'render', { source: flow, check: true })]);
     expect(r?.result.content[0].text).toBe(cli(['--format', 'text', '--width', '100'], flow).stdout);
-    expect(r?.result.content[1].text).toBe(`${cli(['--format', 'check'], flow).stdout}${TERMINAL_NOTE}\n`);
+    expect(r?.result.content[1].text).toBe(cli(['--format', 'check'], flow).stdout);
   });
 
   it('renders svg', () => {

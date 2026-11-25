@@ -40457,9 +40457,13 @@ function layoutOptions5(req) {
   };
 }
 var TERMINAL_NOTE = "note: this check reads the svg layout; the terminal drawing routes its lines on a grid of its own, so its crossings and bends can differ";
+function graphReport(laid, src, terminal) {
+  const details = checkDetails(laid, src);
+  return [...checkLines(laid), ...details, ...terminal && details.length > 0 ? [TERMINAL_NOTE] : []];
+}
 function checkReport(src, req, terminal = false) {
   const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
-  const lines = "edges" in laid && "diagnostics" in laid ? [...checkLines(laid), ...checkDetails(laid, src), ...terminal ? [TERMINAL_NOTE] : []] : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
+  const lines = "edges" in laid && "diagnostics" in laid ? graphReport(laid, src, terminal) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
   return `${lines.join(`
 `)}
 `;

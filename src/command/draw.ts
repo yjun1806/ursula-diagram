@@ -34,12 +34,18 @@ function layoutOptions(req: DrawRequest) {
 /** The last line of `--check` beside a terminal drawing of a graph: the check reads the svg layout, not the drawing. */
 export const TERMINAL_NOTE = 'note: this check reads the svg layout; the terminal drawing routes its lines on a grid of its own, so its crossings and bends can differ';
 
-/** The lines of `--format check`; `terminal` adds TERMINAL_NOTE when the report counts the lines of a graph. */
+/** The report on a graph; `terminal` adds TERMINAL_NOTE when the report names lines that cross or bend. */
+function graphReport(laid: Layout, src: string, terminal: boolean): string[] {
+  const details = checkDetails(laid, src);
+  return [...checkLines(laid), ...details, ...(terminal && details.length > 0 ? [TERMINAL_NOTE] : [])];
+}
+
+/** The lines of `--format check`; see `graphReport` for `terminal`. */
 export function checkReport(src: string, req: DrawRequest, terminal = false): string {
   const laid = selectFrontEnd(src).json(src, 'svg', layoutOptions(req)) as Layout | SequenceLayout;
   const lines =
     'edges' in laid && 'diagnostics' in laid
-      ? [...checkLines(laid), ...checkDetails(laid, src), ...(terminal ? [TERMINAL_NOTE] : [])]
+      ? graphReport(laid, src, terminal)
       : 'messages' in laid
         ? sequenceCheckLines(laid)
         : ['no checks for this kind of diagram'];

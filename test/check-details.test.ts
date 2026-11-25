@@ -96,8 +96,8 @@ describe('--check', () => {
   it.each(examples)('%s: the drawing on stdout, the check report on stderr, code 0', (name) => {
     const file = `${root}examples/${name}`;
     const report = run([file, '--format', 'check']).stdout;
-    // Beside a terminal drawing of a graph, the report ends with a note that it counts the svg layout.
-    const graph = report.startsWith('composition ');
+    // Beside a terminal drawing, a report that names crossing or bent lines ends with a note that it counts the svg layout.
+    const graph = /^(crossing|bends): /m.test(report);
     for (const args of [['--format', 'text', '--width', '100'], ['--format', 'svg'], ['--format', 'text-svg', '--width', '100']]) {
       const both = run([file, ...args, '--check']);
       expect(both.status).toBe(0);
@@ -110,6 +110,8 @@ describe('--check', () => {
     const src = 'flowchart LR\n  A-->C\n  B-->D\n  A-->D\n  B-->C\n  C-->E\n  D-->F\n  E-->F\n  A-->F\n  B-->E\n';
     expect(run(['--format', 'text', '--check'], src).stderr).toMatch(/\nnote: this check reads the svg layout; .*\n$/);
     expect(run(['--format', 'svg', '--check'], src).stderr).not.toContain('note:');
+    // Nothing crosses or bends: nothing for the note to warn about.
+    expect(run(['--format', 'text', '--check'], 'flowchart LR\n  A --> B\n').stderr).toBe('composition lanes · bends 0 · crossings 0\n');
     expect(run(['--help']).stdout).toContain('the report counts the svg layout');
   });
 
