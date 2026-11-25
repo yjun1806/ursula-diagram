@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag such as v0.1.1 whose version matches package.json. The package is published to npm through trusted
+# Push a tag such as v0.1.1 on main whose version matches package.json (see RELEASING.md). The package is published to npm through trusted
 # publishing (no token), with provenance, and a GitHub release is made for the tag.
 on:
   push:
@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -22,6 +24,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
+      - name: The tag is on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: The tag matches the version
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: npx tsc --noEmit
