@@ -31,10 +31,18 @@ function layoutOptions(req: DrawRequest) {
   };
 }
 
-/** The lines of `--format check`. */
-export function checkReport(src: string, req: DrawRequest): string {
+/** The last line of `--check` beside a terminal drawing of a graph: the check reads the svg layout, not the drawing. */
+export const TERMINAL_NOTE = 'note: this check reads the svg layout; the terminal drawing routes its lines on a grid of its own, so its crossings and bends can differ';
+
+/** The lines of `--format check`; `terminal` adds TERMINAL_NOTE when the report counts the lines of a graph. */
+export function checkReport(src: string, req: DrawRequest, terminal = false): string {
   const laid = selectFrontEnd(src).json(src, 'svg', layoutOptions(req)) as Layout | SequenceLayout;
-  const lines = 'edges' in laid && 'diagnostics' in laid ? [...checkLines(laid), ...checkDetails(laid, src)] : 'messages' in laid ? sequenceCheckLines(laid) : ['no checks for this kind of diagram'];
+  const lines =
+    'edges' in laid && 'diagnostics' in laid
+      ? [...checkLines(laid), ...checkDetails(laid, src), ...(terminal ? [TERMINAL_NOTE] : [])]
+      : 'messages' in laid
+        ? sequenceCheckLines(laid)
+        : ['no checks for this kind of diagram'];
   return `${lines.join('\n')}\n`;
 }
 
@@ -69,10 +77,13 @@ function fitted(src: string, req: DrawRequest, limit: number): Outcome {
   return { stdout: '', stderr: `${head}\n${need.sure ? widthHint(need.width) : 'hint: shorten the names, or split the diagram'}\n`, code: 3 };
 }
 
-/** The report of `--check`: the same as `--format check` of the same text, whatever width the drawing was held to. */
+/**
+ * The report of `--check`: the same as `--format check` of the same text, whatever width the drawing was held to.
+ * Beside a terminal drawing it ends with a note that it counts the svg layout.
+ */
 function sideReport(src: string, req: DrawRequest): string {
   const { width: _width, ...rest } = req;
-  return checkReport(src, rest);
+  return checkReport(src, rest, req.format === 'text' || req.format === 'text-svg');
 }
 
 function drawing(src: string, req: DrawRequest): string {

@@ -25,7 +25,7 @@ export const TOOLS = [
         format: { type: 'string', enum: ['text', 'text-svg', 'svg', 'html'], description: 'What to draw; text by default.' },
         width: { type: 'integer', minimum: 1, description: 'Columns for text and text-svg; 100 by default.' },
         charset: { type: 'string', enum: ['unicode', 'ascii'], description: 'Box-drawing characters (unicode, the default) or ascii only.' },
-        check: { type: 'boolean', description: "Also return the engine's check report (counts, crossing lines, questions) as a second text." },
+        check: { type: 'boolean', description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." },
       },
       required: ['source'],
     },

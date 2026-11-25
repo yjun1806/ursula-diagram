@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkDetails, checkLines, selectFrontEnd } from '../src/index.ts';
+import { TERMINAL_NOTE } from '../src/command/draw.ts';
 import { edgeLine } from '../src/layered/details.ts';
 import type { Layout } from '../src/index.ts';
 import * as fixtures from './fixtures.ts';
@@ -95,12 +96,21 @@ describe('--check', () => {
   it.each(examples)('%s: the drawing on stdout, the check report on stderr, code 0', (name) => {
     const file = `${root}examples/${name}`;
     const report = run([file, '--format', 'check']).stdout;
+    // Beside a terminal drawing of a graph, the report ends with a note that it counts the svg layout.
+    const graph = report.startsWith('composition ');
     for (const args of [['--format', 'text', '--width', '100'], ['--format', 'svg'], ['--format', 'text-svg', '--width', '100']]) {
       const both = run([file, ...args, '--check']);
       expect(both.status).toBe(0);
       expect(both.stdout).toBe(run([file, ...args]).stdout);
-      expect(both.stderr).toBe(report);
+      expect(both.stderr).toBe(graph && args[1] !== 'svg' ? `${report}${TERMINAL_NOTE}\n` : report);
     }
+  });
+
+  it('says beside a terminal drawing that the check counts the svg layout, and so does --help', () => {
+    const src = 'flowchart LR\n  A-->C\n  B-->D\n  A-->D\n  B-->C\n  C-->E\n  D-->F\n  E-->F\n  A-->F\n  B-->E\n';
+    expect(run(['--format', 'text', '--check'], src).stderr).toMatch(/\nnote: this check reads the svg layout; .*\n$/);
+    expect(run(['--format', 'svg', '--check'], src).stderr).not.toContain('note:');
+    expect(run(['--help']).stdout).toContain('the report counts the svg layout');
   });
 
   it('prints no report when the drawing fails', () => {

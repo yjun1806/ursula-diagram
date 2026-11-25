@@ -42,7 +42,7 @@ export const OPTIONS: readonly OptionSpec[] = [
     help: 'columns for text and text-svg; fails with code 3 when the drawing cannot fit',
     apply: (req, v) => (v.trim() !== '' && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined),
   },
-  { name: '--check', help: 'with a drawing format: the drawing to stdout, the check report to stderr', apply: (req) => ({ ...req, check: true }) },
+  { name: '--check', help: 'with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)', apply: (req) => ({ ...req, check: true }) },
   { name: '--charset', value: 'C', choices: ['unicode', 'ascii'], help: 'text in box-drawing characters (unicode, the default) or ascii only', apply: choice('charset', ['unicode', 'ascii']) },
   { name: '--color', help: 'text with ANSI colours', apply: (req) => ({ ...req, color: true }) },
   { name: '--title', value: 'TEXT', help: 'the page title of html', apply: (req, v) => ({ ...req, title: v }) },

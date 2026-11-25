@@ -15,7 +15,7 @@ var OPTIONS = [
     help: "columns for text and text-svg; fails with code 3 when the drawing cannot fit",
     apply: (req, v) => v.trim() !== "" && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined
   },
-  { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr", apply: (req) => ({ ...req, check: true }) },
+  { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)", apply: (req) => ({ ...req, check: true }) },
   { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
   { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
   { name: "--title", value: "TEXT", help: "the page title of html", apply: (req, v) => ({ ...req, title: v }) },
@@ -40456,9 +40456,10 @@ function layoutOptions5(req) {
     ...req.charset === undefined ? {} : { charset: req.charset }
   };
 }
-function checkReport(src, req) {
+var TERMINAL_NOTE = "note: this check reads the svg layout; the terminal drawing routes its lines on a grid of its own, so its crossings and bends can differ";
+function checkReport(src, req, terminal = false) {
   const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
-  const lines = "edges" in laid && "diagnostics" in laid ? [...checkLines(laid), ...checkDetails(laid, src)] : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
+  const lines = "edges" in laid && "diagnostics" in laid ? [...checkLines(laid), ...checkDetails(laid, src), ...terminal ? [TERMINAL_NOTE] : []] : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
   return `${lines.join(`
 `)}
 `;
@@ -40501,7 +40502,7 @@ ${need.sure ? widthHint(need.width) : "hint: shorten the names, or split the dia
 }
 function sideReport(src, req) {
   const { width: _width, ...rest } = req;
-  return checkReport(src, rest);
+  return checkReport(src, rest, req.format === "text" || req.format === "text-svg");
 }
 function drawing(src, req) {
   const frontEnd = selectFrontEnd(src);
@@ -40573,7 +40574,8 @@ Which format
   svg       a picture for a document or a page; follows light and dark
   html      one file to open, switch light and dark, and save a PNG
   json      boxes, lines and labels with coordinates, for a program
-  check     the engine's report on the layout, without the drawing
+  check     the engine's report on the svg layout, without the drawing; a
+            terminal drawing routes its lines on its own grid and can differ
 
 Options
 ${optionLines.join(`
@@ -40676,7 +40678,7 @@ var TOOLS = [
         format: { type: "string", enum: ["text", "text-svg", "svg", "html"], description: "What to draw; text by default." },
         width: { type: "integer", minimum: 1, description: "Columns for text and text-svg; 100 by default." },
         charset: { type: "string", enum: ["unicode", "ascii"], description: "Box-drawing characters (unicode, the default) or ascii only." },
-        check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text." }
+        check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." }
       },
       required: ["source"]
     }

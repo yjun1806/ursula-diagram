@@ -24,7 +24,8 @@ Which format
   svg       a picture for a document or a page; follows light and dark
   html      one file to open, switch light and dark, and save a PNG
   json      boxes, lines and labels with coordinates, for a program
-  check     the engine's report on the layout, without the drawing
+  check     the engine's report on the svg layout, without the drawing; a
+            terminal drawing routes its lines on its own grid and can differ
 
 Options
 ${optionLines.join('\n')}
