@@ -13039,7 +13039,7 @@ function withoutRow(l, y) {
     ...l.legend ? { legend: { ...l.legend, y: v(l.legend.y), base: { ...l.legend.base, height: l.legend.base.height - 1 }, items: l.legend.items.map(text) } } : {}
   };
 }
-function closeSpareRows(given) {
+function closeSpareRows(given, keeps = () => true) {
   if (given.clusters !== undefined)
     return given;
   let l = given;
@@ -13080,10 +13080,660 @@ function closeSpareRows(given) {
     if (!spare || passes === 0)
       continue;
     const shorter = withoutRow(now, y);
-    if (openTextRows(shorter).height === shorter.height)
+    if (openTextRows(shorter).height === shorter.height && keeps(shorter, now))
       l = shorter;
   }
   return l;
+}
+
+// src/render/text.ts
+var N = 1;
+var E = 2;
+var S = 4;
+var W = 8;
+var LIGHT = {
+  [E | W]: "─",
+  [E]: "─",
+  [W]: "─",
+  [N | S]: "│",
+  [N]: "│",
+  [S]: "│",
+  [S | E]: "┌",
+  [S | W]: "┐",
+  [N | E]: "└",
+  [N | W]: "┘",
+  [N | S | E]: "├",
+  [N | S | W]: "┤",
+  [E | W | S]: "┬",
+  [E | W | N]: "┴",
+  [N | E | S | W]: "┼"
+};
+var HEAVY = {
+  [E | W]: "━",
+  [E]: "━",
+  [W]: "━",
+  [N | S]: "┃",
+  [N]: "┃",
+  [S]: "┃",
+  [S | E]: "┏",
+  [S | W]: "┓",
+  [N | E]: "┗",
+  [N | W]: "┛",
+  [N | S | E]: "┣",
+  [N | S | W]: "┫",
+  [E | W | S]: "┳",
+  [E | W | N]: "┻",
+  [N | E | S | W]: "╋"
+};
+var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
+
+class Canvas {
+  rows;
+  width;
+  height;
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
+  }
+  widen(width) {
+    if (width <= this.width)
+      return;
+    for (const row of this.rows)
+      while (row.length < width)
+        row.push(" ");
+    this.width = width;
+  }
+  put(x, y, ch) {
+    const row = this.rows[y];
+    if (!row || x < 0 || x >= this.width)
+      return;
+    const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
+    if (wide && x + 1 >= this.width)
+      return;
+    if (row[x] === "" && x > 0)
+      row[x - 1] = " ";
+    if (row[x + 1] === "" && !wide)
+      row[x + 1] = " ";
+    if (wide) {
+      if (row[x + 1] === "" && x + 2 < this.width)
+        row[x + 2] = row[x + 2] === "" ? " " : row[x + 2] ?? " ";
+      if (row[x + 2] === "")
+        row[x + 2] = " ";
+      row[x + 1] = "";
+    }
+    row[x] = ch;
+  }
+  get(x, y) {
+    return this.rows[y]?.[x] ?? " ";
+  }
+  text(x, y, s) {
+    let cx = x;
+    for (const ch of s) {
+      this.put(cx, y, ch);
+      cx += cellWidthOf(ch.codePointAt(0) ?? 0);
+    }
+  }
+  lines() {
+    return this.rows.map((r) => r.join("").trimEnd());
+  }
+}
+function drawLanes2(c, layout) {
+  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
+  for (const lane of layout.lanes) {
+    if (lane.label === "")
+      continue;
+    const x0 = Math.floor(lane.x);
+    const y0 = Math.floor(lane.y);
+    const x1 = x0 + Math.round(lane.w) - 1;
+    const y1 = y0 + Math.round(lane.h) - 1;
+    if (lane.bare && vertical) {
+      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+      continue;
+    }
+    if (vertical) {
+      for (let y = y0;y <= y1; y++) {
+        c.put(x0, y, "╎");
+        c.put(x1, y, "╎");
+      }
+    } else {
+      for (let x = x0;x <= x1; x++)
+        c.put(x, y0, "─");
+      continue;
+    }
+    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+  }
+}
+function cellOf2(edge, nodes, index) {
+  const p = edge.points[index];
+  if (!p)
+    return [0, 0];
+  let x = Math.floor(p.x + 0.000000001);
+  let y = Math.floor(p.y + 0.000000001);
+  const isEnd = index === 0 || index === edge.points.length - 1;
+  const node = nodes.get(index === 0 ? edge.from : edge.to);
+  if (isEnd && node) {
+    if (Math.abs(p.x - node.x) < 0.000000001)
+      x -= 1;
+    if (Math.abs(p.y - node.y) < 0.000000001)
+      y -= 1;
+  }
+  return [x, y];
+}
+function arrowFor(edge) {
+  const a = edge.points[edge.points.length - 2];
+  const b = edge.points[edge.points.length - 1];
+  if (!a || !b)
+    return "▶";
+  if (Math.abs(b.x - a.x) > Math.abs(b.y - a.y))
+    return b.x > a.x ? "▶" : "◀";
+  return b.y > a.y ? "▼" : "▲";
+}
+function markGlyphs(end, heading) {
+  const across = heading === "right" || heading === "left";
+  const foot = { right: "<", left: ">", down: "^", up: "v" }[heading];
+  const bar = across ? "|" : "┼";
+  switch (end) {
+    case "triangle-open":
+      return [{ right: "▷", left: "◁", down: "▽", up: "△" }[heading]];
+    case "diamond-filled":
+      return ["◆"];
+    case "diamond-open":
+      return ["◇"];
+    case "arrow-open":
+      return [{ right: ">", left: "<", down: "v", up: "^" }[heading]];
+    case "one":
+      return [bar, bar];
+    case "zero-one":
+      return [bar, "o"];
+    case "many":
+      return [foot];
+    case "one-many":
+      return [foot, bar];
+    case "zero-many":
+      return [foot, "o"];
+    case "circle-plus":
+      return ["⊕"];
+    case "lollipop":
+      return ["○"];
+    default:
+      return [];
+  }
+}
+var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
+function rulesOf2(layout) {
+  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
+  if (vertical)
+    return new Map;
+  return new Map(layout.lanes.filter((lane) => lane.label !== "").map((lane) => [Math.floor(lane.y), [Math.floor(lane.x), Math.floor(lane.x) + Math.round(lane.w) - 1]]));
+}
+function drawEdges(c, layout) {
+  const nodes = new Map(layout.nodes.map((n) => [n.id, n]));
+  const rules = rulesOf2(layout);
+  const cells = new Map;
+  const touch = (x, y, bits, style) => {
+    const key = `${x},${y}`;
+    const cur = cells.get(key) ?? { bits: 0, style };
+    const next = {
+      ...cur,
+      bits: cur.bits | bits,
+      style: PRIORITY[style] > PRIORITY[cur.style] ? style : cur.style
+    };
+    cells.set(key, next);
+    return next;
+  };
+  const arrows = [];
+  const records = layout.nodes.some((n) => hasCompartments(n) || ["start-dot", "end-dot", "bar", "note", "ellipse", "actor"].includes(n.shape)) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd));
+  const mark = (end, at, from) => {
+    const dx = Math.sign(at[0] - from[0]);
+    const dy = Math.sign(at[1] - from[1]);
+    const heading = dx !== 0 ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
+    markGlyphs(end, heading).forEach((ch, i) => arrows.push({ x: at[0] - dx * i, y: at[1] - dy * i, ch }));
+  };
+  for (const edge of layout.edges) {
+    if (edge.invisible)
+      continue;
+    const pts = edge.points.map((_, i) => cellOf2(edge, nodes, i));
+    for (let i = 0;i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i] ?? [0, 0];
+      const [x2, y2] = pts[i + 1] ?? [0, 0];
+      const dx = Math.sign(x2 - x1);
+      const dy = Math.sign(y2 - y1);
+      if (dx === 0 && dy === 0)
+        continue;
+      const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
+      const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
+      let x = x1;
+      let y = y1;
+      while (x !== x2 || y !== y2) {
+        touch(x, y, out, edge.style);
+        x += dx;
+        y += dy;
+        touch(x, y, back, edge.style);
+      }
+    }
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const toward = (index, id) => {
+      const n = nodes.get(id);
+      const p = edge.points[index];
+      const cell = index === 0 ? first : last;
+      if (!n || !p || !cell)
+        return;
+      const bit = Math.abs(p.x - n.x) < 0.000000001 ? E : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W : Math.abs(p.y - n.y) < 0.000000001 ? S : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N : 0;
+      if (bit !== 0)
+        touch(cell[0], cell[1], bit, edge.style);
+    };
+    toward(0, edge.from);
+    toward(edge.points.length - 1, edge.to);
+    const endMark = edge.end !== undefined && RELATION_MARKS.has(edge.end) ? edge.end : undefined;
+    if (last && pts.length >= 2 && endMark !== undefined)
+      mark(endMark, last, pts[pts.length - 2]);
+    else if (last && edge.end !== "none")
+      arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
+    if (first && pts.length >= 2 && edge.startEnd !== undefined && RELATION_MARKS.has(edge.startEnd))
+      mark(edge.startEnd, first, pts[1]);
+    else if (first && pts.length >= 2 && edge.startEnd === "arrow")
+      arrows.push({ x: first[0], y: first[1], ch: arrowFor({ ...edge, points: [...edge.points].reverse() }) });
+  }
+  for (const [key, cell] of cells) {
+    const [xs, ys] = key.split(",");
+    const glyphs = cell.style === "thick" ? HEAVY : LIGHT;
+    let ch = glyphs[cell.bits] ?? "┼";
+    const rule = cell.bits === (N | S) ? rules.get(Number(ys)) : undefined;
+    if (rule !== undefined && Number(xs) >= rule[0] && Number(xs) <= rule[1])
+      ch = glyphs[cell.bits | (Number(xs) > rule[0] ? W : 0) | (Number(xs) < rule[1] ? E : 0)] ?? "┼";
+    else if (cell.style === "dotted") {
+      if (cell.bits === (E | W) || cell.bits === E || cell.bits === W)
+        ch = "┄";
+      else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S)
+        ch = "┆";
+    }
+    c.put(Number(xs), Number(ys), ch);
+  }
+  for (const a of arrows)
+    c.put(a.x, a.y, a.ch);
+}
+function drawLabels(c, layout) {
+  for (const edge of layout.edges) {
+    const l = edge.label;
+    if (!l || edge.invisible)
+      continue;
+    const x = Math.round(l.x);
+    const y = Math.round(l.y);
+    for (let dy = 0;dy < Math.round(l.h); dy++)
+      for (let dx = 0;dx < Math.round(l.w); dx++)
+        c.put(x + dx, y + dy, " ");
+    const tw = cellWidth(l.text);
+    c.text(x + Math.floor((l.w - tw) / 2), y + Math.floor((l.h - 1) / 2), l.text);
+  }
+}
+function drawEndLabels(c, layout) {
+  const put = (label) => {
+    if (label)
+      c.text(Math.round(label.x), Math.round(label.y), label.text);
+  };
+  for (const edge of layout.edges) {
+    if (edge.invisible)
+      continue;
+    put(edge.startLabel);
+    put(edge.endLabel);
+  }
+}
+var CORNERS = {
+  square: ["┌", "┐", "└", "┘"],
+  round: ["╭", "╮", "╰", "╯"],
+  note: ["┌", "┒", "└", "┘"]
+};
+function drawCompartments(c, n, x0, y0, w) {
+  const cells = n.compartments ?? [];
+  const heights = compartmentHeights(cells, cellRuler());
+  let y = y0 + 1;
+  cells.forEach((cell, i) => {
+    if (i > 0) {
+      c.put(x0, y, "├");
+      for (let x = x0 + 1;x < x0 + w - 1; x++)
+        c.put(x, y, "─");
+      c.put(x0 + w - 1, y, "┤");
+      y += 1;
+    }
+    const centred = (cell.align ?? (i === 0 ? "center" : "left")) === "center";
+    const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
+    cell.lines.forEach((line, k) => {
+      const row = cell.columns?.[k];
+      if (row === undefined)
+        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
+      else
+        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
+    });
+    y += heights[i] ?? 0;
+  });
+}
+function drawNode(c, n) {
+  const x0 = Math.round(n.x);
+  const y0 = Math.round(n.y);
+  const w = Math.round(n.w);
+  const h = Math.round(n.h);
+  if ((n.shape === "start-dot" || n.shape === "end-dot") && w === 1 && h === 1) {
+    c.put(x0, y0, n.shape === "start-dot" ? "●" : "◉");
+    return;
+  }
+  const [tl, tr, bl, br] = CORNERS[n.shape === "ellipse" || n.shape === "actor" ? "round" : n.shape === "note" ? "note" : "square"];
+  const solid = n.shape === "bar";
+  for (let y = y0;y < y0 + h; y++) {
+    for (let x = x0;x < x0 + w; x++) {
+      const top = y === y0;
+      const bottom = y === y0 + h - 1;
+      const left = x === x0;
+      const right = x === x0 + w - 1;
+      let ch = solid ? "█" : " ";
+      if (top && left)
+        ch = solid ? "█" : tl;
+      else if (top && right)
+        ch = solid ? "█" : tr;
+      else if (bottom && left)
+        ch = solid ? "█" : bl;
+      else if (bottom && right)
+        ch = solid ? "█" : br;
+      else if (top || bottom)
+        ch = solid ? "█" : "─";
+      else if (left || right)
+        ch = solid ? "█" : "│";
+      c.put(x, y, ch);
+    }
+  }
+  if (hasCompartments(n)) {
+    drawCompartments(c, n, x0, y0, w);
+    return;
+  }
+  if (solid)
+    return;
+  if (n.shape === "start-dot" || n.shape === "end-dot") {
+    c.put(x0 + Math.floor((w - 1) / 2), y0 + Math.floor((h - 1) / 2), n.shape === "start-dot" ? "●" : "◉");
+    return;
+  }
+  const texts = [n.shape === "actor" ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== "" || n.lines.length === 0);
+  const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
+  texts.forEach((t, i) => {
+    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
+  });
+}
+var SAMPLE_GLYPH = { normal: "──", thick: "━━", dotted: "┄┄" };
+function drawLegend(c, layout) {
+  for (const item of layout.legend?.items ?? []) {
+    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
+    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
+  }
+}
+function drawLaneNames(c, layout, limit) {
+  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
+  if (vertical)
+    return;
+  for (const lane of layout.lanes) {
+    if (lane.label === "" || !lane.bare)
+      continue;
+    const y = Math.floor(lane.y);
+    const x0 = Math.floor(lane.x);
+    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), limit, (x) => c.get(x, y) === "─");
+    const w = cellWidth(placed.text);
+    c.widen(placed.at + w);
+    c.put(placed.at - 1, y, " ");
+    c.text(placed.at, y, placed.text);
+    c.put(placed.at + w, y, " ");
+  }
+}
+function renderTextLayout(layout, maxWidth) {
+  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
+  drawLanes2(c, layout);
+  drawEdges(c, layout);
+  drawLabels(c, layout);
+  drawEndLabels(c, layout);
+  for (const n of layout.nodes)
+    drawNode(c, n);
+  drawLaneNames(c, layout, maxWidth ?? c.width);
+  drawLegend(c, layout);
+  const lines = c.lines();
+  while (lines.length > 0 && lines[lines.length - 1] === "")
+    lines.pop();
+  return lines;
+}
+var ANSI = { normal: "", dim: "\x1B[2m", bold: "\x1B[1m", accent: "\x1B[36m" };
+function spansToAnsi(line) {
+  return line.map((s) => ANSI[s.tone] === "" ? s.text : `${ANSI[s.tone]}${s.text}\x1B[0m`).join("");
+}
+
+// src/layout/text-read.ts
+var N2 = 1;
+var E2 = 2;
+var S2 = 4;
+var W2 = 8;
+var RUNS = {
+  "─": E2 | W2,
+  "━": E2 | W2,
+  "┄": E2 | W2,
+  "│": N2 | S2,
+  "┃": N2 | S2,
+  "┆": N2 | S2,
+  "┌": S2 | E2,
+  "┐": S2 | W2,
+  "└": N2 | E2,
+  "┘": N2 | W2,
+  "┏": S2 | E2,
+  "┓": S2 | W2,
+  "┗": N2 | E2,
+  "┛": N2 | W2,
+  "├": N2 | S2 | E2,
+  "┤": N2 | S2 | W2,
+  "┬": E2 | W2 | S2,
+  "┴": E2 | W2 | N2,
+  "┼": N2 | E2 | S2 | W2,
+  "┣": N2 | S2 | E2,
+  "┫": N2 | S2 | W2,
+  "┳": E2 | W2 | S2,
+  "┻": E2 | W2 | N2,
+  "╋": N2 | E2 | S2 | W2
+};
+var HEADS = {
+  "▶": [-1, 0, E2],
+  "▷": [-1, 0, E2],
+  "◀": [1, 0, W2],
+  "◁": [1, 0, W2],
+  "▼": [0, -1, S2],
+  "▽": [0, -1, S2],
+  "▲": [0, 1, N2],
+  "△": [0, 1, N2]
+};
+var ROUND_MARKS = new Set(["◆", "◇", "⊕", "○"]);
+var TOP_LEFT = new Set(["┌", "╭"]);
+var TOP_RIGHT = new Set(["┐", "╮", "┒"]);
+var BOTTOM_LEFT = new Set(["└", "╰"]);
+var BOTTOM_RIGHT = new Set(["┘", "╯"]);
+var DOTS = new Set(["●", "◉"]);
+var UPRIGHT = new Set(["│", "┃", "┆", "┼", "╋", "├", "┤", "┣", "┫", "▼", "▲", "▽", "△", "◆", "◇", "⊕", "○", "v", "^"]);
+var LEGEND = /^(──|━━|┄┄) .+ {3}(──|━━|┄┄) /;
+function cellsOf(lines) {
+  return lines.map((line) => {
+    const row = [];
+    for (const ch of line) {
+      row.push(ch);
+      if (cellWidthOf(ch.codePointAt(0) ?? 0) === 2)
+        row.push("");
+    }
+    return row;
+  });
+}
+function boxesOf(grid) {
+  const at = (x, y) => grid[y]?.[x] ?? " ";
+  const out = [];
+  grid.forEach((row, y) => {
+    row.forEach((ch, x) => {
+      if (ch === "█" && at(x - 1, y) !== "█" && at(x, y - 1) !== "█") {
+        let x1 = x;
+        let y1 = y;
+        while (at(x1 + 1, y) === "█")
+          x1++;
+        while (at(x, y1 + 1) === "█")
+          y1++;
+        out.push({ x0: x, y0: y, x1, y1 });
+        return;
+      }
+      if (!TOP_LEFT.has(ch))
+        return;
+      let x1 = x + 1;
+      while (at(x1, y) === "─")
+        x1++;
+      if (x1 === x + 1 || !TOP_RIGHT.has(at(x1, y)))
+        return;
+      let y1 = y + 1;
+      while ((at(x, y1) === "│" || at(x, y1) === "├") && (at(x1, y1) === "│" || at(x1, y1) === "┤"))
+        y1++;
+      if (y1 === y + 1 || !BOTTOM_LEFT.has(at(x, y1)) || !BOTTOM_RIGHT.has(at(x1, y1)))
+        return;
+      for (let k = x + 1;k < x1; k++)
+        if (at(k, y1) !== "─")
+          return;
+      out.push({ x0: x, y0: y, x1, y1 });
+    });
+  });
+  const framed = (x, y) => out.some((b) => x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1);
+  const dots = [];
+  grid.forEach((row, y) => {
+    row.forEach((ch, x) => {
+      if (DOTS.has(ch) && !framed(x, y))
+        dots.push({ x0: x, y0: y, x1: x, y1: y });
+    });
+  });
+  return [...out, ...dots];
+}
+function ruleRows(lines) {
+  const out = [];
+  lines.forEach((line, y) => {
+    if ((line.startsWith("─") || line.startsWith("━")) && !LEGEND.test(line))
+      out.push(y);
+  });
+  return out;
+}
+function roomViolations(lines) {
+  const grid = cellsOf(lines);
+  const at = (x, y) => grid[y]?.[x] ?? " ";
+  const rules = ruleRows(lines);
+  const onRule = new Set(rules);
+  const boxes = boxesOf(grid);
+  const found = { headless: [], underName: [], onRule: [], tight: [], close: [] };
+  const show = (y) => `${y}: ${lines[y] ?? ""}`;
+  grid.forEach((row, y) => {
+    row.forEach((ch, x) => {
+      const head = HEADS[ch];
+      if (head !== undefined) {
+        const [dx, dy, run] = head;
+        if (onRule.has(y))
+          found.onRule.push(show(y));
+        if (((RUNS[at(x + dx, y + dy)] ?? 0) & run) === 0)
+          (dy !== 0 && onRule.has(y + dy) ? found.underName : found.headless).push(show(y));
+        return;
+      }
+      if (!ROUND_MARKS.has(ch))
+        return;
+      if (onRule.has(y))
+        found.onRule.push(show(y));
+      const joined = ((RUNS[at(x - 1, y)] ?? 0) & E2) !== 0 || ((RUNS[at(x + 1, y)] ?? 0) & W2) !== 0 || ((RUNS[at(x, y - 1)] ?? 0) & S2) !== 0 || ((RUNS[at(x, y + 1)] ?? 0) & N2) !== 0;
+      if (!joined)
+        (onRule.has(y - 1) || onRule.has(y + 1) ? found.underName : found.headless).push(show(y));
+    });
+  });
+  for (const r of rules) {
+    for (const b of boxes) {
+      if (b.y0 === r + 1 || b.y1 === r - 1) {
+        found.tight.push(show(r));
+        break;
+      }
+    }
+  }
+  const tops = new Map(boxes.map((b) => [b.y0, []]));
+  for (const b of boxes)
+    tops.get(b.y0)?.push(b);
+  for (const a of boxes) {
+    for (let x = a.x0;x <= a.x1; x++) {
+      let y = a.y1 + 1;
+      while (UPRIGHT.has(at(x, y)))
+        y++;
+      const gap = y - a.y1 - 1;
+      if (gap === 0 || gap >= 2)
+        continue;
+      if ((tops.get(y) ?? []).some((b) => b !== a && x >= b.x0 && x <= b.x1))
+        found.close.push(show(a.y1 + 1));
+    }
+  }
+  return found;
+}
+function labelsNotShown(labels, lines) {
+  const wanted = new Map;
+  for (const t of labels)
+    if (t.trim() !== "")
+      wanted.set(t.trim(), (wanted.get(t.trim()) ?? 0) + 1);
+  const times = (t) => lines.reduce((n, line) => n + line.split(t).length - 1, 0);
+  const shortened = (t) => {
+    for (let k = [...t].length - 1;k >= 1; k--)
+      if (lines.some((line) => line.includes(`${[...t].slice(0, k).join("").trimEnd()}…`)))
+        return true;
+    return false;
+  };
+  const out = [];
+  for (const [text, count] of wanted) {
+    const missing = count - times(text);
+    if (missing > 0)
+      out.push({ text, missing, cut: shortened(text) });
+  }
+  return out;
+}
+
+// src/layout/text-ends.ts
+function endTextsClear(l) {
+  const ends = l.edges.flatMap((e, i) => e.invisible === true ? [] : ["startLabel", "endLabel"].flatMap((which) => (e[which]?.text ?? "") === "" ? [] : [{ i, which }]));
+  if (ends.length === 0)
+    return l;
+  const bare = l.edges.map((e) => {
+    const { startLabel: _s, endLabel: _e, ...rest } = e;
+    return rest;
+  });
+  const grid = cellsOf(renderTextLayout({ ...l, edges: bare }));
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  const width = Math.ceil(l.width);
+  const height = Math.ceil(l.height);
+  const taken = new Set;
+  const inBox = (x, y) => l.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x) + Math.round(n.w) && y >= Math.round(n.y) && y < Math.round(n.y) + Math.round(n.h));
+  const free = (x, y, w) => x >= 0 && x + w <= width && y >= 0 && y < height && Array.from({ length: w }, (_, k) => x + k).every((cx) => (grid[y]?.[cx] ?? " ") === " " && !inBox(cx, y) && !taken.has(`${cx},${y}`));
+  const moved = new Map;
+  for (const { i, which } of ends) {
+    const e = l.edges[i];
+    const t = e[which];
+    const [x, y, w] = [Math.round(t.x), Math.round(t.y), cellWidth(t.text)];
+    let spot = free(x, y, w) ? [x, y] : undefined;
+    if (spot === undefined) {
+      const k = which === "startLabel" ? 0 : e.points.length - 1;
+      const [cx, cy] = cellOf(e, nodes, k);
+      const [nx, ny] = cellOf(e, nodes, which === "startLabel" ? Math.min(1, e.points.length - 1) : Math.max(0, e.points.length - 2));
+      const level = ny === cy;
+      const along = level ? Math.sign(nx - cx) : Math.sign(ny - cy);
+      const tries = [0, 1, 2].flatMap((step) => level ? [-1, 1].map((side) => [along > 0 ? cx + step : cx - w + 1 - step, cy + side]) : [1, -1].map((side) => [side > 0 ? cx + 1 : cx - w, cy + along * step]));
+      spot = tries.find(([tx, ty]) => free(tx, ty, w));
+    }
+    if (spot === undefined)
+      continue;
+    for (let k = 0;k < w; k++)
+      taken.add(`${spot[0] + k},${spot[1]}`);
+    if (spot[0] !== x || spot[1] !== y)
+      moved.set(`${i}|${which}`, { ...t, x: spot[0], y: spot[1] });
+  }
+  if (moved.size === 0)
+    return l;
+  return {
+    ...l,
+    edges: l.edges.map((e, i) => {
+      const [s, t] = [moved.get(`${i}|startLabel`), moved.get(`${i}|endLabel`)];
+      return s === undefined && t === undefined ? e : { ...e, ...s === undefined ? {} : { startLabel: s }, ...t === undefined ? {} : { endLabel: t } };
+    })
+  };
 }
 
 // src/layout/rank.ts
@@ -13218,16 +13868,11 @@ function rankNodes(graph) {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i]));
   const n = graph.nodes.length;
   const raw = [];
-  const pairs = new Set;
   for (const [edge, e] of graph.edges.entries()) {
     const a = index.get(e.from);
     const b = index.get(e.to);
     if (a === undefined || b === undefined || a === b)
       return;
-    const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
-    if (pairs.has(pair))
-      return;
-    pairs.add(pair);
     raw.push({ edge, a, b, flipped: false, len: Math.max(1, e.minLength ?? 1) });
   }
   const out = Array.from({ length: n }, () => []);
@@ -13325,6 +13970,8 @@ function layoutRanks(graph, ruler, limit) {
   if (ranked === undefined)
     return;
   const { rank, links } = ranked;
+  if (!td && links.some((l) => l.flipped))
+    return withLoopsBelow(graph, ruler, limit, new Set(links.filter((l) => l.flipped).map((l) => l.edge)));
   const ends = (pick) => graph.nodes.some((_n, i) => links.filter((l) => pick(l) === i).length >= 2);
   if (!ends((l) => l.a) && !ends((l) => l.b))
     return;
@@ -13588,6 +14235,51 @@ function layoutRanks(graph, ruler, limit) {
     diagnostics: graph.mirror === undefined ? [] : [{ kind: "direction-mirrored-in-text", nodes: [], message: `The direction ${graph.mirror} is drawn as ${graph.direction} in text.` }]
   };
 }
+function withLoopsBelow(graph, ruler, limit, back) {
+  const drawn = layoutRanks({ ...graph, edges: graph.edges.filter((_e, i) => !back.has(i)) }, ruler, limit);
+  if (drawn === undefined)
+    return;
+  const nodes = new Map(drawn.nodes.map((n) => [n.id, n]));
+  const middle = (n) => n.x + Math.floor(n.w / 2);
+  const loops = [...back].map((i) => ({ i, e: graph.edges[i], from: nodes.get(graph.edges[i].from), to: nodes.get(graph.edges[i].to) }));
+  const ends = loops.flatMap((l) => [l.e.from, l.e.to]);
+  if (new Set(ends).size < ends.length)
+    return;
+  const order = [...loops].sort((p, q) => Math.abs(middle(p.from) - middle(p.to)) - Math.abs(middle(q.from) - middle(q.to)) || p.i - q.i);
+  const clear = (x, y0, y1) => drawn.nodes.every((n) => x < n.x || x >= n.x + n.w || y1 < n.y || y0 >= n.y + n.h);
+  const placed = new Map;
+  let row = Math.max(drawn.height + 1, ...loops.map((l) => l.to.y + l.to.h + 2));
+  for (const { i, e, from, to } of order) {
+    const [fx, tx] = [middle(from), middle(to)];
+    if (!clear(fx, from.y + from.h, row) || !clear(tx, to.y + to.h, row))
+      return;
+    const text = e.label ?? "";
+    const width = ruler.textWidth(text, "edge");
+    const [lo, hi] = [Math.min(fx, tx), Math.max(fx, tx)];
+    if (text !== "" && hi - lo - 1 < width + 4)
+      return;
+    const label = text === "" ? {} : { label: { text, x: Math.floor((lo + hi + 1) / 2 - (width + 2) / 2), y: row, w: width + 2, h: 1 } };
+    placed.set(i, {
+      from: e.from,
+      to: e.to,
+      style: e.style,
+      ...e.id === undefined ? {} : { id: e.id },
+      ...e.startEnd === undefined ? {} : { startEnd: e.startEnd },
+      ...e.end === undefined ? {} : { end: e.end },
+      points: [
+        { x: fx + 0.5, y: from.y + from.h },
+        { x: fx + 0.5, y: row + 0.5 },
+        { x: tx + 0.5, y: row + 0.5 },
+        { x: tx + 0.5, y: to.y + to.h }
+      ],
+      ...label
+    });
+    row++;
+  }
+  const kept = drawn.edges[Symbol.iterator]();
+  const edges = graph.edges.map((_e, i) => placed.get(i) ?? kept.next().value);
+  return { ...drawn, height: row, lanes: drawn.lanes.map((lane) => ({ ...lane, h: row })), edges };
+}
 
 // src/layout/rows.ts
 function assignRows(graph, rank) {
@@ -13676,7 +14368,7 @@ function assignRows(graph, rank) {
 }
 
 // src/layout/slots.ts
-var W = {
+var W3 = {
   cross: 100,
   bend: 10,
   half: 4,
@@ -13719,7 +14411,7 @@ class Placement {
   evaluations = 0;
   totals = 0;
   baseTotal;
-  cross = W.cross;
+  cross = W3.cross;
   constructor(lanes, lane, span, edges, K, col, row, g = 0.5) {
     this.g = g;
     this.n = lane.length;
@@ -13932,7 +14624,7 @@ class Placement {
   }
   edgeTerm(e) {
     const edge = this.edges[e];
-    let cost = W.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
+    let cost = W3.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
     if (edge?.sameLane) {
       const p = edge.first;
       const q = edge.second;
@@ -13940,14 +14632,14 @@ class Placement {
       const cq = this.col[q] ?? 0;
       if (cq < cp + (this.span[p] ?? 2)) {
         const aligned = cq === cp && Math.abs((this.row[p] ?? 0) - (this.row[q] ?? 0)) === 1;
-        cost += aligned ? W.backAligned : W.back;
+        cost += aligned ? W3.backAligned : W3.back;
       }
     }
     return cost;
   }
   nodeTerm(i) {
     const c = this.col[i] ?? 0;
-    return (c % 2 === 1 ? W.half : 0) + W.order * ((this.n - i) / this.n) * (c + (this.row[i] ?? 0));
+    return (c % 2 === 1 ? W3.half : 0) + W3.order * ((this.n - i) / this.n) * (c + (this.row[i] ?? 0));
   }
   local(edges, nodes, hazards = true, before = 0, bound = Infinity) {
     this.evaluations++;
@@ -14010,7 +14702,7 @@ class Placement {
     for (let i = 0;i < this.n; i++)
       cost += this.nodeTerm(i);
     for (const r of this.rows)
-      cost += W.row * Math.max(0, r - 1) + W.rowMany * Math.max(0, r - 2);
+      cost += W3.row * Math.max(0, r - 1) + W3.rowMany * Math.max(0, r - 2);
     return cost;
   }
   recordBase() {
@@ -14685,427 +15377,20 @@ function drawAttached(laid, attached, ruler) {
   };
 }
 
-// src/render/text.ts
-var N = 1;
-var E = 2;
-var S = 4;
-var W2 = 8;
-var LIGHT = {
-  [E | W2]: "─",
-  [E]: "─",
-  [W2]: "─",
-  [N | S]: "│",
-  [N]: "│",
-  [S]: "│",
-  [S | E]: "┌",
-  [S | W2]: "┐",
-  [N | E]: "└",
-  [N | W2]: "┘",
-  [N | S | E]: "├",
-  [N | S | W2]: "┤",
-  [E | W2 | S]: "┬",
-  [E | W2 | N]: "┴",
-  [N | E | S | W2]: "┼"
-};
-var HEAVY = {
-  [E | W2]: "━",
-  [E]: "━",
-  [W2]: "━",
-  [N | S]: "┃",
-  [N]: "┃",
-  [S]: "┃",
-  [S | E]: "┏",
-  [S | W2]: "┓",
-  [N | E]: "┗",
-  [N | W2]: "┛",
-  [N | S | E]: "┣",
-  [N | S | W2]: "┫",
-  [E | W2 | S]: "┳",
-  [E | W2 | N]: "┻",
-  [N | E | S | W2]: "╋"
-};
-var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
-
-class Canvas {
-  rows;
-  width;
-  height;
-  constructor(width, height) {
-    this.width = width;
-    this.height = height;
-    this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
-  }
-  widen(width) {
-    if (width <= this.width)
-      return;
-    for (const row of this.rows)
-      while (row.length < width)
-        row.push(" ");
-    this.width = width;
-  }
-  put(x, y, ch) {
-    const row = this.rows[y];
-    if (!row || x < 0 || x >= this.width)
-      return;
-    const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
-    if (wide && x + 1 >= this.width)
-      return;
-    if (row[x] === "" && x > 0)
-      row[x - 1] = " ";
-    if (row[x + 1] === "" && !wide)
-      row[x + 1] = " ";
-    if (wide) {
-      if (row[x + 1] === "" && x + 2 < this.width)
-        row[x + 2] = row[x + 2] === "" ? " " : row[x + 2] ?? " ";
-      if (row[x + 2] === "")
-        row[x + 2] = " ";
-      row[x + 1] = "";
-    }
-    row[x] = ch;
-  }
-  get(x, y) {
-    return this.rows[y]?.[x] ?? " ";
-  }
-  text(x, y, s) {
-    let cx = x;
-    for (const ch of s) {
-      this.put(cx, y, ch);
-      cx += cellWidthOf(ch.codePointAt(0) ?? 0);
-    }
-  }
-  lines() {
-    return this.rows.map((r) => r.join("").trimEnd());
-  }
-}
-function drawLanes2(c, layout) {
-  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
-  for (const lane of layout.lanes) {
-    if (lane.label === "")
-      continue;
-    const x0 = Math.floor(lane.x);
-    const y0 = Math.floor(lane.y);
-    const x1 = x0 + Math.round(lane.w) - 1;
-    const y1 = y0 + Math.round(lane.h) - 1;
-    if (lane.bare && vertical) {
-      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
-      continue;
-    }
-    if (vertical) {
-      for (let y = y0;y <= y1; y++) {
-        c.put(x0, y, "╎");
-        c.put(x1, y, "╎");
-      }
-    } else {
-      for (let x = x0;x <= x1; x++)
-        c.put(x, y0, "─");
-      continue;
-    }
-    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
-  }
-}
-function cellOf2(edge, nodes, index) {
-  const p = edge.points[index];
-  if (!p)
-    return [0, 0];
-  let x = Math.floor(p.x + 0.000000001);
-  let y = Math.floor(p.y + 0.000000001);
-  const isEnd = index === 0 || index === edge.points.length - 1;
-  const node = nodes.get(index === 0 ? edge.from : edge.to);
-  if (isEnd && node) {
-    if (Math.abs(p.x - node.x) < 0.000000001)
-      x -= 1;
-    if (Math.abs(p.y - node.y) < 0.000000001)
-      y -= 1;
-  }
-  return [x, y];
-}
-function arrowFor(edge) {
-  const a = edge.points[edge.points.length - 2];
-  const b = edge.points[edge.points.length - 1];
-  if (!a || !b)
-    return "▶";
-  if (Math.abs(b.x - a.x) > Math.abs(b.y - a.y))
-    return b.x > a.x ? "▶" : "◀";
-  return b.y > a.y ? "▼" : "▲";
-}
-function markGlyphs(end, heading) {
-  const across = heading === "right" || heading === "left";
-  const foot = { right: "<", left: ">", down: "^", up: "v" }[heading];
-  const bar = across ? "|" : "┼";
-  switch (end) {
-    case "triangle-open":
-      return [{ right: "▷", left: "◁", down: "▽", up: "△" }[heading]];
-    case "diamond-filled":
-      return ["◆"];
-    case "diamond-open":
-      return ["◇"];
-    case "arrow-open":
-      return [{ right: ">", left: "<", down: "v", up: "^" }[heading]];
-    case "one":
-      return [bar, bar];
-    case "zero-one":
-      return [bar, "o"];
-    case "many":
-      return [foot];
-    case "one-many":
-      return [foot, bar];
-    case "zero-many":
-      return [foot, "o"];
-    case "circle-plus":
-      return ["⊕"];
-    case "lollipop":
-      return ["○"];
-    default:
-      return [];
-  }
-}
-var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
-function rulesOf2(layout) {
-  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
-  if (vertical)
-    return new Map;
-  return new Map(layout.lanes.filter((lane) => lane.label !== "").map((lane) => [Math.floor(lane.y), [Math.floor(lane.x), Math.floor(lane.x) + Math.round(lane.w) - 1]]));
-}
-function drawEdges(c, layout) {
-  const nodes = new Map(layout.nodes.map((n) => [n.id, n]));
-  const rules = rulesOf2(layout);
-  const cells = new Map;
-  const touch = (x, y, bits, style) => {
-    const key = `${x},${y}`;
-    const cur = cells.get(key) ?? { bits: 0, style };
-    const next = {
-      ...cur,
-      bits: cur.bits | bits,
-      style: PRIORITY[style] > PRIORITY[cur.style] ? style : cur.style
-    };
-    cells.set(key, next);
-    return next;
-  };
-  const arrows = [];
-  const records = layout.nodes.some((n) => hasCompartments(n) || ["start-dot", "end-dot", "bar", "note", "ellipse", "actor"].includes(n.shape)) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd));
-  const mark = (end, at, from) => {
-    const dx = Math.sign(at[0] - from[0]);
-    const dy = Math.sign(at[1] - from[1]);
-    const heading = dx !== 0 ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
-    markGlyphs(end, heading).forEach((ch, i) => arrows.push({ x: at[0] - dx * i, y: at[1] - dy * i, ch }));
-  };
-  for (const edge of layout.edges) {
-    if (edge.invisible)
-      continue;
-    const pts = edge.points.map((_, i) => cellOf2(edge, nodes, i));
-    for (let i = 0;i + 1 < pts.length; i++) {
-      const [x1, y1] = pts[i] ?? [0, 0];
-      const [x2, y2] = pts[i + 1] ?? [0, 0];
-      const dx = Math.sign(x2 - x1);
-      const dy = Math.sign(y2 - y1);
-      if (dx === 0 && dy === 0)
-        continue;
-      const out = dx > 0 ? E : dx < 0 ? W2 : dy > 0 ? S : N;
-      const back = dx > 0 ? W2 : dx < 0 ? E : dy > 0 ? N : S;
-      let x = x1;
-      let y = y1;
-      while (x !== x2 || y !== y2) {
-        touch(x, y, out, edge.style);
-        x += dx;
-        y += dy;
-        touch(x, y, back, edge.style);
-      }
-    }
-    const first = pts[0];
-    const last = pts[pts.length - 1];
-    const toward = (index, id) => {
-      const n = nodes.get(id);
-      const p = edge.points[index];
-      const cell = index === 0 ? first : last;
-      if (!n || !p || !cell)
-        return;
-      const bit = Math.abs(p.x - n.x) < 0.000000001 ? E : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W2 : Math.abs(p.y - n.y) < 0.000000001 ? S : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N : 0;
-      if (bit !== 0)
-        touch(cell[0], cell[1], bit, edge.style);
-    };
-    toward(0, edge.from);
-    toward(edge.points.length - 1, edge.to);
-    const endMark = edge.end !== undefined && RELATION_MARKS.has(edge.end) ? edge.end : undefined;
-    if (last && pts.length >= 2 && endMark !== undefined)
-      mark(endMark, last, pts[pts.length - 2]);
-    else if (last && edge.end !== "none")
-      arrows.push({ x: last[0], y: last[1], ch: arrowFor(edge) });
-    if (first && pts.length >= 2 && edge.startEnd !== undefined && RELATION_MARKS.has(edge.startEnd))
-      mark(edge.startEnd, first, pts[1]);
-    else if (first && pts.length >= 2 && edge.startEnd === "arrow")
-      arrows.push({ x: first[0], y: first[1], ch: arrowFor({ ...edge, points: [...edge.points].reverse() }) });
-  }
-  for (const [key, cell] of cells) {
-    const [xs, ys] = key.split(",");
-    const glyphs = cell.style === "thick" ? HEAVY : LIGHT;
-    let ch = glyphs[cell.bits] ?? "┼";
-    const rule = cell.bits === (N | S) ? rules.get(Number(ys)) : undefined;
-    if (rule !== undefined && Number(xs) >= rule[0] && Number(xs) <= rule[1])
-      ch = glyphs[cell.bits | (Number(xs) > rule[0] ? W2 : 0) | (Number(xs) < rule[1] ? E : 0)] ?? "┼";
-    else if (cell.style === "dotted") {
-      if (cell.bits === (E | W2) || cell.bits === E || cell.bits === W2)
-        ch = "┄";
-      else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S)
-        ch = "┆";
-    }
-    c.put(Number(xs), Number(ys), ch);
-  }
-  for (const a of arrows)
-    c.put(a.x, a.y, a.ch);
-}
-function drawLabels(c, layout) {
-  for (const edge of layout.edges) {
-    const l = edge.label;
-    if (!l || edge.invisible)
-      continue;
-    const x = Math.round(l.x);
-    const y = Math.round(l.y);
-    for (let dy = 0;dy < Math.round(l.h); dy++)
-      for (let dx = 0;dx < Math.round(l.w); dx++)
-        c.put(x + dx, y + dy, " ");
-    const tw = cellWidth(l.text);
-    c.text(x + Math.floor((l.w - tw) / 2), y + Math.floor((l.h - 1) / 2), l.text);
-  }
-}
-function drawEndLabels(c, layout) {
-  const put = (label) => {
-    if (label)
-      c.text(Math.round(label.x), Math.round(label.y), label.text);
-  };
-  for (const edge of layout.edges) {
-    if (edge.invisible)
-      continue;
-    put(edge.startLabel);
-    put(edge.endLabel);
-  }
-}
-var CORNERS = {
-  square: ["┌", "┐", "└", "┘"],
-  round: ["╭", "╮", "╰", "╯"],
-  note: ["┌", "┒", "└", "┘"]
-};
-function drawCompartments(c, n, x0, y0, w) {
-  const cells = n.compartments ?? [];
-  const heights = compartmentHeights(cells, cellRuler());
-  let y = y0 + 1;
-  cells.forEach((cell, i) => {
-    if (i > 0) {
-      c.put(x0, y, "├");
-      for (let x = x0 + 1;x < x0 + w - 1; x++)
-        c.put(x, y, "─");
-      c.put(x0 + w - 1, y, "┤");
-      y += 1;
-    }
-    const centred = (cell.align ?? (i === 0 ? "center" : "left")) === "center";
-    const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
-    cell.lines.forEach((line, k) => {
-      const row = cell.columns?.[k];
-      if (row === undefined)
-        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
-      else
-        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
-    });
-    y += heights[i] ?? 0;
-  });
-}
-function drawNode(c, n) {
-  const x0 = Math.round(n.x);
-  const y0 = Math.round(n.y);
-  const w = Math.round(n.w);
-  const h = Math.round(n.h);
-  if ((n.shape === "start-dot" || n.shape === "end-dot") && w === 1 && h === 1) {
-    c.put(x0, y0, n.shape === "start-dot" ? "●" : "◉");
-    return;
-  }
-  const [tl, tr, bl, br] = CORNERS[n.shape === "ellipse" || n.shape === "actor" ? "round" : n.shape === "note" ? "note" : "square"];
-  const solid = n.shape === "bar";
-  for (let y = y0;y < y0 + h; y++) {
-    for (let x = x0;x < x0 + w; x++) {
-      const top = y === y0;
-      const bottom = y === y0 + h - 1;
-      const left = x === x0;
-      const right = x === x0 + w - 1;
-      let ch = solid ? "█" : " ";
-      if (top && left)
-        ch = solid ? "█" : tl;
-      else if (top && right)
-        ch = solid ? "█" : tr;
-      else if (bottom && left)
-        ch = solid ? "█" : bl;
-      else if (bottom && right)
-        ch = solid ? "█" : br;
-      else if (top || bottom)
-        ch = solid ? "█" : "─";
-      else if (left || right)
-        ch = solid ? "█" : "│";
-      c.put(x, y, ch);
-    }
-  }
-  if (hasCompartments(n)) {
-    drawCompartments(c, n, x0, y0, w);
-    return;
-  }
-  if (solid)
-    return;
-  if (n.shape === "start-dot" || n.shape === "end-dot") {
-    c.put(x0 + Math.floor((w - 1) / 2), y0 + Math.floor((h - 1) / 2), n.shape === "start-dot" ? "●" : "◉");
-    return;
-  }
-  const texts = [n.shape === "actor" ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== "" || n.lines.length === 0);
-  const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
-  texts.forEach((t, i) => {
-    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
-  });
-}
-var SAMPLE_GLYPH = { normal: "──", thick: "━━", dotted: "┄┄" };
-function drawLegend(c, layout) {
-  for (const item of layout.legend?.items ?? []) {
-    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
-    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
-  }
-}
-function drawLaneNames(c, layout, limit) {
-  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
-  if (vertical)
-    return;
-  for (const lane of layout.lanes) {
-    if (lane.label === "" || !lane.bare)
-      continue;
-    const y = Math.floor(lane.y);
-    const x0 = Math.floor(lane.x);
-    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), limit, (x) => c.get(x, y) === "─");
-    const w = cellWidth(placed.text);
-    c.widen(placed.at + w);
-    c.put(placed.at - 1, y, " ");
-    c.text(placed.at, y, placed.text);
-    c.put(placed.at + w, y, " ");
-  }
-}
-function renderTextLayout(layout, maxWidth) {
-  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
-  drawLanes2(c, layout);
-  drawEdges(c, layout);
-  drawLabels(c, layout);
-  drawEndLabels(c, layout);
-  for (const n of layout.nodes)
-    drawNode(c, n);
-  drawLaneNames(c, layout, maxWidth ?? c.width);
-  drawLegend(c, layout);
-  const lines = c.lines();
-  while (lines.length > 0 && lines[lines.length - 1] === "")
-    lines.pop();
-  return lines;
-}
-var ANSI = { normal: "", dim: "\x1B[2m", bold: "\x1B[1m", accent: "\x1B[36m" };
-function spansToAnsi(line) {
-  return line.map((s) => ANSI[s.tone] === "" ? s.text : `${ANSI[s.tone]}${s.text}\x1B[0m`).join("");
-}
-
 // src/layout/text-cost.ts
 var EPS18 = 0.000001;
+var rowsOf = new WeakMap;
+function writtenOf(l) {
+  const known = rowsOf.get(l);
+  if (known !== undefined)
+    return known;
+  const rows = renderTextLayout(l);
+  rowsOf.set(l, rows);
+  return rows;
+}
 var between2 = (v, a, b) => v > Math.min(a, b) + EPS18 && v < Math.max(a, b) - EPS18;
 var upright = (a, b) => Math.abs(a.x - b.x) < EPS18;
-function cellsOf(e, nodes) {
+function cellsOf2(e, nodes) {
   const corners = e.points.map((_, i) => cellOf(e, nodes, i));
   const first = corners[0];
   if (first === undefined)
@@ -15136,7 +15421,7 @@ function blankRows(n) {
 function textCost(l) {
   const nodes = new Map(l.nodes.map((n) => [n.id, n]));
   const drawn = l.edges.filter((e) => e.invisible !== true && e.points.length >= 2);
-  const cells = drawn.map((e) => cellsOf(e, nodes));
+  const cells = drawn.map((e) => cellsOf2(e, nodes));
   const labels = drawn.flatMap((e) => e.label === undefined ? [] : [e.label]);
   const segments = drawn.map((e) => e.points.slice(1).map((p, i) => [e.points[i], p]));
   let crossings = 0;
@@ -15177,7 +15462,7 @@ function textCost(l) {
     const line = cs.slice(0, -1);
     return line.length > 0 && line.every((c) => labels.some((r) => inside2(r, c)) || l.nodes.some((n) => inside2(n, c)));
   }).length;
-  const written = renderTextLayout(l);
+  const written = writtenOf(l);
   return {
     width: Math.max(0, ...written.map(cellWidth)),
     rows: written.length,
@@ -15193,6 +15478,278 @@ function textCost(l) {
 function costsMore(a, b) {
   return Object.keys(a).some((k) => a[k] > b[k] + EPS18);
 }
+
+// src/layout/text-intact.ts
+var N3 = 1;
+var E3 = 2;
+var S3 = 4;
+var W4 = 8;
+var LEVEL = E3 | W4;
+var UPRIGHT2 = N3 | S3;
+var RUNS2 = {
+  "─": E3 | W4,
+  "━": E3 | W4,
+  "┄": E3 | W4,
+  "│": N3 | S3,
+  "┃": N3 | S3,
+  "┆": N3 | S3,
+  "┌": S3 | E3,
+  "┐": S3 | W4,
+  "└": N3 | E3,
+  "┘": N3 | W4,
+  "┏": S3 | E3,
+  "┓": S3 | W4,
+  "┗": N3 | E3,
+  "┛": N3 | W4,
+  "├": N3 | S3 | E3,
+  "┤": N3 | S3 | W4,
+  "┬": E3 | W4 | S3,
+  "┴": E3 | W4 | N3,
+  "┼": N3 | E3 | S3 | W4,
+  "┣": N3 | S3 | E3,
+  "┫": N3 | S3 | W4,
+  "┳": E3 | W4 | S3,
+  "┻": E3 | W4 | N3,
+  "╋": N3 | E3 | S3 | W4
+};
+var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
+var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
+var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
+var CORNERS2 = {
+  square: ["┌", "┐", "└", "┘"],
+  round: ["╭", "╮", "╰", "╯"],
+  note: ["┌", "┒", "└", "┘"]
+};
+var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "coveredLabels", "labelsAtHeads", "room", "unseen"];
+function runsOf2(edge, nodes) {
+  const cellAt = (index) => {
+    const p = edge.points[index] ?? { x: 0, y: 0 };
+    let x = Math.floor(p.x + 0.000000001);
+    let y = Math.floor(p.y + 0.000000001);
+    const node = index === 0 ? nodes.get(edge.from) : index === edge.points.length - 1 ? nodes.get(edge.to) : undefined;
+    if (node !== undefined) {
+      if (Math.abs(p.x - node.x) < 0.000000001)
+        x -= 1;
+      if (Math.abs(p.y - node.y) < 0.000000001)
+        y -= 1;
+    }
+    return [x, y];
+  };
+  const corners = edge.points.map((_, i) => cellAt(i));
+  const bits = new Map;
+  const cells = [];
+  const add = (x, y, bit) => {
+    const key = `${x},${y}`;
+    if (!bits.has(key))
+      cells.push([x, y]);
+    bits.set(key, (bits.get(key) ?? 0) | bit);
+  };
+  const first = corners[0];
+  if (first === undefined)
+    return;
+  add(first[0], first[1], 0);
+  for (let i = 0;i + 1 < corners.length; i++) {
+    const [x1, y1] = corners[i];
+    const [x2, y2] = corners[i + 1];
+    const dx = Math.sign(x2 - x1);
+    const dy = Math.sign(y2 - y1);
+    if (dx !== 0 && dy !== 0)
+      return;
+    if (dx === 0 && dy === 0)
+      continue;
+    const out = dx > 0 ? E3 : dx < 0 ? W4 : dy > 0 ? S3 : N3;
+    const back = dx > 0 ? W4 : dx < 0 ? E3 : dy > 0 ? N3 : S3;
+    for (let x = x1, y = y1;x !== x2 || y !== y2; ) {
+      add(x, y, out);
+      x += dx;
+      y += dy;
+      add(x, y, back);
+    }
+  }
+  const toward = (index, id) => {
+    const n = nodes.get(id);
+    const p = edge.points[index];
+    const cell = corners[index];
+    if (n === undefined || p === undefined || cell === undefined)
+      return;
+    const bit = Math.abs(p.x - n.x) < 0.000000001 ? E3 : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W4 : Math.abs(p.y - n.y) < 0.000000001 ? S3 : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N3 : 0;
+    if (bit !== 0)
+      add(cell[0], cell[1], bit);
+  };
+  toward(0, edge.from);
+  toward(edge.points.length - 1, edge.to);
+  return { cells, bits };
+}
+var together = (a, b) => a.from === b.from || a.to === b.to || a.sharedPort !== undefined && a.sharedPort.id === b.sharedPort?.id || a.trunk !== undefined && a.trunk.id === b.trunk?.id;
+function spotOf(l) {
+  const x = Math.round(l.x);
+  const w = cellWidth(l.text);
+  const x0 = x + Math.floor((l.w - w) / 2);
+  return { x0, x1: x0 + w - 1, y: Math.round(l.y) + Math.floor((l.h - 1) / 2), text: l.text };
+}
+function written(grid, x, y, text) {
+  const want = cellsOf([text])[0] ?? [];
+  const row = grid[y] ?? [];
+  return want.every((ch, k) => (row[x + k] ?? " ") === ch);
+}
+function breaksOf(layout, lines, labels, notes) {
+  const note = (what) => {
+    notes?.push(what);
+  };
+  const grid = cellsOf(lines);
+  const at = (x, y) => grid[y]?.[x] ?? " ";
+  const nodes = new Map(layout.nodes.map((n) => [n.id, n]));
+  const drawn = layout.edges.filter((e) => e.invisible !== true && e.points.length >= 2);
+  const runs = drawn.map((e) => runsOf2(e, nodes));
+  let brokenLines = 0;
+  drawn.forEach((e, i) => {
+    const run = runs[i];
+    if (run === undefined)
+      return;
+    const own = e.label === undefined ? undefined : spotOf(e.label);
+    const ends = run.cells.length;
+    const broken = run.cells.find(([x, y], k) => {
+      const ch = at(x, y);
+      const need = run.bits.get(`${x},${y}`) ?? 0;
+      if (((RUNS2[ch] ?? 0) & need) === need && need !== 0)
+        return false;
+      if ((k < 2 || k >= ends - 2) && MARKS.has(ch))
+        return false;
+      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT2 || need === E3 || need === W4))
+        return false;
+      return true;
+    });
+    if (broken !== undefined) {
+      brokenLines++;
+      note(`line ${e.from}->${e.to} broken at ${broken[0]},${broken[1]}`);
+    }
+  });
+  let brokenBoxes = 0;
+  for (const n of layout.nodes) {
+    const [x0, y0, w, h] = [Math.round(n.x), Math.round(n.y), Math.round(n.w), Math.round(n.h)];
+    if (w < 2 || h < 2)
+      continue;
+    const [x1, y1] = [x0 + w - 1, y0 + h - 1];
+    let whole;
+    if (n.shape === "bar") {
+      whole = [at(x0, y0), at(x1, y0), at(x0, y1), at(x1, y1)].every((c) => c === "█");
+    } else {
+      const [tl, tr, bl, br] = CORNERS2[n.shape === "ellipse" || n.shape === "actor" ? "round" : n.shape === "note" ? "note" : "square"];
+      whole = at(x0, y0) === tl && at(x1, y0) === tr && at(x0, y1) === bl && at(x1, y1) === br;
+      for (let x = x0 + 1;whole && x < x1; x++)
+        whole = at(x, y0) === "─" && at(x, y1) === "─";
+      for (let y = y0 + 1;whole && y < y1; y++)
+        whole = (at(x0, y) === "│" || at(x0, y) === "├") && (at(x1, y) === "│" || at(x1, y) === "┤");
+    }
+    if (!whole) {
+      brokenBoxes++;
+      note(`box ${n.id} broken`);
+    }
+  }
+  const byCell = new Map;
+  runs.forEach((run, i) => {
+    for (const [x, y] of run?.cells ?? [])
+      byCell.set(`${x},${y}`, [...byCell.get(`${x},${y}`) ?? [], i]);
+  });
+  let tangled = 0;
+  for (const [key, list] of byCell) {
+    if (list.length < 2)
+      continue;
+    const tangles = list.some((i, k) => list.slice(k + 1).some((j) => {
+      if (together(drawn[i], drawn[j]))
+        return false;
+      const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
+      return (a & LEVEL) !== 0 && (b & LEVEL) !== 0 || (a & UPRIGHT2) !== 0 && (b & UPRIGHT2) !== 0;
+    }));
+    if (tangles) {
+      tangled++;
+      note(`lines tangled at ${key}`);
+    }
+  }
+  const crossings = new Map;
+  for (const [key, list] of byCell) {
+    list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
+      const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
+      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
+        crossings.set(`${i}|${j}`, (crossings.get(`${i}|${j}`) ?? 0) + 1);
+    }));
+  }
+  for (const [pair, n] of crossings) {
+    tangled += n - 1;
+    if (n > 1)
+      note(`lines ${pair} cross ${n} times`);
+  }
+  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
+  const spots = drawn.map((e) => e.label === undefined ? undefined : spotOf(e.label));
+  let strayLabels = 0;
+  let coveredLabels = 0;
+  let labelsAtHeads = 0;
+  drawn.forEach((e, i) => {
+    const spot = spots[i];
+    if (spot === undefined)
+      return;
+    if (!written(grid, spot.x0, spot.y, spot.text)) {
+      coveredLabels++;
+      note(`label ${spot.text} covered`);
+    }
+    const other = (x, y) => lineOf(x, y).some((j) => j !== i) && !lineOf(x, y).includes(i);
+    const mine = (x, y) => lineOf(x, y).includes(i);
+    const blank = (x, y) => at(x, y) === " ";
+    let stray = false;
+    if (other(spot.x0 - 1, spot.y) || other(spot.x1 + 1, spot.y))
+      stray = true;
+    if (blank(spot.x0 - 1, spot.y) && other(spot.x0 - 2, spot.y) || blank(spot.x1 + 1, spot.y) && other(spot.x1 + 2, spot.y))
+      stray = true;
+    for (let x = spot.x0;x <= spot.x1 && !stray; x++)
+      if (other(x, spot.y - 1) || other(x, spot.y + 1))
+        stray = true;
+    for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
+      const near = edge + 2 * side;
+      if (!stray && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT2) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT2) !== 0)
+        stray = true;
+    }
+    for (const [j, o] of spots.entries()) {
+      if (stray || o === undefined || j === i || o.y !== spot.y)
+        continue;
+      const [a, b] = o.x0 > spot.x1 ? [spot.x1, o.x0] : o.x1 < spot.x0 ? [o.x1, spot.x0] : [0, 0];
+      if (b - a - 1 <= 2 && b > a && Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k).every((x) => blank(x, spot.y)))
+        stray = true;
+    }
+    if (stray) {
+      strayLabels++;
+      note(`label ${spot.text} stray`);
+    }
+    const headAt = (x, between) => LEVEL_HEADS.has(at(x, spot.y)) && (between === 0 || blank(between, spot.y));
+    if (headAt(spot.x1 + 1, 0) || headAt(spot.x1 + 2, spot.x1 + 1) || headAt(spot.x0 - 1, 0) || headAt(spot.x0 - 2, spot.x0 - 1))
+      labelsAtHeads++;
+  });
+  for (const e of drawn) {
+    for (const t of [e.startLabel, e.endLabel]) {
+      if (t !== undefined && t.text !== "" && !written(grid, Math.round(t.x), Math.round(t.y), t.text)) {
+        coveredLabels++;
+        note(`end text ${t.text} covered`);
+      }
+    }
+  }
+  const room = roomViolations(lines);
+  const asked = labels ?? drawn.flatMap((e) => e.label === undefined ? [] : e.label.lines ?? [e.label.text]);
+  return {
+    brokenLines,
+    brokenBoxes,
+    tangled,
+    strayLabels,
+    coveredLabels,
+    labelsAtHeads,
+    room: room.headless.length + room.underName.length + room.onRule.length + room.tight.length + room.close.length,
+    unseen: labelsNotShown(asked, lines).reduce((n, m) => n + m.missing, 0)
+  };
+}
+var breaksMore = (a, b) => BREAK_KINDS.some((k) => a[k] > b[k]);
+var LABEL_KINDS = ["strayLabels", "coveredLabels", "labelsAtHeads", "unseen"];
+var breaksMoreMovingLabels = (a, b) => {
+  const sum = (x) => LABEL_KINDS.reduce((n, k) => n + x[k], 0);
+  return BREAK_KINDS.some((k) => !LABEL_KINDS.includes(k) && a[k] > b[k]) || sum(a) > sum(b);
+};
 
 // src/layout/plan.ts
 function isFlowSide(side) {
@@ -15897,7 +16454,7 @@ function terminals(sk, geo, s, side) {
     cost: isFlowSide(side) ? Math.abs((geo.cC[b] ?? 0) - midC) : Math.abs((geo.fC[a] ?? 0) - midF)
   }));
 }
-function runsOf2(verts, from, srcSide, to, tgtSide) {
+function runsOf3(verts, from, srcSide, to, tgtSide) {
   const pts = [stubPoint(from, srcSide), ...verts.map((v) => [2 * v[0], 2 * v[1]]), stubPoint(to, tgtSide)];
   const out = [];
   for (let i = 0;i + 1 < pts.length; i++) {
@@ -15933,7 +16490,7 @@ function routeEdges(sk, geo, ruler, plans) {
       const path = shortestPath(grid, geo, ruler.rankGap, terminals(sk, geo, from, plan.srcSide), terminals(sk, geo, to, plan.tgtSide));
       if (!path)
         continue;
-      pieces = runsOf2(path, from, plan.srcSide, to, plan.tgtSide);
+      pieces = runsOf3(path, from, plan.srcSide, to, plan.tgtSide);
     }
     const ids = [];
     for (const piece of pieces) {
@@ -16545,7 +17102,7 @@ function layoutAlong(arranged, ruler, opts, fit = false) {
 function layoutMirrored(graph, how, ruler, opts) {
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
-    const drawn = layoutOnce(plain, ruler, opts).closed;
+    const drawn = layoutOnce(plain, ruler, opts, true).closed;
     const note = { kind: "direction-mirrored-in-text", nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
@@ -16561,14 +17118,14 @@ function layout(graph, given, opts = {}) {
   if (ranked !== undefined && opts.ranked === true)
     return ranked;
   const flow = out(layoutShared(graph, given, opts));
+  const labels = graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
   if (ranked !== undefined)
-    return worthIt(textCost(ranked), textCost(flow)) ? ranked : flow;
+    return worthIt(ranked, flow, labels, limit) ? ranked : flow;
   if (plain || graph.zones !== "groups" || flow.composition !== "stages" || graph.direction !== "LR")
     return flow;
   const alongside = out(layoutShared(graph, given, { ...opts, composition: "lanes" }));
-  const cost = textCost(alongside);
-  const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, cost.width) <= limit;
-  return fits && onward(alongside) > onward(flow) && worthIt(cost, textCost(flow)) ? alongside : flow;
+  const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, textCost(alongside).width) <= limit;
+  return fits && onward(alongside) > onward(flow) && worthIt(alongside, flow, labels, limit) ? alongside : flow;
 }
 function onward(l) {
   const nodes = new Map(l.nodes.map((n) => [n.id, n]));
@@ -16578,10 +17135,21 @@ function onward(l) {
     return a !== undefined && b !== undefined && e.invisible !== true && (down ? b.y >= a.y + a.h : b.x >= a.x + a.w);
   }).length;
 }
-var KEPT = ["crossings", "touches", "cut", "blank", "hidden", "crossed"];
-var roomFor = (rows) => rows * 1.1 + 2;
-function worthIt(other, usual) {
-  return KEPT.every((k) => other[k] <= usual[k]) && other.rows <= roomFor(usual.rows);
+var KEPT = ["crossings", "touches", "cut", "hidden", "crossed"];
+function worthIt(other, usual, labels, limit) {
+  const [mine, theirs] = [textCost(other), textCost(usual)];
+  if (!KEPT.every((k) => mine[k] <= theirs[k]))
+    return false;
+  return !breaksMore(breaksIn(other, labels, limit), breaksIn(usual, labels, limit));
+}
+var counted = new WeakMap;
+function breaksIn(l, labels, limit) {
+  const known = counted.get(l);
+  if (known !== undefined)
+    return known;
+  const found = breaksOf(l, limit === undefined || !Number.isFinite(limit) || l.lanes.every((lane) => lane.label === "") ? writtenOf(l) : renderTextLayout(l, limit), labels);
+  counted.set(l, found);
+  return found;
 }
 function layoutShared(graph, given, opts) {
   if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true)
@@ -16602,15 +17170,26 @@ function layoutShared(graph, given, opts) {
   return costsMore(shared, own) || !costsMore(own, shared) ? apart : joined;
 }
 var arrangementOf = (l) => [l.composition, l.laneAxis, ...l.lanes.map((lane) => lane.id)].join("|");
-function layoutOnce(graph, given, opts) {
+function layoutOnce(graph, given, opts, out = false) {
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true)
     return { closed: drawn, opened: () => drawn };
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l) => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
+  const labels = graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
+  const intact = (after, before) => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
+  const shown = (after, before) => !breaksMoreMovingLabels(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
+  const spare = (l) => {
+    const all = closeSpareRows(l);
+    return all === l || intact(all, l) ? all : closeSpareRows(l, intact);
+  };
+  const ends = (l) => {
+    const moved = endTextsClear(l);
+    return moved === l || intact(moved, l) ? moved : l;
+  };
   const close = (l) => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
   const finish = (fitted, room) => {
-    const closed = room ? closeSpareRows(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
+    const closed = room ? spare(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
     const fit = () => {
       if (!over(closed))
         return closed;
@@ -16619,17 +17198,23 @@ function layoutOnce(graph, given, opts) {
     };
     const narrow = fit();
     const packed = (l) => {
-      const full = labelsInSight(packParts(labelsInSight(l, limit, false), limit), limit);
-      if (!l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0))
+      const sighted = labelsInSight(l, limit, false);
+      const left = l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0);
+      const plain = packParts(left ? cutLeftLabels(l) : l, limit);
+      const full = sighted === l && !left ? labelsInSight(plain, limit) : labelsInSight(packParts(sighted, limit), limit);
+      if (full === plain)
         return full;
+      if (!left)
+        return !room && !out ? full : shown(full, plain) ? full : plain;
       const short = labelsInSight(packParts(cutLeftLabels(l), limit), limit);
       const wide = (d) => limit !== undefined && Number.isFinite(limit) && d.width > limit;
-      return wide(full) && !wide(short) || Math.ceil(short.height) < Math.ceil(full.height) ? short : full;
+      const tried = wide(full) && !wide(short) || Math.ceil(short.height) < Math.ceil(full.height) ? [short, full] : [full, short];
+      return !room && !out ? tried[0] : tried.find((d) => shown(d, plain)) ?? plain;
     };
     if (!room)
-      return packed(narrow);
+      return ends(packed(narrow));
     const wider = openTextColumns(narrow, limit);
-    return packed(over(wider) && !over(narrow) ? narrow : wider);
+    return ends(packed(over(wider) && !over(narrow) ? narrow : wider));
   };
   let source = close(drawn);
   let best = finish(source, false);
@@ -18263,7 +18848,7 @@ function trimmedPoints(edge, nodes) {
 }
 var accented = (edge, paint) => edge.style === "thick" || paint.roles.get(edge.from) === "decision";
 var MARK = 12;
-var MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
+var MARKS2 = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
 function endMarkerId(end, accent, atStart) {
   switch (end) {
     case "none":
@@ -18279,7 +18864,7 @@ function endMarkerId(end, accent, atStart) {
   }
 }
 function endTrim(end) {
-  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : MARKS2.has(end) ? MARK : DOT / 2;
 }
 function markBody(end, accent) {
   const cls = (base) => accent ? `ursula-end-${base} ursula-end-${base}--accent` : `ursula-end-${base}`;
@@ -18367,7 +18952,7 @@ function extraEnds(layout, paint) {
         wanted.set(id, reversed(flowMarker(id, accent ? "ursula-arrow ursula-arrow--accent" : "ursula-arrow")));
       return;
     }
-    if (MARKS.has(end)) {
+    if (MARKS2.has(end)) {
       wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
       return;
     }
@@ -18426,7 +19011,7 @@ function endLabelSvg(edge) {
   return edge.invisible ? "" : one(edge.startLabel, "start") + one(edge.endLabel, "end");
 }
 function usesRecords(layout) {
-  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && MARKS.has(e.end) || e.startEnd !== undefined && MARKS.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
+  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && MARKS2.has(e.end) || e.startEnd !== undefined && MARKS2.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
 }
 var points = (pts) => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(" ");
 function boxSvg(node, rx) {
@@ -18749,7 +19334,9 @@ function drawText(src, maxWidth, opts) {
       return fewest;
     const crossings = (f) => textCost(f.quick.layout).crossings;
     const most = crossings(fewest);
-    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most);
+    const labels = full.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
+    const breaks = (f) => breaksOf(f.quick.layout, f.quick.lines, labels);
+    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most && !breaksMoreMovingLabels(breaks(f), breaks(fewest)));
     return clearer.reduce((w, f) => f.hidden < w.hidden || f.hidden === w.hidden && f.cost < w.cost ? f : w, clearer[0] ?? fewest);
   };
   const textual = detail === "auto" || detail === "full" || detail === "narrow" ? best([...detail === "narrow" ? [] : stepAttempts.full, ...detail === "full" ? [] : stepAttempts.narrow]) : undefined;
@@ -21989,12 +22576,12 @@ function parseEventModeling(src, heading) {
 }
 
 // src/eventmodeling/wires.ts
-var N2 = 1;
-var E2 = 2;
-var S2 = 4;
-var W3 = 8;
-var UPRIGHT = N2 | S2;
-var LEVEL = E2 | W3;
+var N4 = 1;
+var E4 = 2;
+var S4 = 4;
+var W5 = 8;
+var UPRIGHT3 = N4 | S4;
+var LEVEL2 = E4 | W5;
 var DX3 = [0, 1, 0, -1];
 var DY3 = [-1, 0, 1, 0];
 var UP = 0;
@@ -22013,13 +22600,13 @@ var STEM_MOST = 300;
 var NONE = [];
 function toward(cell, rect) {
   if (cell[1] === rect.y - 1)
-    return S2;
+    return S4;
   if (cell[1] === rect.y + rect.h)
-    return N2;
+    return N4;
   if (cell[0] === rect.x - 1)
-    return E2;
+    return E4;
   if (cell[0] === rect.x + rect.w)
-    return W3;
+    return W5;
   return 0;
 }
 function bitsOf(path, from, to) {
@@ -22029,13 +22616,13 @@ function bitsOf(path, from, to) {
       if (other === undefined)
         continue;
       if (other[0] > cell[0])
-        bits |= E2;
+        bits |= E4;
       else if (other[0] < cell[0])
-        bits |= W3;
+        bits |= W5;
       else if (other[1] > cell[1])
-        bits |= S2;
+        bits |= S4;
       else if (other[1] < cell[1])
-        bits |= N2;
+        bits |= N4;
     }
     if (i === 0)
       bits |= toward(cell, from);
@@ -22109,7 +22696,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
     const bits = bitsOf(path, rects[wire.from], rects[wire.to]);
     path.forEach((cell, i) => {
       const key = cell[1] * width + cell[0];
-      if ((bits[i] & LEVEL) !== 0)
+      if ((bits[i] & LEVEL2) !== 0)
         opened[cell[1]] = 1;
       uses[key] = [...uses[key] ?? NONE, { wire: index, bits: bits[i], end: i === 0 || i === path.length - 1 }];
     });
@@ -22242,8 +22829,8 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
         let shut = false;
         for (const u of uses[nkey] ?? NONE) {
           if (related(u.wire, index))
-            shared ||= (u.bits & (level ? LEVEL : UPRIGHT)) !== 0;
-          else if (u.end || u.bits !== (level ? UPRIGHT : LEVEL))
+            shared ||= (u.bits & (level ? LEVEL2 : UPRIGHT3)) !== 0;
+          else if (u.end || u.bits !== (level ? UPRIGHT3 : LEVEL2))
             shut = true;
           else
             crosses = true;
@@ -22260,7 +22847,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
             const skey = ny * width + side;
             if (blocked[skey] === 1)
               step += BESIDE_BOX;
-            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT) !== 0))
+            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT3) !== 0))
               step += BESIDE_LINE;
           }
         }
@@ -22323,7 +22910,7 @@ function spareRows(rects, wires, paths, rows) {
   });
   const level = new Set;
   for (const [key, b] of bits)
-    if ((b & LEVEL) !== 0)
+    if ((b & LEVEL2) !== 0)
       level.add(Math.floor(key / width));
   const spare = new Set;
   rows.forEach((row, y) => {
@@ -22338,7 +22925,7 @@ function spareRows(rects, wires, paths, rows) {
           return true;
         if (next === undefined || next[0] !== end[0])
           return false;
-        return ((bits.get(next[1] * width + next[0]) ?? 0) & LEVEL) === 0;
+        return ((bits.get(next[1] * width + next[0]) ?? 0) & LEVEL2) === 0;
       });
     });
     if (moves)
@@ -22786,7 +23373,7 @@ function assignSides(categories, mode) {
     return side;
   });
 }
-function rowsOf(causes, ruler) {
+function rowsOf2(causes, ruler) {
   const groups = [];
   for (const c of causes) {
     const last = groups[groups.length - 1];
@@ -22817,7 +23404,7 @@ function layoutIshikawa(model, ruler, heading, opts = {}) {
   const ranks = { top: 0, bottom: 0 };
   const drafts = model.categories.map((category, i) => {
     const side = sides[i] ?? "top";
-    const rows = rowsOf(category.causes, ruler);
+    const rows = rowsOf2(category.causes, ruler);
     const offsets = [];
     let at = 0;
     rows.forEach((row, r) => {
@@ -24745,7 +25332,7 @@ var SHAPES3 = [
 var MD_OPEN = '"`';
 var MD_CLOSE = '`"';
 var EMPHASIS = /\*\*([^*]+)\*\*|\*([^*]+)\*|(?<![\p{L}\p{N}])_([^_]+)_(?![\p{L}\p{N}])/gu;
-function runsOf3(paragraph) {
+function runsOf4(paragraph) {
   const runs = [];
   let at = 0;
   for (const m of paragraph.matchAll(EMPHASIS)) {
@@ -24770,7 +25357,7 @@ function paragraphsOf(text) {
 function labelOf2(inside) {
   const t = inside.trim();
   if (t.startsWith(MD_OPEN) && t.endsWith(MD_CLOSE) && t.length >= 4) {
-    const runs = paragraphsOf(t.slice(2, -2)).map(runsOf3);
+    const runs = paragraphsOf(t.slice(2, -2)).map(runsOf4);
     const paragraphs = runs.map((r) => r.map((run) => run.text).join(""));
     return runs.some((r) => r.some((run) => run.bold === true || run.italic === true)) ? { paragraphs, runs } : { paragraphs };
   }
@@ -25713,7 +26300,7 @@ class Cursor {
 }
 var seqOf = (items) => items.length === 1 ? items[0] : { k: "seq", items };
 var choiceOf = (items) => items.length === 1 ? items[0] : { k: "choice", items };
-function counted(item, min, max, line) {
+function counted2(item, min, max, line) {
   if (max !== null && max < min)
     fail8(`The repeat count ${min}*${max} runs backwards.`, line);
   if (max === 0)
@@ -25863,7 +26450,7 @@ function abnfRepetition(c) {
   }
   if (!abnfStarts(c.peek()) || c.peek()?.k === "num" || c.isSym("*"))
     fail8("A repeat count must be followed by an element.", line);
-  return counted(abnfElement(c), min, max, line);
+  return counted2(abnfElement(c), min, max, line);
 }
 function abnfElement(c) {
   const t = c.peek();
@@ -27204,43 +27791,43 @@ function parseBlock(src, heading) {
 }
 
 // src/block/text.ts
-var N3 = 1;
-var E3 = 2;
-var S3 = 4;
-var W4 = 8;
+var N5 = 1;
+var E5 = 2;
+var S5 = 4;
+var W6 = 8;
 var LIGHT2 = {
-  [E3 | W4]: "─",
-  [E3]: "─",
-  [W4]: "─",
-  [N3 | S3]: "│",
-  [N3]: "│",
-  [S3]: "│",
-  [S3 | E3]: "╭",
-  [S3 | W4]: "╮",
-  [N3 | E3]: "╰",
-  [N3 | W4]: "╯",
-  [N3 | S3 | E3]: "├",
-  [N3 | S3 | W4]: "┤",
-  [E3 | W4 | S3]: "┬",
-  [E3 | W4 | N3]: "┴",
-  [N3 | E3 | S3 | W4]: "┼"
+  [E5 | W6]: "─",
+  [E5]: "─",
+  [W6]: "─",
+  [N5 | S5]: "│",
+  [N5]: "│",
+  [S5]: "│",
+  [S5 | E5]: "╭",
+  [S5 | W6]: "╮",
+  [N5 | E5]: "╰",
+  [N5 | W6]: "╯",
+  [N5 | S5 | E5]: "├",
+  [N5 | S5 | W6]: "┤",
+  [E5 | W6 | S5]: "┬",
+  [E5 | W6 | N5]: "┴",
+  [N5 | E5 | S5 | W6]: "┼"
 };
 var HEAVY2 = {
-  [E3 | W4]: "━",
-  [E3]: "━",
-  [W4]: "━",
-  [N3 | S3]: "┃",
-  [N3]: "┃",
-  [S3]: "┃",
-  [S3 | E3]: "┏",
-  [S3 | W4]: "┓",
-  [N3 | E3]: "┗",
-  [N3 | W4]: "┛",
-  [N3 | S3 | E3]: "┣",
-  [N3 | S3 | W4]: "┫",
-  [E3 | W4 | S3]: "┳",
-  [E3 | W4 | N3]: "┻",
-  [N3 | E3 | S3 | W4]: "╋"
+  [E5 | W6]: "━",
+  [E5]: "━",
+  [W6]: "━",
+  [N5 | S5]: "┃",
+  [N5]: "┃",
+  [S5]: "┃",
+  [S5 | E5]: "┏",
+  [S5 | W6]: "┓",
+  [N5 | E5]: "┗",
+  [N5 | W6]: "┛",
+  [N5 | S5 | E5]: "┣",
+  [N5 | S5 | W6]: "┫",
+  [E5 | W6 | S5]: "┳",
+  [E5 | W6 | N5]: "┻",
+  [N5 | E5 | S5 | W6]: "╋"
 };
 
 class Canvas2 {
@@ -27386,7 +27973,7 @@ function cellOf3(p, block, isEnd) {
   }
   return [x, y];
 }
-var HEADS = { "1,0": "▶", "-1,0": "◀", "0,1": "▼", "0,-1": "▲" };
+var HEADS3 = { "1,0": "▶", "-1,0": "◀", "0,1": "▼", "0,-1": "▲" };
 function drawLinks(c, links, byId) {
   const bits = new Map;
   const rank = { dotted: 0, normal: 1, thick: 2 };
@@ -27405,8 +27992,8 @@ function drawLinks(c, links, byId) {
       const [bx, by] = cells[i + 1];
       const dx = Math.sign(bx - ax);
       const dy = Math.sign(by - ay);
-      const out = dx > 0 ? E3 : dx < 0 ? W4 : dy > 0 ? S3 : N3;
-      const back = dx > 0 ? W4 : dx < 0 ? E3 : dy > 0 ? N3 : S3;
+      const out = dx > 0 ? E5 : dx < 0 ? W6 : dy > 0 ? S5 : N5;
+      const back = dx > 0 ? W6 : dx < 0 ? E5 : dy > 0 ? N5 : S5;
       let x = ax;
       let y = ay;
       mark(x, y, out, link.style);
@@ -27419,17 +28006,17 @@ function drawLinks(c, links, byId) {
     const end = cells[cells.length - 1];
     const before = cells[cells.length - 2];
     if (link.arrow)
-      heads.push({ x: end[0], y: end[1], ch: HEADS[`${Math.sign(end[0] - before[0])},${Math.sign(end[1] - before[1])}`] ?? "▶" });
+      heads.push({ x: end[0], y: end[1], ch: HEADS3[`${Math.sign(end[0] - before[0])},${Math.sign(end[1] - before[1])}`] ?? "▶" });
     if (link.arrowStart) {
       const start = cells[0];
       const after = cells[1];
-      heads.push({ x: start[0], y: start[1], ch: HEADS[`${Math.sign(start[0] - after[0])},${Math.sign(start[1] - after[1])}`] ?? "◀" });
+      heads.push({ x: start[0], y: start[1], ch: HEADS3[`${Math.sign(start[0] - after[0])},${Math.sign(start[1] - after[1])}`] ?? "◀" });
     }
   }
   for (const [key, cell] of bits) {
     const [x, y] = key.split(",").map(Number);
-    const horizontal = (cell.bits & (E3 | W4)) !== 0 && (cell.bits & (N3 | S3)) === 0;
-    const vertical = (cell.bits & (N3 | S3)) !== 0 && (cell.bits & (E3 | W4)) === 0;
+    const horizontal = (cell.bits & (E5 | W6)) !== 0 && (cell.bits & (N5 | S5)) === 0;
+    const vertical = (cell.bits & (N5 | S5)) !== 0 && (cell.bits & (E5 | W6)) === 0;
     const glyph = cell.style === "dotted" && horizontal ? "┄" : cell.style === "dotted" && vertical ? "┆" : (cell.style === "thick" ? HEAVY2 : LIGHT2)[cell.bits] ?? "┼";
     c.put(x, y, glyph);
   }
@@ -27926,7 +28513,7 @@ function nameLines(label, room, width) {
     return [label];
   return two.reduce((best, s) => Math.max(...s.map(width)) < Math.max(...best.map(width)) ? s : best);
 }
-function cellsOf2(packet) {
+function cellsOf3(packet) {
   const n = packet.bitsPerRow;
   const pieces = splitFields(packet);
   const cells = [];
@@ -27949,7 +28536,7 @@ function cellsOf2(packet) {
 }
 function layoutPacket(packet, ruler) {
   const n = packet.bitsPerRow;
-  const cells = cellsOf2(packet);
+  const cells = cellsOf3(packet);
   const nameWidth = (s) => ruler.textWidth(s, "line") * NAME_SCALE;
   const bitW = Math.max(BIT_W, ...cells.map((c) => ceilTo((nameNeed(c.label, nameWidth) + 2 * NAME_PAD + 2 * INSET2) / (c.c1 - c.c0 + 1))));
   const rows = Math.max(...cells.map((c) => c.row1)) + 1;
@@ -29584,11 +30171,11 @@ registerFrontEnd({
 
 // src/architecture/graph.ts
 var LANE7 = "";
-var LEVEL2 = new Set(["L", "R"]);
+var LEVEL3 = new Set(["L", "R"]);
 var against = (e, direction) => direction === "LR" ? e.fromSide === "L" && e.toSide === "R" : e.fromSide === "T" && e.toSide === "B";
 function architectureGraph(model) {
-  const level = model.edges.filter((e) => LEVEL2.has(e.fromSide) && LEVEL2.has(e.toSide)).length;
-  const upright = model.edges.filter((e) => !LEVEL2.has(e.fromSide) && !LEVEL2.has(e.toSide)).length;
+  const level = model.edges.filter((e) => LEVEL3.has(e.fromSide) && LEVEL3.has(e.toSide)).length;
+  const upright = model.edges.filter((e) => !LEVEL3.has(e.fromSide) && !LEVEL3.has(e.toSide)).length;
   const direction = level > upright ? "LR" : "TD";
   const clusters = model.groups.map((g) => ({ id: `group:${g.id}`, label: g.label, ...g.parent === undefined ? {} : { parent: `group:${g.parent}` } }));
   const nodes = model.nodes.map((n) => ({
@@ -31456,7 +32043,7 @@ function wrapWords2(text, cap, hard) {
   flush();
   return out;
 }
-var HEADS2 = {
+var HEADS4 = {
   filled: ["▶", "◀"],
   open: ["▷", "◁"],
   cross: ["×", "×"],
@@ -31807,7 +32394,7 @@ function render2(c, gaps) {
     const dash = s.dashed ? "┄" : "─";
     const a = xOf(m.a);
     const b = xOf(m.b);
-    const [headR, headL] = HEADS2[s.head];
+    const [headR, headL] = HEADS4[s.head];
     const hi = bound();
     const lo = low();
     const act = (col) => (depth[col] ?? 0) > 0;
@@ -33503,13 +34090,13 @@ var MARK2 = 12;
 var BEND5 = 8;
 var flat2 = ([p, q]) => Math.abs(p.y - q.y) < 0.5;
 var upright2 = ([p, q]) => Math.abs(p.x - q.x) < 0.5;
-var runsOf4 = (pts) => pts.slice(1).map((q, i) => [pts[i], q]);
+var runsOf5 = (pts) => pts.slice(1).map((q, i) => [pts[i], q]);
 function turns(pts) {
-  const down = runsOf4(pts).map(([p, q]) => p.x === q.x);
+  const down = runsOf5(pts).map(([p, q]) => p.x === q.x);
   return down.slice(1).filter((d, i) => d !== down[i]).length;
 }
 function drawnPieces(pts) {
-  const runs = runsOf4(pts);
+  const runs = runsOf5(pts);
   const length = ([p, q]) => Math.hypot(q.x - p.x, q.y - p.y);
   const from = (p, q, by) => ({ x: p.x + (q.x - p.x) * by / (length([p, q]) || 1), y: p.y + (q.y - p.y) * by / (length([p, q]) || 1) });
   const round = runs.map((run, i) => i === 0 ? 0 : Math.min(BEND5, length(runs[i - 1]) / 2, length(run) / 2));
@@ -33519,7 +34106,7 @@ function drawnPieces(pts) {
   });
 }
 function faults(l, nameWidth) {
-  const lines = l.edges.map((e) => runsOf4(e.points));
+  const lines = l.edges.map((e) => runsOf5(e.points));
   let [crossings, near, touching, covered, named, away] = [0, 0, 0, 0, 0, 0];
   for (let i = 0;i < lines.length; i++) {
     for (let j = i + 1;j < lines.length; j++) {
