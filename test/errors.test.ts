@@ -84,7 +84,15 @@ describe('the command writes the error with the line, a mark and the advice', ()
 
   it('places the mark by cells when the line holds wide characters', () => {
     const r = cli('flowchart LR\n가나 --> 다라[이름\n');
-    // 가나, 다라 and 이름 take two cells each: the mark stands 18 cells in, just past the end.
-    expect(r.stderr).toContain(`  2 | 가나 --> 다라[이름\n    | ${' '.repeat(18)}^\n`);
+    // 가나, 다라 and 이름 take two cells each: the open bracket stands 13 cells in, and the mark covers '[이름'.
+    expect(r.stderr).toContain(`  2 | 가나 --> 다라[이름\n    | ${' '.repeat(13)}^^^^^\n`);
+  });
+
+  it('marks the bracket that is never closed, not one closed earlier on the line', () => {
+    expect(cli('flowchart LR\n  ab[start] --> cd[end\n').stderr).toContain(`  2 |   ab[start] --> cd[end\n    | ${' '.repeat(18)}^^^^\n`);
+    // 가, 나 take two cells and 시작 four: the open bracket after 나 stands 17 cells in.
+    expect(cli('flowchart LR\n  가[시작] --> 나[끝\n').stderr).toContain(`  2 |   가[시작] --> 나[끝\n    | ${' '.repeat(17)}^^^\n`);
+    // A bracket inside quotes closes nothing.
+    expect(cli('flowchart LR\n  ab("a ) b") --> cd(end\n').stderr).toContain(`    | ${' '.repeat(20)}^^^^\n`);
   });
 });

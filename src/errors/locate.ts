@@ -13,12 +13,36 @@ export function quotedPieces(message: string): string[] {
  * the end of the line. Undefined when no piece is on the line.
  */
 export function locate(message: string, row: string): number | undefined {
+  const closer = /^missing '([\])}])'/.exec(message)?.[1];
+  const opener = closer === undefined ? undefined : unclosed(row, closer);
+  if (opener !== undefined) return opener;
   const found = locatePiece(message, row);
   if (found !== undefined || row.trim() === '') return found;
   // No quoted piece: guess from what the message is about.
   if (/indent|lines up|one root|level/i.test(message)) return row.length - row.trimStart().length + 1;
   if (/\b(needs?|not closed|never closed|unterminated|missing|has no|is empty|three fields)\b/i.test(message)) return row.trimEnd().length + 1;
   return undefined;
+}
+
+const OPENER: Record<string, string> = { ']': '[', ')': '(', '}': '{' };
+
+/**
+ * The column (from 1) of the last bracket on `row` that `closer` would close and nothing closes; undefined when every
+ * one is closed. Brackets inside double quotes do not count.
+ */
+export function unclosed(row: string, closer: string): number | undefined {
+  const opener = OPENER[closer];
+  const open: number[] = [];
+  let quoted = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (ch === '"') quoted = !quoted;
+    else if (quoted) continue;
+    else if (ch === opener) open.push(i);
+    else if (ch === closer) open.pop();
+  }
+  const at = open.at(-1);
+  return at === undefined ? undefined : at + 1;
 }
 
 function locatePiece(message: string, row: string): number | undefined {
