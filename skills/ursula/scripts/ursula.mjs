@@ -12483,6 +12483,19 @@ function cutLeftLabels(l) {
   };
   return { ...l, edges: l.edges.map(fitted) };
 }
+function cutPastLimit(l, limit) {
+  if (limit === undefined || !Number.isFinite(limit))
+    return l;
+  const fitted = (e) => {
+    const t = e.label;
+    if (t === undefined || e.invisible || t.x < 0 || textEnd(t) <= limit)
+      return e;
+    const room = Math.floor(limit - t.x);
+    return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
+  };
+  const edges = l.edges.map(fitted);
+  return edges.every((e, i) => e === l.edges[i]) ? l : { ...l, edges };
+}
 function textEnd(t) {
   const tw = cellWidth(t.text);
   return Math.ceil(t.x + Math.floor((t.w - tw) / 2) + tw);
@@ -12567,7 +12580,19 @@ function labelsInSight(given, limit, cutting = true) {
     for (const run of level)
       for (let x = run.left + 1;x + lw - 1 < run.right; x++)
         places.push({ x, y: run.y, on: true, far: near(run.y, ly) + near(x, lx) });
-    const place = places.sort((p, q) => p.far - q.far).find((p) => clear(p.x, p.y, lw, p.on, tail));
+    const textAt = (p) => p.x + Math.floor((lw - tw) / 2);
+    const astray = (p) => {
+      const x0 = textAt(p);
+      for (let c = x0 - 2;c <= x0 + tw + 1; c++)
+        if (foreign.has(`${c},${p.y}`))
+          return true;
+      for (let c = x0;c < x0 + tw; c++)
+        if (foreign.has(`${c},${p.y - 1}`) || foreign.has(`${c},${p.y + 1}`))
+          return true;
+      return false;
+    };
+    const fitting = places.sort((p, q) => p.far - q.far).filter((p) => clear(p.x, p.y, lw, p.on, tail));
+    const place = fitting.find((p) => !astray(p));
     if (place !== undefined) {
       l = put(place.x, place.y);
       continue;
@@ -12582,6 +12607,10 @@ function labelsInSight(given, limit, cutting = true) {
     if (leftOf !== undefined) {
       const moved = grow(now, -Infinity, lw - leftOf.x, false);
       l = { ...moved, edges: moved.edges.map((o, k) => k === ei && o.label ? { ...o, label: { ...o.label, x: 0, y: leftOf.y, w: lw } } : o) };
+      continue;
+    }
+    if (fitting[0] !== undefined) {
+      l = put(fitting[0].x, fitting[0].y);
       continue;
     }
     const open = (x) => !boxes.some((r) => x > r.x && x < r.x + r.w);
@@ -13060,6 +13089,9 @@ function closeSpareRows(given, keeps = () => true) {
     };
     const texts = textsOf(now, false);
     if (now.nodes.some((n) => texts.some((t) => row(t, y - 1) && row(n, y + 1) || row(t, y + 1) && row(n, y - 1))))
+      continue;
+    const rules = now.lanes.filter((lane) => lane.label !== "").map((lane) => Math.floor(lane.y));
+    if (texts.some((t) => rules.some((r) => r === y + 1 && row(t, y - 1) || r === y - 1 && row(t, y + 1))))
       continue;
     let passes = 0;
     const spare = now.edges.every((e) => {
@@ -13702,13 +13734,32 @@ function endTextsClear(l) {
   const height = Math.ceil(l.height);
   const taken = new Set;
   const inBox = (x, y) => l.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x) + Math.round(n.w) && y >= Math.round(n.y) && y < Math.round(n.y) + Math.round(n.h));
+  const words = new Set;
+  const letters = new Set;
+  for (const e of l.edges) {
+    const t = e.label;
+    if (t === undefined || e.invisible === true)
+      continue;
+    const rows = t.lines ?? [t.text];
+    const top = Math.round(t.y) + Math.floor((Math.round(t.h) - rows.length) / 2);
+    rows.forEach((row, k) => {
+      const tw = cellWidth(row);
+      const x0 = Math.round(t.x) + Math.floor((Math.round(t.w) - tw) / 2);
+      for (let cx = x0 - 1;cx <= x0 + tw; cx++)
+        words.add(`${cx},${top + k}`);
+      for (let cx = x0;cx < x0 + tw; cx++)
+        letters.add(`${cx},${top + k}`);
+    });
+  }
   const free = (x, y, w) => x >= 0 && x + w <= width && y >= 0 && y < height && Array.from({ length: w }, (_, k) => x + k).every((cx) => (grid[y]?.[cx] ?? " ") === " " && !inBox(cx, y) && !taken.has(`${cx},${y}`));
+  const apart = (x, y, w) => free(x, y, w) && Array.from({ length: w }, (_, k) => x + k).every((cx) => !words.has(`${cx},${y}`)) && !taken.has(`${x - 1},${y}`) && !taken.has(`${x + w},${y}`);
   const moved = new Map;
   for (const { i, which } of ends) {
     const e = l.edges[i];
     const t = e[which];
     const [x, y, w] = [Math.round(t.x), Math.round(t.y), cellWidth(t.text)];
-    let spot = free(x, y, w) ? [x, y] : undefined;
+    const over = Array.from({ length: w }, (_, k) => `${x + k},${y}`).some((key) => letters.has(key) || taken.has(key));
+    let spot = !over || free(x, y, w) ? [x, y] : undefined;
     if (spot === undefined) {
       const k = which === "startLabel" ? 0 : e.points.length - 1;
       const [cx, cy] = cellOf(e, nodes, k);
@@ -13716,7 +13767,7 @@ function endTextsClear(l) {
       const level = ny === cy;
       const along = level ? Math.sign(nx - cx) : Math.sign(ny - cy);
       const tries = [0, 1, 2].flatMap((step) => level ? [-1, 1].map((side) => [along > 0 ? cx + step : cx - w + 1 - step, cy + side]) : [1, -1].map((side) => [side > 0 ? cx + 1 : cx - w, cy + along * step]));
-      spot = tries.find(([tx, ty]) => free(tx, ty, w));
+      spot = tries.find(([tx, ty]) => apart(tx, ty, w));
     }
     if (spot === undefined)
       continue;
@@ -15513,6 +15564,7 @@ var RUNS2 = {
   "╋": N3 | E3 | S3 | W4
 };
 var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
+var UPRIGHT_HEADS = new Set(["▼", "▲", "▽", "△"]);
 var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
 var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
 var CORNERS2 = {
@@ -15520,7 +15572,7 @@ var CORNERS2 = {
   round: ["╭", "╮", "╰", "╯"],
   note: ["┌", "┒", "└", "┘"]
 };
-var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "coveredLabels", "labelsAtHeads", "room", "unseen"];
+var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging"];
 function runsOf2(edge, nodes) {
   const cellAt = (index) => {
     const p = edge.points[index] ?? { x: 0, y: 0 };
@@ -15651,6 +15703,16 @@ function breaksOf(layout, lines, labels, notes) {
     for (const [x, y] of run?.cells ?? [])
       byCell.set(`${x},${y}`, [...byCell.get(`${x},${y}`) ?? [], i]);
   });
+  const root = drawn.map((_, i) => i);
+  const find = (i) => root[i] === i ? i : find(root[i]);
+  for (const [key, list] of byCell) {
+    list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
+      const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
+      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
+        return;
+      root[find(i)] = find(j);
+    }));
+  }
   let tangled = 0;
   for (const [key, list] of byCell) {
     if (list.length < 2)
@@ -15680,8 +15742,13 @@ function breaksOf(layout, lines, labels, notes) {
       note(`lines ${pair} cross ${n} times`);
   }
   const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
+  const inBox = (x, y) => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
+  const rule = (x, y) => RUNS2[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
+  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT2) !== 0 || UPRIGHT_HEADS.has(at(x, y));
+  const apart = (p, q) => !p.some((i) => q.some((j) => find(i) === find(j)));
   const spots = drawn.map((e) => e.label === undefined ? undefined : spotOf(e.label));
   let strayLabels = 0;
+  let crowdedLabels = 0;
   let coveredLabels = 0;
   let labelsAtHeads = 0;
   drawn.forEach((e, i) => {
@@ -15691,8 +15758,9 @@ function breaksOf(layout, lines, labels, notes) {
     if (!written(grid, spot.x0, spot.y, spot.text)) {
       coveredLabels++;
       note(`label ${spot.text} covered`);
+      return;
     }
-    const other = (x, y) => lineOf(x, y).some((j) => j !== i) && !lineOf(x, y).includes(i);
+    const other = (x, y) => lineOf(x, y).some((j) => j !== i) && !lineOf(x, y).includes(i) || rule(x, y);
     const mine = (x, y) => lineOf(x, y).includes(i);
     const blank = (x, y) => at(x, y) === " ";
     let stray = false;
@@ -15703,34 +15771,161 @@ function breaksOf(layout, lines, labels, notes) {
     for (let x = spot.x0;x <= spot.x1 && !stray; x++)
       if (other(x, spot.y - 1) || other(x, spot.y + 1))
         stray = true;
-    for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
-      const near = edge + 2 * side;
-      if (!stray && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT2) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT2) !== 0)
-        stray = true;
-    }
-    for (const [j, o] of spots.entries()) {
-      if (stray || o === undefined || j === i || o.y !== spot.y)
-        continue;
-      const [a, b] = o.x0 > spot.x1 ? [spot.x1, o.x0] : o.x1 < spot.x0 ? [o.x1, spot.x0] : [0, 0];
-      if (b - a - 1 <= 2 && b > a && Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k).every((x) => blank(x, spot.y)))
-        stray = true;
-    }
+    const reach = (side) => {
+      const edge = side > 0 ? spot.x1 : spot.x0;
+      const out = [];
+      for (let k = 1;k <= 3; k++) {
+        out.push([edge + k * side, spot.y]);
+        if (!blank(edge + k * side, spot.y))
+          break;
+      }
+      return out;
+    };
+    const around = [...reach(1), ...reach(-1), ...Array.from({ length: spot.x1 - spot.x0 + 1 }, (_, k) => [[spot.x0 + k, spot.y - 1], [spot.x0 + k, spot.y + 1]]).flat()];
+    if (!around.some(([x, y]) => mine(x, y)))
+      stray = true;
     if (stray) {
       strayLabels++;
       note(`label ${spot.text} stray`);
+    }
+    let crowded = false;
+    for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
+      const near = edge + 2 * side;
+      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT2) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT2) !== 0)
+        crowded = true;
+    }
+    for (const side of [1, -1]) {
+      if (crowded)
+        break;
+      let x = (side > 0 ? spot.x1 : spot.x0) + side;
+      if (blank(x, spot.y))
+        x += side;
+      if (!uprightAt(x, spot.y) || lineOf(x, spot.y).length === 0)
+        continue;
+      let x2 = x + side;
+      if (blank(x2, spot.y))
+        x2 += side;
+      if (uprightAt(x2, spot.y) && lineOf(x2, spot.y).length > 0 && apart(lineOf(x, spot.y), lineOf(x2, spot.y)))
+        crowded = true;
+    }
+    for (const [j, o] of spots.entries()) {
+      if (crowded || o === undefined || j === i || o.y !== spot.y)
+        continue;
+      const [a, b] = o.x0 > spot.x1 ? [spot.x1, o.x0] : o.x1 < spot.x0 ? [o.x1, spot.x0] : [0, 0];
+      if (b - a - 1 <= 2 && b > a && Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k).every((x) => blank(x, spot.y)))
+        crowded = true;
+    }
+    if (crowded) {
+      crowdedLabels++;
+      note(`label ${spot.text} crowded`);
     }
     const headAt = (x, between) => LEVEL_HEADS.has(at(x, spot.y)) && (between === 0 || blank(between, spot.y));
     if (headAt(spot.x1 + 1, 0) || headAt(spot.x1 + 2, spot.x1 + 1) || headAt(spot.x0 - 1, 0) || headAt(spot.x0 - 2, spot.x0 - 1))
       labelsAtHeads++;
   });
+  const word = (x, y) => /[\p{L}\p{N}*]/u.test(at(x, y)) && !inBox(x, y);
   for (const e of drawn) {
     for (const t of [e.startLabel, e.endLabel]) {
-      if (t !== undefined && t.text !== "" && !written(grid, Math.round(t.x), Math.round(t.y), t.text)) {
+      if (t === undefined || t.text === "")
+        continue;
+      const [x, y] = [Math.round(t.x), Math.round(t.y)];
+      if (!written(grid, x, y, t.text)) {
         coveredLabels++;
         note(`end text ${t.text} covered`);
+      } else if (word(x - 1, y) || word(x + cellWidth(t.text), y)) {
+        strayLabels++;
+        note(`end text ${t.text} against a word`);
       }
     }
   }
+  let forks = 0;
+  let crossMarks = 0;
+  for (const [key, list] of byCell) {
+    const [x, y] = key.split(",").map(Number);
+    if (at(x, y) !== "┼" && at(x, y) !== "╋")
+      continue;
+    if ([[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => inBox(x + dx, y + dy)))
+      continue;
+    if (list.length > 1)
+      crossMarks++;
+    if (list.some((i) => {
+      const b = runs[i]?.bits.get(key) ?? 0;
+      return b !== LEVEL && b !== UPRIGHT2;
+    })) {
+      forks++;
+      note(`fork drawn as a crossing at ${key}`);
+    }
+  }
+  const twoWay = (e) => e.end === "none" || e.startEnd !== undefined;
+  const joins = new Set(drawn.flatMap((e) => twoWay(e) ? [`${e.from}>${e.to}`, `${e.to}>${e.from}`] : [`${e.from}>${e.to}`]));
+  let mixedNets = 0;
+  const nets = new Map;
+  drawn.forEach((e, i) => nets.set(find(i), [...nets.get(find(i)) ?? [], e]));
+  for (const net of nets.values()) {
+    if (net.length < 2)
+      continue;
+    const froms = new Set(net.flatMap((e) => twoWay(e) ? [e.from, e.to] : [e.from]));
+    const tos = new Set(net.flatMap((e) => twoWay(e) ? [e.from, e.to] : [e.to]));
+    if (net.every((e) => e.from === net[0]?.from) || net.every((e) => e.to === net[0]?.to))
+      continue;
+    if ([...froms].every((a) => [...tos].every((b) => a === b || joins.has(`${a}>${b}`))))
+      continue;
+    mixedNets++;
+    note(`lines ${net.map((e) => `${e.from}->${e.to}`).join(", ")} run as one`);
+  }
+  let hugging = 0;
+  const hugged = new Set;
+  const sides = new Map;
+  const side = (x, y, id, level) => {
+    sides.set(`${x},${y}`, [...sides.get(`${x},${y}`) ?? [], { id, level }]);
+  };
+  for (const n of layout.nodes) {
+    const [x0, y0, x1, y1] = [Math.round(n.x), Math.round(n.y), Math.round(n.x + n.w) - 1, Math.round(n.y + n.h) - 1];
+    for (let x = x0 + 1;x < x1; x++) {
+      side(x, y0, n.id, true);
+      side(x, y1, n.id, true);
+    }
+    for (let y = y0 + 1;y < y1; y++) {
+      side(x0, y, n.id, false);
+      side(x1, y, n.id, false);
+    }
+  }
+  drawn.forEach((e, i) => {
+    const run = runs[i];
+    if (run === undefined)
+      return;
+    for (const [x, y] of run.cells) {
+      const b = run.bits.get(`${x},${y}`) ?? 0;
+      if (b !== LEVEL && b !== UPRIGHT2)
+        continue;
+      const across = b === LEVEL ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
+      const along = b === LEVEL ? [1, 0] : [0, 1];
+      for (const [dx, dy] of across) {
+        const [nx, ny] = [x + dx, y + dy];
+        const [fx, fy] = [x + along[0], y + along[1]];
+        if ((run.bits.get(`${fx},${fy}`) ?? 0) !== b)
+          continue;
+        const near = sides.get(`${nx},${ny}`);
+        const box = near === undefined ? undefined : near.find((n) => n.level === (b === LEVEL) && n.id !== e.from && n.id !== e.to && sides.get(`${nx + along[0]},${ny + along[1]}`)?.some((m) => m.id === n.id && m.level === n.level));
+        if (box !== undefined && !hugged.has(`${i}|${box.id}`)) {
+          hugged.add(`${i}|${box.id}`);
+          hugging++;
+          note(`line ${e.from}->${e.to} along box ${box.id}`);
+        }
+        for (const j of byCell.get(`${nx},${ny}`) ?? []) {
+          const pair = i < j ? `${i}|${j}` : `${j}|${i}`;
+          if (j === i || hugged.has(pair) || !apart([i], [j]) || together(e, drawn[j]))
+            continue;
+          const [ob, of] = [runs[j]?.bits.get(`${nx},${ny}`) ?? 0, runs[j]?.bits.get(`${nx + along[0]},${ny + along[1]}`) ?? 0];
+          if (ob !== b || of !== b)
+            continue;
+          hugged.add(pair);
+          hugging++;
+          note(`lines ${e.from}->${e.to} and ${drawn[j]?.from}->${drawn[j]?.to} run side by side`);
+        }
+      }
+    }
+  });
   const room = roomViolations(lines);
   const asked = labels ?? drawn.flatMap((e) => e.label === undefined ? [] : e.label.lines ?? [e.label.text]);
   return {
@@ -15738,18 +15933,18 @@ function breaksOf(layout, lines, labels, notes) {
     brokenBoxes,
     tangled,
     strayLabels,
+    crowdedLabels,
     coveredLabels,
     labelsAtHeads,
     room: room.headless.length + room.underName.length + room.onRule.length + room.tight.length + room.close.length,
-    unseen: labelsNotShown(asked, lines).reduce((n, m) => n + m.missing, 0)
+    unseen: labelsNotShown(asked, lines).reduce((n, m) => n + m.missing, 0),
+    forks,
+    crossMarks,
+    mixedNets,
+    hugging
   };
 }
 var breaksMore = (a, b) => BREAK_KINDS.some((k) => a[k] > b[k]);
-var LABEL_KINDS = ["strayLabels", "coveredLabels", "labelsAtHeads", "unseen"];
-var breaksMoreMovingLabels = (a, b) => {
-  const sum = (x) => LABEL_KINDS.reduce((n, k) => n + x[k], 0);
-  return BREAK_KINDS.some((k) => !LABEL_KINDS.includes(k) && a[k] > b[k]) || sum(a) > sum(b);
-};
 
 // src/layout/plan.ts
 function isFlowSide(side) {
@@ -17178,7 +17373,6 @@ function layoutOnce(graph, given, opts, out = false) {
   const over = (l) => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
   const labels = graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
   const intact = (after, before) => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
-  const shown = (after, before) => !breaksMoreMovingLabels(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
   const spare = (l) => {
     const all = closeSpareRows(l);
     return all === l || intact(all, l) ? all : closeSpareRows(l, intact);
@@ -17190,26 +17384,35 @@ function layoutOnce(graph, given, opts, out = false) {
   const close = (l) => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
   const finish = (fitted, room) => {
     const closed = room ? spare(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
+    const squeeze = (c) => {
+      const pushed = openTextLabels(compactColumns(c), limit);
+      return over(pushed) ? openTextLabels(compactColumns(c, true), limit) : pushed;
+    };
     const fit = () => {
       if (!over(closed))
         return closed;
-      const pushed = openTextLabels(compactColumns(closed), limit);
-      return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
+      const pushed = squeeze(closed);
+      if (!over(pushed) || !closed.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0))
+        return pushed;
+      const cut = squeeze(cutLeftLabels(closed));
+      return cut.width < pushed.width ? cut : pushed;
     };
     const narrow = fit();
     const packed = (l) => {
+      if (out)
+        return packParts(l, limit);
       const sighted = labelsInSight(l, limit, false);
       const left = l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0);
-      const plain = packParts(left ? cutLeftLabels(l) : l, limit);
+      const plain = cutPastLimit(packParts(left ? cutLeftLabels(l) : l, limit), limit);
       const full = sighted === l && !left ? labelsInSight(plain, limit) : labelsInSight(packParts(sighted, limit), limit);
       if (full === plain)
         return full;
       if (!left)
-        return !room && !out ? full : shown(full, plain) ? full : plain;
+        return !room ? full : intact(full, plain) ? full : plain;
       const short = labelsInSight(packParts(cutLeftLabels(l), limit), limit);
       const wide = (d) => limit !== undefined && Number.isFinite(limit) && d.width > limit;
       const tried = wide(full) && !wide(short) || Math.ceil(short.height) < Math.ceil(full.height) ? [short, full] : [full, short];
-      return !room && !out ? tried[0] : tried.find((d) => shown(d, plain)) ?? plain;
+      return !room ? tried[0] : tried.find((d) => intact(d, plain)) ?? plain;
     };
     if (!room)
       return ends(packed(narrow));
@@ -19336,8 +19539,12 @@ function drawText(src, maxWidth, opts) {
     const most = crossings(fewest);
     const labels = full.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
     const breaks = (f) => breaksOf(f.quick.layout, f.quick.lines, labels);
-    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most && !breaksMoreMovingLabels(breaks(f), breaks(fewest)));
-    return clearer.reduce((w, f) => f.hidden < w.hidden || f.hidden === w.hidden && f.cost < w.cost ? f : w, clearer[0] ?? fewest);
+    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most && !breaksMore(breaks(f), breaks(fewest)));
+    const clearest = clearer.reduce((w, f) => f.hidden < w.hidden || f.hidden === w.hidden && f.cost < w.cost ? f : w, clearer[0] ?? fewest);
+    if (clearest === fewest)
+      return fewest;
+    const [mine, theirs] = [draw(clearest.a, false, false), draw(fewest.a, false, false)];
+    return breaksMore(breaksOf(mine.layout, mine.lines, labels), breaksOf(theirs.layout, theirs.lines, labels)) ? fewest : clearest;
   };
   const textual = detail === "auto" || detail === "full" || detail === "narrow" ? best([...detail === "narrow" ? [] : stepAttempts.full, ...detail === "full" ? [] : stepAttempts.narrow]) : undefined;
   const titles = detail === "auto" || detail === "title" ? best(stepAttempts.title) : undefined;
