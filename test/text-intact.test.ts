@@ -22,7 +22,7 @@ const over = (lines: readonly string[], y: number, x: number, text: string): str
     return [...cells.slice(0, x), ...text, ...cells.slice(x + text.length)].join('');
   });
 
-const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, crowdedLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0, forks: 0, crossMarks: 0, mixedNets: 0, hugging: 0 };
+const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, crowdedLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0, forks: 0, crossMarks: 0, mixedNets: 0, hugging: 0, overwritten: 0 };
 
 describe('the breaks of a terminal drawing', () => {
   it('are none in a drawing that keeps every line, box and label whole', () => {
@@ -40,6 +40,15 @@ describe('the breaks of a terminal drawing', () => {
     const top = lines.findIndex((line) => line.includes('┌──────┐'));
     const corner = (lines[top] ?? '').indexOf('┌');
     expect(breaksOf(laid, over(lines, top, corner + 2, 'x'), labels)).toEqual({ ...clean, brokenBoxes: 1 });
+  });
+
+  it('count the cells of a line a text is written over, but not a label on its own line', () => {
+    const { laid, lines, labels } = drawn(DECISION);
+    const stem = lines.findIndex((line) => line.trim() === '│');
+    const x = (lines[stem] ?? '').indexOf('│');
+    expect(breaksOf(laid, over(lines, stem, x, 'x'), labels)).toMatchObject({ brokenLines: 1, overwritten: 1 });
+    const services = drawn(SERVICES);
+    expect(breaksOf(services.laid, services.lines, services.labels).overwritten).toBe(0);
   });
 
   it('count a label written over, and a label with no line between it and an arrowhead', () => {
@@ -286,6 +295,9 @@ describe('a terminal drawing made otherwise than the usual one', () => {
   const CUT = 'graph LR\n  v0{검증}\n  v1[Retry]\n  v2{Validate the order}\n  v3{Validate the order}\n  v0-->v1\n  v1-->|on failure retry|v2\n  v2-->|실패|v3';
   // A label of the usual drawing that some other drawing would bring into sight beside the arrowhead of another line.
   const BESIDE = 'flowchart LR\n  v0([Validate the order])\n  v1[x]\n  v2[알림 보내기]\n  v3[검증]\n  v4([DB])\n  v5{저장}\n  v6[요청]\n  v7[Worker]\n  v0-->|실패|v1\n  v1-->|예|v2\n  v1-->|재시도|v3\n  v3-->|실패|v4\n  v4-->|거절|v5\n  v1-->|실패|v6\n  v3-->|통과|v7\n  v2-->|아니오|v4';
+  // Labels another label hid in the usual drawing: brought into sight, they would stand on the start of another line and read as its label.
+  const OVER = 'graph RL\n  v0[검증]\n  v1{알림 보내기}\n  v2[Worker]\n  v3[Retry]\n  v4([Worker])\n  v5{Gateway}\n  v6[Validate the order]\n  v7[Cache]\n  v8[x]\n  v9[Cache]\n  v0 --> v1\n  v1 -->|on failure retry| v2\n  v1 -->|on failure retry| v3\n  v2 --> v4\n  v3 -->|아니오| v5\n  v5 -->|no| v6\n  v5 -->|예| v7\n  v7 -->|아니오| v8\n  v7 -->|아니오| v9\n  v9 -->|no| v1\n  v2 --> v0\n  v3 -->|거절| v2';
+  const UNDER = 'graph RL\n  v0[x]\n  v1[Retry]\n  v2{Retry}\n  v3{Worker}\n  v4{요청}\n  v5([x])\n  v6{저장}\n  v7[x]\n  v8[검증]\n  v9[Cache]\n  v0 --> v1\n  v1 --> v2\n  v2 -->|통과| v3\n  v3 -->|거절| v4\n  v4 -->|거절| v5\n  v4 -->|on failure retry| v6\n  v6 -->|예| v7\n  v6 -->|z| v8\n  v8 --> v9\n  v5 -->|실패| v3\n  v5 -->|ok| v4\n  v6 -->|yes| v5';
   const labelsOf = (src: string): string[] => parse(src).edges.flatMap((e) => (e.label === undefined ? [] : [e.label]));
   const shown = (src: string, width: number, bare: boolean): { layout: Layout; lines: string[] } => drawText(src, width, bare ? { bare: true } : {});
 
@@ -295,8 +307,16 @@ describe('a terminal drawing made otherwise than the usual one', () => {
     expect(row).toMatch(/─ on failure\S*… ─+▶/);
   });
 
+  it('writes a label over no more cells of other lines than the usual drawing', () => {
+    for (const src of [OVER, UNDER]) {
+      const [mine, usual] = [shown(src, 60, false), shown(src, 60, true)];
+      expect(breaksOf(mine.layout, mine.lines, labelsOf(src)).overwritten, mine.lines.join('\n')).toBeLessThanOrEqual(breaksOf(usual.layout, usual.lines, labelsOf(src)).overwritten);
+    }
+    expect(shown(OVER, 60, false).lines.join('\n')).not.toMatch(/on failure retry ─+┐ 아니오/);
+  });
+
   it('breaks no line, box or label the usual drawing keeps whole, and crosses no more lines', () => {
-    for (const [src, width] of [[CUT, 60], [BESIDE, 80], [DECISION, 60], [SERVICES, 60]] as const) {
+    for (const [src, width] of [[CUT, 60], [BESIDE, 80], [DECISION, 60], [SERVICES, 60], [OVER, 60], [UNDER, 60]] as const) {
       const [mine, usual] = [shown(src, width, false), shown(src, width, true)];
       const [a, b] = [breaksOf(mine.layout, mine.lines, labelsOf(src)), breaksOf(usual.layout, usual.lines, labelsOf(src))];
       for (const k of Object.keys(a) as Array<keyof typeof a>) expect(a[k], `${k}\n${mine.lines.join('\n')}`).toBeLessThanOrEqual(b[k]);

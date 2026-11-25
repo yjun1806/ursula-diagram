@@ -691,6 +691,29 @@ function cellsOfLine(e: LayoutEdge, nodes: Map<string, LayoutNode>): Array<[numb
  * widest room beside its line. A label is cut only when `cutting`: parts packed after a pass without it may yet leave it room.
  */
 export function labelsInSight(given: Layout, limit: number | undefined, cutting = true): Layout {
+  // A label another label hid until it moved may stand on a line of another edge: it moves off it where a clear place is.
+  return sight(sight(given, limit, cutting, false), limit, cutting, true);
+}
+
+/** The edges whose lines run through each cell of a drawing, by the boxes of the drawing: moving a label moves no line. */
+const edgesByCell = new WeakMap<readonly LayoutNode[], WeakMap<readonly LayoutEdge[], Map<string, number[]>>>();
+function linesAt(l: Layout): Map<string, number[]> {
+  const byEdges = edgesByCell.get(l.nodes) ?? new WeakMap<readonly LayoutEdge[], Map<string, number[]>>();
+  edgesByCell.set(l.nodes, byEdges);
+  const known = byEdges.get(l.edges);
+  if (known !== undefined) return known;
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const out = new Map<string, number[]>();
+  l.edges.forEach((e, k) => {
+    if (e.invisible || e.points.length < 2) return;
+    for (const [x, y] of cellsOfLine(e, nodes)) out.set(`${x},${y}`, [...(out.get(`${x},${y}`) ?? []), k]);
+  });
+  byEdges.set(l.edges, out);
+  return out;
+}
+
+/** One pass of `labelsInSight`; `off` moves only labels whose text stands on a line of another edge, and only to a clear place. */
+function sight(given: Layout, limit: number | undefined, cutting: boolean, off: boolean): Layout {
   let l = given;
   const within = (w: number): boolean => limit === undefined || !Number.isFinite(limit) || w <= limit;
   for (let ei = 0; ei < l.edges.length; ei++) {
@@ -701,12 +724,21 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
     const [lx, ly] = [Math.round(label.x), Math.round(label.y)];
     const tw = cellWidth(label.text);
     const lw = Math.max(Math.round(label.w), tw);
+    // The text itself is what has to show: the blank on either side of it may lie under a border.
+    const from = lx + Math.floor((lw - tw) / 2);
+    if (off) {
+      if (lx < 0 || ly < 0) continue;
+      const lines = linesAt(now);
+      // A cell its own line runs through as well is its own: lines drawn as one carry their labels together.
+      const onOther = Array.from({ length: tw }, (_, k) => lines.get(`${from + k},${ly}`) ?? []).some((list) => !list.includes(ei) && list.length > 0);
+      if (!onOther) continue;
+    }
     const boxes = now.nodes.map((n) => ({ x: Math.round(n.x), y: Math.round(n.y), w: Math.round(n.w), h: Math.round(n.h) }));
     const texts = now.edges.flatMap((o, k) => (o.invisible ? [] : [k === ei ? undefined : o.label, o.startLabel, o.endLabel])).flatMap((t) => (t === undefined ? [] : [{ x: Math.round(t.x), y: Math.round(t.y), w: Math.max(1, Math.round(t.w)), h: 1 }]));
     const stands = (x: number, row: number, w: number): boolean => [...boxes, ...texts].some((r) => row >= r.y && row < r.y + r.h && x + w > r.x && x < r.x + r.w);
-    // The text itself is what has to show: the blank on either side of it may lie under a border.
-    const from = lx + Math.floor((lw - tw) / 2);
-    if (lx >= 0 && ly >= 0 && !stands(from, ly, tw)) {
+    if (off) {
+      if (stands(from, ly, tw)) continue;
+    } else if (lx >= 0 && ly >= 0 && !stands(from, ly, tw)) {
       // A label past the last column of the drawing is cut off there: the drawing is as wide as its labels, within the limit.
       if (from + tw <= now.width) continue;
       if (within(from + tw)) {
@@ -761,6 +793,7 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
       l = put(place.x, place.y);
       continue;
     }
+    if (off) continue;
     // A label above the first row brings the rows it needs to the top of the drawing, and is looked at again there.
     if (ly < 0) {
       l = grow(now, -Infinity, -ly, true);

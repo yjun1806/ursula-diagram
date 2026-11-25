@@ -69,9 +69,11 @@ export interface Breaks {
   mixedNets: number;
   /** Lines that run right along the side of a box they neither leave nor reach, or right along another line they do not run with. */
   hugging: number;
+  /** Cells a line runs through with a text written in them that is not the label of a line running there: another label written over a line reads as its label. */
+  overwritten: number;
 }
 
-export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenBoxes', 'tangled', 'strayLabels', 'crowdedLabels', 'coveredLabels', 'labelsAtHeads', 'room', 'unseen', 'forks', 'crossMarks', 'mixedNets', 'hugging'];
+export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenBoxes', 'tangled', 'strayLabels', 'crowdedLabels', 'coveredLabels', 'labelsAtHeads', 'room', 'unseen', 'forks', 'crossMarks', 'mixedNets', 'hugging', 'overwritten'];
 
 /** The cells of a line and the ways it runs on in each, as the drawing draws it; undefined for a line with a slanted stretch. */
 function runsOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>): { cells: Array<[number, number]>; bits: Map<string, number> } | undefined {
@@ -440,6 +442,26 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     }
   });
 
+  // Cells of a line with a text in them that is not the label of a line running there, each cell once.
+  let overwritten = 0;
+  const textAt = new Set<string>();
+  runs.forEach((run, i) => {
+    const ends = run?.cells.length ?? 0;
+    run?.cells.forEach(([x, y], k) => {
+      const key = `${x},${y}`;
+      const ch = at(x, y);
+      if (textAt.has(key) || ch === ' ' || RUNS[ch] !== undefined || ((k < 2 || k >= ends - 2) && MARKS.has(ch)) || inBox(x, y)) return;
+      // Its own label, or the label of a line it runs with, written on the line.
+      if ((byCell.get(key) ?? [i]).some((j) => {
+        const s = spots[j];
+        return s !== undefined && s.y === y && x >= s.x0 && x <= s.x1;
+      })) return;
+      textAt.add(key);
+      overwritten++;
+    });
+  });
+  if (overwritten > 0) note(`${overwritten} cells of lines written over`);
+
   const room = roomViolations(lines, grid);
   const asked = labels ?? drawn.flatMap((e) => (e.label === undefined ? [] : (e.label.lines ?? [e.label.text])));
   return {
@@ -456,6 +478,7 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     crossMarks,
     mixedNets,
     hugging,
+    overwritten,
   };
 }
 
