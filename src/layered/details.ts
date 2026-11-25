@@ -6,14 +6,23 @@ const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const word = (id: string): string => `(?<![\\p{L}\\p{N}_])${escape(id)}(?![\\p{L}\\p{N}_])`;
 
 /**
- * The line (from 1) of `src` that writes the edge `from` → `to`: the first line where both ids stand as words with an
- * arrow (two or more of `- . = < >`) between them. Undefined when no line does.
+ * The id as the source writes it. A state diagram keeps its start and end as `[*]start:<scope>` and `[*]end:<scope>`,
+ * both written `[*]`.
+ */
+export const sourceId = (id: string): string => (/^\[\*\](start|end):/.test(id) ? '[*]' : id);
+
+/**
+ * The line (from 1) of `src` that writes the edge `from` → `to`: the first line where both ids stand as words, `from`
+ * first, with an arrow (two or more of `- . = < >`) between them; else the first that writes them the other way round
+ * (`B <-- A`). Undefined when no line does.
  */
 export function edgeLine(rows: readonly string[], from: string, to: string): number | undefined {
   const arrow = '[^\\n]*?[-.=<>]{2,}[^\\n]*?';
-  const forward = new RegExp(`${word(from)}${arrow}${word(to)}`, 'u');
-  const backward = new RegExp(`${word(to)}${arrow}${word(from)}`, 'u');
-  const at = rows.findIndex((r) => !r.trim().startsWith('%%') && (forward.test(r) || backward.test(r)));
+  const a = sourceId(from);
+  const b = sourceId(to);
+  const first = (pattern: RegExp): number => rows.findIndex((r) => !r.trim().startsWith('%%') && pattern.test(r));
+  let at = first(new RegExp(`${word(a)}${arrow}${word(b)}`, 'u'));
+  if (at < 0) at = first(new RegExp(`${word(b)}${arrow}${word(a)}`, 'u'));
   return at < 0 ? undefined : at + 1;
 }
 
@@ -25,7 +34,7 @@ export function checkDetails(l: Layout, src: string): string[] {
   const rows = src.split(/\r?\n/);
   const name = (from: string, to: string): string => {
     const line = edgeLine(rows, from, to);
-    return `${from} --> ${to}${line === undefined ? '' : ` (line ${line})`}`;
+    return `${sourceId(from)} --> ${sourceId(to)}${line === undefined ? '' : ` (line ${line})`}`;
   };
   const out: string[] = [];
   const crossings = l.diagnostics.filter((d) => d.kind === 'crossing' && d.nodes.length === 4);

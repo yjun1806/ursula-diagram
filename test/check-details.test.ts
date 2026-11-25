@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkDetails, checkLines, selectFrontEnd } from '../src/index.ts';
+import { edgeLine } from '../src/layered/details.ts';
 import type { Layout } from '../src/index.ts';
 import * as fixtures from './fixtures.ts';
 
@@ -52,6 +53,27 @@ describe('checkDetails', () => {
       }
     },
   );
+
+  it('names the line that writes an edge in its own direction when both directions are written', () => {
+    const src = 'flowchart LR\n  A --> B\n  B --> A\n  A --> C\n  C --> D\n  B --> D\n  D --> A\n  C --> B\n';
+    const details = checkDetails(selectFrontEnd(src).json(src, 'svg', {}) as Layout, src).join('\n');
+    expect(details).toContain('B --> A (line 3)');
+    expect(details).not.toMatch(/B --> A \(line 2\)/);
+    const state = 'stateDiagram-v2\n  [*] --> Idle\n  Idle --> Run\n  Run --> Idle\n  Run --> [*]\n';
+    expect(checkDetails(selectFrontEnd(state).json(state, 'svg', {}) as Layout, state)).toContain('bends: Run --> Idle (line 4) 2');
+  });
+
+  it("writes a state diagram's start and end as [*], with the line", () => {
+    const src = 'stateDiagram-v2\n    [*] --> Still\n    Still --> [*]\n\n    Still --> Moving\n    Moving --> Still\n    Moving --> Crash\n    Crash --> [*]\n';
+    const details = checkDetails(selectFrontEnd(src).json(src, 'svg', {}) as Layout, src);
+    expect(details).toContain('bends: Still --> [*] (line 3) 2, Moving --> Still (line 6) 2');
+    expect(details.join('\n')).not.toMatch(/\[\*\](start|end)/);
+  });
+
+  it('falls back to a line written the other way round', () => {
+    expect(edgeLine(['flowchart LR', '  B <-- A'], 'A', 'B')).toBe(2);
+    expect(edgeLine(['flowchart LR', '  A --> B', '  B --> A'], 'B', 'A')).toBe(3);
+  });
 
   it('writes the pairs, then the most bent lines', () => {
     const l = selectFrontEnd(crossed).json(crossed, 'svg', {}) as Layout;
