@@ -1,7 +1,10 @@
 /*
  * The site in ursula's own colours: the values of the engine's colour table (src/render/colors.ts), neutral greys and
- * one mustard accent, mapped onto the VitePress variables. The accent as link text measures 5.40:1 on the light page
- * and 9.63:1 on the dark one (WCAG AA asks 4.5:1); buttons take the start-box face with dark text on it.
+ * one mustard accent, mapped onto the VitePress variables. Secondary and tertiary text are darker (lighter in dark
+ * mode) than the engine's muted and faint greys, so that every text colour passes WCAG AA (4.5:1) on every page
+ * background: on the page, text-2 measures 9.2:1 light and 10.8:1 dark, text-3 5.3:1 and 6.4:1 (at least 4.66:1 on
+ * the soft background). The accent as link text measures 5.40:1 on the light page and 9.63:1 on the dark one; buttons
+ * take the start-box face with dark text on it.
  */
 :root {
   --vp-c-bg: #fcfcfa;
@@ -10,8 +13,8 @@
   --vp-c-bg-soft: #efeeed;
 
   --vp-c-text-1: #201f1e;
-  --vp-c-text-2: #5b5b59;
-  --vp-c-text-3: #878685;
+  --vp-c-text-2: #474644;
+  --vp-c-text-3: #6b6a68;
 
   --vp-c-border: #c8c7c6;
   --vp-c-divider: #e2e1e0;
@@ -60,8 +63,8 @@
   --vp-c-bg-soft: #252422;
 
   --vp-c-text-1: #efeeec;
-  --vp-c-text-2: #b2b1af;
-  --vp-c-text-3: #757472;
+  --vp-c-text-2: #c9c8c6;
+  --vp-c-text-3: #9a9997;
 
   --vp-c-border: #434241;
   --vp-c-divider: #2c2b2a;

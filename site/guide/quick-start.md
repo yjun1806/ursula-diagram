@@ -1,11 +1,27 @@
 # Quick start
 
-Install the `ursula-diagram` command with npm (Node 22 or later; `ursula` is a short alias), or run it once with `npx`:
+Install the `ursula-diagram` command with your package manager (Node 22 or later; `ursula` is a short alias), or run it
+once with `npx`:
 
-```bash
+::: code-group
+
+```bash [npm]
 npm install -g ursula-diagram
+```
+
+```bash [pnpm]
+pnpm add -g ursula-diagram
+```
+
+```bash [bun]
+bun add -g ursula-diagram
+```
+
+```bash [npx]
 npx ursula-diagram order.mmd --format text   # without installing
 ```
+
+:::
 
 ```bash
 cat > order.mmd <<'EOF'
