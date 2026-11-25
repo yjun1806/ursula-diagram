@@ -11826,6 +11826,46 @@ function compactColumns(l, shortLabels = false) {
   return { ...l, width, nodes: moved, edges, lanes: l.lanes.map((lane) => ({ ...lane, w: Math.max(0, lane.w - (l.width - width)) })), ...l.legend ? { legend: { ...l.legend, base: { ...l.legend.base, width: Math.min(l.legend.base.width, width) } } } : {} };
 }
 
+// src/layout/lane-names.ts
+var SHORT_NAME = 6;
+function placeLaneName(label, x0, x1, preferred, limit, bare) {
+  const w = cellWidth(label);
+  const free = (x) => {
+    for (let k = x - 1;k <= x + w; k++)
+      if (k < x0 || k > x1 || !bare(k))
+        return false;
+    return true;
+  };
+  const candidates = [preferred];
+  for (let x = x0;x <= x1; x++)
+    if (!bare(x))
+      candidates.push(x + 2);
+  for (let x = preferred;x + w <= x1; x++)
+    candidates.push(x);
+  const past = (x) => {
+    if (x + w > limit)
+      return false;
+    for (let k = x - 1;k <= Math.min(x + w, x1); k++)
+      if (k < x0 || !bare(k))
+        return false;
+    return true;
+  };
+  const whole = candidates.find(free) ?? candidates.find(past);
+  if (whole !== undefined)
+    return { at: whole, text: label, over: false };
+  let best = { from: 0, len: 0 };
+  for (let x = x0, from = x0;x <= x1 + 1; x++) {
+    if (x <= x1 && bare(x))
+      continue;
+    if (x - from > best.len)
+      best = { from, len: x - from };
+    from = x + 1;
+  }
+  if (best.len >= SHORT_NAME + 4)
+    return { at: best.from + 2, text: clip(label, best.len - 4), over: false };
+  return { at: preferred, text: label, over: true };
+}
+
 // src/layout/text-tidy.ts
 function cut(text, cells) {
   if (cellWidth(text) <= cells)
@@ -12313,7 +12353,48 @@ function lineCells(l) {
   cellsOfLines.set(l, out);
   return out;
 }
-function clearUprightLabels(given) {
+var cellsOfMarks = new WeakMap;
+function markCells(l) {
+  const known = cellsOfMarks.get(l);
+  if (known)
+    return known;
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  const out = new Set;
+  for (const e of l.edges) {
+    if (e.invisible || e.points.length < 2)
+      continue;
+    const last = e.points.length - 1;
+    for (const [end, next, marks] of [[0, 1, startCells2(e)], [last, last - 1, endCells2(e)]]) {
+      if (marks === 0)
+        continue;
+      const [x, y] = cellOf(e, nodes, end);
+      const [x2, y2] = cellOf(e, nodes, next);
+      const [dx, dy] = [Math.sign(x2 - x), Math.sign(y2 - y)];
+      const reach = Math.min(marks, Math.abs(dx === 0 ? y2 - y : x2 - x));
+      for (let k = 0;k <= reach; k++)
+        out.add(`${x + k * dx},${y + k * (dx === 0 ? dy : 0)}`);
+    }
+  }
+  cellsOfMarks.set(l, out);
+  return out;
+}
+function namesKeep(l, ei, row, from, to) {
+  if (l.direction === "TD" !== (l.laneAxis === "along"))
+    return true;
+  const named = l.lanes.filter((lane) => lane.label !== "" && lane.bare === true && Math.floor(lane.y) === row);
+  if (named.length === 0)
+    return true;
+  const taken = lineCells(l);
+  const others = l.edges.flatMap((o, k) => o.invisible || k === ei ? [] : [o.label, o.startLabel, o.endLabel]).filter((t) => t !== undefined && Math.round(t.y) === row);
+  const bare = (x) => !taken.has(`${x},${row}`) && !others.some((t) => x >= Math.round(t.x) && x < Math.round(t.x) + Math.max(1, Math.round(t.w)));
+  return named.every((lane) => {
+    const x0 = Math.floor(lane.x);
+    const place = (free) => placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), Math.ceil(l.width), free);
+    const [alone, beside] = [place(bare), place((x) => bare(x) && (x < from || x > to))];
+    return alone.over === beside.over && alone.text === beside.text && (beside.at + cellWidth(beside.text) < from || beside.at - 1 > to);
+  });
+}
+function clearUprightLabels(given, marks = false) {
   let l = given;
   for (let ei = 0;ei < l.edges.length; ei++) {
     const e = l.edges[ei];
@@ -12346,6 +12427,14 @@ function clearUprightLabels(given) {
       for (let x = lx + 1;x < lx + lw - 1; x++)
         if (taken.has(`${x},${row}`))
           return false;
+      if (marks) {
+        const ends = markCells(now);
+        for (let x = lx;x < lx + lw; x++)
+          if (ends.has(`${x},${row}`))
+            return false;
+        if (!namesKeep(now, ei, row, lx, lx + lw - 1))
+          return false;
+      }
       return !now.nodes.some((n) => row >= Math.round(n.y) && row < Math.round(n.y) + Math.round(n.h) && lx + lw - 1 > Math.round(n.x) && lx + 1 < Math.round(n.x) + Math.round(n.w)) && !now.edges.some((o, k) => k !== ei && o.label !== undefined && Math.round(o.label.y) === row && lx < Math.round(o.label.x) + Math.round(o.label.w) && Math.round(o.label.x) < lx + lw);
     };
     const run = stretch(l);
@@ -12368,13 +12457,395 @@ function clearUprightLabels(given) {
     }
     if (stands)
       continue;
-    const taller = grow(l, run.top + 0.5, 1, true);
-    const again = stretch({ ...taller, edges: taller.edges.map((o, k) => k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o) });
-    const placed = again === undefined ? undefined : place(taller, again);
-    if (placed !== undefined)
+    const whole = l;
+    const between = (row) => !whole.nodes.some((n) => Math.round(n.y) <= row && row + 1 < Math.round(n.y) + Math.round(n.h));
+    const later = Array.from({ length: run.bottom - run.top }, (_, k) => run.top + 1 + k).filter(between);
+    for (const row of marks ? [run.top, ...later] : [run.top]) {
+      const taller = grow(whole, row + 0.5, 1, true);
+      const again = stretch({ ...taller, edges: taller.edges.map((o, k) => k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o) });
+      const placed = again === undefined ? undefined : place(taller, again);
+      if (placed === undefined)
+        continue;
       l = placed;
+      break;
+    }
   }
   return l;
+}
+
+// src/layout/text-room.ts
+var UPRIGHT_LEAST = 2;
+var STEP3 = 1;
+var THROUGH_BOX = 1e4;
+var near2 = (a, b) => Math.abs(a - b) < 0.000000001;
+var sideOf2 = (p, n) => near2(p.y, n.y) ? "top" : near2(p.y, n.y + n.h) ? "bottom" : "other";
+var cells = (r) => ({ x: Math.round(r.x), y: Math.round(r.y), w: Math.max(1, Math.round(r.w)), h: Math.max(1, Math.round(r.h)) });
+var covers = (t, cell) => {
+  const r = cells(t);
+  return cell[0] >= r.x && cell[0] < r.x + r.w && cell[1] >= r.y && cell[1] < r.y + r.h;
+};
+function turned(l) {
+  const point = (p) => ({ ...p, x: p.y, y: p.x });
+  const rect = (r) => ({ ...r, x: r.y, y: r.x, w: r.h, h: r.w });
+  return {
+    ...l,
+    width: l.height,
+    height: l.width,
+    nodes: l.nodes.map(rect),
+    lanes: l.lanes.map((lane) => ({ ...rect(lane), labelBox: rect(lane.labelBox) })),
+    edges: l.edges.map((e) => ({
+      ...e,
+      points: e.points.map(point),
+      ...e.label ? { label: rect(e.label) } : {},
+      ...e.startLabel ? { startLabel: rect(e.startLabel) } : {},
+      ...e.endLabel ? { endLabel: rect(e.endLabel) } : {}
+    }))
+  };
+}
+function cellsAlong(e, nodes) {
+  const corners = e.points.map((_, i) => cellOf(e, nodes, i));
+  const out = [corners[0]];
+  for (let i = 0;i + 1 < corners.length; i++) {
+    let [x, y] = corners[i];
+    const [x2, y2] = corners[i + 1];
+    const dx = Math.sign(x2 - x);
+    const dy = dx === 0 ? Math.sign(y2 - y) : 0;
+    while (x !== x2 || dx === 0 && y !== y2) {
+      x += dx;
+      y += dy;
+      out.push([x, y]);
+    }
+  }
+  return out;
+}
+function textsOf(l, names) {
+  const onLines = l.edges.flatMap((e) => e.invisible ? [] : [e.label, e.startLabel, e.endLabel]).filter((t) => t !== undefined);
+  return names ? [...onLines, ...l.lanes.filter((lane) => lane.label !== "").map((lane) => lane.labelBox)] : onLines;
+}
+function namesOverLines(l) {
+  const named = l.lanes.filter((lane) => lane.label !== "" && lane.bare === true);
+  if (named.length === 0)
+    return [];
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  const shown = l.edges.filter((e) => !e.invisible && e.points.length >= 2);
+  const lines = new Set(shown.flatMap((e) => cellsAlong(e, nodes).map((c) => `${c[0]},${c[1]}`)));
+  const texts = textsOf(l, false);
+  return named.flatMap((lane) => {
+    const [x0, y] = [Math.floor(lane.x), Math.floor(lane.y)];
+    const bare = (x) => !lines.has(`${x},${y}`) && !texts.some((t) => covers(t, [x, y]));
+    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), Math.ceil(l.width), bare);
+    return placed.over ? [{ x: placed.at - 1, y, w: cellWidth(placed.text) + 2, h: 1 }] : [];
+  });
+}
+var rowBefore = (end) => end.side === "top" ? Math.round(end.node.y) : Math.round(end.node.y) + Math.round(end.node.h);
+function rowsLacking(l, rules, texts, joins, least) {
+  const lack = new Map;
+  const want = (row, rows, n) => {
+    if (rows <= 0)
+      return;
+    const span = [Math.round(n.x), Math.round(n.x) + Math.round(n.w) - 1];
+    const had = lack.get(row);
+    lack.set(row, { row, rows: Math.max(rows, had?.rows ?? 0), spans: [...had?.spans ?? [], span] });
+  };
+  if (!joins) {
+    for (const n of l.nodes) {
+      const top = Math.round(n.y);
+      const below = top + Math.round(n.h);
+      if (rules.has(top - 1))
+        want(top, 1, n);
+      if (rules.has(below))
+        want(below, 1, n);
+    }
+  }
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  for (const e of l.edges) {
+    const from = nodes.get(e.from);
+    const to = nodes.get(e.to);
+    if (e.invisible || e.points.length < 2 || from === undefined || to === undefined)
+      continue;
+    const along = cellsAlong(e, nodes);
+    const start = { node: from, side: sideOf2(e.points[0], from), marks: startCells2(e), cells: along };
+    const end = { node: to, side: sideOf2(e.points[e.points.length - 1], to), marks: endCells2(e), cells: [...along].reverse() };
+    const upright = from !== to && start.side !== "other" && end.side !== "other" && along.every((c) => c[0] === along[0][0]);
+    if (joins) {
+      const lower = start.side === "top" ? start : end;
+      if (upright)
+        want(rowBefore(lower), least(start.marks + end.marks) - along.length, lower.node);
+      continue;
+    }
+    for (const one of [start, end]) {
+      if (one.side === "other" || one.marks === 0)
+        continue;
+      let straight = 1;
+      while (straight < one.cells.length && one.cells[straight][0] === one.cells[0][0])
+        straight++;
+      if (!upright)
+        want(rowBefore(one), one.marks + 1 - straight, one.node);
+      if (one.cells.slice(0, one.marks + 1).some((c) => texts.some((t) => covers(t, c))))
+        want(rowBefore(one), 1, one.node);
+      const onRule = one.cells.slice(0, one.marks).findIndex((c) => rules.has(c[1]));
+      if (onRule >= 0)
+        want(rowBefore(one), one.marks - onRule, one.node);
+    }
+  }
+  return [...lack.values()].sort((a, b) => a.row - b.row);
+}
+function sheetOf(l, texts, bars) {
+  const w = Math.max(1, Math.ceil(l.width));
+  const h = Math.max(1, Math.ceil(l.height));
+  const sheet = { w, h, joined: new Uint8Array(w * h), owner: new Int32Array(w * h), box: [], last: new Int32Array(w).fill(-1) };
+  const inside = (x, y) => x >= 0 && x < w && y >= 0 && y < h;
+  const stand = (x, y) => {
+    if (inside(x, y) && y > sheet.last[x])
+      sheet.last[x] = y;
+  };
+  const join = (x, y) => {
+    if (inside(x, y) && x + 1 < w)
+      sheet.joined[y * w + x] = 1;
+  };
+  const own = (given, box) => {
+    const r = cells(given);
+    sheet.box.push(box);
+    for (let y = r.y;y < r.y + r.h; y++) {
+      for (let x = r.x;x < r.x + r.w; x++) {
+        if (!inside(x, y))
+          continue;
+        sheet.owner[y * w + x] = sheet.box.length;
+        if (x + 1 < r.x + r.w)
+          join(x, y);
+        stand(x, y);
+      }
+    }
+  };
+  for (const n of l.nodes)
+    own(n, true);
+  for (const t of texts)
+    own(t, false);
+  for (const given of bars) {
+    const r = cells(given);
+    for (let y = r.y;y < r.y + r.h; y++) {
+      for (let x = r.x;x < r.x + r.w; x++) {
+        stand(x, y);
+        if (x + 1 < r.x + r.w)
+          join(x, y);
+      }
+    }
+  }
+  const nodes = new Map(l.nodes.map((n) => [n.id, n]));
+  for (const e of l.edges) {
+    if (e.invisible || e.points.length < 2)
+      continue;
+    const along = cellsAlong(e, nodes);
+    along.forEach((c, k) => {
+      stand(c[0], c[1]);
+      const next = along[k + 1];
+      if (next !== undefined && next[1] === c[1])
+        join(Math.min(c[0], next[0]), c[1]);
+    });
+    for (const [i, id] of [[0, e.from], [e.points.length - 1, e.to]]) {
+      const n = nodes.get(id);
+      const p = e.points[i];
+      if (n === undefined || sideOf2(p, n) !== "other")
+        continue;
+      const c = cellOf(e, nodes, i);
+      if (near2(p.x, n.x))
+        join(c[0], c[1]);
+      else if (near2(p.x, n.x + n.w))
+        join(c[0] - 1, c[1]);
+    }
+  }
+  return sheet;
+}
+function seamOf(sheet, lack, grow, edge) {
+  const { w, h } = sheet;
+  const states = h + 1;
+  const forced = new Uint8Array(w);
+  for (const [from, to] of lack.spans)
+    for (let x = Math.max(0, from);x <= Math.min(w - 1, to); x++)
+      forced[x] = 1;
+  const price = (x, s) => {
+    if (forced[x] === 1 && s !== lack.row)
+      return Number.POSITIVE_INFINITY;
+    if (edge !== undefined && s <= sheet.last[x] && sheet.last[x] + lack.rows > edge)
+      return Number.POSITIVE_INFINITY;
+    if (s === 0 || s === h)
+      return 0;
+    const above = sheet.owner[(s - 1) * w + x];
+    if (above === 0 || above !== sheet.owner[s * w + x])
+      return 0;
+    return grow && sheet.box[above - 1] === true ? THROUGH_BOX : Number.POSITIVE_INFINITY;
+  };
+  const from = new Int32Array(w * states);
+  let cost = new Float64Array(states);
+  for (let s = 0;s < states; s++)
+    cost[s] = price(0, s);
+  for (let x = 1;x < w; x++) {
+    const next = Float64Array.from(cost);
+    const origin = from.subarray(x * states, (x + 1) * states);
+    for (let s = 0;s < states; s++)
+      origin[s] = s;
+    for (let s = 1;s < states; s++) {
+      if (sheet.joined[(s - 1) * w + x - 1] === 1 || next[s - 1] + STEP3 >= next[s])
+        continue;
+      next[s] = next[s - 1] + STEP3;
+      origin[s] = origin[s - 1];
+    }
+    for (let s = states - 2;s >= 0; s--) {
+      if (sheet.joined[s * w + x - 1] === 1 || next[s + 1] + STEP3 >= next[s])
+        continue;
+      next[s] = next[s + 1] + STEP3;
+      origin[s] = origin[s + 1];
+    }
+    for (let s = 0;s < states; s++)
+      next[s] = next[s] + price(x, s);
+    cost = next;
+  }
+  let best = 0;
+  for (let s = 1;s < states; s++)
+    if (cost[s] < cost[best])
+      best = s;
+  if (!Number.isFinite(cost[best]))
+    return;
+  const seam = new Int32Array(w);
+  for (let x = w - 1, s = best;x >= 0; x--) {
+    seam[x] = s;
+    s = from[x * states + s];
+  }
+  return seam;
+}
+function withRows(l, seam, rows, fixed) {
+  const at = (x) => seam[Math.max(0, Math.min(seam.length - 1, x))];
+  const shift = (x, y) => y >= at(x) ? rows : 0;
+  const text = (t) => ({ ...t, y: t.y + shift(Math.round(t.x), Math.round(t.y)) });
+  const moved = l.nodes.map((n) => {
+    const [x, top] = [Math.round(n.x), Math.round(n.y)];
+    const last = top + Math.round(n.h) - 1;
+    return { ...n, y: n.y + shift(x, top), h: n.h + shift(x, last) - shift(x, top) };
+  });
+  const before = new Map(l.nodes.map((n) => [n.id, n]));
+  const after = new Map(moved.map((n) => [n.id, n]));
+  const edges = l.edges.map((e) => {
+    if (e.points.length === 0)
+      return e;
+    const was = e.points.map((_, i) => cellOf(e, before, i));
+    const last = e.points.length - 1;
+    const points = e.points.map((p, i) => {
+      const old = was[i];
+      const plain = { x: p.x, y: p.y + shift(old[0], old[1]) };
+      const id = i === 0 ? e.from : i === last ? e.to : undefined;
+      const [stood, stands] = id === undefined ? [undefined, undefined] : [before.get(id), after.get(id)];
+      if (stood === undefined || stands === undefined)
+        return plain;
+      const side = sideOf2(p, stood);
+      return side === "top" ? { x: p.x, y: stands.y } : side === "bottom" ? { x: p.x, y: stands.y + stands.h } : plain;
+    });
+    const now = points.map((_, i) => cellOf({ ...e, points }, after, i));
+    const turn = (end, next) => {
+      const [old, beside] = [was[end], was[next]];
+      const row = old[1] + shift(old[0], old[1]);
+      if (old[0] === beside[0] || row === now[end][1])
+        return;
+      const inner = next !== 0 && next !== last;
+      return { x: points[end].x, y: inner ? points[next].y : row };
+    };
+    const first = last >= 1 ? turn(0, 1) : undefined;
+    const final = last >= 1 ? turn(last, last - 1) : undefined;
+    return {
+      ...e,
+      points: [points[0], ...first ? [first] : [], ...points.slice(1, -1), ...final ? [final] : [], points[last]],
+      ...e.label ? { label: text(e.label) } : {},
+      ...e.startLabel ? { startLabel: text(e.startLabel) } : {},
+      ...e.endLabel ? { endLabel: text(e.endLabel) } : {}
+    };
+  });
+  const layout = {
+    ...l,
+    height: l.height + rows,
+    nodes: moved,
+    lanes: l.lanes.map((lane) => {
+      const [x, top] = [Math.round(lane.x), Math.round(lane.y)];
+      return { ...lane, y: lane.y + shift(x, top), h: lane.h + shift(x, top + Math.round(lane.h)) - shift(x, top), labelBox: text(lane.labelBox) };
+    }),
+    edges
+  };
+  return { layout, moved: fixed.map((r) => shift(Math.round(r.x), Math.round(r.y))) };
+}
+function opened(given, asked) {
+  let l = given;
+  let { fixed, bars } = asked;
+  const left = new Set;
+  const key = (lack) => `${lack.row}:${lack.spans.map((s) => s.join("-")).join(",")}`;
+  const put = (seam, rows, keep) => {
+    const done = withRows(l, seam, rows, [...fixed, ...bars]);
+    const down = (rects, skip) => rects.map((r, i) => ({ ...r, y: r.y + done.moved[skip + i] }));
+    l = keep === undefined ? done.layout : { ...done.layout, height: Math.max(l.height, keep) };
+    [fixed, bars] = [down(fixed, 0), down(bars, fixed.length)];
+  };
+  for (let turn = 0, most = 6 * given.nodes.length + 24;turn < most; turn++) {
+    const rules = new Set(bars.map((r) => Math.round(r.y)));
+    const texts = [...textsOf(l, asked.names), ...fixed, ...bars.length > 0 ? namesOverLines(l) : []];
+    const lacking = (joins) => rowsLacking(l, rules, texts, joins, asked.least).filter((lack) => !left.has(key(lack)));
+    const marks = lacking(false);
+    const lacks = marks.length > 0 ? marks : lacking(true);
+    if (lacks.length === 0)
+      break;
+    const width = Math.max(1, Math.ceil(l.width));
+    const through = (row) => [...l.nodes, ...texts].some((r) => Math.round(r.y) < row && row < Math.round(r.y) + Math.round(r.h));
+    const straight = asked.reach === undefined ? lacks.filter((lack) => !through(lack.row)) : [];
+    if (straight.length > 0) {
+      for (const lack of [...straight].reverse())
+        put(new Int32Array(width).fill(lack.row), lack.rows, undefined);
+      continue;
+    }
+    const lack = lacks[0];
+    const sheet = sheetOf(l, texts, bars);
+    const edge = asked.reach === undefined ? undefined : Math.max(asked.reach, sheet.last.reduce((far, y) => Math.max(far, y), 0));
+    const within = seamOf(sheet, lack, asked.grow, edge);
+    const wider = within === undefined && edge !== undefined && asked.most !== undefined && asked.most - 1 > edge;
+    const seam = wider ? seamOf(sheet, lack, asked.grow, asked.most - 1) : within;
+    if (seam === undefined) {
+      left.add(key(lack));
+      continue;
+    }
+    const far = sheet.last.reduce((most, y, x) => Math.max(most, y >= seam[x] ? y + lack.rows : y), -1);
+    put(seam, lack.rows, edge === undefined ? undefined : far + 1);
+  }
+  return { layout: l, fixed };
+}
+var ruled = (l) => l.direction === "TD" === (l.laneAxis === "along");
+var rulesOf = (l) => ruled(l) ? l.lanes.filter((lane) => lane.label !== "").map((lane) => ({ x: Math.floor(lane.x), y: Math.floor(lane.y), w: Math.round(lane.w), h: 1 })) : [];
+function openTextRows(l) {
+  if (l.clusters !== undefined)
+    return l;
+  const bars = rulesOf(l);
+  const items = l.legend?.items ?? [];
+  const legend = items.length === 0 ? [] : [{ x: 0, y: Math.floor(items[0].y), w: Math.max(1, Math.ceil(l.width)), h: 1 }];
+  const done = opened(l, { bars, names: bars.length === 0, fixed: legend, least: (marks) => Math.max(UPRIGHT_LEAST, marks + 1), grow: true }).layout;
+  const added = done.height - l.height;
+  if (added === 0 || l.legend === undefined)
+    return done;
+  return { ...done, legend: { ...l.legend, y: l.legend.y + added, base: { ...l.legend.base, height: l.legend.base.height + added }, items: l.legend.items.map((item) => ({ ...item, y: item.y + added })) } };
+}
+function openTextColumns(l, limit) {
+  if (l.clusters !== undefined)
+    return l;
+  const flat = turned(l);
+  const rules = rulesOf(l);
+  const items = l.legend?.items ?? [];
+  const captions = items.map((item) => ({ x: Math.floor(item.y), y: Math.round(item.x), w: 1, h: Math.ceil(item.captionX) + cellWidth(item.caption) - Math.round(item.x) }));
+  const reach = Math.max(-1, ...rules.map((r) => Math.min(r.x + r.w, Math.ceil(l.width)) - 1));
+  const done = opened(flat, { bars: [], names: rules.length === 0, fixed: captions, least: (marks) => marks === 0 ? 0 : marks + 1, grow: false, reach, most: limit === undefined || !Number.isFinite(limit) ? Number.MAX_SAFE_INTEGER : Math.floor(limit) });
+  if (done.layout === flat)
+    return l;
+  const back = turned(done.layout);
+  const lanes = back.lanes.map((lane, i) => {
+    const was = l.lanes[i];
+    return { ...lane, w: rules.length > 0 && was.x + was.w >= l.width ? back.width - lane.x : Math.min(lane.w, back.width - lane.x) };
+  });
+  if (l.legend === undefined)
+    return { ...back, lanes };
+  const right = (i) => done.fixed[i].y - captions[i].y;
+  return { ...back, lanes, legend: { ...l.legend, base: { ...l.legend.base, width: l.legend.base.width + back.width - l.width }, items: l.legend.items.map((item, i) => ({ ...item, x: item.x + right(i), captionX: item.captionX + right(i) })) } };
 }
 
 // src/layout/rank.ts
@@ -13769,8 +14240,15 @@ function markGlyphs(end, heading) {
   }
 }
 var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
+function rulesOf2(layout) {
+  const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
+  if (vertical)
+    return new Map;
+  return new Map(layout.lanes.filter((lane) => lane.label !== "").map((lane) => [Math.floor(lane.y), [Math.floor(lane.x), Math.floor(lane.x) + Math.round(lane.w) - 1]]));
+}
 function drawEdges(c, layout) {
   const nodes = new Map(layout.nodes.map((n) => [n.id, n]));
+  const rules = rulesOf2(layout);
   const cells = new Map;
   const touch = (x, y, bits, style) => {
     const key = `${x},${y}`;
@@ -13841,7 +14319,10 @@ function drawEdges(c, layout) {
     const [xs, ys] = key.split(",");
     const glyphs = cell.style === "thick" ? HEAVY : LIGHT;
     let ch = glyphs[cell.bits] ?? "┼";
-    if (cell.style === "dotted") {
+    const rule = cell.bits === (N | S) ? rules.get(Number(ys)) : undefined;
+    if (rule !== undefined && Number(xs) >= rule[0] && Number(xs) <= rule[1])
+      ch = glyphs[cell.bits | (Number(xs) > rule[0] ? W2 : 0) | (Number(xs) < rule[1] ? E : 0)] ?? "┼";
+    else if (cell.style === "dotted") {
       if (cell.bits === (E | W2) || cell.bits === E || cell.bits === W2)
         ch = "┄";
       else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S)
@@ -13963,7 +14444,6 @@ function drawLegend(c, layout) {
     c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
   }
 }
-var SHORT_NAME = 6;
 function drawLaneNames(c, layout, limit) {
   const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
   if (vertical)
@@ -13973,54 +14453,12 @@ function drawLaneNames(c, layout, limit) {
       continue;
     const y = Math.floor(lane.y);
     const x0 = Math.floor(lane.x);
-    const x1 = x0 + Math.round(lane.w) - 1;
-    const w = cellWidth(lane.label);
-    const free = (x) => {
-      for (let k = x - 1;k <= x + w; k++)
-        if (k < x0 || k > x1 || c.get(k, y) !== "─")
-          return false;
-      return true;
-    };
-    const preferred = Math.floor(lane.labelBox.x);
-    const lines = [];
-    for (let x = x0;x <= x1; x++)
-      if (c.get(x, y) !== "─")
-        lines.push(x);
-    const candidates = [preferred, ...lines.map((x) => x + 2)];
-    for (let x = preferred;x + w <= x1; x++)
-      candidates.push(x);
-    const past = (x) => {
-      if (x + w > limit)
-        return false;
-      for (let k = x - 1;k <= Math.min(x + w, x1); k++)
-        if (k < x0 || c.get(k, y) !== "─")
-          return false;
-      return true;
-    };
-    const whole = candidates.find(free) ?? candidates.find(past);
-    if (whole === undefined) {
-      let best = { from: 0, len: 0 };
-      for (let x = x0, from = x0;x <= x1 + 1; x++) {
-        if (x <= x1 && c.get(x, y) === "─")
-          continue;
-        if (x - from > best.len)
-          best = { from, len: x - from };
-        from = x + 1;
-      }
-      if (best.len >= SHORT_NAME + 4) {
-        const cut = clip(lane.label, best.len - 4);
-        const start = best.from + 2;
-        c.put(start - 1, y, " ");
-        c.text(start, y, cut);
-        c.put(start + cellWidth(cut), y, " ");
-        continue;
-      }
-    }
-    const at = whole ?? preferred;
-    c.widen(at + w);
-    c.put(at - 1, y, " ");
-    c.text(at, y, lane.label);
-    c.put(at + w, y, " ");
+    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), limit, (x) => c.get(x, y) === "─");
+    const w = cellWidth(placed.text);
+    c.widen(placed.at + w);
+    c.put(placed.at - 1, y, " ");
+    c.text(placed.at, y, placed.text);
+    c.put(placed.at + w, y, " ");
   }
 }
 function renderTextLayout(layout, maxWidth) {
@@ -15487,7 +15925,7 @@ function layoutAlong(arranged, ruler, opts, fit = false) {
 function layoutMirrored(graph, how, ruler, opts) {
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
-    const drawn = layout(plain, ruler, opts);
+    const drawn = layoutOnce(plain, ruler, opts).closed;
     const note = { kind: "direction-mirrored-in-text", nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
@@ -15495,44 +15933,55 @@ function layoutMirrored(graph, how, ruler, opts) {
   return withLegend(mirrorLayout(bare, how, { width: bare.width, height: bare.height }), ruler, opts.legend);
 }
 function layout(graph, given, opts = {}) {
+  const out = (drawn) => opts.room === false ? drawn.closed : drawn.opened();
   if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true)
-    return layoutOnce(graph, given, opts);
+    return out(layoutOnce(graph, given, opts));
   const before = sharing.placements;
   const joined = layoutOnce(graph, given, { ...opts, sharePorts: true });
-  const shares = joined.edges.some((e) => e.sharedPort !== undefined);
+  const shares = joined.closed.edges.some((e) => e.sharedPort !== undefined);
   if (sharing.placements === before && !shares)
-    return joined;
+    return out(joined);
   const apart = layoutOnce(graph, given, { ...opts, sharePorts: false });
-  if (!shares || arrangementOf(joined) !== arrangementOf(apart))
-    return apart;
-  const own = textCost(apart);
+  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed))
+    return out(apart);
+  const own = textCost(apart.closed);
   const limit = opts.maxWidth ?? given.defaultWidth;
-  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.width, own.width) > limit)
-    return apart;
-  const shared = textCost(joined);
-  return costsMore(shared, own) || !costsMore(own, shared) ? apart : joined;
+  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit)
+    return out(apart);
+  const shared = textCost(joined.closed);
+  return out(costsMore(shared, own) || !costsMore(own, shared) ? apart : joined);
 }
 var arrangementOf = (l) => [l.composition, l.laneAxis, ...l.lanes.map((lane) => lane.id)].join("|");
 function layoutOnce(graph, given, opts) {
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true)
-    return drawn;
+    return { closed: drawn, opened: () => drawn };
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l) => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
-  const tidy = (l) => {
-    const closed = clearUprightLabels(openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit));
-    if (!over(closed))
-      return packParts(closed, limit);
-    const pushed = openTextLabels(compactColumns(closed), limit);
-    return packParts(over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed, limit);
+  const close = (l) => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
+  const finish = (fitted, room) => {
+    const closed = room ? openTextRows(clearUprightLabels(openTextRows(fitted), true)) : clearUprightLabels(fitted);
+    const fit = () => {
+      if (!over(closed))
+        return closed;
+      const pushed = openTextLabels(compactColumns(closed), limit);
+      return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
+    };
+    const narrow = fit();
+    if (!room)
+      return packParts(narrow, limit);
+    const wider = openTextColumns(narrow, limit);
+    return packParts(over(wider) && !over(narrow) ? narrow : wider, limit);
   };
-  let best = tidy(drawn);
+  let source = close(drawn);
+  let best = finish(source, false);
   if (over(best) && limit !== undefined && graph.nodes.some((n) => n.attach !== undefined && n.lines.length > 0)) {
     for (const cells of [28, 22, 16]) {
       const narrow = { ...graph, nodes: graph.nodes.map((n) => n.attach === undefined ? n : { ...n, lines: wrapWords(n.lines.join(" "), cells, cellWidth) }) };
-      const tried = tidy(layoutAny(narrow, given, opts));
+      const fitted = close(layoutAny(narrow, given, opts));
+      const tried = finish(fitted, false);
       if (tried.width < best.width)
-        best = tried;
+        [source, best] = [fitted, tried];
       if (best.width <= limit)
         break;
     }
@@ -15549,12 +15998,14 @@ function layoutOnce(graph, given, opts) {
           ...n.compartments === undefined ? {} : { compartments: n.compartments.map((c) => ({ ...c, lines: cutLines(c.lines), ...c.columns === undefined ? {} : { columns: c.columns.map((row) => row.map((cell) => clip(cell, Math.max(4, Math.floor(cells / Math.max(1, row.length)))))) } })) }
         }))
       };
-      const tried = tidy(layoutAny(short, given, opts));
+      const fitted = close(layoutAny(short, given, opts));
+      const tried = finish(fitted, false);
       if (tried.width < best.width)
-        best = tried;
+        [source, best] = [fitted, tried];
     }
   }
-  return best;
+  const chosen = source;
+  return { closed: best, opened: () => finish(chosen, true) };
 }
 function withoutEmptyCompartments(graph) {
   const empty = (lines) => lines.every((t) => t.trim() === "");
@@ -17448,13 +17899,14 @@ function drawText(src, maxWidth, opts) {
     stepAttempts.title.push({ graph: titlesOnly(full), w: inner, list: true });
   const numberOf = { full: 1, narrow: 2, title: 3 };
   const widest = (lines) => Math.max(0, ...lines.map(cellWidth));
-  const draw = (a, fold, quick, as = composition) => {
+  const draw = (a, fold, quick, as = composition, room = true) => {
     const laid = layout(a.graph, cellRuler(), {
       ...layoutOptions({ legend, engine, composition: as, ...quality === undefined ? {} : { quality } }),
       ...maxHeight === undefined ? {} : { maxHeight },
       ...maxWidth === undefined ? {} : { maxWidth },
       fold,
-      ...quick ? { quick: true, refine: false } : {}
+      ...quick ? { quick: true, refine: false } : {},
+      ...room ? {} : { room: false }
     });
     const drawn = renderTextLayout(laid);
     const list = a.list && maxWidth !== undefined ? descriptionList(full, maxWidth) : [];
@@ -17485,7 +17937,7 @@ function drawText(src, maxWidth, opts) {
     let first = -1;
     while (lo <= hi) {
       const mid = lo + hi >> 1;
-      const quick = draw(options[mid], false, true);
+      const quick = draw(options[mid], false, true, composition, false);
       if (widest(quick.lines) <= maxWidth) {
         first = mid;
         hi = mid - 1;
@@ -17496,7 +17948,7 @@ function drawText(src, maxWidth, opts) {
       return;
     let winner;
     for (const a of options.slice(first)) {
-      const quick = draw(a, false, true);
+      const quick = draw(a, false, true, composition, false);
       if (widest(quick.lines) > maxWidth)
         continue;
       const cost = figureLines(quick) + (a.list ? listLines : 0);
@@ -17511,7 +17963,7 @@ function drawText(src, maxWidth, opts) {
   if (chosen) {
     const heavy = draw(chosen.a, false, false);
     const step = chosen.a.list ? 3 : chosen.a.graph === full ? 1 : 2;
-    return result(chosen.a, step, widest(heavy.lines) <= maxWidth ? heavy : chosen.quick);
+    return result(chosen.a, step, widest(heavy.lines) <= maxWidth ? heavy : draw(chosen.a, false, true));
   }
   const narrowest = stepAttempts[names[names.length - 1]].at(-1);
   let drawn = draw(narrowest, true, true);
@@ -18648,7 +19100,7 @@ var NAME_HEAD = 44;
 var PLAIN_HEAD = 24;
 var ZONE_FOOT = 24;
 var PLOT_GAP = 48;
-var STEP3 = 32;
+var STEP4 = 32;
 var FOOT = 52;
 var WIDTH_LIMIT = 1280;
 var VALUE_H = 12;
@@ -18721,9 +19173,9 @@ function layoutJourney(journey, ruler, opts = {}) {
   const head = hasName ? NAME_HEAD : PLAIN_HEAD;
   const zoneH = head + boxH + ZONE_FOOT;
   const gridTop = zoneTop + zoneH + PLOT_GAP;
-  const axisY = gridTop + 4 * STEP3;
+  const axisY = gridTop + 4 * STEP4;
   const height = axisY + FOOT;
-  const scoreY = (s) => round2(gridTop + (5 - s) * STEP3);
+  const scoreY = (s) => round2(gridTop + (5 - s) * STEP4);
   const plotRight = width - MARGIN2;
   if (titleText !== undefined)
     items.push({ kind: "text", x: MARGIN2, y: TITLE_Y, text: titleText, anchor: "start", role: ["title"] });
@@ -20752,7 +21204,7 @@ var DX3 = [0, 1, 0, -1];
 var DY3 = [-1, 0, 1, 0];
 var UP = 0;
 var DOWN = 2;
-var STEP4 = 10;
+var STEP5 = 10;
 var SHARED = 1;
 var BEND4 = 100;
 var CROSS4 = 200;
@@ -20921,7 +21373,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
       return;
     }
     const heap = new Heap3;
-    const pace = wires.some((w, i) => i !== index && paths[i] !== undefined && related(i, index)) ? SHARED : STEP4;
+    const pace = wires.some((w, i) => i !== index && paths[i] !== undefined && related(i, index)) ? SHARED : STEP5;
     const ahead = (state) => {
       if (state === states)
         return 0;
@@ -21003,7 +21455,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
         }
         if (shut)
           continue;
-        let step = (shared ? SHARED : STEP4) + (crosses ? CROSS4 : 0) + (nd === d ? 0 : BEND4);
+        let step = (shared ? SHARED : STEP5) + (crosses ? CROSS4 : 0) + (nd === d ? 0 : BEND4);
         if (level)
           step += row.rank + (tidy && nd !== d && opened[y] === 0 ? OPEN : 0);
         else {
@@ -21134,6 +21586,25 @@ var spareAbove = (spare, height) => {
   }
   return above;
 };
+function roomAtRules(drawn, wires) {
+  const before = drawn.rows.flatMap((row, y) => row.kind !== "rule" ? [] : drawn.rows[y - 1]?.kind === "box" ? [y, y + 1] : [y + 1]);
+  const down = (y) => y + before.filter((at) => at <= y).length;
+  const rows = drawn.rows.flatMap((row, y) => [...before.filter((at) => at === y).map(() => ({ kind: "box", rank: 0 })), row]);
+  const rects = drawn.rects.map((r) => ({ ...r, y: down(r.y) }));
+  const run = (from, to) => Array.from({ length: Math.abs(to - from[1]) }, (_, k) => [from[0], from[1] + Math.sign(to - from[1]) * (k + 1)]);
+  const beside = (y, r) => y < r.y - 1 ? r.y - 1 : y > r.y + r.h ? r.y + r.h : y;
+  const paths = drawn.paths.map((path, i) => {
+    const moved = path.map((c) => [c[0], down(c[1])]);
+    const whole = moved.flatMap((c, k) => {
+      const next = moved[k + 1];
+      return next === undefined || next[0] !== c[0] ? [c] : [c, ...run(c, next[1]).slice(0, -1)];
+    });
+    const wire = wires[i];
+    const [first, last] = [whole[0], whole[whole.length - 1]];
+    return [...run(first, beside(first[1], rects[wire.from])).reverse(), ...whole, ...run(last, beside(last[1], rects[wire.to]))];
+  });
+  return { rects, rows, paths };
+}
 function slotsOf(bandOf, sizes, bandCount, step, wrap) {
   const slots = [];
   let bandEnd = new Array(bandCount).fill(Number.NEGATIVE_INFINITY);
@@ -21213,7 +21684,7 @@ function leastRows(slots, bandCount) {
     tallest.set(s.strip * bandCount + s.band, Math.max(tallest.get(s.strip * bandCount + s.band) ?? 0, s.h));
   return [...tallest.values()].reduce((sum, h) => sum + h + 1, slots[slots.length - 1]?.strip ?? 0);
 }
-function eventModelGrid(model, variant, wrap, strips, most = CHANNELS[0], spend = () => true, tidy = true, set = setOut(model, variant, wrap)) {
+function gridWithRoom(model, variant, wrap, strips, most, spend, tidy, set) {
   if (set === undefined)
     return;
   const { bands, frames, texts, wires, slots } = set;
@@ -21260,19 +21731,20 @@ function eventModelGrid(model, variant, wrap, strips, most = CHANNELS[0], spend 
     return;
   const routed = routeWires(rects, wires, gridWidth, rows, spend, tidy);
   if (routed === undefined)
-    return channels < wires.length && most < CHANNELS[1] && spend(0) ? eventModelGrid(model, variant, wrap, strips, CHANNELS[1], spend, tidy, set) : undefined;
-  let state = { rects, rows, paths: routed };
+    return channels < wires.length && most < CHANNELS[1] && spend(0) ? gridWithRoom(model, variant, wrap, strips, CHANNELS[1], spend, tidy, set) : undefined;
+  let closed = { rects, rows, paths: routed };
   for (;; ) {
-    const spare = spareRows(state.rects, wires, state.paths, state.rows);
+    const spare = spareRows(closed.rects, wires, closed.paths, closed.rows);
     if (spare.size === 0)
       break;
-    const above = spareAbove(spare, state.rows.length);
-    state = {
-      rects: state.rects.map((r) => ({ ...r, y: r.y - above[r.y] })),
-      rows: state.rows.filter((_, y) => !spare.has(y)),
-      paths: state.paths.map((path) => path.filter((c) => !spare.has(c[1])).map((c) => [c[0], c[1] - above[c[1]]]))
+    const above = spareAbove(spare, closed.rows.length);
+    closed = {
+      rects: closed.rects.map((r) => ({ ...r, y: r.y - above[r.y] })),
+      rows: closed.rows.filter((_, y) => !spare.has(y)),
+      paths: closed.paths.map((path) => path.filter((c) => !spare.has(c[1])).map((c) => [c[0], c[1] - above[c[1]]]))
     };
   }
+  const state = roomAtRules(closed, wires);
   const cells = state.paths.flat();
   const left = smallest(cells.map((c) => c[0]), smallest(state.rects.map((r) => r.x), Number.POSITIVE_INFINITY));
   const right = Math.max(largest(state.rects.map((r) => r.x + r.w), 0), largest(cells.map((c) => c[0] + 1), 0));
@@ -21326,7 +21798,7 @@ function eventModelGrid(model, variant, wrap, strips, most = CHANNELS[0], spend 
     const y = ruleRows(state.rows)[i];
     return { id: `${rule.strip}/${band.id}`, label: band.label, x: 0, y, w: width, h: rule.height + 1, labelBox: { x: NAME_AT, y, w: cellWidth(band.label), h: 1 }, bare: true };
   });
-  return { width, height: state.rows.length, direction: "LR", laneAxis: "across", lanes, nodes, edges, diagnostics: [] };
+  return { layout: { width, height: state.rows.length, direction: "LR", laneAxis: "across", lanes, nodes, edges, diagnostics: [] }, opened: state.rows.length - closed.rows.length };
 }
 var BUDGET2 = 2200000;
 var WAY_BUDGET = 1200000;
@@ -21370,17 +21842,18 @@ function drawEventModel(model, maxWidth, told) {
   };
   const draw = (variant, wrap, strips, tidy, set) => {
     const before = spent;
-    const layout = eventModelGrid(model, variant, wrap, strips, CHANNELS[0], (cost) => spend(cost) && spent - before <= WAY_BUDGET, tidy, set);
+    const grid = gridWithRoom(model, variant, wrap, strips, CHANNELS[0], (cost) => spend(cost) && spent - before <= WAY_BUDGET, tidy, set);
     tooLarge = spent - before > WAY_BUDGET;
-    if (layout === undefined)
+    if (grid === undefined)
       return;
+    const layout = grid.layout;
     const first = renderTextLayout(layout, limit);
     const widest = largest(first.map(cellWidth), 0);
     const reach = Math.min(widest + 2, limit);
     const lines = widest > layout.width ? renderTextLayout({ ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) }, limit) : first;
     if (!lines.every((line) => cellWidth(line) <= limit) || nameOverLine(layout, lines))
       return;
-    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length };
+    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length, rows: lines.length - grid.opened };
   };
   const firstWhole = (ways) => {
     let fits;
@@ -21390,7 +21863,7 @@ function drawEventModel(model, maxWidth, told) {
       const drawing = way();
       if (drawing === undefined)
         continue;
-      if (drawing.cut === 0 && (fits === undefined || drawing.lines.length <= fits.lines.length + NAME_ROWS))
+      if (drawing.cut === 0 && (fits === undefined || drawing.rows <= fits.rows + NAME_ROWS))
         return drawing;
       fits ??= drawing;
     }
@@ -22116,7 +22589,7 @@ function displayOrder(graph) {
 }
 
 // src/git/layout.ts
-var STEP5 = 96;
+var STEP6 = 96;
 var LANE5 = 64;
 var REACH = 56;
 var FIRST_GAP = 40;
@@ -22220,7 +22693,7 @@ function buildGit(graph, ruler, delays) {
   const turnedDown = (c) => turned ? TURN_DROP + idW(c) * COS45 + TEXT_HALF * COS45 : 0;
   const turnedBack = (c) => turned ? TURN_BACK + idW(c) * COS45 + TEXT_HALF * COS45 : 0;
   const nameW = Math.max(0, ...order.map((n) => ruler.textWidth(n, "lane")));
-  let step = STEP5;
+  let step = STEP6;
   if (!vertical) {
     for (const name of order) {
       const own = graph.commits.filter((c) => c.branch === name && labelW(c) > 0).sort((a, b) => (pos[a.seq] ?? 0) - (pos[b.seq] ?? 0));
@@ -25164,7 +25637,7 @@ function facesAlong(r, ctx) {
 var OFF_MIDDLE = 700;
 var SHARED3 = 3000;
 var flat = (d) => d.y === 0;
-var near2 = (a, b) => Math.abs(a - b) < 0.000001;
+var near3 = (a, b) => Math.abs(a - b) < 0.000001;
 function gap(a, b, r) {
   const dx = Math.max(0, r.x - Math.max(a.x, b.x), Math.min(a.x, b.x) - (r.x + r.w));
   const dy = Math.max(0, r.y - Math.max(a.y, b.y), Math.min(a.y, b.y) - (r.y + r.h));
@@ -25175,20 +25648,20 @@ function cuts2(a, b, r, m) {
   const x1 = r.x + r.w + m;
   const y0 = r.y - m;
   const y1 = r.y + r.h + m;
-  if (near2(a.y, b.y))
+  if (near3(a.y, b.y))
     return a.y > y0 && a.y < y1 && Math.max(a.x, b.x) > x0 && Math.min(a.x, b.x) < x1;
   return a.x > x0 && a.x < x1 && Math.max(a.y, b.y) > y0 && Math.min(a.y, b.y) < y1;
 }
 function shared(a, b, c, d) {
-  if (near2(a.y, b.y) && near2(c.y, d.y) && near2(a.y, c.y))
+  if (near3(a.y, b.y) && near3(c.y, d.y) && near3(a.y, c.y))
     return Math.max(0, Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) - Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)));
-  if (near2(a.x, b.x) && near2(c.x, d.x) && near2(a.x, c.x))
+  if (near3(a.x, b.x) && near3(c.x, d.x) && near3(a.x, c.x))
     return Math.max(0, Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) - Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)));
   return 0;
 }
 function crosses3(a, b, c, d) {
-  const aFlat = near2(a.y, b.y);
-  if (aFlat === near2(c.y, d.y))
+  const aFlat = near3(a.y, b.y);
+  if (aFlat === near3(c.y, d.y))
     return false;
   const [h0, h1, v0, v1] = aFlat ? [a, b, c, d] : [c, d, a, b];
   return v0.x > Math.min(h0.x, h1.x) && v0.x < Math.max(h0.x, h1.x) && h0.y > Math.min(v0.y, v1.y) && h0.y < Math.max(v0.y, v1.y);
@@ -25229,7 +25702,7 @@ function candidates3(from, to, ctx) {
         if (fa.d.x === -fb.d.x) {
           if ((pb.x - pa.x) * fa.d.x < 2 * ctx.stub)
             continue;
-          if (near2(pa.y, pb.y))
+          if (near3(pa.y, pb.y))
             push([pa, pb]);
           else
             for (const m of middles(pa.x, pb.x, ctx, ctx.channelsX))
@@ -25246,7 +25719,7 @@ function candidates3(from, to, ctx) {
         if (fa.d.y === -fb.d.y) {
           if ((pb.y - pa.y) * fa.d.y < 2 * ctx.stub)
             continue;
-          if (near2(pa.x, pb.x))
+          if (near3(pa.x, pb.x))
             push([pa, pb]);
           else
             for (const m of middles(pa.y, pb.y, ctx, ctx.channelsY))
