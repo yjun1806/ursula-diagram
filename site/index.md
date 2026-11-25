@@ -5,9 +5,6 @@ hero:
   name: ursula
   text: Mermaid text to SVG and terminal text
   tagline: No browser, no runtime dependencies. The same text always gives the same drawing.
-  image:
-    src: /assets/icon.png
-    alt: ursula
   actions:
     - theme: brand
       text: Quick start
@@ -28,7 +25,9 @@ features:
     details: No browser, no DOM, nothing to install at run time. The same text always gives the same drawing.
 ---
 
-<div class="vp-doc" style="max-width: 1152px; margin: 48px auto 0; padding: 0 24px;">
+<TypeGrid />
+
+<div class="home-prose">
 
 ## What it does
 
@@ -37,31 +36,8 @@ box, line and label goes. It is made for coding agents: the agent writes a few l
 them out, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. The same text always gives the
 same drawing. It runs on Node alone: no browser, no DOM, nothing to install at run time.
 
-```
-flowchart LR
-  order([Order placed]) --> pay{Paid?}
-  pay -->|yes| pick[Pick items]
-  pay -->|no| remind[Send reminder]
-  remind --> pay
-  pick --> ship([Ship])
-```
-
-```
-                                         ┌────────────┐   ┌────────────┐
-                                ┌─ yes ─▶│ Pick items │──▶│    Ship    │
-┌────────────┐   ┌────────────┐ │        └────────────┘   └────────────┘
-│   Order    │──▶│   Paid?    │─┤
-│   placed   │   └────────────┘ │        ┌────────────┐
-└────────────┘          ▲       └─ no ──▶│    Send    │
-                        │                │  reminder  │
-                        │                └────────────┘
-                        │                       │
-                        └───────────────────────┘
-```
-
-<p class="figure"><img src="/assets/hero.svg" alt="The same flowchart drawn by ursula as SVG" width="760"></p>
-
-The first block is the input. The text drawing and the picture under it are what ursula draws from it, with
-`--format text --width 80` and with `--format svg`. Try your own text in the [playground](/playground).
+The drawing at the top of this page is one such text and what ursula draws from it, unedited: the SVG with
+`--format svg` and the terminal text with `--format text --width 80` (`--width 40` on a narrow screen). Try your own
+text in the [playground](/playground).
 
 </div>

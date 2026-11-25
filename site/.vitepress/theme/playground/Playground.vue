@@ -269,9 +269,9 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 12px;
   font-family: var(--vp-font-family-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  background: var(--vp-c-bg-soft);
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--vp-c-bg-alt);
   color: var(--vp-c-text-1);
   tab-size: 2;
 }
@@ -336,7 +336,8 @@ onBeforeUnmount(() => {
 }
 .pg-note {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--vp-c-text-2);
 }
 .pg-status {

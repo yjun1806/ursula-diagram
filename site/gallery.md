@@ -2,26 +2,16 @@
 
 Every picture below is the output of `ursula-diagram <file> --format svg`, unedited.
 
-<table>
-  <tr>
-    <td align="center"><b>Flowchart</b><br><img src="/assets/flowchart.svg" alt="Flowchart" width="400"></td>
-    <td align="center"><b>Sequence</b><br><img src="/assets/sequence.svg" alt="Sequence diagram" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Class</b><br><img src="/assets/class.svg" alt="Class diagram" width="150"></td>
-    <td align="center"><b>State</b><br><img src="/assets/state.svg" alt="State diagram" width="140"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Entity relationship</b><br><img src="/assets/er.svg" alt="Entity relationship diagram" width="400"></td>
-    <td align="center"><b>C4 context</b><br><img src="/assets/c4.svg" alt="C4 context diagram" width="260"></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><b>Mindmap</b><br><img src="/assets/mindmap.svg" alt="Mindmap" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><b>Gantt</b><br><img src="/assets/gantt.svg" alt="Gantt chart" width="820"></td>
-  </tr>
-</table>
+<div class="gallery">
+  <figure><figcaption>Flowchart</figcaption><div class="ursula-frame"><img src="/assets/flowchart.svg" alt="Flowchart" width="400"></div></figure>
+  <figure><figcaption>Sequence</figcaption><div class="ursula-frame"><img src="/assets/sequence.svg" alt="Sequence diagram" width="400"></div></figure>
+  <figure><figcaption>Class</figcaption><div class="ursula-frame"><img src="/assets/class.svg" alt="Class diagram" width="150"></div></figure>
+  <figure><figcaption>State</figcaption><div class="ursula-frame"><img src="/assets/state.svg" alt="State diagram" width="140"></div></figure>
+  <figure><figcaption>Entity relationship</figcaption><div class="ursula-frame"><img src="/assets/er.svg" alt="Entity relationship diagram" width="400"></div></figure>
+  <figure><figcaption>C4 context</figcaption><div class="ursula-frame"><img src="/assets/c4.svg" alt="C4 context diagram" width="260"></div></figure>
+  <figure class="wide"><figcaption>Mindmap</figcaption><div class="ursula-frame"><img src="/assets/mindmap.svg" alt="Mindmap" width="400"></div></figure>
+  <figure class="wide"><figcaption>Gantt</figcaption><div class="ursula-frame"><img src="/assets/gantt.svg" alt="Gantt chart" width="820"></div></figure>
+</div>
 
 <details>
 <summary>The Mermaid text of each picture</summary>

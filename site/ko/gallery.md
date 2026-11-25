@@ -3,26 +3,16 @@
 아래 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. SVG는 글자를 정한 자리에
 놓으므로 한글 라벨도 그대로 씁니다.
 
-<table>
-  <tr>
-    <td align="center"><b>흐름도</b><br><img src="/assets/ko-flowchart.svg" alt="흐름도" width="400"></td>
-    <td align="center"><b>시퀀스</b><br><img src="/assets/ko-sequence.svg" alt="시퀀스 다이어그램" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>클래스</b><br><img src="/assets/ko-class.svg" alt="클래스 다이어그램" width="150"></td>
-    <td align="center"><b>상태</b><br><img src="/assets/ko-state.svg" alt="상태 다이어그램" width="140"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>ER</b><br><img src="/assets/ko-er.svg" alt="ER 다이어그램" width="400"></td>
-    <td align="center"><b>C4 컨텍스트</b><br><img src="/assets/ko-c4.svg" alt="C4 컨텍스트 다이어그램" width="260"></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><b>마인드맵</b><br><img src="/assets/ko-mindmap.svg" alt="마인드맵" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><b>간트</b><br><img src="/assets/ko-gantt.svg" alt="간트 차트" width="820"></td>
-  </tr>
-</table>
+<div class="gallery">
+  <figure><figcaption>흐름도</figcaption><div class="ursula-frame"><img src="/assets/ko-flowchart.svg" alt="흐름도" width="400"></div></figure>
+  <figure><figcaption>시퀀스</figcaption><div class="ursula-frame"><img src="/assets/ko-sequence.svg" alt="시퀀스 다이어그램" width="400"></div></figure>
+  <figure><figcaption>클래스</figcaption><div class="ursula-frame"><img src="/assets/ko-class.svg" alt="클래스 다이어그램" width="150"></div></figure>
+  <figure><figcaption>상태</figcaption><div class="ursula-frame"><img src="/assets/ko-state.svg" alt="상태 다이어그램" width="140"></div></figure>
+  <figure><figcaption>ER</figcaption><div class="ursula-frame"><img src="/assets/ko-er.svg" alt="ER 다이어그램" width="400"></div></figure>
+  <figure><figcaption>C4 컨텍스트</figcaption><div class="ursula-frame"><img src="/assets/ko-c4.svg" alt="C4 컨텍스트 다이어그램" width="260"></div></figure>
+  <figure class="wide"><figcaption>마인드맵</figcaption><div class="ursula-frame"><img src="/assets/ko-mindmap.svg" alt="마인드맵" width="400"></div></figure>
+  <figure class="wide"><figcaption>간트</figcaption><div class="ursula-frame"><img src="/assets/ko-gantt.svg" alt="간트 차트" width="820"></div></figure>
+</div>
 
 <details>
 <summary>그림마다의 Mermaid 글</summary>
