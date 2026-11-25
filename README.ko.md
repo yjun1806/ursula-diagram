@@ -357,6 +357,22 @@ Cats   85  17.5%
 Rats   15   3.1%
 ```
 
+그림이 `--width`에 들지 않으면 명령은 그림을 내지 않고 종료 코드 3으로 끝나며, 들어가는 폭을 알려 줍니다. 그리는
+형식에 `--check`를 더하면 엔진의 점검 결과가 표준 오류로 함께 나옵니다. 점검 결과에는 개수, 교차하는 선과 그 선을 적은
+줄 번호, 질문이 들어 있습니다. `ursula-diagram syntax`는 유형 목록을, `ursula-diagram syntax <유형>`은 작은 예시와
+규칙을 보여 줍니다. 오류는 줄과 열을 짚고, 할 수 있으면 의도했을 낱말과 맞게 쓴 줄 하나를 붙입니다.
+
+```
+error: line 1: expected a 'flowchart' or 'graph' header
+  1 | flowchrt LR
+    | ^^^^^^^^
+did you mean: flowchart
+example: flowchart LR
+```
+
+종료 코드는 0 그림, 1 글의 오류, 2 옵션 오류, 3 폭 부족, 4 엔진 안의 오류입니다. 옵션 전부는
+`ursula-diagram --help`로 봅니다.
+
 ### 줄이 맞지 않을 때
 
 글자 그림은 모든 글자가 엔진이 센 폭대로 그려질 때만 줄이 맞습니다. 엔진은 선과 화살촉을 한 칸으로, 한글·한자·가나를
@@ -494,8 +510,8 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습�
 
 ## 에이전트 스킬
 
-`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--format check`로
-엔진에 그림을 물어보는 법, 읽는 사람에게 어떤 출력을 줄지를 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
+`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--check`로
+그림을 그리면서 엔진에 물어보는 법, 읽는 사람에게 어떤 출력을 줄지를 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이라, 스킬은 Node 22 이상만 있으면 돌고 아무것도 설치하지 않습니다.
 
 [skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에 함께 쓰입니다.
@@ -512,8 +528,23 @@ npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
-스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--format check`를 돌린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
+스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--check`를 붙여 그린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
 `text`, 채팅이나 웹 페이지에는 `text-svg`, 파일에는 `svg`나 `html`을 줍니다.
+
+### MCP로
+
+셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 냅니다. 도구는 셋입니다.
+`render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`), `check`, `syntax`.
+
+```bash
+claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code
+```
+
+```json
+{ "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
+```
+
+두 번째는 Claude Desktop의 `claude_desktop_config.json`에 넣습니다. 같은 형식을 받는 다른 클라이언트에도 씁니다.
 
 ### 에이전트 터미널에서
 

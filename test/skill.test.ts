@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -13,6 +13,25 @@ describe('the agent skill', () => {
     for (const args of [['--format', 'svg'], ['--format', 'text', '--width', '100'], ['--format', 'text', '--width', '100', '--charset', 'ascii'], ['--format', 'text-svg', '--width', '100'], ['--format', 'check']]) {
       expect(run('skills/ursula/scripts/ursula.mjs', [`${root}examples/${name}`, ...args])).toBe(run('src/cli.ts', [`${root}examples/${name}`, ...args]));
     }
+  });
+
+  // The commands the skill document names, with what they write to standard error and their exit codes.
+  it('answers --check, syntax, --help, a text error and a narrow width as the sources do', () => {
+    const both = (entry: string, args: string[], input?: string) => {
+      const r = spawnSync(process.execPath, [`${root}${entry}`, ...args], { encoding: 'utf8', ...(input === undefined ? {} : { input }) });
+      return { stdout: r.stdout, stderr: r.stderr, status: r.status };
+    };
+    const order = `${root}examples/order-flow.mmd`;
+    const cases: Array<[string[], string?]> = [
+      [[order, '--format', 'text', '--width', '100', '--check']],
+      [['syntax']],
+      [['syntax', 'wardley']],
+      [['syntax', 'wardly']],
+      [['--help']],
+      [['--format', 'text'], 'wardley-beta\ncompnent Tea [0.6, 0.8]\n'],
+      [[order, '--format', 'text', '--width', '30']],
+    ];
+    for (const [args, input] of cases) expect(both('skills/ursula/scripts/ursula.mjs', args, input)).toEqual(both('src/cli.ts', args, input));
   });
 
   it('names itself and says when to use it', () => {

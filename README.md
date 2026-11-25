@@ -359,6 +359,23 @@ Cats   85  17.5%
 Rats   15   3.1%
 ```
 
+When a drawing cannot fit in `--width`, the command prints no drawing, ends with code 3 and names a width that fits.
+`--check` with any drawing format adds the engine's report on standard error: the counts, the lines that cross with
+their source line numbers, and questions. `ursula-diagram syntax` lists every type, and
+`ursula-diagram syntax <type>` prints a small example and the rules. An error names the line and the column and,
+when it can, the word that was meant and a line written the right way:
+
+```
+error: line 1: expected a 'flowchart' or 'graph' header
+  1 | flowchrt LR
+    | ^^^^^^^^
+did you mean: flowchart
+example: flowchart LR
+```
+
+The exit code is 0 when drawn, 1 for an error in the text, 2 for wrong options, 3 when the drawing is too wide and 4
+for a failure inside the engine. `ursula-diagram --help` lists every option.
+
 ### When the columns do not line up
 
 A text drawing keeps its columns only where every character is as wide as the engine counts it: one cell for a line
@@ -500,7 +517,7 @@ own and follows a page that sets the variables. Each has a light and a dark valu
 ## Agent skill
 
 `skills/ursula` is a skill for coding agents. `SKILL.md` tells the agent how to write the Mermaid text, how to
-ask the engine about it with `--format check`, and which output to give the reader. `scripts/ursula.mjs` is the
+draw it and ask the engine about it in one call with `--check`, and which output to give the reader. `scripts/ursula.mjs` is the
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
 Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
@@ -518,8 +535,23 @@ Or copy the `skills/ursula` folder into the skills folder of your agent by hand.
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
-With the skill, the agent writes the Mermaid text, runs `--format check`, and picks the output by where the reader
+With the skill, the agent writes the Mermaid text, draws it with `--check`, and picks the output by where the reader
 is: `text` for a terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.
+
+### Over MCP
+
+Where an agent has no shell, `ursula-diagram mcp` serves the command over MCP on standard input and output. It has
+three tools: `render` (with `format`, `width`, `charset`, and `check` for the report), `check` and `syntax`.
+
+```bash
+claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code
+```
+
+```json
+{ "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
+```
+
+The second is for `claude_desktop_config.json` of Claude Desktop, and for other clients that take the same form.
 
 ### In an agent's terminal
 
