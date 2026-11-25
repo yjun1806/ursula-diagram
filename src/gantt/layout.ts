@@ -27,6 +27,8 @@ const MAX_REORDER = 7;
 /** Shortest run of an `after` line from where it leaves its predecessor to its arrow tip. */
 const MIN_RUN = 28;
 const ARROW_REACH = 3;
+/** Width of the frame of a chart without tasks, when its title does not ask for more. */
+const EMPTY_WIDTH = 320;
 
 /** Pixels per unit of time the chart may use: `ladder` values of each unit; the largest that fits wins. */
 const UNITS_MS = [1, 1000, 60_000, 3_600_000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
@@ -73,6 +75,7 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
   const w12 = (s: string): number => ruler.textWidth(s, 'line');
   const w13 = (s: string): number => ruler.textWidth(s, 'title');
   const taskOf = (i: number): GanttTask => model.tasks[i] as GanttTask;
+  if (model.tasks.length === 0) return emptyLayout(model, w13);
 
   const rowTasks = model.tasks.flatMap((t, i) => (t.vert ? [] : [i]));
   const vertTasks = model.tasks.flatMap((t, i) => (t.vert ? [i] : []));
@@ -367,9 +370,23 @@ export function layoutGantt(model: Gantt, ruler: Ruler): GanttLayout {
   }
   items.push(...portItems);
 
-  const name = model.accTitle ?? (model.title === undefined ? 'gantt' : `gantt — ${model.title}`);
-  const scene: Scene = { width, height, title: name, items };
+  const scene: Scene = { width, height, title: sceneName(model), items };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
+}
+
+function sceneName(model: Gantt): string {
+  return model.accTitle ?? (model.title === undefined ? 'gantt' : `gantt — ${model.title}`);
+}
+
+/** A chart without tasks has no time range: it is drawn as its frame and title, with no axis. */
+function emptyLayout(model: Gantt, titleWidth: (s: string) => number): GanttLayout {
+  const titleRight = model.title === undefined ? 0 : LEFT + (titleWidth(model.title) * 15) / 13;
+  const width = Math.max(EMPTY_WIDTH, ceilTo(titleRight) + 40);
+  const height = model.title === undefined ? 80 : 120;
+  const items: SceneItem[] = [{ kind: 'box', x: 16, y: 16, w: width - 32, h: height - 32, role: ['panel'] }];
+  if (model.title !== undefined) items.push({ kind: 'text', x: LEFT, y: 52, text: model.title, role: ['title'] });
+  const ticks: TickPlan = { unit: 'd', step: 1, twoRow: false, ticks: [] };
+  return { scene: { width, height, title: sceneName(model), items }, bars: [], ticks, scale: 0, origin: LEFT, omitted: [] };
 }
 
 /** Whether a line going down or up at `x` between rows `a` and `b` passes over a band or its text in a row between them. */

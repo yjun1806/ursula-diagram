@@ -6,6 +6,9 @@ import { layoutGantt } from './layout.ts';
 import { parseGantt } from './parse.ts';
 import { layoutGanttText } from './text.ts';
 
+/** For a reader of the check or the JSON, who does not see that the drawing is empty. */
+export const EMPTY_NOTE = 'the chart has no tasks, so it draws an empty frame; a task is written "name : start, end"';
+
 registerFrontEnd({
   name: 'gantt',
   headers: ['gantt'],
@@ -23,8 +26,9 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter });
-    if (mode === 'text') return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans) };
-    return { model, ...layoutGantt(model, pixelRuler()) };
+    const notes = model.tasks.length === 0 ? { notes: [EMPTY_NOTE] } : {};
+    if (mode === 'text') return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans), ...notes };
+    return { model, ...layoutGantt(model, pixelRuler()), ...notes };
   },
 });
 

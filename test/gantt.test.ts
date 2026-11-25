@@ -1,6 +1,8 @@
 // Examples adapted from the Mermaid documentation (MIT).
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { cellWidth, render, renderText, selectFrontEnd, UrsulaError } from '../src/index.ts';
+import { EMPTY_NOTE } from '../src/gantt/frontend.ts';
 import { layoutGantt } from '../src/gantt/layout.ts';
 import { parseGantt } from '../src/gantt/parse.ts';
 import { compileDateFormat, formatTime, fromDate, stretchOverExcluded } from '../src/gantt/time.ts';
@@ -145,9 +147,6 @@ describe('gantt svg', () => {
     expect(selectFrontEnd(examples['note'] ?? '').name).toBe('gantt');
   });
 
-  it('refuses a chart of settings only, because there is nothing to draw', () => {
-    expect(() => render(settingsOnly)).toThrow(UrsulaError);
-  });
 
   it('reads the front matter title and ignores accessibility lines', () => {
     const svg = render(`---\ntitle: From front matter\n---\ngantt\n accTitle: Plan\n accDescr: a plan\n dateFormat YYYY-MM-DD\n A :2024-01-01, 3d`);
@@ -496,5 +495,97 @@ describe('gantt text', () => {
 
   it('reports a width that is too small', () => {
     expect(renderText(examples['note'] ?? '', 20)).toHaveProperty('error');
+  });
+});
+
+describe('gantt without tasks', () => {
+  const empties: Record<string, string> = {
+    'settings only': settingsOnly,
+    'the header alone': 'gantt',
+    'a title only': 'gantt\n  title Nothing planned yet',
+    'sections only': 'gantt\n  title Plan\n  dateFormat YYYY-MM-DD\n  excludes weekends\n  section Empty',
+  };
+  /** Runs `fn` and fails when it takes longer than five seconds: an empty time range once looped for ever. */
+  const quick = <T>(fn: () => T): T => {
+    const began = Date.now();
+    const out = fn();
+    expect(Date.now() - began).toBeLessThan(5000);
+    return out;
+  };
+
+  for (const [name, src] of Object.entries(empties)) {
+    it(`draws ${name} as an empty frame`, () => {
+      const layout = quick(() => layoutGantt(parseGantt(src), pixelRuler()));
+      expect(layout.bars).toEqual([]);
+      expect(layout.ticks.ticks).toEqual([]);
+      expect(layout.scene.width).toBeGreaterThanOrEqual(320);
+      expect(layout.scene.items.filter((i) => i.kind === 'box').map((i) => (i as SceneBox).role)).toEqual([['panel']]);
+      const svg = quick(() => render(src));
+      expect(svg).toContain('ursula-panel');
+      expect(svg).not.toContain('ursula-grid');
+    });
+
+    it(`writes ${name} as a line that says there are no tasks`, () => {
+      const r = quick(() => renderText(src, 80));
+      if ('error' in r) throw new Error(r.error);
+      expect(r.lines[r.lines.length - 1]).toBe('(no tasks)');
+    });
+  }
+
+  it('keeps the title', () => {
+    const src = empties['a title only'] ?? '';
+    const layout = layoutGantt(parseGantt(src), pixelRuler());
+    const texts = layout.scene.items.filter((i): i is SceneText => i.kind === 'text').map((t) => t.text);
+    expect(texts).toEqual(['Nothing planned yet']);
+    expect(layout.scene.height).toBe(120);
+    const r = renderText(src, 80);
+    expect(r).toEqual({ lines: ['Nothing planned yet', '(no tasks)'] });
+  });
+
+  it('is an 80 pixel high frame without a title', () => {
+    const layout = layoutGantt(parseGantt('gantt'), pixelRuler());
+    expect(layout.scene.items.some((i) => i.kind === 'text')).toBe(false);
+    expect(layout.scene.height).toBe(80);
+    expect(renderText('gantt', 80)).toEqual({ lines: ['(no tasks)'] });
+  });
+
+  it('keeps the frame wide enough for a long title', () => {
+    const title = 'A rather long title for a plan that has not been written down yet';
+    const layout = layoutGantt(parseGantt(`gantt\n title ${title}`), pixelRuler());
+    const titleRight = 40 + (pixelRuler().textWidth(title, 'title') * 15) / 13;
+    expect(layout.scene.width).toBeGreaterThan(titleRight);
+  });
+
+  it('still reads a chart that has only markers', () => {
+    const layout = layoutGantt(parseGantt('gantt\n dateFormat YYYY-MM-DD\n Release : vert, 2024-01-01, 1d'), pixelRuler());
+    expect(layout.ticks.ticks.length).toBeGreaterThan(0);
+  });
+
+  // An endless loop would block the test runner itself, so the command runs in a child process with a time limit.
+  const cli = new URL('../src/cli.ts', import.meta.url).pathname;
+  const run = (src: string, format: string): { status: number | null; signal: string | null; stdout: string; stderr: string } =>
+    spawnSync(process.execPath, [cli, '--format', format], { input: src, encoding: 'utf8', timeout: 15_000 });
+
+  for (const format of ['svg', 'text', 'json', 'html']) {
+    it(`finishes the command for ${format}`, () => {
+      const r = run(settingsOnly, format);
+      expect(r.signal).toBeNull();
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+    });
+  }
+
+  it('finishes the check', () => {
+    const r = run(settingsOnly, 'check');
+    expect(r.signal).toBeNull();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe('no checks for this kind of diagram\n');
+  });
+
+  it('says in the JSON that the chart has no tasks', () => {
+    for (const mode of ['svg', 'text'] as const) {
+      expect(selectFrontEnd(settingsOnly).json(settingsOnly, mode, {})).toHaveProperty('notes', [EMPTY_NOTE]);
+      expect(selectFrontEnd(examples['note'] ?? '').json(examples['note'] ?? '', mode, {})).not.toHaveProperty('notes');
+    }
   });
 });
