@@ -11,7 +11,7 @@ const BOX =
   '-|-|=#=#-|-|';
 
 const SHAPES: Record<number, string> = {
-  0x25c6: '*',
+  0x25c6: '@',
   0x25c7: 'o',
   0x25c8: '*',
   0x25c9: '@',
@@ -59,6 +59,12 @@ function isLine(ch: string | undefined): boolean {
   return cp >= 0x2500 && cp <= 0x2570;
 }
 
+/** Whether a character is a crossing, where the bar of a hollow head would cut the line that crosses. */
+function isCrossing(ch: string | undefined): boolean {
+  const cp = ch?.codePointAt(0) ?? 0;
+  return cp >= 0x253c && cp <= 0x254b;
+}
+
 /** What the bar of a count stands next to on an upright line: the side of a box, or the foot of a count. */
 const BESIDE_BAR = new Set('─━┬┴┌┐└┘╭╮╰╯^v');
 const REACHES_RIGHT = new Set('─━┄┈╌┌└├┬┴┼┏┗┣┳┻╋╭╰');
@@ -78,15 +84,18 @@ function indexAt(row: readonly string[] | undefined, column: number): number {
 
 /**
  * The rows with every drawing character replaced by an ASCII one, cell for cell. A hollow arrowhead becomes the head
- * and a bar in the cell of the line behind it (`--|>`), so that it differs from a filled or an open head (`-->`). A
- * crossing that no line reaches from either side and that stands at a box is the bar of a count on an upright line and
- * becomes `-`.
+ * and a bar in the cell of the line behind it (`--|>`), so that it differs from a filled or an open head (`-->`), unless
+ * that cell is a crossing. With `countBars`, a crossing that no line reaches from either side and that stands at a box
+ * is the bar of a count on an upright line and becomes `-`.
  */
-function asciiRows(rows: readonly (readonly string[])[]): string[][] {
+function asciiRows(rows: readonly (readonly string[])[], countBars: boolean): string[][] {
   const out = rows.map((row) => row.map(asciiOf));
   const bar = (r: number, i: number, ch: string): void => {
     const target = out[r];
     if (target !== undefined && i >= 0 && isLine(rows[r]?.[i])) target[i] = ch;
+  };
+  const behind = (r: number, i: number, ch: string): void => {
+    if (!isCrossing(rows[r]?.[i])) bar(r, i, ch);
   };
   const over = (r: number, column: number): string => rows[r]?.[indexAt(rows[r], column)] ?? '';
   const lone = (r: number, column: number): boolean => {
@@ -104,25 +113,30 @@ function asciiRows(rows: readonly (readonly string[])[]): string[][] {
   rows.forEach((row, r) => {
     let column = 0;
     row.forEach((ch, i) => {
-      if (ch === '▷') bar(r, i - 1, '|');
-      else if (ch === '◁') bar(r, i + 1, '|');
-      else if (ch === '▽') bar(r - 1, indexAt(rows[r - 1], column), '-');
-      else if (ch === '△') bar(r + 1, indexAt(rows[r + 1], column), '-');
-      else if (ch === '┼' && (atBox(r, column) || (lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))) bar(r, i, '-');
+      if (ch === '▷') behind(r, i - 1, '|');
+      else if (ch === '◁') behind(r, i + 1, '|');
+      else if (ch === '▽') behind(r - 1, indexAt(rows[r - 1], column), '-');
+      else if (ch === '△') behind(r + 1, indexAt(rows[r + 1], column), '-');
+      else if (countBars && ch === '┼' && (atBox(r, column) || (lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))) bar(r, i, '-');
       column += cellWidthOf(ch.codePointAt(0) ?? 0);
     });
   });
   return out;
 }
 
+export interface AsciiOptions {
+  /** Whether the rows mark counts with bars on upright lines, as an entity-relationship drawing does. Off by default: every crossing stays a crossing. */
+  countBars?: boolean;
+}
+
 /** Terminal rows drawn with ASCII characters only; the text of the diagram itself is left as it is. */
-export function toAscii(lines: readonly string[]): string[] {
-  return asciiRows(lines.map((line) => [...line])).map((row) => row.join(''));
+export function toAscii(lines: readonly string[], opts: AsciiOptions = {}): string[] {
+  return asciiRows(lines.map((line) => [...line]), opts.countBars === true).map((row) => row.join(''));
 }
 
 /** `toAscii` for rows of spans; every span keeps its tone and its length. */
-export function spansToAscii(lines: readonly (readonly TextSpan[])[]): TextSpan[][] {
-  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])));
+export function spansToAscii(lines: readonly (readonly TextSpan[])[], opts: AsciiOptions = {}): TextSpan[][] {
+  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true);
   return lines.map((line, r) => {
     let at = 0;
     return line.map((span) => {

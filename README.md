@@ -42,7 +42,7 @@ that draws line characters two cells wide, use `--charset ascii`.
 | Line, heavy line, dashed line | `─ │` `━ ┃` `┄ ┆` | `- \|` `= #` `. :` |
 | Corner, tee, crossing; rounded corner | `┌ ├ ┼`; `╭ ╮ ╰ ╯` | `+`; `/ \ \ /` |
 | Arrowhead; hollow arrowhead | `▶ ◀ ▼ ▲`; `──▷` | `> < v ^`; `--\|>` |
-| Filled and open diamond, dots, bar | `◆ ◇` `● ◉` `█` | `* o` `* @` `#` |
+| Filled and open diamond, dots, bar | `◆ ◇` `● ◉` `█` | `@ o` `* @` `#` |
 | Cut-off text | `…` | `~` |
 
 The text of the diagram is kept as written. The characters of the table are replaced wherever they stand, and so
@@ -85,7 +85,8 @@ the message as `{ error }`, also when the drawing does not fit the width: it nev
 
 `renderTextSpans` returns the same lines as spans with a tone (`normal`, `dim`, `bold`, `accent`), for a host that
 colours terminal text itself. `spansToSvg` draws such lines as the picture `renderTextSvg` returns, and `toAscii`
-replaces the drawing characters of lines already drawn.
+replaces the drawing characters of lines already drawn; give it `{ countBars: true }` for the lines of an
+entity-relationship drawing, so that the bars of its counts on upright lines become `-`.
 
 ## Colours
 

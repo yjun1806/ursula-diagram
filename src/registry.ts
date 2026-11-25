@@ -94,6 +94,7 @@ export function selectFrontEnd(src: string): FrontEnd {
   const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
   if (!found) throw new Error('no front-end registered');
   const spans = found.textSpans;
+  const ascii = { countBars: found.name === 'er' };
   const head = <T extends { heading?: string; config?: Record<string, FrontValue>; frontMatter?: Record<string, FrontValue> }>(s: string, o: T): T => {
     const front = readFrontMatter(s);
     const title = front['title'];
@@ -111,14 +112,14 @@ export function selectFrontEnd(src: string): FrontEnd {
     svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
     textLines: (s, w, o) => {
       const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
-      return o.charset === 'ascii' ? toAscii(lines) : lines;
+      return o.charset === 'ascii' ? toAscii(lines, ascii) : lines;
     },
     json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
     ...(spans
       ? {
           textSpans: (s: string, w: number | undefined, o: TextOptions) => {
             const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
-            return o.charset === 'ascii' ? spansToAscii(lines) : lines;
+            return o.charset === 'ascii' ? spansToAscii(lines, ascii) : lines;
           },
         }
       : {}),

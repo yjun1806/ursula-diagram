@@ -49,6 +49,7 @@ export { renderSvg } from './render/svg.ts';
 export type { NodeHook, SvgOptions } from './render/svg.ts';
 export { renderTextLayout, spansToAnsi } from './render/text.ts';
 export { spansToAscii, toAscii } from './render/ascii.ts';
+export type { AsciiOptions } from './render/ascii.ts';
 export { renderTextSvg as spansToSvg } from './render/text-svg.ts';
 export { registerFrontEnd, selectFrontEnd } from './registry.ts';
 export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';

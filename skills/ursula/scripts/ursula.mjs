@@ -16799,7 +16799,7 @@ function readFrontMatter(src) {
 // src/render/ascii.ts
 var BOX = "-=|#.=:#.=:#" + "+++#+++#+++#+++#+++++++#+++++++#+++++++#+++++++#+++++++++++++++#" + ".=:#" + "=#".padEnd(29, "#") + "/\\/\\/\\x" + "-|-|=#=#-|-|";
 var SHAPES2 = {
-  9670: "*",
+  9670: "@",
   9671: "o",
   9672: "*",
   9673: "@",
@@ -16848,6 +16848,10 @@ function isLine(ch) {
   const cp = ch?.codePointAt(0) ?? 0;
   return cp >= 9472 && cp <= 9584;
 }
+function isCrossing(ch) {
+  const cp = ch?.codePointAt(0) ?? 0;
+  return cp >= 9532 && cp <= 9547;
+}
 var BESIDE_BAR = new Set("─━┬┴┌┐└┘╭╮╰╯^v");
 var REACHES_RIGHT = new Set("─━┄┈╌┌└├┬┴┼┏┗┣┳┻╋╭╰");
 var REACHES_LEFT = new Set("─━┄┈╌┐┘┤┬┴┼┓┛┫┳┻╋╮╯┒");
@@ -16864,12 +16868,16 @@ function indexAt(row, column) {
   }
   return -1;
 }
-function asciiRows(rows) {
+function asciiRows(rows, countBars) {
   const out = rows.map((row) => row.map(asciiOf));
   const bar = (r, i, ch) => {
     const target = out[r];
     if (target !== undefined && i >= 0 && isLine(rows[r]?.[i]))
       target[i] = ch;
+  };
+  const behind = (r, i, ch) => {
+    if (!isCrossing(rows[r]?.[i]))
+      bar(r, i, ch);
   };
   const over = (r, column) => rows[r]?.[indexAt(rows[r], column)] ?? "";
   const lone = (r, column) => {
@@ -16890,25 +16898,25 @@ function asciiRows(rows) {
     let column = 0;
     row.forEach((ch, i) => {
       if (ch === "▷")
-        bar(r, i - 1, "|");
+        behind(r, i - 1, "|");
       else if (ch === "◁")
-        bar(r, i + 1, "|");
+        behind(r, i + 1, "|");
       else if (ch === "▽")
-        bar(r - 1, indexAt(rows[r - 1], column), "-");
+        behind(r - 1, indexAt(rows[r - 1], column), "-");
       else if (ch === "△")
-        bar(r + 1, indexAt(rows[r + 1], column), "-");
-      else if (ch === "┼" && (atBox(r, column) || lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))
+        behind(r + 1, indexAt(rows[r + 1], column), "-");
+      else if (countBars && ch === "┼" && (atBox(r, column) || lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))
         bar(r, i, "-");
       column += cellWidthOf(ch.codePointAt(0) ?? 0);
     });
   });
   return out;
 }
-function toAscii(lines) {
-  return asciiRows(lines.map((line) => [...line])).map((row) => row.join(""));
+function toAscii(lines, opts = {}) {
+  return asciiRows(lines.map((line) => [...line]), opts.countBars === true).map((row) => row.join(""));
 }
-function spansToAscii(lines) {
-  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])));
+function spansToAscii(lines, opts = {}) {
+  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true);
   return lines.map((line, r) => {
     let at = 0;
     return line.map((span) => {
@@ -16948,6 +16956,7 @@ function selectFrontEnd(src) {
   if (!found)
     throw new Error("no front-end registered");
   const spans = found.textSpans;
+  const ascii = { countBars: found.name === "er" };
   const head = (s, o) => {
     const front = readFrontMatter(s);
     const title = front["title"];
@@ -16965,13 +16974,13 @@ function selectFrontEnd(src) {
     svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
     textLines: (s, w, o) => {
       const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
-      return o.charset === "ascii" ? toAscii(lines) : lines;
+      return o.charset === "ascii" ? toAscii(lines, ascii) : lines;
     },
     json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
     ...spans ? {
       textSpans: (s, w, o) => {
         const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
-        return o.charset === "ascii" ? spansToAscii(lines) : lines;
+        return o.charset === "ascii" ? spansToAscii(lines, ascii) : lines;
       }
     } : {}
   };
