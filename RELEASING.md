@@ -17,9 +17,13 @@ Pushing to `main` also redeploys the documentation site.
 
 Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a patch bump (`0.x.y`) does not.
 
-1. Open a pull request named `chore: release <version>` that changes only `version` in `package.json`.
-2. Merge it after `CI` passes.
-3. Tag the merge commit on `main` and push the tag:
+1. Branch from `main`: `git switch -c chore/release-<version>`.
+2. Set the new version in `version` of `package.json` and in `VERSION` of `src/version.ts`. A test fails when the two differ.
+3. Rebuild the bundled skill command, which carries the version: `bun scripts/build.ts`.
+   Check that `skills/ursula/scripts/ursula.mjs` changed.
+4. Commit the three files as `chore: release <version>`, push, and open a pull request with that name.
+5. Merge it after `CI` passes.
+6. Tag the merge commit on `main` and push the tag:
 
    ```bash
    git switch main && git pull
@@ -27,10 +31,10 @@ Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a
    git push origin v<version>
    ```
 
-4. The `Release` workflow checks that the tag matches `package.json` and sits on `main`, runs the tests and the build,
+7. The `Release` workflow checks that the tag matches `package.json` and sits on `main`, runs the tests and the build,
    publishes to npm through trusted publishing (with provenance, no token), and creates the GitHub release with
    generated notes.
-5. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
+8. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
 
 If the workflow fails before publishing, fix it in a pull request, delete the tag (`git push origin :refs/tags/v<version>`
 and `git tag -d v<version>`) and tag again. A version that reached npm cannot be published again; release the next

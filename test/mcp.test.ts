@@ -128,6 +128,17 @@ describe('ursula-diagram mcp', () => {
     expect(VERSION).toBe(JSON.parse(readFileSync(`${root}package.json`, 'utf8')).version);
   });
 
+  it('carries the same version in the bundled command', () => {
+    const [hi] = talk([hello], 'skills/ursula/scripts/ursula.mjs');
+    expect(hi?.result.serverInfo.version).toBe(VERSION);
+  });
+
+  it('has a release procedure that changes every file carrying the version', () => {
+    const releasing = readFileSync(`${root}RELEASING.md`, 'utf8');
+    for (const step of ['package.json', 'src/version.ts', 'bun scripts/build.ts', 'skills/ursula/scripts/ursula.mjs']) expect(releasing).toContain(step);
+    expect(releasing).not.toMatch(/changes only `version`/);
+  });
+
   it('works from the file the skill carries', () => {
     const [, list] = talk([hello, { jsonrpc: '2.0', id: 1, method: 'tools/list' }], 'skills/ursula/scripts/ursula.mjs');
     expect(list?.result.tools).toHaveLength(3);
