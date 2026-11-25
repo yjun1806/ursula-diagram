@@ -16848,10 +16848,6 @@ function isLine(ch) {
   const cp = ch?.codePointAt(0) ?? 0;
   return cp >= 9472 && cp <= 9584;
 }
-function isCrossing(ch) {
-  const cp = ch?.codePointAt(0) ?? 0;
-  return cp >= 9532 && cp <= 9547;
-}
 var BESIDE_BAR = new Set("─━┬┴┌┐└┘╭╮╰╯^v");
 var REACHES_RIGHT = new Set("─━┄┈╌┌└├┬┴┼┏┗┣┳┻╋╭╰");
 var REACHES_LEFT = new Set("─━┄┈╌┐┘┤┬┴┼┓┛┫┳┻╋╮╯┒");
@@ -16875,10 +16871,6 @@ function asciiRows(rows, countBars) {
     if (target !== undefined && i >= 0 && isLine(rows[r]?.[i]))
       target[i] = ch;
   };
-  const behind = (r, i, ch) => {
-    if (!isCrossing(rows[r]?.[i]))
-      bar(r, i, ch);
-  };
   const over = (r, column) => rows[r]?.[indexAt(rows[r], column)] ?? "";
   const lone = (r, column) => {
     const row = rows[r] ?? [];
@@ -16898,13 +16890,13 @@ function asciiRows(rows, countBars) {
     let column = 0;
     row.forEach((ch, i) => {
       if (ch === "▷")
-        behind(r, i - 1, "|");
+        bar(r, i - 1, "|");
       else if (ch === "◁")
-        behind(r, i + 1, "|");
+        bar(r, i + 1, "|");
       else if (ch === "▽")
-        behind(r - 1, indexAt(rows[r - 1], column), "-");
+        bar(r - 1, indexAt(rows[r - 1], column), "-");
       else if (ch === "△")
-        behind(r + 1, indexAt(rows[r + 1], column), "-");
+        bar(r + 1, indexAt(rows[r + 1], column), "-");
       else if (countBars && ch === "┼" && (atBox(r, column) || lone(r, column) && (atBox(r - 1, column) || atBox(r + 1, column))))
         bar(r, i, "-");
       column += cellWidthOf(ch.codePointAt(0) ?? 0);

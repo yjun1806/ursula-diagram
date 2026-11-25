@@ -18,8 +18,12 @@ describe('the ASCII character set', () => {
     expect(toAscii(['───▷│', '│◁───', '│◁┘'])).toEqual(['--|>|', '|<|--', '|<|']);
     expect(toAscii(['△', '│', '│', '▽'])).toEqual(['^', '-', '-', 'v']);
     expect(toAscii(['한│', '글▽'])).toEqual(['한-', '글v']);
-    expect(toAscii(['──┼─┼──', '──▽─┼──'])).toEqual(['--+-+--', '--v-+--']);
-    expect(toAscii([' │', '─┼▷'])).toEqual([' |', '-+>']);
+  });
+
+  it('keeps the bar of a hollow head on a crossing behind it, along the line that crosses there', () => {
+    expect(toAscii(['  │', '──┼─┼──', '  ▽ │'])).toEqual(['  |', '----+--', '  v |']);
+    expect(toAscii([' │', '─┼▷', ' │'])).toEqual([' |', '-|>', ' |']);
+    expect(toAscii(['│◁┼┐', '  │'])).toEqual(['|<|+', '  |']);
   });
 
   it('draws the bar of a count on an upright line as a bar when told the rows hold such bars', () => {
@@ -44,13 +48,50 @@ describe('the ASCII character set', () => {
     ['class with a hollow head', 73, "classDiagram\ndirection LR\nclass C0 {\n  +field0 int\n  +run()\n}\nclass C1 {\n}\nclass C2 {\n  +run()\n}\nclass C3 {\n  +field0 int\n  +field1 int\n  +field2 int\n  +run()\n}\nclass C4 {\n  +field0 int\n  +field1 int\n  +field2 int\n  +run()\n}\nclass C5 {\n  +field0 int\n  +field1 int\n  +run()\n}\nclass C6 {\n  +run()\n}\nC2 -- C6 : x\nC2 *-- C0 : fail\nC5 <--> C2\nC1 --* C0\nC1 \"1\" <--> \"*\" C6 : x\nC4 -- C2\nC4 <|-- C5\nC0 \"1\" --> \"*\" C6\nC4 ..|> C0\nC6 *-- C3"],
     ['swimlane', 64, "swimlane-beta LR\n  subgraph G0[Web]\n    n0[Ingest]\n    n1[Parse]\n    n2[Validate order]\n  end\n  subgraph G1[Billing]\n    n3[Charge]\n    n4[재고 확인]\n    n5[Ship]\n    n6[Notify]\n  end\n  subgraph G2[Warehouse]\n    n7[Archive]\n    n8[Refund]\n    n9[고객 응대]\n    n10[Audit]\n  end\n  n3 ==>|x| n10\n  n10 <-->|timeout after 30s| n1\n  n6 -->|needs review| n8\n  n3 --> n10\n  n2 -->|ok| n9\n  n5 --o n7\n  n10 -.- n1\n  n7 --> n9\n  n9 -->|x| n0\n  n8 --x|fail| n4\n  n3 -.->|ok| n5"],
   ] as const;
-  it.each(CROSSED)('draws every crossing of a %s drawing as a crossing', (_kind, width, src) => {
+  /** The cell behind each hollow head of the rows, with the bar it gets: `|` beside a head that points sideways, `-` above or below one that points up or down. */
+  const barsBehind = (lines: readonly string[]): Map<string, string> => {
+    const bars = new Map<string, string>();
+    lines.forEach((line, r) =>
+      [...line].forEach((ch, i) => {
+        if (ch === '▷') bars.set(`${r},${i - 1}`, '|');
+        if (ch === '◁') bars.set(`${r},${i + 1}`, '|');
+        if (ch === '▽') bars.set(`${r - 1},${i}`, '-');
+        if (ch === '△') bars.set(`${r + 1},${i}`, '-');
+      }),
+    );
+    return bars;
+  };
+  it.each(CROSSED)('draws every crossing of a %s drawing as a crossing, or as the bar of a hollow head along the line that crosses', (_kind, width, src) => {
     const plain = renderText(src, width);
     const ascii = renderText(src, width, { charset: 'ascii' });
     if ('error' in plain || 'error' in ascii) throw new Error('not drawn');
-    const crossings = plain.lines.flatMap((line, r) => [...line].flatMap((ch, i) => (ch === '┼' ? [[...(ascii.lines[r] ?? '')][i]] : [])));
+    const bars = barsBehind(plain.lines);
+    const crossings = plain.lines.flatMap((line, r) =>
+      [...line].flatMap((ch, i) => (ch === '┼' ? [{ got: [...(ascii.lines[r] ?? '')][i], want: bars.get(`${r},${i}`) ?? '+' }] : [])),
+    );
     expect(crossings.length).toBeGreaterThan(0);
-    expect(crossings.filter((ch) => ch !== '+')).toEqual([]);
+    expect(crossings.filter(({ got, want }) => got !== want)).toEqual([]);
+  });
+
+  const HOLLOW_ON_CROSSING = [
+    ['beside', 95, 'classDiagram\nclass C0 {\n  +field0 int\n  +run()\n}\nclass C1 {\n}\nclass C2 {\n  +field0 int\n  +run()\n}\nclass C3 {\n}\nclass C4 {\n  +field0 int\n  +field1 int\n  +field2 int\n}\nclass C5 {\n  +field0 int\n  +field1 int\n  +run()\n}\nclass C6 {\n  +field0 int\n}\nC3 ..> C5\nC3 <|-- C4 : needs review\nC4 <--> C2\nC3 <|-- C4\nC5 ..> C1\nC5 --|> C6'],
+    ['above and below', 74, 'classDiagram\nnamespace N0 {\n  class C0 {\n    +field0 int\n    +field1 int\n    +field2 int\n    +run()\n  }\n}\nnamespace N1 {\n  class C1 {\n    +field0 int\n    +field1 int\n    +field2 int\n  }\n}\nnamespace N0 {\n  class C2 {\n    +field0 int\n  }\n}\nnamespace N1 {\n  class C3 {\n    +field0 int\n    +field1 int\n    +field2 int\n  }\n}\nclass C4 {\n  +field0 int\n  +field1 int\n  +field2 int\n  +run()\n}\nC1 ..> C3\nC0 --* C1\nC4 "1" --|> "*" C2\nC0 --* C2\nC0 ..|> C1 : needs review'],
+  ] as const;
+  it.each(HOLLOW_ON_CROSSING)('keeps an inheritance head %s a crossing apart from an association head', (_where, width, src) => {
+    const plain = renderText(src, width);
+    const ascii = renderText(src, width, { charset: 'ascii' });
+    if ('error' in plain || 'error' in ascii) throw new Error('not drawn');
+    const bars = [...barsBehind(plain.lines)];
+    const onCrossing = bars.filter(([at]) => {
+      const [r = 0, i = 0] = at.split(',').map(Number);
+      return [...(plain.lines[r] ?? '')][i] === '┼';
+    });
+    expect(onCrossing.length).toBeGreaterThan(0);
+    const missing = bars.filter(([at, bar]) => {
+      const [r = 0, i = 0] = at.split(',').map(Number);
+      return [...(ascii.lines[r] ?? '')][i] !== bar;
+    });
+    expect(missing).toEqual([]);
   });
 
   it('draws the bars of the counts of an entity-relationship drawing', () => {
