@@ -5,8 +5,11 @@
 <p align="center"><b>Draws Mermaid text as SVG and as terminal text. No browser, no runtime dependencies.</b></p>
 
 <p align="center">
+  <a href="#why">Why</a> ·
+  <a href="#compared-with-other-tools">Compared</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#gallery">Gallery</a> ·
+  <a href="#a-larger-drawing">A larger drawing</a> ·
   <a href="#in-a-terminal">In a terminal</a> ·
   <a href="#output-formats">Output formats</a> ·
   <a href="#library">Library</a> ·
@@ -14,8 +17,9 @@
 </p>
 
 ursula reads the Mermaid text of any of the 35 diagram types in the Mermaid documentation and computes where every
-box, line and label goes. The same text always gives the same drawing. It runs on Node alone: no browser, no DOM,
-nothing to install at run time.
+box, line and label goes. It is made for coding agents: the agent writes a few lines of Mermaid, and the engine lays
+them out, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. The same text always gives the
+same drawing. It runs on Node alone: no browser, no DOM, nothing to install at run time.
 
 ```
 flowchart LR
@@ -44,9 +48,74 @@ flowchart LR
 The first block is the input. The text drawing and the picture under it are what ursula draws from it, with
 `--format text --width 80` and with `--format svg`.
 
+## Why
+
+An agent that wants to show a diagram usually takes one of two roads.
+
+- **A drawing skill.** The model plans the layout itself, writes the coordinates or a script that computes them,
+  checks the result and plans again. The pictures can look hand-made, with zones, a legend and emphasis chosen for
+  each one. But every round of planning and checking is another model turn, so one drawing takes many turns and many
+  tokens, and the same request can come out different the next time.
+- **Mermaid as it is.** The model writes Mermaid text and Mermaid draws it. This is fast and cheap for the model,
+  but Mermaid draws in a browser (or, from the command line, in a headless Chromium), the model cannot see what the
+  layout came out like, and in a terminal the reader sees only the source text.
+
+ursula sits between the two. The model writes Mermaid only, never a coordinate: the official examples have a
+median of 154 bytes of text, and the order flowchart above is 315. The engine does the layout, with no model in the
+loop, so the same text gives the same drawing. One engine draws both an SVG and a drawing in terminal cells, so the
+picture also shows up where an agent actually answers: in the terminal.
+
+Measured on an Apple M2 Max with Node 26, over the 531 examples in the Mermaid documentation, each drawn five
+times (the last two rows: one flowchart, six runs of the command each):
+
+| | Median | Slowest |
+| --- | --- | --- |
+| SVG, from the library | 0.36 ms | 79.6 ms |
+| Terminal text at width 100, from the library | 0.29 ms | 46.3 ms |
+| One run of the command, order flowchart, `--format text` | 0.15 s | |
+| One run of the command, order flowchart, `--format svg` | 0.35 s | |
+
+A run of the command is mostly the start of Node and the reading of the one-file bundle (1.56 MB).
+In place of the model looking at its own picture, `--format check` prints the count of bends and crossings and,
+sometimes, a question about the text. The agent skill answers the questions once and then draws; it does not loop.
+
+## Compared with other tools
+
+Each of these does something ursula does not. The table says what was measured; a cell that says *not checked* was
+not measured here. The counts of examples are out of the 531 examples in the Mermaid documentation, 35 types.
+
+| | Output | What it draws | Runs on | Speed | In a terminal | Korean and other wide characters |
+| --- | --- | --- | --- | --- | --- | --- |
+| **ursula** 0.1.0 | SVG, terminal text, text as SVG, one-file HTML, JSON | 530 of 531; all 35 types | Node 22+, no runtime dependencies, no browser | Median under 1 ms in the library; 0.1–0.4 s per command run | Yes: 21 types as boxes and lines, 14 as a table or a list | Counted in terminal cells: no extra breaks in 13 Korean test drawings. Emoji counted one cell wide (wrong) |
+| **A drawing skill** | SVG or HTML the model writes | Whatever the model can lay out; layout chosen per picture | The agent's model | Many model turns per drawing (not measured) | Not checked | Not checked |
+| **Mermaid** in a browser (12.3.0) | SVG | 515 of 531 (fails on ZenUML) | A browser; 22 dependencies | Not checked | Not checked | Not checked |
+| **mermaid-cli** (12.2.0) | SVG, PNG | Mermaid's types (not counted) | Node 22.13+ and Chromium through Puppeteer | Not checked | No | Not checked |
+| **Text drawing tools**: mermaid-ascii, termaid, mmdflux, beautiful-mermaid | Terminal text; mmdflux and beautiful-mermaid also SVG | mmdflux 206 of 531 in 4 types; beautiful-mermaid 226 of 531 in 6 types; the others not counted | Go (mermaid-ascii), Python (termaid), Rust (mmdflux), a Node library (beautiful-mermaid) | mmdflux 7.9 ms per process run; the others not checked | Yes | termaid: no extra breaks in 13 of 13. mermaid-ascii: none in the 10 it drew. mmdflux: one (a label over a crossing) in the 11 it drew. All three count emoji as two cells. beautiful-mermaid 1.1.2 counts characters, not cells, and breaks all 13 Korean drawings |
+
+Per process, mmdflux is about 12 times faster than the `ursula-diagram` command (median 7.9 ms against 99 ms over the 116
+flowchart examples); the difference is mostly the start of Node. Inside one program ursula is under 1 ms too.
+
+### When ursula is not the better choice
+
+- **You want a picture tuned by hand.** A drawing skill or a person picks zones, a legend and emphasis for each
+  picture. ursula has one look and changes only its colours (through CSS variables). Some types keep fewer lines
+  straight: in the official examples, 87% of the lines are straight in flowcharts but 60% in C4 and 67% in use case
+  drawings, and Event Modeling lines all bend.
+- **You need a PNG from the command line.** mermaid-cli writes one. ursula saves a PNG only from its `html` page.
+- **You call it once per process in a tight loop.** A native binary such as mmdflux starts about 12 times faster.
+  Calling the library from one Node program avoids the cost.
+- **Your labels have emoji and the drawing goes to a terminal.** ursula counts an emoji as one cell, so the right
+  edge of that box moves one cell; mermaid-ascii, mmdflux and termaid count two.
+- **You want a chart drawn in a terminal.** Pie, XY chart, radar, quadrant, Sankey, Wardley, timeline, user
+  journey, railroad, Venn and Cynefin come out as tables or lists there, not as pictures.
+- **Your subgraphs nest and the drawing goes to a terminal.** A nested subgraph is drawn as a band named
+  `outer / inner`, not as a box inside a box, so the nesting is not visible.
+- **You need a settled API.** This is the first release, 0.1.0. The library ignores an option it does not know,
+  without a warning (the command refuses it).
+
 ## Quick start
 
-Install the `ursula` command with npm (Node 22 or later), or run it once with `npx`:
+Install the `ursula-diagram` command with npm (Node 22 or later; `ursula` is a short alias), or run it once with `npx`:
 
 ```bash
 npm install -g ursula-diagram
@@ -62,14 +131,14 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-ursula order.mmd --format text --width 80   # the text drawing above
-ursula order.mmd --format svg > order.svg   # the picture above
+ursula-diagram order.mmd --format text --width 80   # the text drawing above
+ursula-diagram order.mmd --format svg > order.svg   # the picture above
 ```
 
 
 ## Gallery
 
-Every picture below is the output of `ursula <file> --format svg`, unedited.
+Every picture below is the output of `ursula-diagram <file> --format svg`, unedited.
 
 <table>
   <tr>
@@ -210,12 +279,26 @@ Architecture, Block, C4, Class, Cynefin, Entity Relationship, Event Modeling, Fl
 Kanban, Mindmap, Packet, Pie, Quadrant, Radar, Railroad (IR, ABNF, EBNF, PEG), Requirement, Sankey, Sequence, State,
 Swimlanes, Timeline, TreeView, Treemap, Use Case, User Journey, Venn, Wardley Map, XY Chart, ZenUML.
 
+## A larger drawing
+
+Two C4 examples from the Mermaid documentation, drawn as they are. The container diagram has 10 elements, 13
+relations and a boundary; people and systems outside the boundary connect to the apps inside it. The deployment
+diagram nests nodes three deep (data center, server, Tomcat, application) and ends in a replicated database. Both come
+out with no crossings (`--format check`: 7 and 4 bends).
+
+<p align="center"><img src="assets/c4-container.svg" alt="C4 container diagram of an internet banking system" width="100%"></p>
+<p align="center"><img src="assets/c4-deployment.svg" alt="C4 deployment diagram of an internet banking system" width="80%"></p>
+
+The texts are in [examples/c4-container.mmd](examples/c4-container.mmd) and
+[examples/c4-deployment.mmd](examples/c4-deployment.mmd). The terminal draws them too, but at this size it shortens
+long relation labels and draws the boundary as a band, so for drawings like these the SVG reads better.
+
 ## In a terminal
 
 `--format text` draws with box-drawing characters and arranges the drawing for `--width`. The order flowchart at the
 top runs left to right at `--width 80`; at `--width 40` the same text comes out stacked top to bottom. A drawing is
 never cut off. These are the gallery's sequence, Gantt and mindmap texts, drawn with
-`ursula <file> --format text --width 80`.
+`ursula-diagram <file> --format text --width 80`.
 
 ```
 ┌───────────────┐   ┌─────┐       ┌───────────┐     ┌─────┐
@@ -332,17 +415,17 @@ are a few symbols that some terminals draw two cells wide (`·` `×` `—` `∩`
 | `check` | One line of counts (bends, crossings) and, sometimes, questions a writer can answer by editing the text. |
 
 ```bash
-ursula flow.mmd --format svg > flow.svg
-ursula flow.mmd --format text --width 100
-ursula flow.mmd --format text --width 100 --charset ascii
-ursula flow.mmd --format text-svg --width 100 > flow-text.svg
-ursula flow.mmd --format html --theme dark --title "Flow" > flow.html
-ursula flow.mmd --format check
+ursula-diagram flow.mmd --format svg > flow.svg
+ursula-diagram flow.mmd --format text --width 100
+ursula-diagram flow.mmd --format text --width 100 --charset ascii
+ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
+ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
+ursula-diagram flow.mmd --format check
 cat flow.mmd | ursula --format json
 ```
 
 The command reads standard input when no file is given. `--theme auto|light|dark` sets the light or dark of an
-`html` page; `auto` follows the system setting. Run `ursula --help` to list every option.
+`html` page; `auto` follows the system setting. Run `ursula-diagram --help` to list every option.
 
 ## Library
 
@@ -423,6 +506,35 @@ To use it, copy the `skills/ursula` folder into the skills folder of your agent.
 ```bash
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
+
+With the skill, the agent writes the Mermaid text, runs `--format check`, and picks the output by where the reader
+is: `text` for a terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.
+
+### In an agent's terminal
+
+A host that shows an agent's replies can also draw the diagrams itself, with no skill and no extra turn: find each
+` ```mermaid ` block in the reply and put the drawing in its place. A Claude Code mod that redraws the replies in
+the terminal is one such host. `renderTextSpans` gives each line as spans with a tone, and the host picks the
+colour of each tone:
+
+````ts
+import { renderTextSpans } from 'ursula-diagram';
+
+const TONE = { normal: '', dim: '\x1b[2m', bold: '\x1b[1m', accent: '\x1b[33m' };
+
+function drawMermaidBlocks(reply: string, width: number): string {
+  return reply.replace(/```mermaid\n([\s\S]*?)```/g, (block, src) => {
+    const out = renderTextSpans(src, width);
+    if ('error' in out) return block; // keep the text when it cannot be drawn
+    return out.lines
+      .map((line) => line.map((s) => TONE[s.tone] + s.text + '\x1b[0m').join(''))
+      .join('\n');
+  });
+}
+````
+
+The drawing never goes past `width`: when it does not fit, `renderTextSpans` returns `{ error }`, and the block
+stays as text.
 
 ## Development
 

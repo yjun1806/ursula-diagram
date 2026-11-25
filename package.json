@@ -16,11 +16,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yjun1806/ursula.git"
+    "url": "git+https://github.com/yjun1806/ursula-diagram.git"
   },
-  "homepage": "https://github.com/yjun1806/ursula#readme",
+  "homepage": "https://github.com/yjun1806/ursula-diagram#readme",
   "bugs": {
-    "url": "https://github.com/yjun1806/ursula/issues"
+    "url": "https://github.com/yjun1806/ursula-diagram/issues"
   },
   "type": "module",
   "main": "dist/index.js",
@@ -37,7 +37,8 @@
     "./global": "./dist/ursula.global.js"
   },
   "bin": {
-    "ursula": "skills/ursula/scripts/ursula.mjs"
+    "ursula": "skills/ursula/scripts/ursula.mjs",
+    "ursula-diagram": "skills/ursula/scripts/ursula.mjs"
   },
   "files": [
     "dist",

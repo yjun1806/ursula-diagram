@@ -39273,7 +39273,7 @@ function renderHtml(src, opts = {}) {
 
 // src/cli.ts
 function usage() {
-  process.stderr.write(`usage: ursula [file.mmd] [--format svg|text|text-svg|json|check|html] [--width N] [--charset unicode|ascii] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]
+  process.stderr.write(`usage: ursula-diagram [file.mmd] [--format svg|text|text-svg|json|check|html] [--width N] [--charset unicode|ascii] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]
 `);
   process.exit(2);
 }
