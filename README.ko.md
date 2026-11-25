@@ -7,7 +7,7 @@
 <p align="center"><a href="https://yjun1806.github.io/ursula-diagram/ko/">문서와 플레이그라운드</a> · <a href="https://yjun1806.github.io/ursula-diagram/ko/playground">브라우저에서 해 보기</a></p>
 
 <p align="center">
-  <a href="#왜-만들었나">왜 만들었나</a> ·
+  <a href="#왜-ursula인가">왜 ursula인가</a> ·
   <a href="#다른-도구와-비교">비교</a> ·
   <a href="#빠른-시작">빠른 시작</a> ·
   <a href="#그림-모음">그림 모음</a> ·
@@ -51,7 +51,7 @@ flowchart LR
 `--format svg`로 그렸습니다. 이 문서의 글자 그림은 모두 영문입니다. 까닭은 [줄이 맞지 않을 때](#줄이-맞지-않을-때)에
 적었습니다.
 
-## 왜 만들었나
+## 왜 ursula인가
 
 에이전트가 그림을 보여 주려 할 때는 대개 두 길 가운데 하나를 갑니다.
 
