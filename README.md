@@ -42,6 +42,14 @@ web page or a code block in a document often does not, and the boxes come apart.
 `text-svg` draws the lines as shapes and sets every word on the grid, so no font moves a column. For a terminal
 that draws line characters two cells wide, use `--charset ascii`.
 
+```
+    +---- no ---+
+    v           |
++-------+   +-------+        +-------+
+| Start |-->|  Ok?  |- yes ->| Done  |
++-------+   +-------+        +-------+
+```
+
 | | `unicode` (default) | `ascii` |
 | --- | --- | --- |
 | Line, heavy line, dashed line | `─ │` `━ ┃` `┄ ┆` | `- \|` `= #` `. :` |
