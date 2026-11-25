@@ -1,0 +1,5 @@
+# Copied from the engine build and the repository by scripts/prepare.mjs
+public/ursula.global.js
+public/assets/
+.vitepress/cache
+.vitepress/dist

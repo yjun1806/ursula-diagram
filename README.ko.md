@@ -4,6 +4,8 @@
 
 <p align="center"><b>Mermaid 글을 SVG와 터미널 글자 그림으로 그립니다. 브라우저도, 실행 의존성도 필요 없습니다.</b></p>
 
+<p align="center"><a href="https://yjun1806.github.io/ursula-diagram/">문서와 플레이그라운드</a> · <a href="https://yjun1806.github.io/ursula-diagram/playground">브라우저에서 해 보기</a> (영어)</p>
+
 <p align="center">
   <a href="#왜-만들었나">왜 만들었나</a> ·
   <a href="#다른-도구와-비교">비교</a> ·
@@ -545,6 +547,7 @@ npx tsc --noEmit
 npm test              # 느린 대조를 뺀 시험 전체
 npm run test:rewrite  # 층 배치 엔진의 느린 대조, 15분쯤
 bun scripts/build.ts  # dist/와 스킬 안의 명령. 그림이 바뀌면 다시 돌립니다
+cd site && npm install && npm run dev   # 문서 사이트와 플레이그라운드. 방금 만든 dist/를 씁니다
 ```
 
 빌드한 파일은 Node 22 이상에서 돕니다. 저장소를 받은 폴더에서는 Node 24 이상이 소스를 바로 실행합니다:

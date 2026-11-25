@@ -4,6 +4,8 @@
 
 <p align="center"><b>Draws Mermaid text as SVG and as terminal text. No browser, no runtime dependencies.</b></p>
 
+<p align="center"><a href="https://yjun1806.github.io/ursula-diagram/">Docs and playground</a> · <a href="https://yjun1806.github.io/ursula-diagram/playground">Try it in the browser</a></p>
+
 <p align="center">
   <a href="#why">Why</a> ·
   <a href="#compared-with-other-tools">Compared</a> ·
@@ -553,6 +555,7 @@ npx tsc --noEmit
 npm test              # the whole suite but the slow comparisons
 npm run test:rewrite  # the slow comparisons of the layered engine, about a quarter of an hour
 bun scripts/build.ts  # dist/ and the command inside the skill; run it again when a drawing changes
+cd site && npm install && npm run dev   # the documentation site and playground, on the dist/ just built
 ```
 
 The built files run on Node 22 or later. In a checkout, Node 24 or later also runs the sources directly:

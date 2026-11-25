@@ -1,0 +1,16 @@
+{
+  "name": "ursula-diagram-site",
+  "private": true,
+  "type": "module",
+  "description": "The documentation site and playground of ursula-diagram. Not published to npm.",
+  "scripts": {
+    "prepare-engine": "node scripts/prepare.mjs",
+    "dev": "node scripts/prepare.mjs && vitepress dev",
+    "build": "node scripts/prepare.mjs && vitepress build",
+    "preview": "vitepress preview",
+    "check": "node scripts/check-playground.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}
