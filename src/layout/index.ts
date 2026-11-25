@@ -11,6 +11,7 @@ import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
+import { openTextColumns, openTextRows } from './text-room.ts';
 import { clearUprightLabels, closeTextColumns, closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
@@ -247,7 +248,8 @@ function layoutAlong(arranged: AlongArrangement, ruler: Ruler, opts: SolveOption
 function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: LayoutOptions): Layout {
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
-    const drawn = layout(plain, ruler, opts);
+    // The caller closes and opens the rows of what comes back.
+    const drawn = layoutOnce(plain, ruler, opts).closed;
     const note: Diagnostic = { kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
@@ -262,50 +264,64 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
   // A quick drawing is what a caller chooses a setting on: it never shares ports, so that the choice does not turn on them.
-  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts);
+  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts).opened();
   // Lines that share a port on the side of a box leave the box shorter, and may cost elsewhere: the drawing is made
   // with shared ports and without, and the one with shared ports is kept only when it costs no more in any respect
-  // and less in one. Where no line found a port to share there is one drawing only.
+  // and less in one. Where no line found a port to share there is one drawing only. The two are compared before the
+  // rows that arrowheads and bands ask for are opened: those rows are owed either way.
   const before = sharing.placements;
   const joined = layoutOnce(graph, given, { ...opts, sharePorts: true });
-  const shares = joined.edges.some((e) => e.sharedPort !== undefined);
-  if (sharing.placements === before && !shares) return joined;
+  const shares = joined.closed.edges.some((e) => e.sharedPort !== undefined);
+  if (sharing.placements === before && !shares) return joined.opened();
   const apart = layoutOnce(graph, given, { ...opts, sharePorts: false });
   // Sharing ports changes the width of a drawing on the way, and with it the arrangement that fits: a drawing in which
   // no line shares a port after all, or one whose bands are arranged another way, is not kept for it.
-  if (!shares || arrangementOf(joined) !== arrangementOf(apart)) return apart;
-  const own = textCost(apart);
+  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed)) return apart.opened();
+  const own = textCost(apart.closed);
   // A drawing that is too wide without shared ports is given as it is, so that a caller that draws again for the width does what it did without them.
   const limit = opts.maxWidth ?? given.defaultWidth;
-  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.width, own.width) > limit) return apart;
-  const shared = textCost(joined);
-  return costsMore(shared, own) || !costsMore(own, shared) ? apart : joined;
+  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit) return apart.opened();
+  const shared = textCost(joined.closed);
+  return (costsMore(shared, own) || !costsMore(own, shared) ? apart : joined).opened();
 }
 
 /** How the bands of a drawing are arranged: alongside the reading direction or across it, and which bands there are. */
 const arrangementOf = (l: Layout): string => [l.composition, l.laneAxis, ...l.lanes.map((lane) => lane.id)].join('|');
 
-function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
+/** A drawing as it is compared with another (`closed`), and as it is given out: a terminal drawing with its rows opened. */
+interface Drawn {
+  closed: Layout;
+  opened: () => Layout;
+}
+
+function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
   const drawn = layoutAny(graph, given, opts);
-  if (given.terminal !== true || opts.nested === true) return drawn;
+  if (given.terminal !== true || opts.nested === true) return { closed: drawn, opened: () => drawn };
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l: Layout): boolean => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
+  // Rows and columns are closed first, so that a label is given the room that frees.
+  const close = (l: Layout): Layout => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
-  const tidy = (l: Layout): Layout => {
-    // Rows and columns are closed first, so that a label is given the room that frees.
-    const closed = clearUprightLabels(openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit));
-    if (!over(closed)) return packParts(closed, limit);
-    const pushed = openTextLabels(compactColumns(closed), limit);
-    // Still too wide: the labels on level lines give way, and are cut to the room they are left.
-    return packParts(over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed, limit);
+  const finish = (fitted: Layout, room: boolean): Layout => {
+    // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
+    const closed = room ? openTextRows(clearUprightLabels(openTextRows(fitted))) : clearUprightLabels(fitted);
+    const fit = (): Layout => {
+      if (!over(closed)) return closed;
+      const pushed = openTextLabels(compactColumns(closed), limit);
+      // Still too wide: the labels on level lines give way, and are cut to the room they are left.
+      return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
+    };
+    return packParts(room ? openTextColumns(fit()) : fit(), limit);
   };
-  let best = tidy(drawn);
+  let source = close(drawn);
+  let best = finish(source, false);
   // A drawing too wide with notes beside its boxes: the notes are wrapped narrower until it fits.
   if (over(best) && limit !== undefined && graph.nodes.some((n) => n.attach !== undefined && n.lines.length > 0)) {
     for (const cells of [28, 22, 16]) {
       const narrow: Graph = { ...graph, nodes: graph.nodes.map((n) => (n.attach === undefined ? n : { ...n, lines: wrapWords(n.lines.join(' '), cells, cellWidth) })) };
-      const tried = tidy(layoutAny(narrow, given, opts));
-      if (tried.width < best.width) best = tried;
+      const fitted = close(layoutAny(narrow, given, opts));
+      const tried = finish(fitted, false);
+      if (tried.width < best.width) [source, best] = [fitted, tried];
       if (best.width <= limit) break;
     }
   }
@@ -324,11 +340,13 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
             : { compartments: n.compartments.map((c) => ({ ...c, lines: cutLines(c.lines), ...(c.columns === undefined ? {} : { columns: c.columns.map((row) => row.map((cell) => clip(cell, Math.max(4, Math.floor(cells / Math.max(1, row.length)))))) }) })) }),
         })),
       };
-      const tried = tidy(layoutAny(short, given, opts));
-      if (tried.width < best.width) best = tried;
+      const fitted = close(layoutAny(short, given, opts));
+      const tried = finish(fitted, false);
+      if (tried.width < best.width) [source, best] = [fitted, tried];
     }
   }
-  return best;
+  const chosen = source;
+  return { closed: best, opened: () => finish(chosen, true) };
 }
 
 /** Terminal drawings: a compartment with nothing in it takes no rows; the name of the box always stays. */

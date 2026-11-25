@@ -4,6 +4,7 @@ import type { Layout, LayoutEdge, Point, Ruler } from '../src/index.ts';
 import { violations } from '../src/layered/choose.ts';
 import { assignTracks } from '../src/layered/route.ts';
 import { costsMore, textCost } from '../src/layout/text-cost.ts';
+import type { TextCost } from '../src/layout/text-cost.ts';
 import { parseUsecase } from '../src/usecase/parse.ts';
 import { geometryViolations } from './helpers.ts';
 
@@ -194,13 +195,16 @@ describe('a terminal drawing with shared ports against the one without', () => {
     layout(parseUsecase(`usecase-beta\ndirection LR\n${body}`).graph, cellRuler(), { maxWidth, fold: true, legend: false, ...(sharePorts === undefined ? {} : { sharePorts }) });
   const arrangement = (l: Layout): unknown[] => [l.composition, l.laneAxis, l.lanes.map((lane) => lane.id)];
 
+  // The two drawings are compared before their rows are opened, and stacked bands are owed more rows than columns of them.
+  const compared = (l: Layout): TextCost => ({ ...textCost(l), rows: 0 });
+
   it.each(BOUNDED)('is not taken when no line shares a port in it, though it costs less arranged another way (%#)', (body, width) => {
     const [shared, own, taken] = [bounded(body, width, true), bounded(body, width, false), bounded(body, width)];
     // Shared ports made the columns too wide on the way, so the boundaries were stacked as bands instead.
     expect(shares(shared)).toBe(false);
     expect(arrangement(shared)).not.toEqual(arrangement(own));
-    expect(costsMore(textCost(shared), textCost(own))).toBe(false);
-    expect(costsMore(textCost(own), textCost(shared))).toBe(true);
+    expect(costsMore(compared(shared), compared(own))).toBe(false);
+    expect(costsMore(compared(own), compared(shared))).toBe(true);
     expect(taken).toEqual(own);
     expect(own.composition).toBe('stages');
   });

@@ -32,8 +32,8 @@ export function cellOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>, index: 
 const TWO_CELLS: ReadonlySet<string> = new Set(['one', 'zero-one', 'one-many', 'zero-many']);
 
 /** Cells the mark at the start and the one at the end of a line take; the arrowhead of a plain line takes one. */
-const startCells = (e: LayoutEdge): number => (e.startEnd === undefined || e.startEnd === 'none' ? 0 : TWO_CELLS.has(e.startEnd) ? 2 : 1);
-const endCells = (e: LayoutEdge): number => (e.end === 'none' ? 0 : e.end !== undefined && TWO_CELLS.has(e.end) ? 2 : 1);
+export const startCells = (e: LayoutEdge): number => (e.startEnd === undefined || e.startEnd === 'none' ? 0 : TWO_CELLS.has(e.startEnd) ? 2 : 1);
+export const endCells = (e: LayoutEdge): number => (e.end === 'none' ? 0 : e.end !== undefined && TWO_CELLS.has(e.end) ? 2 : 1);
 
 /**
  * The drawing with `count` blank columns (or rows, when `rows` is set) put in before the one numbered `at`: what
@@ -540,11 +540,19 @@ export function clearUprightLabels(given: Layout): Layout {
       continue;
     }
     if (stands) continue;
-    // One more row after the first cell of the stretch; the label takes a row of the longer stretch.
-    const taller = grow(l, run.top + 0.5, 1, true);
-    const again = stretch({ ...taller, edges: taller.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o)) });
-    const placed = again === undefined ? undefined : place(taller, again);
-    if (placed !== undefined) l = placed;
+    // One more row after the first cell of the stretch; the label takes a row of the longer stretch. Where another
+    // line runs down that row under the label, the row goes in after a later cell of the stretch that no box stands beside.
+    const whole = l;
+    const between = (row: number): boolean => !whole.nodes.some((n) => Math.round(n.y) <= row && row + 1 < Math.round(n.y) + Math.round(n.h));
+    const later = Array.from({ length: run.bottom - run.top }, (_, k) => run.top + 1 + k).filter(between);
+    for (const row of [run.top, ...later]) {
+      const taller = grow(whole, row + 0.5, 1, true);
+      const again = stretch({ ...taller, edges: taller.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o)) });
+      const placed = again === undefined ? undefined : place(taller, again);
+      if (placed === undefined) continue;
+      l = placed;
+      break;
+    }
   }
   return l;
 }

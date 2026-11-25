@@ -170,8 +170,16 @@ export function markGlyphs(end: EdgeEnd, heading: Heading): string[] {
 
 const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
 
+/** The rows the rules of the bands are drawn in, with the first and the last column of each rule. */
+function rulesOf(layout: Layout): Map<number, readonly [number, number]> {
+  const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
+  if (vertical) return new Map();
+  return new Map(layout.lanes.filter((lane) => lane.label !== '').map((lane) => [Math.floor(lane.y), [Math.floor(lane.x), Math.floor(lane.x) + Math.round(lane.w) - 1]] as const));
+}
+
 function drawEdges(c: Canvas, layout: Layout): void {
   const nodes = new Map(layout.nodes.map((n) => [n.id, n] as const));
+  const rules = rulesOf(layout);
   const cells = new Map<string, Cell>();
   const touch = (x: number, y: number, bits: number, style: EdgeStyle): Cell => {
     const key = `${x},${y}`;
@@ -239,7 +247,10 @@ function drawEdges(c: Canvas, layout: Layout): void {
     const [xs, ys] = key.split(',');
     const glyphs = cell.style === 'thick' ? HEAVY : LIGHT;
     let ch = glyphs[cell.bits] ?? '┼';
-    if (cell.style === 'dotted') {
+    // An upright line that crosses the rule of a band is drawn as the crossing it is.
+    const rule = cell.bits === (N | S) ? rules.get(Number(ys)) : undefined;
+    if (rule !== undefined && Number(xs) >= rule[0] && Number(xs) <= rule[1]) ch = glyphs[cell.bits | (Number(xs) > rule[0] ? W : 0) | (Number(xs) < rule[1] ? E : 0)] ?? '┼';
+    else if (cell.style === 'dotted') {
       if (cell.bits === (E | W) || cell.bits === E || cell.bits === W) ch = '┄';
       else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S) ch = '┆';
     }
