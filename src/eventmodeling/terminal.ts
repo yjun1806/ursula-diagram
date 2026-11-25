@@ -67,6 +67,41 @@ const spareAbove = (spare: Set<number>, height: number): number[] => {
   return above;
 };
 
+/** The boxes, the rows and the lines of a drawing once the lines are found. */
+interface Routed {
+  rects: Rect[];
+  rows: Row[];
+  paths: Cell[][];
+}
+
+/**
+ * Opens the rows the rules ask for: one under every rule, and one above a rule that the boxes of the band above
+ * reach down to. A box then stands a row off the rule on either side, and a line that ended on a rule ends in the
+ * row beside its box, so that no arrowhead stands on a rule. The lines keep their columns.
+ */
+function roomAtRules(drawn: Routed, wires: Wire[]): Routed {
+  const before = drawn.rows.flatMap((row, y) => (row.kind !== 'rule' ? [] : drawn.rows[y - 1]?.kind === 'box' ? [y, y + 1] : [y + 1]));
+  /** How far the row `y` moves down. */
+  const down = (y: number): number => y + before.filter((at) => at <= y).length;
+  const rows = drawn.rows.flatMap((row, y): Row[] => [...before.filter((at) => at === y).map((): Row => ({ kind: 'box', rank: 0 })), row]);
+  const rects = drawn.rects.map((r) => ({ ...r, y: down(r.y) }));
+  /** The cells from `from` up or down to `to`, `from` left out. */
+  const run = (from: Cell, to: number): Cell[] => Array.from({ length: Math.abs(to - from[1]) }, (_, k): Cell => [from[0], from[1] + Math.sign(to - from[1]) * (k + 1)]);
+  /** The row beside `r` that a line in the row `y` runs on to, when it stands off the box. */
+  const beside = (y: number, r: Rect): number => (y < r.y - 1 ? r.y - 1 : y > r.y + r.h ? r.y + r.h : y);
+  const paths = drawn.paths.map((path, i) => {
+    const moved = path.map((c): Cell => [c[0], down(c[1])]);
+    const whole = moved.flatMap((c, k): Cell[] => {
+      const next = moved[k + 1];
+      return next === undefined || next[0] !== c[0] ? [c] : [c, ...run(c, next[1]).slice(0, -1)];
+    });
+    const wire = wires[i] as Wire;
+    const [first, last] = [whole[0] as Cell, whole[whole.length - 1] as Cell];
+    return [...run(first, beside(first[1], rects[wire.from] as Rect)).reverse(), ...whole, ...run(last, beside(last[1], rects[wire.to] as Rect))];
+  });
+  return { rects, rows, paths };
+}
+
 /** A box before the rows are known: which strip and band it stands in, and its left edge and size. */
 interface Slot {
   strip: number;
@@ -244,17 +279,18 @@ export function eventModelGrid(
   if (!spend(gridWidth * rows.length)) return undefined;
   const routed = routeWires(rects, wires, gridWidth, rows, spend, tidy);
   if (routed === undefined) return channels < wires.length && most < (CHANNELS[1] as number) && spend(0) ? eventModelGrid(model, variant, wrap, strips, CHANNELS[1], spend, tidy, set) : undefined;
-  let state = { rects, rows, paths: routed };
+  let closed: Routed = { rects, rows, paths: routed };
   for (;;) {
-    const spare = spareRows(state.rects, wires, state.paths, state.rows);
+    const spare = spareRows(closed.rects, wires, closed.paths, closed.rows);
     if (spare.size === 0) break;
-    const above = spareAbove(spare, state.rows.length);
-    state = {
-      rects: state.rects.map((r) => ({ ...r, y: r.y - (above[r.y] as number) })),
-      rows: state.rows.filter((_, y) => !spare.has(y)),
-      paths: state.paths.map((path) => path.filter((c) => !spare.has(c[1])).map((c): Cell => [c[0], c[1] - (above[c[1]] as number)])),
+    const above = spareAbove(spare, closed.rows.length);
+    closed = {
+      rects: closed.rects.map((r) => ({ ...r, y: r.y - (above[r.y] as number) })),
+      rows: closed.rows.filter((_, y) => !spare.has(y)),
+      paths: closed.paths.map((path) => path.filter((c) => !spare.has(c[1])).map((c): Cell => [c[0], c[1] - (above[c[1]] as number)])),
     };
   }
+  const state = roomAtRules(closed, wires);
 
   const cells = state.paths.flat();
   const left = smallest(cells.map((c) => c[0]), smallest(state.rects.map((r) => r.x), Number.POSITIVE_INFINITY));

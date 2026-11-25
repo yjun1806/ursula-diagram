@@ -8,6 +8,7 @@ import { spareRows } from '../src/eventmodeling/wires.ts';
 import type { Cell, Rect, Row } from '../src/eventmodeling/wires.ts';
 import { cellWidth, pixelRuler } from '../src/metrics.ts';
 import type { SceneBox, SceneText } from '../src/types.ts';
+import { roomViolations } from './text-room.ts';
 
 const examples: Record<string, string> = {
   '01-timeline': "eventmodeling\n\ntf 01 ui CartUI\ntf 02 cmd AddItem\ntf 03 evt ItemAdded",
@@ -180,8 +181,8 @@ describe('eventmodeling text', () => {
 
   it('writes a lane name beside the line that crosses its rule, never over it', () => {
     const lines = text('01-timeline', 80);
-    expect(lines).toContain('────────▼ Command/Read Model ─');
-    expect(lines).toContain('── Events ──▼─────────────────');
+    expect(lines).toContain('────────┼ Command/Read Model ─');
+    expect(lines).toContain('── Events ──┼─────────────────');
   });
 
   it('draws every example within 80, 100 and 120 cells', () => {
@@ -282,13 +283,42 @@ describe('eventmodeling text', () => {
     const grid = eventModelGrid(parseEventModeling(chain(5)), { uniform: true, step: 4 }, 80, 'one');
     expect(grid?.edges.length).toBe(4);
     for (const e of grid?.edges ?? []) expect(e.points.length, `${e.from}->${e.to}`).toBe(2);
-    // Three bands of a rule and four box rows each, and no row between them.
-    expect(linesOf(chain(5), 80).length).toBe(15);
+    // Three bands of a rule, the row under it and four box rows each, and a row above the second rule and the third.
+    expect(linesOf(chain(5), 80).length).toBe(20);
+  });
+
+  it('stands every box a row off the rules and ends every line off them, the crossing of the rule behind the arrowhead', () => {
+    expect(linesOf(chain(3), 80)).toEqual([
+      '── UI/Automation ───────────',
+      '',
+      '┌────────┐',
+      '│ Frame1 │',
+      '│ 01 ui  │',
+      '└────────┘',
+      '      │',
+      '──────┼ Command/Read Model ─',
+      '      ▼',
+      '    ┌────────┐',
+      '    │ Frame2 │',
+      '    │ 02 cmd │',
+      '    └────────┘',
+      '          │',
+      '── Events ┼─────────────────',
+      '          ▼',
+      '        ┌────────┐',
+      '        │ Frame3 │',
+      '        │ 03 evt │',
+      '        └────────┘',
+    ]);
+    const none = { headless: [], underName: [], onRule: [], tight: [], close: [] };
+    for (const [src, width] of [[chain(16), 80], [dense(30), 120], [mixed, 120], ...Object.values(examples).flatMap((example) => [80, 100, 120].map((w) => [example, w] as const))] as const) {
+      expect(roomViolations(linesOf(src, width)), `${width}\n${src}`).toEqual(none);
+    }
   });
 
   it('keeps one row between two strips, where the line to the next strip turns', () => {
     const lines = linesOf(chain(16), 80);
-    expect(lines.length).toBeLessThanOrEqual(31);
+    expect(lines.length).toBeLessThanOrEqual(41);
     expect(lines.filter((line) => line.includes('UI/Automation')).length).toBe(2);
   });
 
@@ -457,7 +487,7 @@ describe('eventmodeling text', () => {
   it('wraps the frames the way that takes the fewest rows of boxes', () => {
     const lines = linesOf(mixed, 120);
     expect(lines.some((line) => line.includes('┌'))).toBe(true);
-    expect(lines.length).toBeLessThanOrEqual(39);
+    expect(lines.length).toBeLessThanOrEqual(49);
   });
 
   it('finds the spare rows of a line of very many cells', () => {
