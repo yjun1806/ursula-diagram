@@ -61,6 +61,11 @@ export function registerFrontEnd(frontEnd: FrontEnd): void {
   frontEnds.push(frontEnd);
 }
 
+/** The name and headers of every registered front-end, in the order they were registered. */
+export function registeredFrontEnds(): Array<{ name: string; headers: readonly string[] }> {
+  return frontEnds.map((f) => ({ name: f.name, headers: f.headers }));
+}
+
 /**
  * The source with a leading `---` front-matter block turned into blank lines, so line numbers stay the same.
  * Front-ends read diagram text only; the block reaches them as `heading` and `config` options.
