@@ -1,5 +1,6 @@
 import { renderHtml } from '../html.ts';
 import { checkLines, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg } from '../index.ts';
+import { checkDetails } from '../layered/details.ts';
 import type { SequenceLayout } from '../sequence/model.ts';
 import type { Layout } from '../types.ts';
 import { UrsulaError } from '../types.ts';
@@ -33,7 +34,7 @@ function layoutOptions(req: DrawRequest) {
 /** The lines of `--format check`. */
 export function checkReport(src: string, req: DrawRequest): string {
   const laid = selectFrontEnd(src).json(src, 'svg', layoutOptions(req)) as Layout | SequenceLayout;
-  const lines = 'edges' in laid && 'diagnostics' in laid ? checkLines(laid) : 'messages' in laid ? sequenceCheckLines(laid) : ['no checks for this kind of diagram'];
+  const lines = 'edges' in laid && 'diagnostics' in laid ? [...checkLines(laid), ...checkDetails(laid, src)] : 'messages' in laid ? sequenceCheckLines(laid) : ['no checks for this kind of diagram'];
   return `${lines.join('\n')}\n`;
 }
 
@@ -68,6 +69,12 @@ function fitted(src: string, req: DrawRequest, limit: number): Outcome {
   return { stdout: '', stderr: `${head}\n${need.sure ? widthHint(need.width) : 'hint: shorten the names, or split the diagram'}\n`, code: 3 };
 }
 
+/** The report of `--check`: the same as `--format check` of the same text, whatever width the drawing was held to. */
+function sideReport(src: string, req: DrawRequest): string {
+  const { width: _width, ...rest } = req;
+  return checkReport(src, rest);
+}
+
 function drawing(src: string, req: DrawRequest): string {
   const frontEnd = selectFrontEnd(src);
   const opts = layoutOptions(req);
@@ -95,9 +102,12 @@ function drawing(src: string, req: DrawRequest): string {
 /** Draws `src` as the request asks; never throws. */
 export function drawCommand(src: string, req: DrawRequest): Outcome {
   try {
-    if ((req.format === 'text' || req.format === 'text-svg') && req.width !== undefined) return fitted(src, req, req.width);
+    if ((req.format === 'text' || req.format === 'text-svg') && req.width !== undefined) {
+      const out = fitted(src, req, req.width);
+      return out.code === 0 && req.check ? { ...out, stderr: sideReport(src, req) } : out;
+    }
     const stdout = drawing(src, req);
-    return { stdout, stderr: '', code: 0 };
+    return { stdout, stderr: req.check && req.format !== 'check' ? sideReport(src, req) : '', code: 0 };
   } catch (err) {
     if (err instanceof UrsulaError && isTooNarrow(err)) return { stdout: '', stderr: `error: ${err.message}\n`, code: 3 };
     if (err instanceof UrsulaError) return { stdout: '', stderr: errorReport(err, src), code: 1 };

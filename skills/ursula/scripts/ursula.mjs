@@ -4,6 +4,58 @@ if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula ne
 // src/cli.ts
 import { readFileSync } from "node:fs";
 
+// src/command/args.ts
+var FORMATS = ["svg", "text", "text-svg", "json", "check", "html"];
+var choice = (key, choices) => (req, v) => choices.includes(v) ? { ...req, [key]: v } : undefined;
+var OPTIONS = [
+  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, json or check", apply: choice("format", FORMATS) },
+  {
+    name: "--width",
+    value: "N",
+    help: "columns for text and text-svg; fails with code 3 when the drawing cannot fit",
+    apply: (req, v) => v.trim() !== "" && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined
+  },
+  { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr", apply: (req) => ({ ...req, check: true }) },
+  { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
+  { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
+  { name: "--title", value: "TEXT", help: "the page title of html", apply: (req, v) => ({ ...req, title: v }) },
+  { name: "--theme", value: "T", choices: ["auto", "light", "dark"], help: "the starting theme of html: auto (the default), light or dark", apply: choice("theme", ["auto", "light", "dark"]) },
+  { name: "--detail", value: "D", choices: ["auto", "full", "narrow", "title"], help: "how much of each box text keeps: auto (the fullest that fits), full, narrow, title", apply: choice("detail", ["auto", "full", "narrow", "title"]) },
+  { name: "--quality", value: "Q", choices: ["fast", "best"], help: "layout effort, fast or best; pictures draw best and text fast unless told", apply: choice("quality", ["fast", "best"]) },
+  { name: "--engine", value: "E", choices: ["layered", "grid"], help: "the flowchart layout engine: layered (the default) or grid", apply: choice("engine", ["grid", "layered"]) },
+  { name: "--composition", value: "C", choices: ["auto", "lanes", "stages"], help: "swimlanes along the flow (lanes), across it (stages), or auto", apply: choice("composition", ["auto", "lanes", "stages"]) },
+  { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) },
+  { name: "--no-questions", help: "no questions in the check report", apply: (req) => ({ ...req, questions: false }) },
+  { name: "--no-elbows", help: "no one-bend lines out of the side of a box", apply: (req) => ({ ...req, elbows: false }) }
+];
+var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
+function parseDrawArgs(args) {
+  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false };
+  for (let i = 0;i < args.length; i++) {
+    const a = args[i];
+    if (a === "--help" || a === "-h")
+      return { kind: "help" };
+    const spec = OPTIONS.find((o) => o.name === a);
+    if (spec) {
+      let value = "";
+      if (spec.value !== undefined) {
+        const next = args[++i];
+        if (next === undefined)
+          return { kind: "usage" };
+        value = next;
+      }
+      const applied = spec.apply(req, value);
+      if (!applied)
+        return { kind: "usage" };
+      req = applied;
+    } else if (!a.startsWith("-") && req.file === undefined)
+      req = { ...req, file: a };
+    else
+      return { kind: "usage" };
+  }
+  return { kind: "draw", request: req };
+}
+
 // src/metrics.ts
 var WIDE_RANGES = [
   [4352, 4447],
@@ -17652,12 +17704,39 @@ function arrange(graph, ruler, opts) {
 class UrsulaError extends Error {
   code;
   line;
-  constructor(message, code, line) {
+  column;
+  hint;
+  suggestion;
+  example;
+  minWidth;
+  constructor(message, code, line, advice = {}) {
     super(line === undefined ? message : `line ${line}: ${message}`);
     this.name = "UrsulaError";
     this.code = code;
     if (line !== undefined)
       this.line = line;
+    if (advice.column !== undefined)
+      this.column = advice.column;
+    if (advice.hint !== undefined)
+      this.hint = advice.hint;
+    if (advice.suggestion !== undefined)
+      this.suggestion = advice.suggestion;
+    if (advice.example !== undefined)
+      this.example = advice.example;
+    if (advice.minWidth !== undefined)
+      this.minWidth = advice.minWidth;
+  }
+  get bare() {
+    return this.line === undefined ? this.message : this.message.slice(`line ${this.line}: `.length);
+  }
+  get advice() {
+    return {
+      ...this.column === undefined ? {} : { column: this.column },
+      ...this.hint === undefined ? {} : { hint: this.hint },
+      ...this.suggestion === undefined ? {} : { suggestion: this.suggestion },
+      ...this.example === undefined ? {} : { example: this.example },
+      ...this.minWidth === undefined ? {} : { minWidth: this.minWidth }
+    };
   }
 }
 
@@ -18491,6 +18570,883 @@ function spansToAscii(lines, opts = {}) {
   });
 }
 
+// src/syntax/flowchart.ts
+var flowchart = {
+  name: "flowchart",
+  headers: ["flowchart", "graph", "swimlane-beta"],
+  summary: "steps and decisions; swimlanes by owner",
+  example: `flowchart LR
+  start([Order placed]) --> pay{Paid?}
+  pay -->|yes| pick[Pick items]
+  pay -->|no| remind[Send reminder]
+  remind -.-> pay
+  subgraph wh[Warehouse]
+    pick --> ship([Ship])
+  end`,
+  rules: [
+    "A box is an id and its text: A[box], A(round), A([start]), A{decision}, A((circle)).",
+    "Lines: --> arrow, --- plain, -.-> dotted, ==> thick; A -->|text| B labels a line.",
+    "subgraph id[Title] ... end groups boxes; with 'swimlane-beta LR' each subgraph is a lane.",
+    "The direction follows the header: LR, RL, TD (or TB), BT.",
+    'Quote text that holds brackets or punctuation: A["a (b)"]; <br> breaks a line.'
+  ],
+  keywords: ["flowchart", "graph", "subgraph", "end", "direction", "classDef", "class", "style", "click", "linkStyle"]
+};
+
+// src/syntax/sequence.ts
+var sequence = {
+  name: "sequence",
+  headers: ["sequenceDiagram"],
+  summary: "messages between participants over time",
+  example: `sequenceDiagram
+  actor U as User
+  participant A as App
+  participant S as Server
+  U->>A: Tap pay
+  A->>+S: POST /pay
+  S-->>-A: 200 OK
+  alt declined
+    A-->>U: Show error
+  else paid
+    A-->>U: Show receipt
+  end`,
+  rules: [
+    "participant X as Name (or actor) declares in order; undeclared names appear when first used.",
+    "A->>B: text is a call, A-->>B: text a reply; -) is async, -x a lost message.",
+    "+ and - after the arrow (A->>+B, B-->>-A) start and end an activation.",
+    "Blocks: alt/else, opt, loop, par/and, critical, break, each closed by end.",
+    "Note right of A: text, or Note over A,B: text."
+  ],
+  keywords: ["participant", "actor", "alt", "else", "opt", "loop", "par", "and", "critical", "option", "break", "rect", "end", "Note", "note", "activate", "deactivate", "autonumber", "box", "create", "destroy", "title"]
+};
+
+// src/syntax/state.ts
+var state = {
+  name: "state",
+  headers: ["stateDiagram-v2"],
+  summary: "states and what moves between them",
+  example: `stateDiagram-v2
+  [*] --> Idle
+  Idle --> Running : start
+  Running --> Paused : pause
+  Paused --> Running : resume
+  Running --> Done : finish
+  Done --> [*]`,
+  rules: [
+    "A --> B : text is a transition; [*] is the start or the end.",
+    'state Busy { ... } nests states; state "Long name" as L names one.',
+    "state Fork <<fork>>, <<join>>, <<choice>> make the special states.",
+    "note right of A : text, or note left of A ... end note.",
+    "direction LR inside the diagram turns it sideways."
+  ],
+  keywords: ["state", "note", "end", "direction", "classDef", "class", "style"]
+};
+
+// src/syntax/class.ts
+var klass = {
+  name: "class",
+  headers: ["classDiagram"],
+  summary: "types with fields and how they relate",
+  example: `classDiagram
+  class Order {
+    +String id
+    +total() Money
+  }
+  class Customer {
+    +String name
+  }
+  Customer "1" --> "*" Order : places
+  Order *-- LineItem
+  Payment <|-- CardPayment`,
+  rules: [
+    "class Name { ... } lists members: +public, -private, #protected; a name with () is a method.",
+    "A <|-- B inheritance, *-- composition, o-- aggregation, --> association, ..> dependency, ..|> realization.",
+    '"1" and "*" beside the names are multiplicities; : text labels the line.',
+    "<<interface>> inside the braces marks a stereotype.",
+    "namespace Name { ... } groups classes."
+  ],
+  keywords: ["class", "namespace", "note", "direction", "classDef", "cssClass", "style", "link", "click", "callback"]
+};
+
+// src/syntax/er.ts
+var er = {
+  name: "er",
+  headers: ["erDiagram"],
+  summary: "tables and their relations",
+  example: `erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE_ITEM : contains
+  CUSTOMER {
+    string id PK
+    string name
+  }
+  ORDER {
+    string id PK
+    string customer_id FK
+  }`,
+  rules: [
+    "A ||--o{ B : label is a relation; the label is required.",
+    "Ends: || exactly one, |o zero or one, }| one or more, }o zero or more.",
+    "-- is an identifying line, .. a non-identifying one.",
+    'NAME { type field PK|FK|UK "comment" } lists the columns.',
+    'NAME["Shown name"] gives a table a longer name.'
+  ],
+  keywords: ["direction", "style", "classDef", "class"]
+};
+
+// src/syntax/gantt.ts
+var gantt = {
+  name: "gantt",
+  headers: ["gantt"],
+  summary: "tasks on a calendar",
+  example: `gantt
+  title Release
+  dateFormat YYYY-MM-DD
+  section Build
+    Design : a1, 2024-01-01, 5d
+    Code   : a2, after a1, 10d
+  section Ship
+    Test   : a3, after a2, 4d
+    Launch : milestone, after a3, 0d`,
+  rules: [
+    "Task : [tags,] [id,] start, end-or-length; tags are done, active, crit, milestone.",
+    "start is a date in dateFormat or 'after id'; a length is 3d, 2w, 12h.",
+    "section Name starts a group of tasks.",
+    "excludes weekends skips days; axisFormat %b %d sets the date labels.",
+    "In a terminal it needs about 30 columns or more."
+  ],
+  keywords: ["title", "dateFormat", "axisFormat", "tickInterval", "section", "excludes", "includes", "todayMarker", "weekday", "inclusiveEndDates", "topAxis", "displayMode", "accTitle", "accDescr"]
+};
+
+// src/syntax/journey.ts
+var journey = {
+  name: "journey",
+  headers: ["journey"],
+  summary: "how a user feels at each step",
+  example: `journey
+  title Buying a ticket
+  section Find
+    Search events: 4: Me
+    Compare prices: 2: Me, Friend
+  section Pay
+    Enter card: 3: Me
+    Get ticket: 5: Me`,
+  rules: [
+    "Task: score: who; the score runs from 1 (bad) to 5 (good).",
+    "Several people are separated by commas.",
+    "section Name groups the tasks that follow."
+  ],
+  keywords: ["title", "section", "accTitle", "accDescr"]
+};
+
+// src/syntax/eventmodeling.ts
+var eventmodeling = {
+  name: "eventmodeling",
+  headers: ["eventmodeling"],
+  summary: "commands, events and views along time",
+  example: `eventmodeling
+tf 01 ui CartUI
+tf 02 cmd AddItem { description: string }
+tf 03 evt ItemAdded
+tf 04 rmo CartItems
+tf 05 ui CartUI`,
+  rules: [
+    "tf NN kind Name is one time frame; NN orders them left to right.",
+    "Kinds: ui, cmd (command), evt (event), rmo (read model), pcr (processor).",
+    "{ field: type } after the name gives the data.",
+    "rf (resetframe) starts a new flow; ->> NN points the frame at frame NN.",
+    "Each frame is joined to the one before it when the kinds allow it."
+  ],
+  keywords: ["tf", "timeframe", "rf", "resetframe", "data", "ui", "cmd", "command", "evt", "event", "rmo", "readmodel", "pcr", "processor"]
+};
+
+// src/syntax/ishikawa.ts
+var ishikawa = {
+  name: "ishikawa",
+  headers: ["ishikawa-beta"],
+  summary: "the causes of one effect",
+  example: `ishikawa-beta
+  Slow checkout
+  People
+    New staff
+  Process
+    Manual card entry
+    Long queue
+  Tools
+    Old card reader`,
+  rules: [
+    "The first line under the header is the effect.",
+    "Each line one step in is a category; lines further in are its causes.",
+    "Indent with spaces; deeper causes nest under the line above."
+  ],
+  keywords: [],
+  indented: true
+};
+
+// src/syntax/cynefin.ts
+var cynefin = {
+  name: "cynefin",
+  headers: ["cynefin-beta"],
+  summary: "situations sorted into the five Cynefin domains",
+  example: `cynefin-beta
+  title Incident response
+  complex
+    "Investigate root cause"
+  complicated
+    "Analyze the logs"
+  clear
+    "Restart service"
+  chaotic
+    "Page on-call"
+  chaotic --> complex : "Stabilized"`,
+  rules: [
+    "The domains are complex, complicated, clear, chaotic and confusion.",
+    "Quoted lines indented under a domain are its items.",
+    'a --> b : "text" draws a move between two domains.'
+  ],
+  keywords: ["title", "complex", "complicated", "clear", "chaotic", "confusion"]
+};
+
+// src/syntax/git.ts
+var git = {
+  name: "git",
+  headers: ["gitGraph"],
+  summary: "branches, commits and merges",
+  example: `gitGraph
+  commit
+  branch feature
+  checkout feature
+  commit id: "parser"
+  commit
+  checkout main
+  merge feature tag: "v1.0"
+  commit`,
+  rules: [
+    'commit adds a commit to the current branch; id: "x", tag: "v1", type: HIGHLIGHT name it.',
+    "branch name starts a branch and moves to it; checkout (or switch) moves.",
+    "merge name merges that branch into the current one.",
+    'cherry-pick id: "x" copies a commit.',
+    "The first branch is main."
+  ],
+  keywords: ["commit", "branch", "checkout", "switch", "merge", "cherry-pick"]
+};
+
+// src/syntax/kanban.ts
+var kanban = {
+  name: "kanban",
+  headers: ["kanban"],
+  summary: "work by column",
+  example: `kanban
+  todo[To do]
+    t1[Write spec]
+    t2[Design API]@{ assigned: 'Ana', priority: 'High' }
+  doing[In progress]
+    t3[Build parser]
+  done[Done]
+    t4[Set up repo]`,
+  rules: [
+    "A line at the first indent is a column: id[Title].",
+    "Lines indented under it are its cards: id[Text].",
+    "@{ assigned: 'x', ticket: 'T-1', priority: 'High' } adds details to a card."
+  ],
+  keywords: [],
+  indented: true
+};
+
+// src/syntax/mindmap.ts
+var mindmap = {
+  name: "mindmap",
+  headers: ["mindmap"],
+  summary: "a tree of ideas",
+  example: `mindmap
+  root((Launch))
+    Product
+      Pricing
+      Docs
+    Marketing
+      Blog post
+      Newsletter`,
+  rules: [
+    "Indentation makes the tree: a line further in is a child of the line above.",
+    "The first line is the root.",
+    "Shapes as in flowcharts: id[box], id(round), id((circle)), id{{hexagon}}."
+  ],
+  keywords: [],
+  indented: true
+};
+
+// src/syntax/quadrant.ts
+var quadrant = {
+  name: "quadrant",
+  headers: ["quadrantChart"],
+  summary: "items on two axes, in four quadrants",
+  example: `quadrantChart
+  title Campaigns
+  x-axis Low reach --> High reach
+  y-axis Low engagement --> High engagement
+  quadrant-1 Expand
+  quadrant-2 Promote
+  quadrant-3 Re-evaluate
+  quadrant-4 Improve
+  Campaign A: [0.3, 0.6]
+  Campaign B: [0.78, 0.34]`,
+  rules: [
+    "Name: [x, y] places a point; x and y run from 0 to 1.",
+    "x-axis Low --> High and y-axis Low --> High name the ends of each axis.",
+    "quadrant-1 is top right, 2 top left, 3 bottom left, 4 bottom right."
+  ],
+  keywords: ["title", "x-axis", "y-axis", "quadrant-1", "quadrant-2", "quadrant-3", "quadrant-4", "classDef"]
+};
+
+// src/syntax/railroad.ts
+var railroad = {
+  name: "railroad",
+  headers: ["railroad-ebnf-beta", "railroad-abnf-beta", "railroad-peg-beta", "railroad-beta"],
+  summary: "the grammar of a language as railroad tracks",
+  example: `railroad-ebnf-beta
+title Number
+number = [ "-" ] digit { digit } [ "." digit { digit } ] ;
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;`,
+  rules: [
+    "One rule per line: name = expression ; (ends with a semicolon).",
+    'EBNF: "x" a terminal, name a rule, | a choice, [ x ] optional, { x } repeated.',
+    "railroad-abnf-beta and railroad-peg-beta read ABNF and PEG rules instead.",
+    'railroad-beta takes sequence(), choice(), optional(), zeroOrMore(), terminal("x"), nonterminal("y").'
+  ],
+  keywords: ["title"]
+};
+
+// src/syntax/block.ts
+var block = {
+  name: "block",
+  headers: ["block-beta"],
+  summary: "blocks on a grid",
+  example: `block-beta
+  columns 3
+  web["Web"] api["API"] db[("Database")]
+  web --> api
+  api --> db`,
+  rules: [
+    "columns N sets how many blocks a row holds; blocks fill rows in order.",
+    'id["Text"] is a block; shapes as in flowcharts; space leaves a gap.',
+    "block:id ... end nests blocks; id:2 spans two columns.",
+    "a --> b joins two blocks."
+  ],
+  keywords: ["columns", "block", "end", "space", "style", "classDef", "class"]
+};
+
+// src/syntax/pie.ts
+var pie = {
+  name: "pie",
+  headers: ["pie"],
+  summary: "parts of a whole",
+  example: `pie title Pets
+  "Dogs" : 386
+  "Cats" : 85
+  "Rats" : 15`,
+  rules: [
+    '"Label" : value, one slice per line; values are positive numbers.',
+    "pie showData prints the values; title Text names the chart."
+  ],
+  keywords: ["title", "showData"]
+};
+
+// src/syntax/packet.ts
+var packet = {
+  name: "packet",
+  headers: ["packet-beta"],
+  summary: "the bits of a packet header",
+  example: `packet-beta
+  0-15: "Source port"
+  16-31: "Destination port"
+  32-63: "Sequence number"
+  64-95: "Acknowledgment number"`,
+  rules: [
+    'start-end: "Name" covers bits start to end; a single bit is n: "Name".',
+    '+n: "Name" takes the next n bits.',
+    "Rows hold 32 bits."
+  ],
+  keywords: ["title"]
+};
+
+// src/syntax/radar.ts
+var radar = {
+  name: "radar",
+  headers: ["radar-beta"],
+  summary: "scores of a few things on several axes",
+  example: `radar-beta
+  axis speed["Speed"], cost["Cost"], ease["Ease"]
+  curve a["Plan A"]{4, 2, 5}
+  curve b["Plan B"]{3, 4, 2}
+  max 5`,
+  rules: [
+    'axis id["Name"], ... lists the axes.',
+    'curve id["Name"]{n, n, ...} gives one value per axis, in order.',
+    "max and min set the scale."
+  ],
+  keywords: ["title", "axis", "curve", "max", "min", "ticks", "showLegend", "graticule"]
+};
+
+// src/syntax/requirement.ts
+var requirement = {
+  name: "requirement",
+  headers: ["requirementDiagram"],
+  summary: "requirements and what satisfies them",
+  example: `requirementDiagram
+  requirement login {
+    id: 1
+    text: Users sign in.
+    risk: medium
+    verifymethod: test
+  }
+  element auth_service {
+    type: service
+  }
+  auth_service - satisfies -> login`,
+  rules: [
+    "requirement name { id: text: risk: verifymethod: } declares one; also functionalRequirement and others.",
+    "element name { type: docref: } is what meets or checks it.",
+    "a - satisfies -> b; other kinds: contains, copies, derives, verifies, refines, traces."
+  ],
+  keywords: ["requirement", "functionalRequirement", "interfaceRequirement", "performanceRequirement", "physicalRequirement", "designConstraint", "element", "direction", "style", "classDef", "class"]
+};
+
+// src/syntax/sankey.ts
+var sankey = {
+  name: "sankey",
+  headers: ["sankey-beta"],
+  summary: "flows and their amounts",
+  example: `sankey-beta
+Salary,Budget,4000
+Side jobs,Budget,800
+Budget,Rent,1500
+Budget,Food,700
+Budget,Savings,2600`,
+  rules: [
+    "One flow per line: source,target,value (comma separated).",
+    "A name with a comma goes in double quotes."
+  ],
+  keywords: []
+};
+
+// src/syntax/architecture.ts
+var architecture = {
+  name: "architecture",
+  headers: ["architecture-beta"],
+  summary: "services in groups and what connects them",
+  example: `architecture-beta
+  group api(cloud)[API]
+  service db(database)[Database] in api
+  service server(server)[Server] in api
+  service web(internet)[Web]
+  web:R --> L:server
+  server:R -- L:db`,
+  rules: [
+    "service id(icon)[Name] in group; icons: cloud, database, disk, internet, server.",
+    "group id(icon)[Name] holds services; groups can sit in groups.",
+    "a:R -- L:b joins the right side of a to the left of b; sides are L, R, T, B.",
+    "--> puts an arrowhead at the end, <--> at both."
+  ],
+  keywords: ["group", "service", "junction"]
+};
+
+// src/syntax/timeline.ts
+var timeline = {
+  name: "timeline",
+  headers: ["timeline"],
+  summary: "events in order",
+  example: `timeline
+  title Product history
+  2021 : Idea
+  2022 : First release
+       : 1000 users
+  section Growth
+    2023 : Teams plan
+    2024 : Mobile app`,
+  rules: [
+    "period : event; more events of the same period go on lines that start with :.",
+    "section Name groups the periods that follow."
+  ],
+  keywords: ["title", "section"]
+};
+
+// src/syntax/treeview.ts
+var treeview = {
+  name: "treeview",
+  headers: ["treeView-beta"],
+  summary: "a file tree",
+  example: `treeView-beta
+  src
+    index.ts
+    utils.ts
+  test
+    index.test.ts
+  package.json`,
+  rules: [
+    "Indentation makes the tree; a line further in is inside the line above.",
+    "Lines drawn with ├── and └── are read as well.",
+    "name ## text adds a note beside an entry."
+  ],
+  keywords: [],
+  indented: true
+};
+
+// src/syntax/usecase.ts
+var usecase = {
+  name: "usecase",
+  headers: ["usecase-beta"],
+  summary: "actors and what they can do",
+  example: `usecase-beta
+direction LR
+actor Customer
+systemBoundary Shop
+  Browse("Browse catalogue")
+  Checkout("Check out")
+end
+Customer --> Browse
+Customer --> Checkout
+Checkout ..> : include Browse`,
+  rules: [
+    "actor Name declares a person or system outside.",
+    'systemBoundary Name ... end holds the use cases: id("Text").',
+    "A --> B joins an actor to a use case.",
+    "a ..> : include b and a ..> : extend b are the dashed relations."
+  ],
+  keywords: ["actor", "systemBoundary", "end", "direction", "classDef", "class", "style"]
+};
+
+// src/syntax/treemap.ts
+var treemap = {
+  name: "treemap",
+  headers: ["treemap-beta"],
+  summary: "sizes of nested parts",
+  example: `treemap-beta
+"Frontend"
+  "Pages": 40
+  "Components": 25
+"Backend"
+  "API": 30
+  "Jobs": 10`,
+  rules: [
+    '"Name" alone is a group; "Name": value is a leaf with its size.',
+    "Indentation puts leaves and groups inside the group above."
+  ],
+  keywords: ["classDef"],
+  indented: true
+};
+
+// src/syntax/venn.ts
+var venn = {
+  name: "venn",
+  headers: ["venn-beta"],
+  summary: "sets and their overlaps",
+  example: `venn-beta
+  title Good feature
+  set Desirable
+  set Feasible
+  set Viable
+  union Desirable,Feasible["Buildable"]
+  union Desirable,Feasible,Viable["Ship it"]`,
+  rules: [
+    "set Name declares a set; two to four sets.",
+    'union A,B["Text"] names the overlap of the sets listed.',
+    "set Name:20 gives a size; text lines under a set list its items."
+  ],
+  keywords: ["title", "set", "union", "text", "style"]
+};
+
+// src/syntax/c4.ts
+var c4 = {
+  name: "c4",
+  headers: ["C4Context", "C4Container", "C4Component", "C4Dynamic", "C4Deployment"],
+  summary: "systems, containers and who uses them",
+  example: `C4Context
+  title Online shop
+  Person(customer, "Customer", "Buys things")
+  System(shop, "Shop", "Takes orders")
+  System_Ext(pay, "Payments", "Charges cards")
+  Rel(customer, shop, "Places orders")
+  Rel(shop, pay, "Charges", "HTTPS")`,
+  rules: [
+    'Person(id, "Name", "text"), System(...), Container(id, "Name", "tech", "text"); _Ext for outside ones.',
+    'Rel(from, to, "label", "tech") joins two elements.',
+    'System_Boundary(id, "Name") { ... } groups elements; also Enterprise_Boundary, Container_Boundary.',
+    "The header picks the level: C4Context, C4Container, C4Component, C4Dynamic, C4Deployment."
+  ],
+  keywords: ["title", "Person", "Person_Ext", "System", "System_Ext", "SystemDb", "SystemDb_Ext", "SystemQueue", "Container", "Container_Ext", "ContainerDb", "ContainerQueue", "Component", "Component_Ext", "ComponentDb", "Rel", "BiRel", "Rel_U", "Rel_D", "Rel_L", "Rel_R", "Boundary", "System_Boundary", "Enterprise_Boundary", "Container_Boundary", "Deployment_Node", "Node", "UpdateLayoutConfig", "UpdateRelStyle", "UpdateElementStyle"]
+};
+
+// src/syntax/wardley.ts
+var wardley = {
+  name: "wardley",
+  headers: ["wardley-beta"],
+  summary: "components by visibility and evolution",
+  example: `wardley-beta
+title Tea shop
+anchor Business [0.95, 0.63]
+component Tea [0.63, 0.81]
+component Kettle [0.43, 0.35]
+Business -> Tea
+Tea -> Kettle`,
+  rules: [
+    "[visibility, evolution]: two numbers from 0 to 1; visibility 1 is the top.",
+    "'anchor' is the user need; 'component' is everything else.",
+    "'A -> B' links two components by their names.",
+    "evolve Name 0.8 draws where a component is heading.",
+    "(build), (buy), (outsource) and (inertia) after the position mark a component."
+  ],
+  keywords: ["title", "anchor", "component", "evolve", "pipeline", "note", "evolution", "size", "annotation", "annotations", "accelerator", "deaccelerator"]
+};
+
+// src/syntax/xychart.ts
+var xychart = {
+  name: "xychart",
+  headers: ["xychart-beta"],
+  summary: "numbers as bars and lines",
+  example: `xychart-beta
+  title "Sales"
+  x-axis [jan, feb, mar, apr]
+  y-axis "Revenue" 0 --> 100
+  bar [30, 45, 60, 80]
+  line [25, 40, 65, 70]`,
+  rules: [
+    "x-axis [a, b, c] names the categories; x-axis 0 --> 10 makes it numeric.",
+    'y-axis "Title" min --> max sets the scale.',
+    "bar [ ... ] and line [ ... ] give one value per category.",
+    "xychart-beta horizontal turns the chart sideways."
+  ],
+  keywords: ["title", "x-axis", "y-axis", "bar", "line"]
+};
+
+// src/syntax/zenuml.ts
+var zenuml = {
+  name: "zenuml",
+  headers: ["zenuml"],
+  summary: "calls between objects, written like code",
+  example: `zenuml
+  title Order
+  @Actor Client
+  Client->Shop.order(cart) {
+    Stock.reserve(cart)
+    if(paid) {
+      return receipt
+    }
+  }`,
+  rules: [
+    "A->B: text is a message; A->B.method(args) { ... } is a call with what happens inside.",
+    "@Actor, @Database, @Boundary and others before a name set its kind.",
+    "if(x) { } else { }, while(x) { }, try { } catch { } are the blocks.",
+    "return x inside a call draws the reply."
+  ],
+  keywords: ["title", "if", "else", "while", "for", "forEach", "loop", "par", "opt", "try", "catch", "finally", "return", "new", "@Actor", "@Database", "@Boundary", "@Control", "@Entity"]
+};
+
+// src/syntax/index.ts
+var SYNTAX = [flowchart, sequence, state, klass, er, gantt, journey, eventmodeling, ishikawa, cynefin, git, kanban, mindmap, quadrant, railroad, block, pie, packet, radar, requirement, sankey, architecture, timeline, treeview, usecase, treemap, venn, c4, wardley, xychart, zenuml];
+
+// src/errors/hints.ts
+var HINTS = [
+  { frontEnd: "flowchart", pattern: /^expected a node id near ''/, hint: "an arrow needs a node on both ends", example: "A --> B" },
+  { frontEnd: "flowchart", pattern: /^missing '([\])}>])'/, hint: "a bracket around the text of a node is opened and not closed", example: "A[Text] --> B(Text)" },
+  { frontEnd: "flowchart", pattern: /^subgraph '.*' is never closed/, hint: "close every subgraph with a line 'end'", example: "end" },
+  { frontEnd: "flowchart", pattern: /^'end' without a matching 'subgraph'/, hint: "this 'end' has no 'subgraph' above it" },
+  { frontEnd: "state", pattern: /^a transition needs a state on both sides/, hint: "a transition names a state on each side of -->", example: "A --> B : event" },
+  { frontEnd: "sequence", pattern: /^message needs a sender and a receiver|^unsupported syntax/, hint: "a message is written Sender->>Receiver: text", example: "Alice->>Bob: Hello" },
+  { frontEnd: "class", pattern: /^Unrecognized class diagram statement/, hint: "a line is a class, a relation such as A <|-- B, or a member such as A : +name" },
+  { frontEnd: "er", pattern: /^Cannot read "/, hint: "a relation is A ||--o{ B : label, and the label is required", example: "CUSTOMER ||--o{ ORDER : places" },
+  { frontEnd: "c4", pattern: /^cannot read '|^unclosed quote/, hint: 'an element is Name(alias, "Label", "text") with every bracket and quote closed' },
+  { frontEnd: "gantt", pattern: /^Cannot read ".*"; a task/, hint: "a task has a name, a colon, then its start and end or length", example: "Task : 2024-01-01, 3d" },
+  { frontEnd: "wardley", pattern: /^Unrecognised line/, hint: "a line starts with title, anchor, component, evolve, pipeline or note, or is a link A -> B" },
+  { frontEnd: "quadrant", pattern: /^Unrecognised line/, hint: "a point is Name: [x, y]; other lines start with title, x-axis, y-axis or quadrant-1..4" },
+  { frontEnd: "mindmap", pattern: /^A mindmap has one root/, hint: "indent every node below the root further than the root" },
+  { frontEnd: "treeview", pattern: /indented .* below the line above/, hint: "indent an item one step deeper than the line above it, not more" },
+  { frontEnd: "timeline", pattern: /^An event line needs a time period/, hint: "an event follows a period: the first line of a period is period : event", example: "2024 : Launch" },
+  { frontEnd: "ishikawa", pattern: /is indented less than the categories/, hint: "indent categories one step under the effect, and causes further under their category" }
+];
+function hintFor(frontEnd, message) {
+  const found = HINTS.find((h) => h.frontEnd === frontEnd && h.pattern.test(message));
+  return found === undefined ? undefined : { hint: found.hint, ...found.example === undefined ? {} : { example: found.example } };
+}
+
+// src/errors/locate.ts
+function quotedPieces(message) {
+  const near = /near '([\s\S]*?)'(?=[\s.,;:)]|$)/.exec(message)?.[1];
+  const rest = message.replace(/near '[\s\S]*?'(?=[\s.,;:)]|$)/, "");
+  const quoted = [...rest.matchAll(/(?<![\w])(["'])([\s\S]*?)\1(?=[\s.,;:)]|$)/g)].map((m) => m[2] ?? "");
+  return [...near === undefined ? [] : [near], ...quoted].map((p) => p.replace(/\.\.\.$/, ""));
+}
+function locate(message, row) {
+  const found = locatePiece(message, row);
+  if (found !== undefined || row.trim() === "")
+    return found;
+  if (/indent|lines up|one root|level/i.test(message))
+    return row.length - row.trimStart().length + 1;
+  if (/\b(needs?|not closed|never closed|unterminated|missing|has no|is empty|three fields)\b/i.test(message))
+    return row.trimEnd().length + 1;
+  return;
+}
+function locatePiece(message, row) {
+  for (const piece of quotedPieces(message)) {
+    if (piece === "")
+      return row.trimEnd().length + 1;
+    const at = row.indexOf(piece);
+    if (at >= 0)
+      return at + 1;
+    const trimmed = piece.trim();
+    if (trimmed !== "" && trimmed !== piece) {
+      const again = row.indexOf(trimmed);
+      if (again >= 0)
+        return again + 1;
+    }
+  }
+  return;
+}
+function leadingWord(row) {
+  return /^[\p{L}_@][\p{L}\p{N}_@]*(?:-[\p{L}\p{N}_]+)*/u.exec(row.trim())?.[0] ?? "";
+}
+
+// src/errors/suggest.ts
+function editDistance(a, b, most = Infinity) {
+  const s = a.toLowerCase();
+  const t = b.toLowerCase();
+  if (Math.abs(s.length - t.length) > most)
+    return most + 1;
+  let prev2 = [];
+  let prev = Array.from({ length: t.length + 1 }, (_, j) => j);
+  for (let i = 1;i <= s.length; i++) {
+    const row = [i];
+    let low = i;
+    for (let j = 1;j <= t.length; j++) {
+      const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+      let d = Math.min((prev[j] ?? 0) + 1, (row[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
+      if (i > 1 && j > 1 && s[i - 1] === t[j - 2] && s[i - 2] === t[j - 1])
+        d = Math.min(d, (prev2[j - 2] ?? 0) + 1);
+      row.push(d);
+      low = Math.min(low, d);
+    }
+    if (low > most)
+      return most + 1;
+    prev2 = prev;
+    prev = row;
+  }
+  return prev[t.length] ?? 0;
+}
+function closest(word, candidates, most = 2) {
+  if (word === "")
+    return;
+  let best;
+  let bestDistance = most + 1;
+  let tied = false;
+  const seen = new Set;
+  for (const c of candidates) {
+    if (c === word || seen.has(c.toLowerCase()))
+      continue;
+    seen.add(c.toLowerCase());
+    const limit = Math.min(most, c.length < 4 ? 1 : most);
+    const d = editDistance(word, c, limit);
+    if (d > limit)
+      continue;
+    if (d < bestDistance) {
+      best = c;
+      bestDistance = d;
+      tied = false;
+    } else if (d === bestDistance)
+      tied = true;
+  }
+  return tied ? undefined : best;
+}
+
+// src/errors/explain.ts
+var prefix = (a, b) => {
+  let n = 0;
+  while (n < a.length && n < b.length && a[n] === b[n])
+    n++;
+  return n;
+};
+function likest(lines, target) {
+  let best;
+  let length = 0;
+  for (const l of lines) {
+    const n = prefix(l.trim(), target);
+    if (n > length) {
+      best = l;
+      length = n;
+    }
+  }
+  return best;
+}
+var hasWord = (line, word) => line.split(/[^\p{L}\p{N}_@-]+/u).includes(word);
+function exampleLine(e, row, word, suggestion, hinted) {
+  const lines = e.example.split(`
+`);
+  if (lines[0] !== undefined && e.headers.includes(word) && suggestion === undefined)
+    return lines[0].trim();
+  const target = (suggestion === undefined || word === "" ? row : row.replace(word, suggestion)).trim();
+  const pick = (suggestion === undefined ? undefined : likest(lines.filter((l) => hasWord(l, suggestion)), target) ?? lines.find((l) => hasWord(l, suggestion))) ?? (word === "" ? undefined : likest(lines.slice(1).filter((l) => leadingWord(l) === word), target) ?? lines.slice(1).find((l) => leadingWord(l) === word)) ?? hinted ?? likest(lines.slice(1), target) ?? lines.slice(1).find((l) => l.trim() !== "");
+  if (pick === undefined)
+    return;
+  return e.indented && pick !== hinted ? pick.trimEnd() : pick.trim();
+}
+var isWidth = (code) => /width$/.test(code);
+function explain(err, src, ctx) {
+  if (isWidth(err.code))
+    return err;
+  const rows = src.split(/\r?\n/);
+  const advice = { ...err.advice };
+  const message = err.bare;
+  if (ctx.frontEnd === undefined) {
+    const at = ctx.header === "" ? -1 : rows.findIndex((r) => r.trim().startsWith(ctx.header));
+    const row = at >= 0 ? rows[at] ?? "" : "";
+    const suggestion = closest(ctx.header, ctx.headers);
+    const rest = at >= 0 ? row.trim().slice(ctx.header.length) : "";
+    return new UrsulaError(message, err.code, err.line ?? (at >= 0 ? at + 1 : undefined), {
+      ...advice,
+      ...advice.column === undefined && at >= 0 ? { column: row.indexOf(ctx.header) + 1 } : {},
+      ...suggestion === undefined ? {} : { suggestion },
+      ...advice.hint === undefined && suggestion === undefined ? { hint: "the first line names the diagram type, such as 'flowchart LR' or 'sequenceDiagram'; 'ursula-diagram syntax' lists them all" } : {},
+      example: advice.example ?? (suggestion === undefined ? "flowchart LR" : `${suggestion}${rest}`)
+    });
+  }
+  const entry = SYNTAX.find((e) => e.name === ctx.frontEnd);
+  const row = err.line === undefined ? undefined : rows[err.line - 1];
+  const word = row === undefined ? "" : leadingWord(row);
+  const keywords = entry?.keywords ?? [];
+  let suggestion = advice.suggestion;
+  if (suggestion === undefined && row !== undefined) {
+    const known = new Set([...keywords, ...ctx.headers]);
+    if (word !== "" && !known.has(word))
+      suggestion = closest(word, keywords);
+    if (suggestion === undefined) {
+      for (const piece of quotedPieces(message)) {
+        const first = leadingWord(piece);
+        if (first === "" || known.has(first) || !row.includes(first))
+          continue;
+        suggestion = closest(first, keywords);
+        if (suggestion !== undefined)
+          break;
+      }
+    }
+  }
+  let column = advice.column;
+  if (column === undefined && row !== undefined) {
+    column = locate(message, row);
+    if (column === undefined && suggestion !== undefined && word !== "" && suggestion !== word) {
+      const at = row.indexOf(word);
+      if (at >= 0)
+        column = at + 1;
+    }
+  }
+  const hinted = entry === undefined ? undefined : hintFor(entry.name, message);
+  const example = advice.example ?? (entry === undefined ? hinted?.example : exampleLine(entry, row ?? "", word, suggestion, hinted?.example));
+  return new UrsulaError(message, err.code, err.line, {
+    ...advice,
+    ...column === undefined ? {} : { column },
+    ...suggestion === undefined ? {} : { suggestion },
+    ...advice.hint === undefined && hinted !== undefined && suggestion === undefined ? { hint: hinted.hint } : {},
+    ...example === undefined ? {} : { example }
+  });
+}
+
 // src/registry.ts
 var frontEnds = [];
 function registerFrontEnd(frontEnd) {
@@ -18515,9 +19471,19 @@ function firstWord(src) {
 }
 function selectFrontEnd(src) {
   const word = firstWord(src);
-  const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
+  const claimed = frontEnds.find((f) => f.headers.includes(word));
+  const found = claimed ?? frontEnds[0];
   if (!found)
     throw new Error("no front-end registered");
+  const guard = (call) => (...a) => {
+    try {
+      return call(...a);
+    } catch (err) {
+      if (!(err instanceof UrsulaError))
+        throw err;
+      throw explain(err, a[0], { frontEnd: claimed?.name, header: word, headers: frontEnds.flatMap((f) => f.headers) });
+    }
+  };
   const spans = found.textSpans;
   const ascii = { countBars: found.name === "er" };
   const head = (s, o) => {
@@ -18534,17 +19500,17 @@ function selectFrontEnd(src) {
   };
   return {
     ...found,
-    svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
-    textLines: (s, w, o) => {
+    svg: guard((s, o) => found.svg(blankFrontMatter(s), head(s, o))),
+    textLines: guard((s, w, o) => {
       const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
       return o.charset === "ascii" ? toAscii(lines, ascii) : lines;
-    },
-    json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
+    }),
+    json: guard((s, m, o) => found.json(blankFrontMatter(s), m, head(s, o))),
     ...spans ? {
-      textSpans: (s, w, o) => {
+      textSpans: guard((s, w, o) => {
         const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
         return o.charset === "ascii" ? spansToAscii(lines, ascii) : lines;
-      }
+      })
     } : {}
   };
 }
@@ -21648,7 +22614,6 @@ var TAG_PAD2 = 9;
 var MAX_REORDER = 7;
 var MIN_RUN2 = 28;
 var ARROW_REACH = 3;
-var EMPTY_WIDTH = 320;
 var UNITS_MS = [1, 1000, 60000, 3600000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
 var SCALES = [32, 24, 16, 12, 8, 6, 4, 3, 2, 1.5, 1];
 function chooseScale(span) {
@@ -21664,8 +22629,6 @@ function layoutGantt(model, ruler) {
   const w12 = (s) => ruler.textWidth(s, "line");
   const w13 = (s) => ruler.textWidth(s, "title");
   const taskOf = (i) => model.tasks[i];
-  if (model.tasks.length === 0)
-    return emptyLayout(model, w13);
   const rowTasks = model.tasks.flatMap((t, i) => t.vert ? [] : [i]);
   const vertTasks = model.tasks.flatMap((t, i) => t.vert ? [i] : []);
   const centreOf = (t) => t.milestone ? t.start + (t.end - t.start) / 2 : t.start;
@@ -21921,21 +22884,9 @@ function layoutGantt(model, ruler) {
     }
   }
   items.push(...portItems);
-  const scene = { width, height, title: sceneName(model), items };
+  const name = model.accTitle ?? (model.title === undefined ? "gantt" : `gantt — ${model.title}`);
+  const scene = { width, height, title: name, items };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
-}
-function sceneName(model) {
-  return model.accTitle ?? (model.title === undefined ? "gantt" : `gantt — ${model.title}`);
-}
-function emptyLayout(model, titleWidth) {
-  const titleRight = model.title === undefined ? 0 : LEFT2 + titleWidth(model.title) * 15 / 13;
-  const width = Math.max(EMPTY_WIDTH, ceilTo(titleRight) + 40);
-  const height = model.title === undefined ? 80 : 120;
-  const items = [{ kind: "box", x: 16, y: 16, w: width - 32, h: height - 32, role: ["panel"] }];
-  if (model.title !== undefined)
-    items.push({ kind: "text", x: LEFT2, y: 52, text: model.title, role: ["title"] });
-  const ticks = { unit: "d", step: 1, twoRow: false, ticks: [] };
-  return { scene: { width, height, title: sceneName(model), items }, bars: [], ticks, scale: 0, origin: LEFT2, omitted: [] };
 }
 function crosses2(x, a, b, spansAt) {
   return range(Math.min(a, b) + 1, Math.max(a, b)).some((r) => spansAt(r).some(([x0, x1]) => x >= x0 - 4 && x <= x1 + 4));
@@ -22132,6 +23083,8 @@ function parseGantt(src, opts = {}) {
   }
   if (!headerSeen)
     fail2('A Gantt chart starts with "gantt".', 1, "header");
+  if (raws.length === 0)
+    fail2("A Gantt chart needs at least one task.", rows.length, "empty");
   const format = compileDateFormat(dateFormat);
   const excludes = readExcludes(excludeTokens, weekend, format);
   const tasks = resolve(raws, format, excludes);
@@ -22365,9 +23318,7 @@ function trimEnd(row) {
 function layoutGanttText(model, maxWidth) {
   const width = maxWidth ?? DEFAULT_WIDTH;
   if (width < MIN_WIDTH)
-    throw new UrsulaError(`A Gantt drawing needs at least ${MIN_WIDTH} columns of width; the limit is ${width}.`, "gantt-width");
-  if (model.tasks.length === 0)
-    return [...model.title === undefined ? [] : [[span2(cut2(model.title, width), "bold")]], [span2("(no tasks)", "dim")]];
+    throw new UrsulaError(`A Gantt drawing needs at least ${MIN_WIDTH} columns of width; the limit is ${width}.`, "gantt-width", undefined, { minWidth: MIN_WIDTH });
   const rowsOf = model.tasks.flatMap((t, i) => t.vert ? [] : [i]);
   const tasks = model.tasks;
   const task = (i) => tasks[i];
@@ -22473,7 +23424,6 @@ function layoutGanttText(model, maxWidth) {
 }
 
 // src/gantt/frontend.ts
-var EMPTY_NOTE = 'the chart has no tasks, so it draws an empty frame; a task is written "name : start, end"';
 registerFrontEnd({
   name: "gantt",
   headers: ["gantt"],
@@ -22491,10 +23441,9 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter });
-    const notes = model.tasks.length === 0 ? { notes: [EMPTY_NOTE] } : {};
     if (mode === "text")
-      return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans), ...notes };
-    return { model, ...layoutGantt(model, pixelRuler()), ...notes };
+      return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans) };
+    return { model, ...layoutGantt(model, pixelRuler()) };
   }
 });
 
@@ -25277,7 +26226,7 @@ function layoutKanbanText(model, maxWidth) {
   const n = model.columns.length;
   const limit = maxWidth ?? Number.POSITIVE_INFINITY;
   if (limit < MIN_INNER2 + 4)
-    throw new UrsulaError(`A kanban drawing needs at least ${MIN_INNER2 + 4} columns of width; the limit is ${limit}.`, "kanban-width");
+    throw new UrsulaError(`A kanban drawing needs at least ${MIN_INNER2 + 4} columns of width; the limit is ${limit}.`, "kanban-width", undefined, { minWidth: MIN_INNER2 + 4 });
   const fit = maxWidth === undefined ? DEFAULT_COLUMN : Math.min(WIDE_COLUMN, Math.floor((maxWidth - COLUMN_GAP3 * (n - 1)) / n));
   let rows;
   if (fit >= NARROW_COLUMN || n === 1) {
@@ -27861,8 +28810,8 @@ function sceneItems(blocks, links, model, u) {
 }
 
 // src/block/parse.ts
-function fail9(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
+function fail9(message, line, code = "syntax", column) {
+  throw new UrsulaError(message, code, line, column === undefined ? {} : { column });
 }
 var BRACKETS = [
   { open: "(((", close: ")))", shape: "dbl-circle" },
@@ -28114,7 +29063,7 @@ function parseBlock(src, heading) {
       continue;
     }
     if (tokens.some((t, i) => i % 2 === 0 !== (t.t === "node")) || tokens[tokens.length - 1]?.t !== "node") {
-      fail9("A link joins two blocks: A --> B.", line, "link");
+      fail9("A link joins two blocks: A --> B.", line, "link", (rows[n] ?? "").trimEnd().length + 1);
     }
     for (const t of tokens)
       if (t.t === "node")
@@ -36508,7 +37457,7 @@ var BOUNDARY_KINDS = new Set(["Boundary", "Enterprise_Boundary", "System_Boundar
 var NODE2 = /^(Deployment_Node|Node)(_L|_R)?$/;
 var REL2 = /^(Rel|BiRel)(_Up|_Down|_Left|_Right|_U|_D|_L|_R|_Back|_Neighbor)?$/;
 var LAY = /^Lay_(Up|Down|Left|Right|U|D|L|R)$/;
-var HINTS = { U: "up", Up: "up", D: "down", Down: "down", L: "left", Left: "left", R: "right", Right: "right", Neighbor: "right" };
+var HINTS2 = { U: "up", Up: "up", D: "down", Down: "down", L: "left", Left: "left", R: "right", Right: "right", Neighbor: "right" };
 var IGNORED5 = /^(Update[A-Za-z]*|Add[A-Za-z]*|Rewrite[A-Za-z]*|Lay_[A-Za-z]+|SHOW_[A-Z_]+|HIDE_[A-Z_]+|LAYOUT_[A-Z_]+|Legend[A-Za-z]*|SetPropertyHeader|WithoutPropertyHeader)$/;
 var BREAK3 = /<br\s*\/?>/gi;
 var fail20 = (message, line) => {
@@ -36658,7 +37607,7 @@ function parseC4(src) {
       steps += 1;
       const suffix = rel?.[2];
       const heads = rel?.[1] === "BiRel" ? "both" : suffix === "_Back" ? "start" : "end";
-      const hint = suffix === undefined ? undefined : HINTS[suffix.slice(1)];
+      const hint = suffix === undefined ? undefined : HINTS2[suffix.slice(1)];
       model.rels.push({
         from,
         to,
@@ -36679,7 +37628,7 @@ function parseC4(src) {
       for (const end of [from, to])
         if (!aliases.has(end))
           fail20(`'${end}' is not defined`, line);
-      model.lays.push({ from, to, hint: HINTS[lay[1]], line });
+      model.lays.push({ from, to, hint: HINTS2[lay[1]], line });
       return;
     }
     if (name === "UpdateLayoutConfig") {
@@ -39011,6 +39960,63 @@ function renderTextSvg(lines) {
     "</svg>"
   ].join("");
 }
+// src/layered/details.ts
+var MOST2 = 5;
+var escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var word = (id) => `(?<![\\p{L}\\p{N}_])${escape(id)}(?![\\p{L}\\p{N}_])`;
+function edgeLine(rows, from, to) {
+  const arrow = "[^\\n]*?[-.=<>]{2,}[^\\n]*?";
+  const forward = new RegExp(`${word(from)}${arrow}${word(to)}`, "u");
+  const backward = new RegExp(`${word(to)}${arrow}${word(from)}`, "u");
+  const at = rows.findIndex((r) => !r.trim().startsWith("%%") && (forward.test(r) || backward.test(r)));
+  return at < 0 ? undefined : at + 1;
+}
+function checkDetails(l, src) {
+  const rows = src.split(/\r?\n/);
+  const name = (from, to) => {
+    const line = edgeLine(rows, from, to);
+    return `${from} --> ${to}${line === undefined ? "" : ` (line ${line})`}`;
+  };
+  const out = [];
+  const crossings = l.diagnostics.filter((d) => d.kind === "crossing" && d.nodes.length === 4);
+  for (const d of crossings.slice(0, MOST2)) {
+    const [a, b, c, e] = d.nodes;
+    const times = /\((\d+) times\)/.exec(d.message)?.[1];
+    out.push(`crossing: ${name(a, b)} crosses ${name(c, e)}${times === undefined ? "" : ` (${times} times)`}`);
+  }
+  if (crossings.length > MOST2)
+    out.push(`crossing: … and ${crossings.length - MOST2} more`);
+  const bent = l.edges.filter((e) => !e.invisible && e.points.length - 2 >= 2).map((e) => ({ e, bends: e.points.length - 2 })).sort((p, q) => q.bends - p.bends).slice(0, MOST2);
+  if (bent.length > 0)
+    out.push(`bends: ${bent.map(({ e, bends }) => `${name(e.from, e.to)} ${bends}`).join(", ")}`);
+  return out;
+}
+// src/syntax/lookup.ts
+function syntaxOf(type) {
+  const t = type.toLowerCase();
+  return SYNTAX.find((e) => e.name.toLowerCase() === t || e.headers.some((h) => h.toLowerCase() === t));
+}
+function closestType(type) {
+  return closest(type, SYNTAX.flatMap((e) => [e.name, ...e.headers]));
+}
+function syntaxText(e) {
+  return [`${e.headers[0]}: ${e.summary}.`, "", e.example, "", ...e.rules.map((r) => `- ${r}`), "", `Headers: ${e.headers.join(", ")}`, ""].join(`
+`);
+}
+function syntaxList() {
+  const heads = SYNTAX.map((e) => e.headers.join(", "));
+  const nameWidth = Math.max(...SYNTAX.map((e) => e.name.length)) + 2;
+  const headWidth = Math.min(40, Math.max(...heads.map((h) => h.length))) + 2;
+  const rows = SYNTAX.map((e, i) => {
+    const head = heads[i] ?? "";
+    return `${e.name.padEnd(nameWidth)}${head.length > headWidth - 2 ? `${head}
+${" ".repeat(nameWidth + headWidth)}` : head.padEnd(headWidth)}${e.summary}`;
+  });
+  return `${rows.join(`
+`)}
+Run 'ursula-diagram syntax <type>' for an example and the rules.
+`;
+}
 // src/sequence/check.ts
 function overlaps3(a, b) {
   return Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
@@ -39288,113 +40294,275 @@ function renderHtml(src, opts = {}) {
   return renderHtmlDocument(svg, layout, src, { ...opts.title === undefined ? {} : { title: opts.title }, ...opts.theme === undefined ? {} : { theme: opts.theme } });
 }
 
-// src/cli.ts
-function usage() {
-  process.stderr.write(`usage: ursula-diagram [file.mmd] [--format svg|text|text-svg|json|check|html] [--width N] [--charset unicode|ascii] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]
-`);
-  process.exit(2);
+// src/command/report.ts
+function errorReport(err, src) {
+  const out = [`error: ${err.message}`];
+  const row = err.line === undefined ? undefined : src.split(/\r?\n/)[err.line - 1];
+  if (err.line !== undefined && row !== undefined && row.trim() !== "") {
+    const gutter = String(err.line);
+    out.push(`  ${gutter} | ${row}`);
+    if (err.column !== undefined) {
+      const before = row.slice(0, err.column - 1);
+      const run = /^\S+/.exec(row.slice(err.column - 1))?.[0] ?? "";
+      const marks = Math.max(1, cellWidth(run));
+      out.push(`  ${" ".repeat(gutter.length)} | ${" ".repeat(cellWidth(before))}${"^".repeat(marks)}`);
+    }
+  }
+  if (err.suggestion !== undefined)
+    out.push(`did you mean: ${err.suggestion}`);
+  if (err.hint !== undefined)
+    out.push(`hint: ${err.hint}`);
+  if (err.example !== undefined)
+    out.push(`example: ${err.example}`);
+  return `${out.join(`
+`)}
+`;
 }
-var args = process.argv.slice(2);
-var file;
-var format = "svg";
-var width;
-var legend = true;
-var color = false;
-var charset;
-var questions = true;
-var elbows = true;
-var engine;
-var composition;
-var detail;
-var title;
-var quality2;
-var theme;
-for (let i = 0;i < args.length; i++) {
-  const a = args[i];
-  if (a === "--format")
-    format = args[++i] ?? usage();
-  else if (a === "--width")
-    width = Number(args[++i] ?? usage());
-  else if (a === "--no-legend")
-    legend = false;
-  else if (a === "--color")
-    color = true;
-  else if (a === "--charset") {
-    const v = args[++i];
-    if (v !== "unicode" && v !== "ascii")
-      usage();
-    charset = v;
-  } else if (a === "--no-questions")
-    questions = false;
-  else if (a === "--no-elbows")
-    elbows = false;
-  else if (a === "--composition") {
-    const v = args[++i];
-    if (v !== "auto" && v !== "lanes" && v !== "stages")
-      usage();
-    composition = v;
-  } else if (a === "--quality") {
-    const v = args[++i];
-    if (v !== "fast" && v !== "best")
-      usage();
-    quality2 = v;
-  } else if (a === "--title") {
-    title = args[++i] ?? usage();
-  } else if (a === "--theme") {
-    const v = args[++i];
-    if (v !== "auto" && v !== "light" && v !== "dark")
-      usage();
-    theme = v;
-  } else if (a === "--detail") {
-    const v = args[++i];
-    if (v !== "auto" && v !== "full" && v !== "narrow" && v !== "title")
-      usage();
-    detail = v;
-  } else if (a === "--engine") {
-    const v = args[++i];
-    if (v !== "grid" && v !== "layered")
-      usage();
-    engine = v;
-  } else if (a !== undefined && !a.startsWith("--") && file === undefined)
-    file = a;
-  else
-    usage();
+var ISSUES = "https://github.com/yjun1806/ursula-diagram/issues";
+function internalReport(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return `error: internal: ${message}
+This is a fault in ursula-diagram, not in the text. Please report it with the diagram text: ${ISSUES}
+`;
 }
-if (!["svg", "text", "text-svg", "json", "check", "html"].includes(format) || width !== undefined && !Number.isFinite(width))
-  usage();
-try {
-  const src = readFileSync(file ?? 0, "utf8");
+
+// src/command/width.ts
+var isTooNarrow = (err) => /width$/.test(err.code);
+var widestOf = (rows) => Math.max(0, ...rows.map(cellWidth));
+function attemptWith(draw) {
+  return (width) => {
+    try {
+      const widest = widestOf(draw(width));
+      return { fits: widest <= width, widest };
+    } catch (err) {
+      if (err instanceof UrsulaError && isTooNarrow(err))
+        return { fits: false, ...err.minWidth === undefined ? {} : { minWidth: err.minWidth } };
+      throw err;
+    }
+  };
+}
+var MOST3 = 8;
+function neededWidth(limit, first, attempt) {
+  let draws = 0;
+  let hi = Math.max(limit + 1, first.widest ?? 0, first.minWidth ?? 0);
+  let fit;
+  while (draws < MOST3) {
+    const a = attempt(hi);
+    draws++;
+    if (a.fits) {
+      fit = hi;
+      break;
+    }
+    hi = Math.max(hi + 1, a.widest ?? 0, a.minWidth ?? 0, a.widest === undefined && a.minWidth === undefined ? Math.ceil(hi * 1.5) : 0);
+  }
+  if (fit === undefined)
+    return { width: hi, sure: false };
+  let lo = limit + 1;
+  while (lo < fit && draws < MOST3) {
+    const mid = Math.floor((lo + fit) / 2);
+    draws++;
+    if (attempt(mid).fits)
+      fit = mid;
+    else
+      lo = mid + 1;
+  }
+  return { width: fit, sure: true };
+}
+var widthHint = (width) => `hint: run again with --width ${width}, or shorten the names, or split the diagram`;
+
+// src/command/draw.ts
+function layoutOptions5(req) {
+  return {
+    ...req.width === undefined ? {} : { maxWidth: req.width },
+    ...req.legend ? {} : { legend: false },
+    ...req.engine === undefined ? {} : { engine: req.engine },
+    ...req.composition === undefined ? {} : { composition: req.composition },
+    ...req.questions ? {} : { questions: false },
+    ...req.elbows ? {} : { elbows: false },
+    ...req.detail === undefined ? {} : { detail: req.detail },
+    ...req.quality === undefined ? {} : { quality: req.quality },
+    ...req.charset === undefined ? {} : { charset: req.charset }
+  };
+}
+function checkReport(src, req) {
+  const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
+  const lines = "edges" in laid && "diagnostics" in laid ? [...checkLines(laid), ...checkDetails(laid, src)] : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
+  return `${lines.join(`
+`)}
+`;
+}
+function terminal2(src, req, width) {
   const frontEnd = selectFrontEnd(src);
-  const opts = { ...width === undefined ? {} : { maxWidth: width }, ...legend ? {} : { legend: false }, ...engine === undefined ? {} : { engine }, ...composition === undefined ? {} : { composition }, ...questions ? {} : { questions: false }, ...elbows ? {} : { elbows: false }, ...detail === undefined ? {} : { detail }, ...quality2 === undefined ? {} : { quality: quality2 }, ...charset === undefined ? {} : { charset } };
-  if (format === "html") {
-    process.stdout.write(renderHtml(src, { ...title === undefined ? {} : { title }, ...width === undefined ? {} : { maxWidth: width }, ...theme === undefined ? {} : { theme } }));
-  } else if (format === "check") {
-    const laid = frontEnd.json(src, "svg", opts);
-    const lines = "edges" in laid && "diagnostics" in laid ? checkLines(laid) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
-    process.stdout.write(`${lines.join(`
-`)}
-`);
-  } else if (format === "text") {
-    const rows = color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
-    process.stdout.write(`${rows.join(`
-`)}
-`);
-  } else if (format === "text-svg") {
+  const opts = layoutOptions5(req);
+  if (req.format === "text-svg" || req.color && frontEnd.textSpans) {
     const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
-    process.stdout.write(`${renderTextSvg(spans)}
-`);
-  } else if (format === "json") {
-    process.stdout.write(`${JSON.stringify(frontEnd.json(src, "svg", opts), null, 2)}
-`);
-  } else {
-    process.stdout.write(`${frontEnd.svg(src, opts)}
-`);
+    const rows = spans.map((line) => line.map((s) => s.text).join(""));
+    return { rows, out: req.format === "text-svg" ? `${renderTextSvg(spans)}
+` : `${spans.map(spansToAnsi).join(`
+`)}
+` };
   }
-} catch (err) {
-  if (err instanceof UrsulaError) {
-    process.stderr.write(`error: ${err.message}
-`);
-    process.exit(1);
-  }
-  throw err;
+  const rows = frontEnd.textLines(src, width, opts);
+  return { rows, out: `${rows.join(`
+`)}
+` };
 }
+function fitted(src, req, limit) {
+  let drawn;
+  let refused;
+  try {
+    drawn = terminal2(src, req, limit);
+    if (widestOf(drawn.rows) <= limit)
+      return { stdout: drawn.out, stderr: "", code: 0 };
+  } catch (err) {
+    if (!(err instanceof UrsulaError) || !isTooNarrow(err))
+      throw err;
+    refused = err;
+  }
+  const attempt = attemptWith((w) => terminal2(src, req, w).rows);
+  const first = drawn === undefined ? { fits: false, ...refused?.minWidth === undefined ? {} : { minWidth: refused.minWidth } } : { fits: false, widest: widestOf(drawn.rows) };
+  const need = neededWidth(limit, first, attempt);
+  const head = refused === undefined ? `error: the drawing needs ${need.sure ? "" : "more than "}${need.sure ? need.width : need.width - 1} columns; the limit is ${limit}` : `error: ${refused.message}`;
+  return { stdout: "", stderr: `${head}
+${need.sure ? widthHint(need.width) : "hint: shorten the names, or split the diagram"}
+`, code: 3 };
+}
+function sideReport(src, req) {
+  const { width: _width, ...rest } = req;
+  return checkReport(src, rest);
+}
+function drawing(src, req) {
+  const frontEnd = selectFrontEnd(src);
+  const opts = layoutOptions5(req);
+  const width = req.width;
+  switch (req.format) {
+    case "html":
+      return renderHtml(src, { ...req.title === undefined ? {} : { title: req.title }, ...width === undefined ? {} : { maxWidth: width }, ...req.theme === undefined ? {} : { theme: req.theme } });
+    case "check":
+      return checkReport(src, req);
+    case "text": {
+      const rows = req.color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
+      return `${rows.join(`
+`)}
+`;
+    }
+    case "text-svg": {
+      const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
+      return `${renderTextSvg(spans)}
+`;
+    }
+    case "json":
+      return `${JSON.stringify(frontEnd.json(src, "svg", opts), null, 2)}
+`;
+    default:
+      return `${frontEnd.svg(src, opts)}
+`;
+  }
+}
+function drawCommand(src, req) {
+  try {
+    if ((req.format === "text" || req.format === "text-svg") && req.width !== undefined) {
+      const out = fitted(src, req, req.width);
+      return out.code === 0 && req.check ? { ...out, stderr: sideReport(src, req) } : out;
+    }
+    const stdout = drawing(src, req);
+    return { stdout, stderr: req.check && req.format !== "check" ? sideReport(src, req) : "", code: 0 };
+  } catch (err) {
+    if (err instanceof UrsulaError && isTooNarrow(err))
+      return { stdout: "", stderr: `error: ${err.message}
+`, code: 3 };
+    if (err instanceof UrsulaError)
+      return { stdout: "", stderr: errorReport(err, src), code: 1 };
+    return { stdout: "", stderr: internalReport(err), code: 4 };
+  }
+}
+
+// src/command/help.ts
+var optionLines = OPTIONS.map((o) => {
+  const head = `${o.name}${o.value === undefined ? "" : ` ${o.value}`}`;
+  return `  ${head.padEnd(16)}  ${o.help}`;
+});
+var HELP = `ursula-diagram: draw Mermaid text as a terminal drawing, an SVG or one HTML file.
+
+Usage
+  ursula-diagram [file.mmd] [options]   reads standard input when no file is given
+  ursula-diagram syntax [type]          an example and the rules of a diagram type
+  ursula-diagram mcp                    serve render, check and syntax over MCP (stdio)
+
+Examples
+  ursula-diagram flow.mmd --format text --width 100
+  ursula-diagram flow.mmd --format svg --check > flow.svg
+  ursula-diagram flow.mmd --format html --title "Order flow" > flow.html
+  ursula-diagram syntax wardley
+
+Which format
+  text      a real terminal (fixed-width font, wide characters take two cells)
+  text-svg  the terminal drawing for a chat window, a web page or a document
+  svg       a picture for a document or a page; follows light and dark
+  html      one file to open, switch light and dark, and save a PNG
+  json      boxes, lines and labels with coordinates, for a program
+  check     the engine's report on the layout, without the drawing
+
+Options
+${optionLines.join(`
+`)}
+  -h, --help        this text
+
+Errors
+  A text error names the line and column, and often adds 'did you mean' and an
+  example line. Fix the text and run again; 'syntax <type>' shows the grammar.
+
+Exit codes
+  0 drawn   1 the text has an error   2 wrong options   3 too narrow   4 engine failure
+`;
+
+// src/command/syntax.ts
+function syntaxCommand(args) {
+  if (args.length > 1)
+    return { stdout: "", stderr: `usage: ursula-diagram syntax [type]
+Run 'ursula-diagram --help' for more.
+`, code: 2 };
+  const type = args[0];
+  if (type === undefined)
+    return { stdout: syntaxList(), stderr: "", code: 0 };
+  const entry = syntaxOf(type);
+  if (entry)
+    return { stdout: syntaxText(entry), stderr: "", code: 0 };
+  const near = closestType(type);
+  return { stdout: "", stderr: `error: no diagram type '${type}'
+${near === undefined ? "" : `did you mean: ${near}
+`}Run 'ursula-diagram syntax' for the list.
+`, code: 2 };
+}
+
+// src/command/run.ts
+var usageError = () => ({ stdout: "", stderr: `${USAGE}
+Run 'ursula-diagram --help' for more.
+`, code: 2 });
+function runCommand(args, read) {
+  if (args[0] === "syntax")
+    return syntaxCommand(args.slice(1));
+  const parsed = parseDrawArgs(args);
+  if (parsed.kind === "help")
+    return { stdout: HELP, stderr: "", code: 0 };
+  if (parsed.kind === "usage")
+    return usageError();
+  const req = parsed.request;
+  let src;
+  try {
+    src = read(req.file);
+  } catch (err) {
+    const why = err instanceof Error && "code" in err ? ` (${String(err.code)})` : "";
+    return { stdout: "", stderr: `error: cannot read ${req.file ?? "standard input"}${why}
+`, code: 2 };
+  }
+  return drawCommand(src, req);
+}
+
+// src/cli.ts
+var out = runCommand(process.argv.slice(2), (file) => readFileSync(file ?? 0, "utf8"));
+if (out.stdout !== "")
+  process.stdout.write(out.stdout);
+if (out.stderr !== "")
+  process.stderr.write(out.stderr);
+process.exitCode = out.code;
