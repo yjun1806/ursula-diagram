@@ -237,6 +237,26 @@ describe('the bands of the subgraphs of a flowchart in a terminal', () => {
     const src = 'graph LR\n  subgraph a[접수]\n  A[요청] --> B[검증]\n  end\n  subgraph b[처리]\n  C[저장] --> D[알림]\n  end\n  B --> C';
     expect(text(src, 21)[0]).toMatch(/^접수 +처리$/);
   });
+
+  it('follow one another when the bands alongside the flow would run a line right along a box it does not reach', () => {
+    const src = [
+      "flowchart LR",
+      "  subgraph G0[App]",
+      "    n0[Open]",
+      "  end",
+      "  subgraph G1[Payments]",
+      "    n1[Triage ticket]",
+      "    n2[환불 심사]",
+      "    n3[Pay]",
+      "  end",
+      "  n1 -->|반려| n2",
+      "  n0 --x|실패| n2",
+      "  n2 <==> n3",
+      "  n1 -.->|yes| n2",
+      "  n0 <-.-> n2",
+    ].join('\n');
+    expect(text(src, 100)[0]).toMatch(/^App +Payments$/);
+  });
 });
 
 describe('the drawing by ranks of a terminal flow', () => {
@@ -266,7 +286,7 @@ describe('the drawing by ranks of a terminal flow', () => {
     const graph = parse(LOGIN);
     const labels = graph.edges.flatMap((e) => (e.label === undefined ? [] : [e.label]));
     const [usual, byRanks] = [false, true].map((ranked) => layout(graph, cellRuler(), { maxWidth: 100, ranked })) as [Layout, Layout];
-    expect(breaksOf(byRanks, renderTextLayout(byRanks), labels).strayLabels).toBeGreaterThan(breaksOf(usual, renderTextLayout(usual), labels).strayLabels);
+    expect(breaksOf(byRanks, renderTextLayout(byRanks), labels).crowdedLabels).toBeGreaterThan(breaksOf(usual, renderTextLayout(usual), labels).crowdedLabels);
     expect(renderTextLayout(layout(graph, cellRuler(), { maxWidth: 100 }))).toEqual(renderTextLayout(usual));
   });
 
@@ -301,5 +321,53 @@ describe('the drawing by ranks of a terminal flow', () => {
   it('is left out of a drawing made without room', () => {
     const src = 'graph TD\n  A[요청] --> B{검증}\n  B -->|통과| C[저장]\n  B -->|실패| D[에러]\n  C --> E[알림]\n  D --> E';
     expect(layout(parse(src), cellRuler(), { maxWidth: 90, room: false })).toEqual(layout(parse(src), cellRuler(), { maxWidth: 90, room: false, ranked: false }));
+  });
+
+  it('is not taken where a line forks on a crossing glyph, or lines run as one from boxes to boxes no line joins', () => {
+    const src = [
+      "flowchart LR",
+      "  v0{Done}",
+      "  v1{Q}",
+      "  v2{에러}",
+      "  v3[Client 3]",
+      "  v0 -->|no| v1",
+      "  v0 --> v2",
+      "  v0 --> v3",
+      "  v3 --> v1",
+    ].join('\n');
+    const graph = parse(src);
+    const byRanks = layout(graph, cellRuler(), { maxWidth: 120, ranked: true });
+    const found = breaksOf(byRanks, renderTextLayout(byRanks));
+    expect(renderTextLayout(byRanks).join('\n')).toContain('─┼▶');
+    expect(found.forks).toBeGreaterThan(0);
+    expect(found.mixedNets).toBeGreaterThan(0);
+    expect(text(src, 120)).toEqual(renderTextLayout(layout(graph, cellRuler(), { maxWidth: 120, ranked: false })));
+  });
+
+  it('never takes a drawing past the width the usual one fits', () => {
+    const src = [
+      "flowchart TD",
+      "  v0{요청}",
+      "  v1[Q]",
+      "  v2{Q}",
+      "  v3{Q 3}",
+      "  v4{Q 4}",
+      "  v5([Client 5])",
+      "  v6{검증 6}",
+      "  v7{결제 승인 7}",
+      "  v8[저장 8]",
+      "  v0 -->|x| v1",
+      "  v1 -->|아니오| v2",
+      "  v2 -->|ok| v3",
+      "  v1 -->|ok| v4",
+      "  v2 --> v5",
+      "  v3 -->|x| v6",
+      "  v5 -->|시간 초과| v7",
+      "  v7 -->|시간 초과| v8",
+      "  v5 -->|after 3 tries| v4",
+      "  v8 --> v2",
+      "  v8 --> v5",
+    ].join('\n');
+    for (const width of [59, 60]) expect(renderText(src, width), String(width)).toHaveProperty('lines');
   });
 });

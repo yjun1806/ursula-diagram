@@ -21,7 +21,7 @@ const over = (lines: readonly string[], y: number, x: number, text: string): str
     return [...cells.slice(0, x), ...text, ...cells.slice(x + text.length)].join('');
   });
 
-const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0 };
+const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, crowdedLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0, forks: 0, crossMarks: 0, mixedNets: 0, hugging: 0 };
 
 describe('the breaks of a terminal drawing', () => {
   it('are none in a drawing that keeps every line, box and label whole', () => {
@@ -58,7 +58,8 @@ describe('the breaks of a terminal drawing', () => {
     const byRanks = layoutRanks(together, cellRuler(), 100) as Layout;
     const lines = renderTextLayout(byRanks);
     expect(lines.join('\n')).toContain('│ 통과  실패 │');
-    expect(breaksOf(byRanks, lines).strayLabels).toBe(2);
+    // 통과 and 실패 run together; 재시도 stands beside the two lines of 요청.
+    expect(breaksOf(byRanks, lines).crowdedLabels).toBe(3);
   });
 
   it('count lines that run along one another and two lines that cross twice', () => {
@@ -143,5 +144,138 @@ describe('the breaks of a terminal drawing', () => {
     const lines = 'lines' in out ? out.lines : [];
     expect(lines.join('\n')).toContain('after 2 failed tries');
     expect(lines.join('\n')).not.toContain('a1ter');
+  });
+
+  it('write no count at the end of a line right against a label', () => {
+    const glued = (lines: readonly string[], text: string): boolean => lines.some((line) => new RegExp(`[0-9*]${text}|${text}[0-9*]`).test(line));
+    const across = [
+      "classDiagram",
+      "namespace N0 {",
+      "  class C0 {",
+      "  }",
+      "}",
+      "namespace N1 {",
+      "  class C1 {",
+      "    +field0 int",
+      "  }",
+      "}",
+      "namespace N0 {",
+      "  class C2 {",
+      "    +field0 int",
+      "    +field1 int",
+      "    +run()",
+      "  }",
+      "}",
+      "namespace N1 {",
+      "  class C3 {",
+      "    +field0 int",
+      "    +field1 int",
+      "  }",
+      "}",
+      "class C4 {",
+      "  +field0 int",
+      "  +field1 int",
+      "  +field2 int",
+      "}",
+      "class C5 {",
+      "  +field0 int",
+      "  +run()",
+      "}",
+      "C2 o-- C3",
+      "C5 <--> C3 : retry",
+      "C4 ..> C0 : retry",
+      "C3 o-- C5",
+      "C3 \"1\" --o \"*\" C4",
+      "C1 --* C4 : 통과",
+      "C3 \"1\" o-- \"*\" C5",
+      "C5 --* C0",
+    ].join('\n');
+    const done = [
+      "classDiagram",
+      "namespace N0 {",
+      "  class C0 {",
+      "  }",
+      "}",
+      "namespace N1 {",
+      "  class C1 {",
+      "    +field0 int",
+      "    +field1 int",
+      "    +field2 int",
+      "  }",
+      "}",
+      "namespace N0 {",
+      "  class C2 {",
+      "    +field0 int",
+      "    +field1 int",
+      "  }",
+      "}",
+      "namespace N1 {",
+      "  class C3 {",
+      "  }",
+      "}",
+      "class C4 {",
+      "  +field0 int",
+      "  +field1 int",
+      "}",
+      "class C5 {",
+      "  +field0 int",
+      "  +run()",
+      "}",
+      "C0 \"1\" -- \"*\" C1 : done",
+      "C4 <--> C2 : on hold",
+      "C1 -- C4",
+      "C1 *-- C2",
+      "C1 \"1\" <|-- \"*\" C0",
+      "C3 o-- C1",
+      "C5 --|> C1 : no",
+    ].join('\n');
+    const no = [
+      "classDiagram",
+      "direction LR",
+      "class C0 {",
+      "  +field0 int",
+      "  +field1 int",
+      "  +field2 int",
+      "  +run()",
+      "}",
+      "class C1 {",
+      "}",
+      "class C2 {",
+      "  +field0 int",
+      "  +field1 int",
+      "  +field2 int",
+      "}",
+      "class C3 {",
+      "  +field0 int",
+      "  +field1 int",
+      "  +run()",
+      "}",
+      "class C4 {",
+      "  +field0 int",
+      "  +field1 int",
+      "}",
+      "class C5 {",
+      "}",
+      "class C6 {",
+      "}",
+      "class C7 {",
+      "  +field0 int",
+      "  +field1 int",
+      "  +run()",
+      "}",
+      "C1 <|-- C7 : yes",
+      "C1 *-- C3",
+      "C5 \"1\" <|-- \"*\" C1 : after 2 failed tries",
+      "C1 \"1\" --|> \"*\" C0 : yes",
+      "C0 o-- C3 : no",
+      "C4 \"1\" --* \"*\" C1",
+      "C3 --|> C4 : on hold",
+    ].join('\n');
+    for (const [src, width, text] of [[across, 80, 'retry'], [done, 100, 'done'], [no, 100, 'no']] as const) {
+      const out = renderText(src, width);
+      const lines = 'lines' in out ? out.lines : [];
+      expect(lines.join('\n')).toContain(text);
+      expect(glued(lines, text), lines.join('\n')).toBe(false);
+    }
   });
 });

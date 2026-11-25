@@ -2,7 +2,7 @@ import { layout } from './layout/index.ts';
 import { textCost } from './layout/text-cost.ts';
 import { hiddenLabels } from './layout/text-tidy.ts';
 import type { Breaks } from './layout/text-intact.ts';
-import { breaksMoreMovingLabels, breaksOf } from './layout/text-intact.ts';
+import { breaksMore, breaksOf } from './layout/text-intact.ts';
 import type { LegendOption } from './layout/legend.ts';
 import { cellRuler, pixelRuler } from './metrics.ts';
 import { parse } from './parse.ts';
@@ -129,13 +129,17 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
     }
     const fewest = fits.reduce<Fit | undefined>((w, f) => (w === undefined || f.cost < w.cost ? f : w), undefined);
     if (fewest === undefined || fewest.hidden === 0) return fewest;
-    // A drawing that hides a label gives way to one that hides fewer, crosses no more lines, breaks no line or box more and leaves no more labels broken.
+    // A drawing that hides a label gives way to one that hides fewer, crosses no more lines, and breaks nothing more (see `breaksOf`).
     const crossings = (f: Fit): number => textCost(f.quick.layout).crossings;
     const most = crossings(fewest);
     const labels = full.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
     const breaks = (f: Fit): Breaks => breaksOf(f.quick.layout, f.quick.lines, labels);
-    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most && !breaksMoreMovingLabels(breaks(f), breaks(fewest)));
-    return clearer.reduce<Fit>((w, f) => (f.hidden < w.hidden || (f.hidden === w.hidden && f.cost < w.cost) ? f : w), clearer[0] ?? fewest);
+    const clearer = fits.filter((f) => f.hidden < fewest.hidden && crossings(f) <= most && !breaksMore(breaks(f), breaks(fewest)));
+    const clearest = clearer.reduce<Fit>((w, f) => (f.hidden < w.hidden || (f.hidden === w.hidden && f.cost < w.cost) ? f : w), clearer[0] ?? fewest);
+    if (clearest === fewest) return fewest;
+    // The drawings that are given out are made with candidates and refinement: the clearer one is kept only where it breaks nothing more there as well.
+    const [mine, theirs] = [draw(clearest.a, false, false), draw(fewest.a, false, false)];
+    return breaksMore(breaksOf(mine.layout, mine.lines, labels), breaksOf(theirs.layout, theirs.lines, labels)) ? fewest : clearest;
   };
   const textual = detail === 'auto' || detail === 'full' || detail === 'narrow' ? best([...(detail === 'narrow' ? [] : stepAttempts.full), ...(detail === 'full' ? [] : stepAttempts.narrow)]) : undefined;
   const titles = detail === 'auto' || detail === 'title' ? best(stepAttempts.title) : undefined;

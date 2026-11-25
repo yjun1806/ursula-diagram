@@ -501,6 +501,9 @@ export function closeSpareRows(given: Layout, keeps: (shorter: Layout, now: Layo
     };
     const texts = textsOf(now, false);
     if (now.nodes.some((n) => texts.some((t) => (row(t, y - 1) && row(n, y + 1)) || (row(t, y + 1) && row(n, y - 1))))) continue;
+    // Nor right against the rule of a band.
+    const rules = now.lanes.filter((lane) => lane.label !== '').map((lane) => Math.floor(lane.y));
+    if (texts.some((t) => rules.some((r) => (r === y + 1 && row(t, y - 1)) || (r === y - 1 && row(t, y + 1))))) continue;
     let passes = 0;
     const spare = now.edges.every((e) => {
       if (e.invisible || e.points.length < 2) return true;

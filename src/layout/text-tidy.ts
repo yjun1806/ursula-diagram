@@ -621,6 +621,19 @@ export function cutLeftLabels(l: Layout): Layout {
   return { ...l, edges: l.edges.map(fitted) };
 }
 
+/** Terminal drawings: a label whose text reaches past `limit` is cut where it stands, to its ellipsis if need be, when four cells or more are left for it: half a text reads as another word. */
+export function cutPastLimit(l: Layout, limit: number | undefined): Layout {
+  if (limit === undefined || !Number.isFinite(limit)) return l;
+  const fitted = (e: LayoutEdge): LayoutEdge => {
+    const t = e.label;
+    if (t === undefined || e.invisible || t.x < 0 || textEnd(t) <= limit) return e;
+    const room = Math.floor(limit - t.x);
+    return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
+  };
+  const edges = l.edges.map(fitted);
+  return edges.every((e, i) => e === l.edges[i]) ? l : { ...l, edges };
+}
+
 /** The column after the last cell of the text of a label, which is drawn in the middle of its box. */
 function textEnd(t: { x: number; w: number; text: string }): number {
   const tw = cellWidth(t.text);
@@ -711,7 +724,16 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
       }
     }
     for (const run of level) for (let x = run.left + 1; x + lw - 1 < run.right; x++) places.push({ x, y: run.y, on: true, far: near(run.y, ly) + near(x, lx) });
-    const place = places.sort((p, q) => p.far - q.far).find((p) => clear(p.x, p.y, lw, p.on, tail));
+    // A place with another line right beside the text, a cell away from it, or above or below it is taken only where no other is clear: the label would read as that line's.
+    const textAt = (p: { x: number }): number => p.x + Math.floor((lw - tw) / 2);
+    const astray = (p: { x: number; y: number }): boolean => {
+      const x0 = textAt(p);
+      for (let c = x0 - 2; c <= x0 + tw + 1; c++) if (foreign.has(`${c},${p.y}`)) return true;
+      for (let c = x0; c < x0 + tw; c++) if (foreign.has(`${c},${p.y - 1}`) || foreign.has(`${c},${p.y + 1}`)) return true;
+      return false;
+    };
+    const fitting = places.sort((p, q) => p.far - q.far).filter((p) => clear(p.x, p.y, lw, p.on, tail));
+    const place = fitting.find((p) => !astray(p));
     if (place !== undefined) {
       l = put(place.x, place.y);
       continue;
@@ -723,7 +745,7 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
       continue;
     }
     const room = Math.max(now.width, ...renderedWidth(now));
-    // No place holds the whole label: the whole drawing moves to the right, and the label stands left of an upright stretch where nothing stands between it and the first column.
+    // No clear place holds the whole label: the whole drawing moves to the right, and the label stands left of an upright stretch where nothing stands between it and the first column.
     const leftOf = upright
       .flatMap((run) => Array.from({ length: run.bottom - run.top + 1 }, (_, k) => ({ x: run.x, y: run.top + k })))
       .filter((p) => p.x < lw && within(room + lw - p.x) && (p.x <= 0 || clear(0, p.y, p.x, false)))
@@ -731,6 +753,11 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
     if (leftOf !== undefined) {
       const moved = grow(now, -Infinity, lw - leftOf.x, false);
       l = { ...moved, edges: moved.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, x: 0, y: leftOf.y, w: lw } } : o)) };
+      continue;
+    }
+    // Failing that, a place by another line.
+    if (fitting[0] !== undefined) {
+      l = put(fitting[0].x, fitting[0].y);
       continue;
     }
     // Or the drawing gets the columns the label needs where no box is in their way: right of an upright stretch of its line, on a row where no line leaves that stretch to the right,

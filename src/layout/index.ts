@@ -13,7 +13,7 @@ import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
 import { closeSpareRows, openTextColumns, openTextRows } from './text-room.ts';
 import { endTextsClear } from './text-ends.ts';
-import { clearUprightLabels, closeTextColumns, closeTextRows, cutLeftLabels, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
+import { clearUprightLabels, closeTextColumns, closeTextRows, cutLeftLabels, cutPastLimit, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
@@ -29,7 +29,7 @@ import { sharing } from '../layered/ports.ts';
 import type { TextCost } from './text-cost.ts';
 import { costsMore, textCost, writtenOf } from './text-cost.ts';
 import type { Breaks } from './text-intact.ts';
-import { breaksMore, breaksMoreMovingLabels, breaksOf } from './text-intact.ts';
+import { breaksMore, breaksOf } from './text-intact.ts';
 import { renderTextLayout } from '../render/text.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
@@ -361,7 +361,7 @@ interface Drawn {
   opened: () => Layout;
 }
 
-/** `out` says that the drawing without room is the one given out, as it is for a flow drawn the other way round: its labels are then checked as well. */
+/** `out` says that the drawing without room is the one given out, as it is for a flow drawn the other way round: it is finished again by the caller. */
 function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false): Drawn {
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true) return { closed: drawn, opened: () => drawn };
@@ -370,14 +370,12 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
   // A step that tidies a drawing up is not taken where it breaks a line, a box or a label the drawing kept whole.
   const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
   const intact = (after: Layout, before: Layout): boolean => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
-  // A label brought into sight may come to stand beside the line of another: that is a break of a label for one, and no worse.
-  const shown = (after: Layout, before: Layout): boolean => !breaksMoreMovingLabels(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
   // Spare rows are taken out all at once where that breaks nothing, and one by one otherwise.
   const spare = (l: Layout): Layout => {
     const all = closeSpareRows(l);
     return all === l || intact(all, l) ? all : closeSpareRows(l, intact);
   };
-  // Texts at the ends of lines move off the labels and lines they stand on where that breaks nothing else.
+  // Texts at the ends of lines move off the labels and texts they stand on where that breaks nothing else.
   const ends = (l: Layout): Layout => {
     const moved = endTextsClear(l);
     return moved === l || intact(moved, l) ? moved : l;
@@ -389,28 +387,37 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
     // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
     // A row that the rows opened later made needless is taken out again.
     const closed = room ? spare(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
+    const squeeze = (c: Layout): Layout => {
+      const pushed = openTextLabels(compactColumns(c), limit);
+      // Still too wide: the labels on level lines give way, and are cut to the room they are left.
+      return over(pushed) ? openTextLabels(compactColumns(c, true), limit) : pushed;
+    };
     const fit = (): Layout => {
       if (!over(closed)) return closed;
-      const pushed = openTextLabels(compactColumns(closed), limit);
-      // Still too wide: the labels on level lines give way, and are cut to the room they are left.
-      return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
+      const pushed = squeeze(closed);
+      // A label that starts left of the drawing holds the columns it stands over: still too wide, it keeps its end only, and the columns close without it.
+      if (!over(pushed) || !closed.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0)) return pushed;
+      const cut = squeeze(cutLeftLabels(closed));
+      return cut.width < pushed.width ? cut : pushed;
     };
     const narrow = fit();
     // Last of all, every label is brought to where it is written in full: before the parts are packed, so that a part is measured as it is drawn, and again after, when a label that still has no room is cut.
     // A label left of the drawing that takes rows to show in full, by keeping a part from standing beside another, keeps its end only.
-    // Labels are brought into sight only where that breaks no line or box the drawing without it keeps whole, and leaves no more labels broken.
+    // Labels are brought into sight only where that breaks nothing the drawing without it keeps whole (see `breaksOf`): a label cut short does not trade for one that stands by another line.
     const packed = (l: Layout): Layout => {
+      // The drawing of a flow drawn the other way round is finished again once it is turned: its labels are brought into sight then, where the rows they stand among are final.
+      if (out) return packParts(l, limit);
       const sighted = labelsInSight(l, limit, false);
       const left = l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0);
-      const plain = packParts(left ? cutLeftLabels(l) : l, limit);
+      const plain = cutPastLimit(packParts(left ? cutLeftLabels(l) : l, limit), limit);
       const full = sighted === l && !left ? labelsInSight(plain, limit) : labelsInSight(packParts(sighted, limit), limit);
       if (full === plain) return full;
       // A drawing without room that is only compared with another keeps its labels in sight unchecked.
-      if (!left) return !room && !out ? full : shown(full, plain) ? full : plain;
+      if (!left) return !room ? full : intact(full, plain) ? full : plain;
       const short = labelsInSight(packParts(cutLeftLabels(l), limit), limit);
       const wide = (d: Layout): boolean => limit !== undefined && Number.isFinite(limit) && d.width > limit;
       const tried = (wide(full) && !wide(short)) || Math.ceil(short.height) < Math.ceil(full.height) ? [short, full] : [full, short];
-      return !room && !out ? (tried[0] as Layout) : (tried.find((d) => shown(d, plain)) ?? plain);
+      return !room ? (tried[0] as Layout) : (tried.find((d) => intact(d, plain)) ?? plain);
     };
     if (!room) return ends(packed(narrow));
     // The columns an arrowhead on the side of a box asks for never take a drawing over the limit.

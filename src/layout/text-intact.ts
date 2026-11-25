@@ -22,6 +22,9 @@ const RUNS: Record<string, number> = {
 /** Arrowheads. */
 const HEADS: ReadonlySet<string> = new Set(['▶', '◀', '▼', '▲', '▷', '◁', '▽', '△']);
 
+/** Arrowheads that point along a column. */
+const UPRIGHT_HEADS: ReadonlySet<string> = new Set(['▼', '▲', '▽', '△']);
+
 /** Arrowheads that point along a row. */
 const LEVEL_HEADS: ReadonlySet<string> = new Set(['▶', '◀', '▷', '◁']);
 
@@ -46,8 +49,10 @@ export interface Breaks {
   brokenBoxes: number;
   /** Cells where two lines that neither leave nor reach a box together run along one another or one turns on the other, and every crossing of two lines after their first. */
   tangled: number;
-  /** Labels that stand by the line of another edge, beside two lines one cell apart, or next to another label. */
+  /** Labels that stand by the line of another edge, the rule of a band or the frame of a group, or by no line of their own; and texts at the ends of lines written right against a word. */
   strayLabels: number;
+  /** Labels beside two upright lines of two nets with no more than a blank between them, or next to another label. */
+  crowdedLabels: number;
   /** Labels and texts at the ends of lines that are not written where they stand: a box, a line or another text covers them. */
   coveredLabels: number;
   /** Labels with no more than a blank between them and an arrowhead that points along their row. */
@@ -56,9 +61,17 @@ export interface Breaks {
   room: number;
   /** Label texts the rows do not show in full. */
   unseen: number;
+  /** Cells drawn as a crossing (`┼`) where a line turns or branches: a reader cannot tell the fork from a crossing. */
+  forks: number;
+  /** Cells drawn as a crossing (`┼`) of two lines or more, away from boxes: the crossings a reader sees. */
+  crossMarks: number;
+  /** Lines that run as one, so that a reader following them may go from a box to a box no line joins. */
+  mixedNets: number;
+  /** Lines that run right along the side of a box they neither leave nor reach, or right along another line they do not run with. */
+  hugging: number;
 }
 
-export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenBoxes', 'tangled', 'strayLabels', 'coveredLabels', 'labelsAtHeads', 'room', 'unseen'];
+export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenBoxes', 'tangled', 'strayLabels', 'crowdedLabels', 'coveredLabels', 'labelsAtHeads', 'room', 'unseen', 'forks', 'crossMarks', 'mixedNets', 'hugging'];
 
 /** The cells of a line and the ways it runs on in each, as the drawing draws it; undefined for a line with a slanted stretch. */
 function runsOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>): { cells: Array<[number, number]>; bits: Map<string, number> } | undefined {
@@ -200,6 +213,18 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
   runs.forEach((run, i) => {
     for (const [x, y] of run?.cells ?? []) byCell.set(`${x},${y}`, [...(byCell.get(`${x},${y}`) ?? []), i]);
   });
+  // Lines that share a cell other than where they cross run as one: a reader may follow them from the start of any to the end of any.
+  const root = drawn.map((_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : find(root[i] as number));
+  for (const [key, list] of byCell) {
+    list.forEach((i, k) =>
+      list.slice(k + 1).forEach((j) => {
+        const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
+        if ((a === LEVEL && b === UPRIGHT) || (a === UPRIGHT && b === LEVEL)) return;
+        root[find(i)] = find(j);
+      }),
+    );
+  }
   let tangled = 0;
   for (const [key, list] of byCell) {
     if (list.length < 2) continue;
@@ -232,18 +257,27 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
 
   // Labels: their own line, the lines of others, arrowheads and other labels about them.
   const lineOf = (x: number, y: number): number[] => (RUNS[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : (byCell.get(`${x},${y}`) ?? []));
+  const inBox = (x: number, y: number): boolean => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
+  // A line glyph that is no line of an edge and no side of a box: the rule of a band or the frame of a group.
+  const rule = (x: number, y: number): boolean => RUNS[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
+  const uprightAt = (x: number, y: number): boolean => ((RUNS[at(x, y)] ?? 0) & UPRIGHT) !== 0 || UPRIGHT_HEADS.has(at(x, y));
+  // Lines of two nets: no cell of one is a cell of the other, but where they cross.
+  const apart = (p: readonly number[], q: readonly number[]): boolean => !p.some((i) => q.some((j) => find(i) === find(j)));
   const spots = drawn.map((e) => (e.label === undefined ? undefined : spotOf(e.label)));
   let strayLabels = 0;
+  let crowdedLabels = 0;
   let coveredLabels = 0;
   let labelsAtHeads = 0;
   drawn.forEach((e, i) => {
     const spot = spots[i];
     if (spot === undefined) return;
+    // A label that is not written where it stands is covered, and nothing else is said of it: a reader does not see it to read it astray.
     if (!written(grid, spot.x0, spot.y, spot.text)) {
       coveredLabels++;
       note(`label ${spot.text} covered`);
+      return;
     }
-    const other = (x: number, y: number): boolean => lineOf(x, y).some((j) => j !== i) && !lineOf(x, y).includes(i);
+    const other = (x: number, y: number): boolean => (lineOf(x, y).some((j) => j !== i) && !lineOf(x, y).includes(i)) || rule(x, y);
     const mine = (x: number, y: number): boolean => lineOf(x, y).includes(i);
     const blank = (x: number, y: number): boolean => at(x, y) === ' ';
     let stray = false;
@@ -251,32 +285,150 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     if (other(spot.x0 - 1, spot.y) || other(spot.x1 + 1, spot.y)) stray = true;
     if ((blank(spot.x0 - 1, spot.y) && other(spot.x0 - 2, spot.y)) || (blank(spot.x1 + 1, spot.y) && other(spot.x1 + 2, spot.y))) stray = true;
     for (let x = spot.x0; x <= spot.x1 && !stray; x++) if (other(x, spot.y - 1) || other(x, spot.y + 1)) stray = true;
-    // Beside its own upright line with another line one cell beyond it: the label reads as the label of either.
-    for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]] as const) {
-      const near = edge + 2 * side;
-      if (!stray && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS[at(near, spot.y)] ?? 0) & UPRIGHT) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT) !== 0) stray = true;
-    }
-    // Another label in the same row with no more than two blanks and no line between them.
-    for (const [j, o] of spots.entries()) {
-      if (stray || o === undefined || j === i || o.y !== spot.y) continue;
-      const [a, b] = o.x0 > spot.x1 ? [spot.x1, o.x0] : o.x1 < spot.x0 ? [o.x1, spot.x0] : [0, 0];
-      if (b - a - 1 <= 2 && b > a && Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k).every((x) => blank(x, spot.y))) stray = true;
-    }
+    // Or no cell of its own line right beside it, up to two blanks away, above or below it: it is the label of no line.
+    const reach = (side: 1 | -1): Array<[number, number]> => {
+      const edge = side > 0 ? spot.x1 : spot.x0;
+      const out: Array<[number, number]> = [];
+      for (let k = 1; k <= 3; k++) {
+        out.push([edge + k * side, spot.y]);
+        if (!blank(edge + k * side, spot.y)) break;
+      }
+      return out;
+    };
+    const around = [...reach(1), ...reach(-1), ...Array.from({ length: spot.x1 - spot.x0 + 1 }, (_, k) => [[spot.x0 + k, spot.y - 1], [spot.x0 + k, spot.y + 1]]).flat()] as Array<[number, number]>;
+    if (!around.some(([x, y]) => mine(x, y))) stray = true;
     if (stray) {
       strayLabels++;
       note(`label ${spot.text} stray`);
     }
+    let crowded = false;
+    // Beside its own upright line with another line one cell beyond it: the label reads as the label of either.
+    for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]] as const) {
+      const near = edge + 2 * side;
+      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS[at(near, spot.y)] ?? 0) & UPRIGHT) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT) !== 0) crowded = true;
+    }
+    // Two upright lines that are not drawn as one, with no more than a blank between the text and the first and between the two: the label reads as the label of either.
+    for (const side of [1, -1] as const) {
+      if (crowded) break;
+      let x = (side > 0 ? spot.x1 : spot.x0) + side;
+      if (blank(x, spot.y)) x += side;
+      if (!uprightAt(x, spot.y) || lineOf(x, spot.y).length === 0) continue;
+      let x2 = x + side;
+      if (blank(x2, spot.y)) x2 += side;
+      if (uprightAt(x2, spot.y) && lineOf(x2, spot.y).length > 0 && apart(lineOf(x, spot.y), lineOf(x2, spot.y))) crowded = true;
+    }
+    // Another label in the same row with no more than two blanks and no line between them.
+    for (const [j, o] of spots.entries()) {
+      if (crowded || o === undefined || j === i || o.y !== spot.y) continue;
+      const [a, b] = o.x0 > spot.x1 ? [spot.x1, o.x0] : o.x1 < spot.x0 ? [o.x1, spot.x0] : [0, 0];
+      if (b - a - 1 <= 2 && b > a && Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k).every((x) => blank(x, spot.y))) crowded = true;
+    }
+    if (crowded) {
+      crowdedLabels++;
+      note(`label ${spot.text} crowded`);
+    }
     const headAt = (x: number, between: number): boolean => LEVEL_HEADS.has(at(x, spot.y)) && (between === 0 || blank(between, spot.y));
     if (headAt(spot.x1 + 1, 0) || headAt(spot.x1 + 2, spot.x1 + 1) || headAt(spot.x0 - 1, 0) || headAt(spot.x0 - 2, spot.x0 - 1)) labelsAtHeads++;
   });
+  const word = (x: number, y: number): boolean => /[\p{L}\p{N}*]/u.test(at(x, y)) && !inBox(x, y);
   for (const e of drawn) {
     for (const t of [e.startLabel, e.endLabel]) {
-      if (t !== undefined && t.text !== '' && !written(grid, Math.round(t.x), Math.round(t.y), t.text)) {
+      if (t === undefined || t.text === '') continue;
+      const [x, y] = [Math.round(t.x), Math.round(t.y)];
+      if (!written(grid, x, y, t.text)) {
         coveredLabels++;
         note(`end text ${t.text} covered`);
+      } else if (word(x - 1, y) || word(x + cellWidth(t.text), y)) {
+        // A text at the end of a line written right against a label or another text reads as one word with it.
+        strayLabels++;
+        note(`end text ${t.text} against a word`);
       }
     }
   }
+
+  // A crossing glyph where a line turns or branches reads as a crossing.
+  let forks = 0;
+  let crossMarks = 0;
+  for (const [key, list] of byCell) {
+    const [x, y] = key.split(',').map(Number) as [number, number];
+    if (at(x, y) !== '┼' && at(x, y) !== '╋') continue;
+    if ([[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => inBox(x + (dx as number), y + (dy as number)))) continue;
+    // A line that crosses the rule of a band is not a crossing of two lines.
+    if (list.length > 1) crossMarks++;
+    if (list.some((i) => {
+      const b = runs[i]?.bits.get(key) ?? 0;
+      return b !== LEVEL && b !== UPRIGHT;
+    })) {
+      forks++;
+      note(`fork drawn as a crossing at ${key}`);
+    }
+  }
+
+  const twoWay = (e: LayoutEdge): boolean => e.end === 'none' || e.startEnd !== undefined;
+  const joins = new Set(drawn.flatMap((e) => (twoWay(e) ? [`${e.from}>${e.to}`, `${e.to}>${e.from}`] : [`${e.from}>${e.to}`])));
+  let mixedNets = 0;
+  const nets = new Map<number, LayoutEdge[]>();
+  drawn.forEach((e, i) => nets.set(find(i), [...(nets.get(find(i)) ?? []), e]));
+  for (const net of nets.values()) {
+    if (net.length < 2) continue;
+    const froms = new Set(net.flatMap((e) => (twoWay(e) ? [e.from, e.to] : [e.from])));
+    const tos = new Set(net.flatMap((e) => (twoWay(e) ? [e.from, e.to] : [e.to])));
+    if (net.every((e) => e.from === net[0]?.from) || net.every((e) => e.to === net[0]?.to)) continue;
+    if ([...froms].every((a) => [...tos].every((b) => a === b || joins.has(`${a}>${b}`)))) continue;
+    mixedNets++;
+    note(`lines ${net.map((e) => `${e.from}->${e.to}`).join(', ')} run as one`);
+  }
+
+  // A line right along the side of a box it neither leaves nor reaches, or right along a line it is not drawn with, for two cells or more.
+  let hugging = 0;
+  const hugged = new Set<string>();
+  // The cells of the sides of boxes, corners left out, with whether the side runs along a row.
+  const sides = new Map<string, Array<{ id: string; level: boolean }>>();
+  const side = (x: number, y: number, id: string, level: boolean): void => {
+    sides.set(`${x},${y}`, [...(sides.get(`${x},${y}`) ?? []), { id, level }]);
+  };
+  for (const n of layout.nodes) {
+    const [x0, y0, x1, y1] = [Math.round(n.x), Math.round(n.y), Math.round(n.x + n.w) - 1, Math.round(n.y + n.h) - 1];
+    for (let x = x0 + 1; x < x1; x++) {
+      side(x, y0, n.id, true);
+      side(x, y1, n.id, true);
+    }
+    for (let y = y0 + 1; y < y1; y++) {
+      side(x0, y, n.id, false);
+      side(x1, y, n.id, false);
+    }
+  }
+  drawn.forEach((e, i) => {
+    const run = runs[i];
+    if (run === undefined) return;
+    for (const [x, y] of run.cells) {
+      const b = run.bits.get(`${x},${y}`) ?? 0;
+      if (b !== LEVEL && b !== UPRIGHT) continue;
+      const across = b === LEVEL ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
+      const along = b === LEVEL ? [1, 0] : [0, 1];
+      for (const [dx, dy] of across as Array<[number, number]>) {
+        const [nx, ny] = [x + dx, y + dy];
+        const [fx, fy] = [x + (along[0] as number), y + (along[1] as number)];
+        if ((run.bits.get(`${fx},${fy}`) ?? 0) !== b) continue;
+        const near = sides.get(`${nx},${ny}`);
+        const box = near === undefined ? undefined : near.find((n) => n.level === (b === LEVEL) && n.id !== e.from && n.id !== e.to && sides.get(`${nx + (along[0] as number)},${ny + (along[1] as number)}`)?.some((m) => m.id === n.id && m.level === n.level));
+        if (box !== undefined && !hugged.has(`${i}|${box.id}`)) {
+          hugged.add(`${i}|${box.id}`);
+          hugging++;
+          note(`line ${e.from}->${e.to} along box ${box.id}`);
+        }
+        for (const j of byCell.get(`${nx},${ny}`) ?? []) {
+          const pair = i < j ? `${i}|${j}` : `${j}|${i}`;
+          if (j === i || hugged.has(pair) || !apart([i], [j]) || together(e, drawn[j] as LayoutEdge)) continue;
+          const [ob, of] = [runs[j]?.bits.get(`${nx},${ny}`) ?? 0, runs[j]?.bits.get(`${nx + (along[0] as number)},${ny + (along[1] as number)}`) ?? 0];
+          if (ob !== b || of !== b) continue;
+          hugged.add(pair);
+          hugging++;
+          note(`lines ${e.from}->${e.to} and ${drawn[j]?.from}->${drawn[j]?.to} run side by side`);
+        }
+      }
+    }
+  });
 
   const room = roomViolations(lines);
   const asked = labels ?? drawn.flatMap((e) => (e.label === undefined ? [] : (e.label.lines ?? [e.label.text])));
@@ -285,24 +437,17 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     brokenBoxes,
     tangled,
     strayLabels,
+    crowdedLabels,
     coveredLabels,
     labelsAtHeads,
     room: room.headless.length + room.underName.length + room.onRule.length + room.tight.length + room.close.length,
     unseen: labelsNotShown(asked, lines).reduce((n, m) => n + m.missing, 0),
+    forks,
+    crossMarks,
+    mixedNets,
+    hugging,
   };
 }
 
 /** Whether drawing `a` breaks more than drawing `b` in some respect. */
 export const breaksMore = (a: Breaks, b: Breaks): boolean => BREAK_KINDS.some((k) => a[k] > b[k]);
-
-/** What a label can suffer: standing astray, covered, at an arrowhead, or not shown in full. */
-const LABEL_KINDS: ReadonlyArray<keyof Breaks> = ['strayLabels', 'coveredLabels', 'labelsAtHeads', 'unseen'];
-
-/**
- * Whether drawing `a` breaks more than drawing `b` where a label that is moved trades one break for another: every
- * break of lines, boxes and room counts on its own, and the breaks of labels count together.
- */
-export const breaksMoreMovingLabels = (a: Breaks, b: Breaks): boolean => {
-  const sum = (x: Breaks): number => LABEL_KINDS.reduce((n, k) => n + x[k], 0);
-  return BREAK_KINDS.some((k) => !LABEL_KINDS.includes(k) && a[k] > b[k]) || sum(a) > sum(b);
-};
