@@ -1,0 +1,95 @@
+/*
+ * The site in ursula's own colours: the values of the engine's colour table (src/render/colors.ts), neutral greys and
+ * one mustard accent, mapped onto the VitePress variables. The accent as link text measures 5.40:1 on the light page
+ * and 9.63:1 on the dark one (WCAG AA asks 4.5:1); buttons take the start-box face with dark text on it.
+ */
+:root {
+  --vp-c-bg: #fcfcfa;
+  --vp-c-bg-alt: #f4f3f1;
+  --vp-c-bg-elv: #fcfcfa;
+  --vp-c-bg-soft: #efeeed;
+
+  --vp-c-text-1: #201f1e;
+  --vp-c-text-2: #5b5b59;
+  --vp-c-text-3: #878685;
+
+  --vp-c-border: #c8c7c6;
+  --vp-c-divider: #e2e1e0;
+  --vp-c-gutter: #e2e1e0;
+
+  --vp-c-default-1: #c8c7c6;
+  --vp-c-default-2: #e2e1e0;
+  --vp-c-default-3: #efeeed;
+  --vp-c-default-soft: #f1f0ef;
+
+  --vp-c-brand-1: #82641c;
+  --vp-c-brand-2: #6e5417;
+  --vp-c-brand-3: #e5c37a;
+  --vp-c-brand-soft: #f6ecd7;
+
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #201f1e;
+  --vp-button-brand-bg: #e5c37a;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: #201f1e;
+  --vp-button-brand-hover-bg: #dab975;
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: #201f1e;
+  --vp-button-brand-active-bg: #dab975;
+
+  --vp-button-alt-border: #c8c7c6;
+  --vp-button-alt-text: #201f1e;
+  --vp-button-alt-bg: #efeeed;
+  --vp-button-alt-hover-border: #878685;
+  --vp-button-alt-hover-text: #201f1e;
+  --vp-button-alt-hover-bg: #e2e1e0;
+
+  --vp-home-hero-name-color: #201f1e;
+
+  /* System fonts only: the stack of the engine's SVG, and monospace faces that draw box lines across the full cell. */
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo',
+    'Noto Sans KR', 'Malgun Gothic', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --vp-font-family-mono: Menlo, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', ui-monospace, 'D2Coding',
+    'Noto Sans Mono CJK KR', monospace;
+}
+
+.dark {
+  --vp-c-bg: #171614;
+  --vp-c-bg-alt: #1e1d1b;
+  --vp-c-bg-elv: #1c1b19;
+  --vp-c-bg-soft: #252422;
+
+  --vp-c-text-1: #efeeec;
+  --vp-c-text-2: #b2b1af;
+  --vp-c-text-3: #757472;
+
+  --vp-c-border: #434241;
+  --vp-c-divider: #2c2b2a;
+  --vp-c-gutter: #0f0e0d;
+
+  --vp-c-default-1: #434241;
+  --vp-c-default-2: #2c2b2a;
+  --vp-c-default-3: #252422;
+  --vp-c-default-soft: #262523;
+
+  --vp-c-brand-1: #dab975;
+  --vp-c-brand-2: #e5c37a;
+  --vp-c-brand-3: #dab975;
+  --vp-c-brand-soft: #372c15;
+
+  --vp-button-brand-text: #171614;
+  --vp-button-brand-bg: #dab975;
+  --vp-button-brand-hover-text: #171614;
+  --vp-button-brand-hover-bg: #e5c37a;
+  --vp-button-brand-active-text: #171614;
+  --vp-button-brand-active-bg: #e5c37a;
+
+  --vp-button-alt-border: #434241;
+  --vp-button-alt-text: #efeeec;
+  --vp-button-alt-bg: #252422;
+  --vp-button-alt-hover-border: #757472;
+  --vp-button-alt-hover-text: #efeeec;
+  --vp-button-alt-hover-bg: #2c2b2a;
+
+  --vp-home-hero-name-color: #efeeec;
+}

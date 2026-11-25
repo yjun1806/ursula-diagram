@@ -78,7 +78,9 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: false,
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: `${base}assets/icon.png` }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}icon-32.png` }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}icon-16.png` }],
+    ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}icon-180.png` }],
     ['script', {}, languageRedirect],
   ],
   locales: {
@@ -122,7 +124,7 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: '/assets/icon.png',
+    logo: { src: '/icon-180.png', alt: '' },
     socialLinks: [{ icon: 'github', link: repo }],
     outline: [2, 3],
     search: {

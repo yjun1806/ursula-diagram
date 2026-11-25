@@ -211,6 +211,9 @@ onBeforeUnmount(() => {
   font-size: 14px;
   color: var(--vp-c-text-2);
 }
+.pg-field > span {
+  white-space: nowrap;
+}
 .pg-off {
   opacity: 0.5;
 }
@@ -306,7 +309,7 @@ onBeforeUnmount(() => {
 }
 .pg-text {
   margin: 0;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'D2Coding', 'Noto Sans Mono CJK KR', monospace;
+  font-family: var(--vp-font-family-mono);
   font-size: 13px;
   line-height: 1.2;
   white-space: pre;
