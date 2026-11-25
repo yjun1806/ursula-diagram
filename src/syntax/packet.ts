@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const packet: SyntaxEntry = {
   name: "packet",
   headers: ["packet-beta"],
+  aliases: ["packet"],
   summary: "the bits of a packet header",
   example: `packet-beta
   0-15: "Source port"

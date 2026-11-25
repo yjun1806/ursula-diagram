@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const treemap: SyntaxEntry = {
   name: "treemap",
   headers: ["treemap-beta"],
+  aliases: ["treemap"],
   summary: "sizes of nested parts",
   example: `treemap-beta
 "Frontend"

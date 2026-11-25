@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const klass: SyntaxEntry = {
   name: "class",
   headers: ["classDiagram"],
+  aliases: ["classDiagram-v2"],
   summary: "types with fields and how they relate",
   example: `classDiagram
   class Order {

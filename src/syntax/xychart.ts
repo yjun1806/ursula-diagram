@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const xychart: SyntaxEntry = {
   name: "xychart",
   headers: ["xychart-beta"],
+  aliases: ["xychart"],
   summary: "numbers as bars and lines",
   example: `xychart-beta
   title "Sales"

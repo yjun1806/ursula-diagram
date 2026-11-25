@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const treeview: SyntaxEntry = {
   name: "treeview",
   headers: ["treeView-beta"],
+  aliases: ["treeView"],
   summary: "a file tree",
   example: `treeView-beta
   src

@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const sankey: SyntaxEntry = {
   name: "sankey",
   headers: ["sankey-beta"],
+  aliases: ["sankey"],
   summary: "flows and their amounts",
   example: `sankey-beta
 Salary,Budget,4000

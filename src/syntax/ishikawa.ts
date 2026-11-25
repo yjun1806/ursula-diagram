@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const ishikawa: SyntaxEntry = {
   name: "ishikawa",
   headers: ["ishikawa-beta"],
+  aliases: ["ishikawa"],
   summary: "the causes of one effect",
   example: `ishikawa-beta
   Slow checkout

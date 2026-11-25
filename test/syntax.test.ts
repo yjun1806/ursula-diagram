@@ -37,6 +37,13 @@ describe('the syntax catalog', () => {
     expect(syntaxOf('graph')?.name).toBe('flowchart');
     expect(syntaxOf('nothing')).toBeUndefined();
   });
+
+  it('finds a type by every header its front-end reads', () => {
+    for (const f of registeredFrontEnds()) for (const h of f.headers) expect(syntaxOf(h)?.name, h).toBe(f.name);
+    const r = cli(['syntax', 'stateDiagram']);
+    expect(r.status).toBe(0);
+    expect(r.stdout.startsWith('stateDiagram-v2: ')).toBe(true);
+  });
 });
 
 describe('ursula-diagram syntax', () => {

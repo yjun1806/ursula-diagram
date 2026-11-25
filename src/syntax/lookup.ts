@@ -7,10 +7,13 @@ export function syntaxTypes(): string[] {
   return SYNTAX.map((e) => e.name);
 }
 
-/** The entry for a type name or a header, ignoring case; undefined when there is none. */
+/** Every header that selects the type of `e`: the listed ones, then the aliases. */
+export const allHeaders = (e: SyntaxEntry): string[] => [...e.headers, ...(e.aliases ?? [])];
+
+/** The entry for a type name or any header its front-end reads, ignoring case; undefined when there is none. */
 export function syntaxOf(type: string): SyntaxEntry | undefined {
   const t = type.toLowerCase();
-  return SYNTAX.find((e) => e.name.toLowerCase() === t || e.headers.some((h) => h.toLowerCase() === t));
+  return SYNTAX.find((e) => e.name.toLowerCase() === t || allHeaders(e).some((h) => h.toLowerCase() === t));
 }
 
 /** The entry of the front-end with this name. */
@@ -20,7 +23,7 @@ export function syntaxOfFrontEnd(name: string): SyntaxEntry | undefined {
 
 /** The type name or header closest to `type`, for 'did you mean'. */
 export function closestType(type: string): string | undefined {
-  return closest(type, SYNTAX.flatMap((e) => [e.name, ...e.headers]));
+  return closest(type, SYNTAX.flatMap((e) => [e.name, ...allHeaders(e)]));
 }
 
 /** The text of `syntax <type>`: what the type is for, the example, the rules and the headers. */

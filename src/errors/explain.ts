@@ -44,7 +44,7 @@ const hasWord = (line: string, word: string): boolean => line.split(/[^\p{L}\p{N
 function exampleLine(e: SyntaxEntry, row: string, word: string, suggestion: string | undefined, hinted: string | undefined): string | undefined {
   const lines = e.example.split('\n');
   // A wrong header line is best replaced by the header line of the example.
-  if (lines[0] !== undefined && e.headers.includes(word) && suggestion === undefined) return lines[0].trim();
+  if (lines[0] !== undefined && [...e.headers, ...(e.aliases ?? [])].includes(word) && suggestion === undefined) return lines[0].trim();
   const target = (suggestion === undefined || word === '' ? row : row.replace(word, suggestion)).trim();
   const pick =
     (suggestion === undefined ? undefined : likest(lines.filter((l) => hasWord(l, suggestion)), target) ?? lines.find((l) => hasWord(l, suggestion))) ??

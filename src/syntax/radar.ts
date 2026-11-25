@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const radar: SyntaxEntry = {
   name: "radar",
   headers: ["radar-beta"],
+  aliases: ["radar"],
   summary: "scores of a few things on several axes",
   example: `radar-beta
   axis speed["Speed"], cost["Cost"], ease["Ease"]

@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const wardley: SyntaxEntry = {
   name: "wardley",
   headers: ["wardley-beta"],
+  aliases: ["wardley"],
   summary: "components by visibility and evolution",
   example: `wardley-beta
 title Tea shop

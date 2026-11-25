@@ -4,6 +4,8 @@ export interface SyntaxEntry {
   name: string;
   /** The headers to show, the usual one first; every one selects this type. */
   headers: string[];
+  /** Other headers the front-end also reads; accepted by `syntax <type>` but not listed. */
+  aliases?: string[];
   /** What the type is for, in a few words. */
   summary: string;
   /** At most twelve lines, starting with the header. */

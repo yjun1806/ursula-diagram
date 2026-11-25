@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const architecture: SyntaxEntry = {
   name: "architecture",
   headers: ["architecture-beta"],
+  aliases: ["architecture"],
   summary: "services in groups and what connects them",
   example: `architecture-beta
   group api(cloud)[API]

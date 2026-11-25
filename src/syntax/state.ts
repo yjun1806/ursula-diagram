@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const state: SyntaxEntry = {
   name: "state",
   headers: ["stateDiagram-v2"],
+  aliases: ["stateDiagram"],
   summary: "states and what moves between them",
   example: `stateDiagram-v2
   [*] --> Idle

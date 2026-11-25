@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const block: SyntaxEntry = {
   name: "block",
   headers: ["block-beta"],
+  aliases: ["block"],
   summary: "blocks on a grid",
   example: `block-beta
   columns 3

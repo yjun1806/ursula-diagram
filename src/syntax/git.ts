@@ -3,6 +3,7 @@ import type { SyntaxEntry } from './entry.ts';
 export const git: SyntaxEntry = {
   name: "git",
   headers: ["gitGraph"],
+  aliases: ["gitGraph:", "gitgraph", "gitgraph:", "GitGraph", "GitGraph:"],
   summary: "branches, commits and merges",
   example: `gitGraph
   commit
