@@ -361,7 +361,8 @@ Rats   15   3.1%
 
 When a drawing cannot fit in `--width`, the command prints no drawing, ends with code 3 and names a width that fits.
 `--check` with any drawing format adds the engine's report on standard error: the counts, the lines that cross with
-their source line numbers, and questions. `ursula-diagram syntax` lists every type, and
+their source line numbers, and questions. The report counts the svg layout; a terminal drawing routes its lines on its
+own grid, so its crossings can differ. `ursula-diagram syntax` lists every type, and
 `ursula-diagram syntax <type>` prints a small example and the rules. An error names the line and the column and,
 when it can, the word that was meant and a line written the right way:
 

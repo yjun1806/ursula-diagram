@@ -19,12 +19,13 @@ Write the diagram as Mermaid text and let the bundled command draw it. The comma
    `URSULA d.mmd --format text --width 100 --check`. The drawing goes to standard output; the report goes to
    standard error: one line of counts (bends, crossings), the lines that cross with their source line numbers, and
    sometimes lines that begin with `question 1:`. A question names what the engine found, what a change would gain,
-   and what to do in the text.
+   and what to do in the text. The counts are for the svg layout; a terminal drawing routes its lines on its own
+   grid, so do not chase a crossing the terminal drawing does not show.
 3. **Answer the questions once.** When there are any, apply a suggestion only when it keeps the meaning of the
    diagram, then draw again. Do not loop: one round of edits.
 
 If the command prints `error: …`, the text could not be drawn. The error names the line and marks the column; follow
-its `did you mean:` and `example:` lines, fix the text and run it again. Do not fall back to drawing by hand. Exit
+its `did you mean:`, `hint:` and `example:` lines, fix the text and run it again. Do not fall back to drawing by hand. Exit
 codes: 1 an error in the text, 2 wrong options, 3 too narrow (below), 4 a failure inside the engine.
 
 ## Which output
