@@ -501,7 +501,16 @@ own and follows a page that sets the variables. Each has a light and a dark valu
 ask the engine about it with `--format check`, and which output to give the reader. `scripts/ursula.mjs` is the
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
-To use it, copy the `skills/ursula` folder into the skills folder of your agent. The npm package carries it too:
+Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
+agents:
+
+```bash
+npx skills add yjun1806/ursula-diagram            # into this project
+npx skills add yjun1806/ursula-diagram -g         # for every project
+npx skills add yjun1806/ursula-diagram -a claude-code   # for one agent only
+```
+
+Or copy the `skills/ursula` folder into the skills folder of your agent by hand. The npm package carries it too:
 
 ```bash
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/

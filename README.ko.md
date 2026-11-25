@@ -496,7 +496,15 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습�
 엔진에 그림을 물어보는 법, 읽는 사람에게 어떤 출력을 줄지를 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이라, 스킬은 Node 22 이상만 있으면 돌고 아무것도 설치하지 않습니다.
 
-쓰려면 `skills/ursula` 폴더를 에이전트의 스킬 폴더에 복사합니다. npm 패키지에도 들어 있습니다.
+[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에 함께 쓰입니다.
+
+```bash
+npx skills add yjun1806/ursula-diagram            # 이 프로젝트에
+npx skills add yjun1806/ursula-diagram -g         # 모든 프로젝트에
+npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
+```
+
+`skills/ursula` 폴더를 에이전트의 스킬 폴더에 직접 복사해도 됩니다. npm 패키지에도 들어 있습니다.
 
 ```bash
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
