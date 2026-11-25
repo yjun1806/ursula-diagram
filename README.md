@@ -25,16 +25,36 @@ The type is read from the header of the text, as Mermaid does.
 | Format | What you get |
 | --- | --- |
 | `svg` | One inline SVG. Colours are CSS variables; light and dark follow the viewer. |
-| `text` | Box-drawing characters within a width you give. No colour codes. |
+| `text` | Box-drawing characters within a width you give. No colour codes. `--charset ascii` draws with ASCII only. |
+| `text-svg` | The terminal drawing as one inline SVG, for where text would lose its columns. |
 | `html` | One file with the drawing, a light and dark switch, and saving as PNG or SVG. |
 | `json` | The placement: boxes, lines and labels with their coordinates. |
 | `check` | Questions about the drawing a writer can answer by editing the text. |
+
+A `text` drawing keeps its columns only where every character is as wide as the engine counts it: one cell for a
+line or an arrowhead, two for a Korean, Chinese or Japanese character. A real terminal does that. A chat window, a
+web page or a code block in a document often does not, and the boxes come apart. Use `svg` or `text-svg` there:
+`text-svg` draws the lines as shapes and sets every word on the grid, so no font moves a column. For a terminal
+that draws line characters two cells wide, use `--charset ascii`.
+
+| | `unicode` (default) | `ascii` |
+| --- | --- | --- |
+| Line, heavy line, dashed line | `─ │` `━ ┃` `┄ ┆` | `- \|` `= #` `. :` |
+| Corner, tee, crossing; rounded corner | `┌ ├ ┼`; `╭ ╮ ╰ ╯` | `+`; `/ \ \ /` |
+| Arrowhead; hollow arrowhead | `▶ ◀ ▼ ▲`; `──▷` | `> < v ^`; `--\|>` |
+| Filled and open diamond, dots, bar | `◆ ◇` `● ◉` `█` | `* o` `* @` `#` |
+| Cut-off text | `…` | `~` |
+
+The text of the diagram is kept as written. The characters of the table are replaced wherever they stand, and so
+are a few symbols that some terminals draw two cells wide (`·` `×` `—` `∩` `⊕`).
 
 ## Command
 
 ```bash
 node src/cli.ts flow.mmd --format svg > flow.svg
 node src/cli.ts flow.mmd --format text --width 100
+node src/cli.ts flow.mmd --format text --width 100 --charset ascii
+node src/cli.ts flow.mmd --format text-svg --width 100 > flow-text.svg
 node src/cli.ts flow.mmd --format html --theme dark > flow.html
 cat flow.mmd | node src/cli.ts --format json
 ```
@@ -45,7 +65,7 @@ Run `node src/cli.ts --help` for every option.
 ## Library
 
 ```ts
-import { render, renderText } from './src/index.ts';
+import { render, renderText, renderTextSvg } from './src/index.ts';
 import { renderHtml } from './src/html.ts';
 
 const src = `flowchart LR
@@ -55,6 +75,8 @@ const src = `flowchart LR
 
 const svg = render(src);                 // string of inline SVG
 const text = renderText(src, 80);        // { lines: string[] } or { error: string }
+const ascii = renderText(src, 80, { charset: 'ascii' });
+const picture = renderTextSvg(src, 80);  // { svg: string } or { error: string }
 const page = renderHtml(src, { title: 'Flow' });
 ```
 
@@ -62,7 +84,8 @@ const page = renderHtml(src, { title: 'Flow' });
 the message as `{ error }`, also when the drawing does not fit the width: it never cuts a drawing off.
 
 `renderTextSpans` returns the same lines as spans with a tone (`normal`, `dim`, `bold`, `accent`), for a host that
-colours terminal text itself.
+colours terminal text itself. `spansToSvg` draws such lines as the picture `renderTextSvg` returns, and `toAscii`
+replaces the drawing characters of lines already drawn.
 
 ## Colours
 

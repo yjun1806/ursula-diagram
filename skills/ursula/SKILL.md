@@ -27,12 +27,21 @@ it again; do not fall back to drawing by hand.
 
 | The reader is | Command | Then |
 | --- | --- | --- |
-| In this conversation, in a terminal | `URSULA d.mmd --format text --width 100` | Paste the lines in a code block. Use `--width 80` when the terminal is narrow. |
+| In a real terminal: a fixed-width font where a Korean, Chinese or Japanese character takes two cells | `URSULA d.mmd --format text --width 100` | Print the lines as they are. Use `--width 80` when the terminal is narrow. |
+| In a terminal that draws box lines and arrowheads two cells wide | `URSULA d.mmd --format text --width 100 --charset ascii` | The same drawing with `+ - \| > < ^ v` and other ASCII characters only. |
+| In a chat window, a web page or a document, and wants the terminal drawing | `URSULA d.mmd --format text-svg --width 100 > d.svg` | Reference or inline the SVG. The columns hold in any font. |
 | Reading a document, a pull request or a page | `URSULA d.mmd --format svg > d.svg` | Reference or inline the SVG. It follows light and dark by itself. |
 | Opening one file to look, switch light and dark, and save a PNG | `URSULA d.mmd --format html --title "Name" > d.html` | Give them the file. |
 | A program | `URSULA d.mmd --format json` | Boxes, lines and labels with coordinates. |
 
 The text reads from standard input when no file is given: `cat d.mmd | URSULA --format text --width 100`.
+
+Paste a `text` drawing only where the font is fixed-width and wide characters take exactly two cells. A chat
+window, a web page and a code block in a document often draw Korean, Chinese or Japanese characters at some other
+width, and then the sides of the boxes no longer line up. When the drawing holds such characters and the reader is
+not in a terminal, give `svg` or `text-svg` instead. With `--charset ascii` a line is `-` and `|`, a heavy line `=`
+and `#`, a dashed line `.` and `:`, a corner `+`, and a hollow arrowhead `--|>`; the legend uses the same
+characters.
 
 A terminal drawing never runs past `--width`. When the drawing cannot fit, the command says so: shorten the names,
 split the diagram in two, or give more width. A few types (pie, quadrant, radar, sankey, xychart, timeline, user
