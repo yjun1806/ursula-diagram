@@ -11,19 +11,21 @@ import { structuralEstimate } from './estimate.ts';
 import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
-import { openTextColumns, openTextRows } from './text-room.ts';
-import { clearUprightLabels, closeTextColumns, closeTextRows, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
+import { closeSpareRows, openTextColumns, openTextRows } from './text-room.ts';
+import { clearUprightLabels, closeTextColumns, closeTextRows, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
 import { assignRanks } from './rank.ts';
+import { layoutRanks } from './text-ranks.ts';
 import { assignRows } from './rows.ts';
 import type { SlotResult } from './slots.ts';
 import { placeSlots, shiftHalfSteps } from './slots.ts';
 import { crossingCount } from './check.ts';
 import { mirrorLayout } from './mirror.ts';
 import { drawAttached, splitAttached } from '../layered/attach.ts';
-import { layoutLayered } from '../layered/index.ts';
+import { layeredRuler, layoutLayered } from '../layered/index.ts';
 import { sharing } from '../layered/ports.ts';
+import type { TextCost } from './text-cost.ts';
 import { costsMore, textCost } from './text-cost.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
@@ -61,6 +63,11 @@ export interface LayoutOptions extends SolveOptions {
    * never share.
    */
   sharePorts?: boolean;
+  /**
+   * Terminal drawings: `true` draws a graph by its ranks wherever it can be (see `layoutRanks`), so that the boxes a box leads to stand side by side, `false` never
+   * does. Absent, the graph is drawn both ways and the drawing by ranks is kept unless it loses something the other shows or is much longer.
+   */
+  ranked?: boolean;
   /** Terminal drawings: `false` leaves out the rows and columns that arrowheads and the rules of bands ask for; such a drawing is for comparing with another, not for showing. */
   room?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
@@ -266,8 +273,46 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
   const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
+  // A quick drawing is what a caller chooses a setting on, and a caller that names the engine, the composition or the ports gets what it names: neither is drawn another way.
+  const plain = given.terminal !== true || opts.nested === true || opts.quick === true || opts.engine === 'grid' || (opts.composition ?? 'auto') !== 'auto' || opts.sharePorts !== undefined;
+  const limit = opts.maxWidth ?? given.defaultWidth;
+  const ranks = plain || opts.ranked === false ? undefined : layoutRanks(graph, given, limit);
+  const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
+  if (ranked !== undefined && opts.ranked === true) return ranked;
+  const flow = out(layoutShared(graph, given, opts));
+  if (ranked !== undefined) return worthIt(textCost(ranked), textCost(flow)) ? ranked : flow;
+  // The subgraphs of a flowchart are drawn as bands that follow one another, their boxes set across the flow, or as bands that run alongside it. The
+  // bands alongside are kept when more lines then lead the way the flow is written, unless they do not fit the width, are much longer, or lose something.
+  if (plain || graph.zones !== 'groups' || flow.composition !== 'stages') return flow;
+  const alongside = out(layoutShared(graph, given, { ...opts, composition: 'lanes' }));
+  const cost = textCost(alongside);
+  const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, cost.width) <= limit;
+  return fits && onward(alongside) > onward(flow) && worthIt(cost, textCost(flow)) ? alongside : flow;
+}
+
+/** How many lines of a drawing lead to a box that stands wholly further on in the direction the drawing is written in. */
+function onward(l: Layout): number {
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const down = l.direction === 'TD' || l.direction === 'BT';
+  return l.edges.filter((e) => {
+    const [a, b] = [nodes.get(e.from), nodes.get(e.to)];
+    return a !== undefined && b !== undefined && e.invisible !== true && (down ? b.y >= a.y + a.h : b.x >= a.x + a.w);
+  }).length;
+}
+
+/** What a drawing made another way may not cost more than the drawing it replaces, and how much longer it may be: 15% and two rows. Its width is held by the limit alone. */
+const KEPT: ReadonlyArray<keyof TextCost> = ['crossings', 'touches', 'cut', 'blank', 'hidden', 'crossed'];
+const roomFor = (rows: number): number => rows * 1.15 + 2;
+
+/** Whether a drawing made another way replaces the usual one: it costs no more where a reader loses something, and is not much longer. */
+function worthIt(other: TextCost, usual: TextCost): boolean {
+  return KEPT.every((k) => other[k] <= usual[k]) && other.rows <= roomFor(usual.rows);
+}
+
+/** The usual terminal drawing, with shared ports where they cost nothing. */
+function layoutShared(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
   // A quick drawing is what a caller chooses a setting on: it never shares ports, so that the choice does not turn on them.
-  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return out(layoutOnce(graph, given, opts));
+  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts);
   // Lines that share a port on the side of a box leave the box shorter, and may cost elsewhere: the drawing is made
   // with shared ports and without, and the one with shared ports is kept only when it costs no more in any respect
   // and less in one. Where no line found a port to share there is one drawing only. The two are compared before the
@@ -275,17 +320,17 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   const before = sharing.placements;
   const joined = layoutOnce(graph, given, { ...opts, sharePorts: true });
   const shares = joined.closed.edges.some((e) => e.sharedPort !== undefined);
-  if (sharing.placements === before && !shares) return out(joined);
+  if (sharing.placements === before && !shares) return joined;
   const apart = layoutOnce(graph, given, { ...opts, sharePorts: false });
   // Sharing ports changes the width of a drawing on the way, and with it the arrangement that fits: a drawing in which
   // no line shares a port after all, or one whose bands are arranged another way, is not kept for it.
-  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed)) return out(apart);
+  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed)) return apart;
   const own = textCost(apart.closed);
   // A drawing that is too wide without shared ports is given as it is, so that a caller that draws again for the width does what it did without them.
   const limit = opts.maxWidth ?? given.defaultWidth;
-  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit) return out(apart);
+  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit) return apart;
   const shared = textCost(joined.closed);
-  return out(costsMore(shared, own) || !costsMore(own, shared) ? apart : joined);
+  return costsMore(shared, own) || !costsMore(own, shared) ? apart : joined;
 }
 
 /** How the bands of a drawing are arranged: alongside the reading direction or across it, and which bands there are. */
@@ -307,7 +352,8 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
   const finish = (fitted: Layout, room: boolean): Layout => {
     // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
-    const closed = room ? openTextRows(clearUprightLabels(openTextRows(fitted), true)) : clearUprightLabels(fitted);
+    // A row that the rows opened later made needless is taken out again.
+    const closed = room ? closeSpareRows(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
     const fit = (): Layout => {
       if (!over(closed)) return closed;
       const pushed = openTextLabels(compactColumns(closed), limit);
@@ -315,10 +361,12 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
       return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
     };
     const narrow = fit();
-    if (!room) return packParts(narrow, limit);
+    // Last of all, every label is brought to where it is written in full: before the parts are packed, so that a part is measured as it is drawn, and again after.
+    const packed = (l: Layout): Layout => labelsInSight(packParts(labelsInSight(l, limit), limit), limit);
+    if (!room) return packed(narrow);
     // The columns an arrowhead on the side of a box asks for never take a drawing over the limit.
     const wider = openTextColumns(narrow, limit);
-    return packParts(over(wider) && !over(narrow) ? narrow : wider, limit);
+    return packed(over(wider) && !over(narrow) ? narrow : wider);
   };
   let source = close(drawn);
   let best = finish(source, false);
@@ -394,7 +442,7 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ...solveOpts } = opts;
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);

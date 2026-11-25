@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderText, renderTextLayout } from '../src/index.ts';
 import type { Layout, LayoutEdge, LayoutNode } from '../src/index.ts';
-import { openTextColumns, openTextRows } from '../src/layout/text-room.ts';
+import { closeSpareRows, openTextColumns, openTextRows } from '../src/layout/text-room.ts';
 import { roomViolations } from './text-room.ts';
 
 const text = (src: string, width = 80): string[] => {
@@ -98,6 +98,14 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
     expect(roomViolations(lines)).toEqual(none);
   });
 
+  it('are closed again where a later row left one that only upright lines pass', () => {
+    const lines = text('classDiagram\n  namespace Platform {\n    namespace Auth {\n      class UserService {\n        +login()\n        +logout()\n      }\n    }\n    namespace Data {\n      class Repository {\n        +find()\n        +save()\n      }\n    }\n    class Gateway {\n      +route()\n    }\n  }\n  Gateway --> UserService : delegates\n  Gateway --> Repository : delegates');
+    const rule = lines.findIndex((line) => line.includes('Platform / Data'));
+    // The arrowhead stands right under the rule its line crosses: the crossing is the cell of line behind it.
+    expect(lines.slice(rule, rule + 2).map((row) => row.trim())).toEqual(['───────┼ Platform / Data ────', 'v']);
+    expect(roomViolations(lines)).toEqual(none);
+  });
+
   it('leave every mark in sight beside a label', () => {
     const marks = (lines: string[]): number => (lines.join('').match(/[▶◀▲▼▷◁▽△◆◇]/g) ?? []).length;
     // The line that came level under a box turns up into it where a label stood beside the upright line next to it.
@@ -181,6 +189,40 @@ describe('a row that goes into a terminal drawing', () => {
     expect(node(l, 'b').y).toBe(5);
     expect([node(l, 't').y, node(l, 't').h]).toEqual([0, 8]);
     expect(roomViolations(renderTextLayout(l))).toEqual(none);
+  });
+});
+
+describe('a row taken out of a terminal drawing again', () => {
+  const box = (id: string, x: number, y: number): LayoutNode => ({ id, lane: '', rank: 0, span: 1, row: 0, x, y, w: 7, h: 3, title: id, lines: [], shape: 'rect' });
+  const drawing = (gap: number): Layout => ({
+    width: 7,
+    height: 6 + gap,
+    direction: 'TD',
+    laneAxis: 'across',
+    lanes: [],
+    nodes: [box('a', 0, 0), box('b', 0, 3 + gap)],
+    edges: [{ from: 'a', to: 'b', style: 'normal', points: [{ x: 3.5, y: 3 }, { x: 3.5, y: 3 + gap }] }],
+    diagnostics: [],
+  });
+
+  it('is one that only an upright line passes, as long as the rows that are left are enough', () => {
+    expect(closeSpareRows(drawing(4)).height).toBe(drawing(2).height);
+    expect(renderTextLayout(closeSpareRows(drawing(4)))).toEqual(renderTextLayout(drawing(2)));
+  });
+
+  it('is never one of the two rows between two boxes a line joins', () => {
+    expect(closeSpareRows(drawing(2))).toEqual(drawing(2));
+  });
+
+  it('is never a row with a label in it', () => {
+    const labelled = { ...drawing(3), width: 9, edges: drawing(3).edges.map((e) => ({ ...e, label: { text: 'yes', x: 4, y: 4, w: 5, h: 1 } })) };
+    expect(closeSpareRows(labelled).edges[0]?.label?.y).toBe(4);
+    expect(renderTextLayout(closeSpareRows(labelled)).join('\n')).toContain('│ yes');
+  });
+
+  it('is never one that would bring a label right against a box', () => {
+    const labelled = { ...drawing(3), width: 9, edges: drawing(3).edges.map((e) => ({ ...e, label: { text: 'yes', x: 4, y: 4, w: 5, h: 1 } })) };
+    expect(closeSpareRows(labelled).height).toBe(labelled.height);
   });
 });
 

@@ -456,3 +456,67 @@ export function openTextColumns(l: Layout, limit?: number): Layout {
   const right = (i: number): number => (done.fixed[i] as Rect).y - (captions[i] as Rect).y;
   return { ...back, lanes, legend: { ...l.legend, base: { ...l.legend.base, width: l.legend.base.width + back.width - l.width }, items: l.legend.items.map((item, i) => ({ ...item, x: item.x + right(i), captionX: item.captionX + right(i) })) } };
 }
+
+/** The drawing without row `y`: what stands below it moves up a row. Nothing but upright lines may run through the row. */
+function withoutRow(l: Layout, y: number): Layout {
+  const v = (c: number): number => (c > y ? c - 1 : c);
+  const text = <T extends { y: number }>(t: T): T => ({ ...t, y: v(t.y) });
+  return {
+    ...l,
+    height: l.height - 1,
+    nodes: l.nodes.map(text),
+    lanes: l.lanes.map((lane) => (lane.y > y ? { ...text(lane), labelBox: text(lane.labelBox) } : lane.y + lane.h > y ? { ...lane, h: lane.h - 1, labelBox: text(lane.labelBox) } : lane)),
+    edges: l.edges.map((e) => ({
+      ...e,
+      points: e.points.map(text),
+      ...(e.label ? { label: text(e.label) } : {}),
+      ...(e.startLabel ? { startLabel: text(e.startLabel) } : {}),
+      ...(e.endLabel ? { endLabel: text(e.endLabel) } : {}),
+    })),
+    ...(l.legend ? { legend: { ...l.legend, y: v(l.legend.y), base: { ...l.legend.base, height: l.legend.base.height - 1 }, items: l.legend.items.map(text) } } : {}),
+  };
+}
+
+/**
+ * Terminal drawings: a row that only upright lines pass, each on a stretch of three cells or more, is taken out again
+ * when the drawing keeps every row its bands and the marks at the ends of its lines ask for without it.
+ */
+export function closeSpareRows(given: Layout): Layout {
+  if (given.clusters !== undefined) return given;
+  let l = given;
+  for (let y = Math.ceil(l.height) - 2; y >= 1; y--) {
+    const now = l;
+    const nodes = new Map(now.nodes.map((n) => [n.id, n] as const));
+    const on = (r: Rect): boolean => {
+      const c = cells(r);
+      return y >= c.y && y < c.y + c.h;
+    };
+    if (now.nodes.some(on) || textsOf(now, false).some(on) || now.lanes.some((lane) => lane.label !== '' && (Math.floor(lane.y) === y || Math.floor(lane.labelBox.y) === y))) continue;
+    if ((now.legend?.items ?? []).some((item) => Math.floor(item.y) >= y - 1 && Math.floor(item.y) <= y + 1)) continue;
+    // A text next to the row is not brought right against a box on its other side.
+    const row = (r: Rect, at: number): boolean => {
+      const c = cells(r);
+      return at >= c.y && at < c.y + c.h;
+    };
+    const texts = textsOf(now, false);
+    if (now.nodes.some((n) => texts.some((t) => (row(t, y - 1) && row(n, y + 1)) || (row(t, y + 1) && row(n, y - 1))))) continue;
+    let passes = 0;
+    const spare = now.edges.every((e) => {
+      if (e.invisible || e.points.length < 2) return true;
+      const corners = e.points.map((_, i) => cellOf(e, nodes, i));
+      return corners.slice(1).every((b, i) => {
+        const a = corners[i] as Cell;
+        const [top, bottom] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
+        if (y < top || y > bottom) return true;
+        // An upright stretch runs through the row with a cell above it and a cell below it; nothing else of a line may lie in it.
+        if (a[0] !== b[0] || y === top || y === bottom || bottom - top < 2) return false;
+        passes++;
+        return true;
+      });
+    });
+    if (!spare || passes === 0) continue;
+    const shorter = withoutRow(now, y);
+    if (openTextRows(shorter).height === shorter.height) l = shorter;
+  }
+  return l;
+}

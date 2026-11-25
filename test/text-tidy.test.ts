@@ -9,7 +9,7 @@ const lines = (src: string, width = 100): string[] => {
 
 describe('labels of a terminal drawing', () => {
   it('leave a cell of line before the label and a cell of line and the arrowhead after it', () => {
-    const text = lines('flowchart TD\nA --> B\nA -->|no way| C').join('\n');
+    const text = lines('flowchart LR\nA -->|no way| C').join('\n');
     expect(text).toContain('│─ no way ─▶│');
   });
 

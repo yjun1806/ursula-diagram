@@ -115,11 +115,11 @@ describe('lines without a label on the side of a terminal box', () => {
   });
 });
 
-/** Either drawing, and the one that is taken when nothing is asked for. */
+/** Either drawing, and the one that is taken when nothing is asked for. The drawing by ranks is left out: it has no ports on the sides of its boxes. */
 const both = (src: string, maxWidth = 80): { shared: Layout; own: Layout; taken: Layout } => ({
-  shared: layout(parse(src), cellRuler(), { maxWidth, sharePorts: true }),
-  own: layout(parse(src), cellRuler(), { maxWidth, sharePorts: false }),
-  taken: layout(parse(src), cellRuler(), { maxWidth }),
+  shared: layout(parse(src), cellRuler(), { maxWidth, sharePorts: true, ranked: false }),
+  own: layout(parse(src), cellRuler(), { maxWidth, sharePorts: false, ranked: false }),
+  taken: layout(parse(src), cellRuler(), { maxWidth, ranked: false }),
 });
 
 /** One of two lines into a box is straight either way: with a shared port the box is shorter and nothing else changes. */
@@ -171,15 +171,14 @@ describe('a terminal drawing with shared ports against the one without', () => {
     const quick = layout(parse(KEPT), cellRuler(), { maxWidth: 80, quick: true });
     expect(shares(quick)).toBe(false);
     expect(quick).toEqual(layout(parse(KEPT), cellRuler(), { maxWidth: 80, quick: true, sharePorts: false }));
-    expect(shares(layout(parse(KEPT), cellRuler(), { maxWidth: 80 }))).toBe(true);
+    expect(shares(layout(parse(KEPT), cellRuler(), { maxWidth: 80, ranked: false }))).toBe(true);
   });
 
   it('is what the text of a diagram is drawn from only when it is taken', () => {
     const kept = KEPT;
     const left = 'flowchart TD\n  a[Alpha]\n  b[Beta]\n  c[Gamma]\n  d[Delta]\n  c --> d\n  a --> d\n  b --> d';
     const laid = (src: string): Layout => selectFrontEnd(src).json(src, 'text', { maxWidth: 80 }) as Layout;
-    expect(shares(laid(kept))).toBe(true);
-    expect(shares(laid(left))).toBe(false);
+    for (const src of [kept, left]) expect(laid(src)).toEqual(layout(parse(src), cellRuler(), { maxWidth: 80 }));
   });
 
   // Use cases inside boundaries whose columns fill the width to within two cells: [source, width].

@@ -28,19 +28,21 @@ describe('renderText', () => {
 
   it('draws a small TD graph', () => {
     expect(lines('flowchart TD\nA[Start] --> B[Mid]\nA --> C[Side]\nB --> D[End]\nC --> D').join('\n')).toMatchInlineSnapshot(`
-      "┌───────┐   ┌───────┐
-      │ Start │   │       │
-      └───────┘   │       │
-          │  └───▶│ Side  │
-          ▼     ┌─│       │
-      ┌───────┐ │ │       │
-      │  Mid  │ │ │       │
-      └───────┘ │ └───────┘
-          │     │
-          ▼     │
-      ┌───────┐ │
-      │  End  │◀┘
-      └───────┘"
+      "      ┌───────┐
+            │ Start │
+            └───────┘
+                │
+          ┌─────┴─────┐
+          ▼           ▼
+      ┌───────┐   ┌───────┐
+      │  Mid  │   │ Side  │
+      └───────┘   └───────┘
+          │           │
+          └─────┬─────┘
+                ▼
+            ┌───────┐
+            │  End  │
+            └───────┘"
     `);
   });
 
