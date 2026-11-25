@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 840 176" width="840" height="176" role="img"><title>Flowchart: 5 nodes, 5 edges</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#efeeed)}
+.ursula-lane-label{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#e5c37a)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-node-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#201f1e)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#201f1e);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#201f1e)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#201f1e);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#565554)}
+.ursula-arrow--accent{fill:var(--ursula-line,#565554)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-edge-label{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+@media (prefers-color-scheme: dark){
+.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#171614);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#252422)}
+.ursula-lane-label{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#171614)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#dab975)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#171614)}
+.ursula-node-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#171614)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#171614);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#efeeec)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#efeeec);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#a5a4a2)}
+.ursula-arrow--accent{fill:var(--ursula-line,#a5a4a2)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-edge-label{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+}</style><defs><marker id="ursula-arrow" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-accent" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--accent" d="M0 0L9 4.5L0 9z"/></marker></defs><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="A" data-to="B" d="M300 120 L350.06 120" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal ursula-edge--branch" data-style="normal" data-from="B" data-to="C" d="M417.94 120 L532 120" marker-end="url(#ursula-arrow-accent)"/><path class="ursula-edge ursula-edge--normal ursula-edge--branch" data-style="normal" data-from="B" data-to="D" d="M388 92.06 L388 72 A8 8 0 0 0 380 64 L108 64 A8 8 0 0 0 100 72 L100 88" marker-end="url(#ursula-arrow-accent)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="D" data-to="A" d="M172 120 L212 120" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="C" data-to="E" d="M684 120 L724 120" marker-end="url(#ursula-arrow)"/><g class="ursula-node" data-node="A" data-role="start"><rect class="ursula-node-box" x="220" y="96" width="80" height="48" rx="24"/><text class="ursula-node-title" x="260" y="120" text-anchor="middle" dominant-baseline="central">Start</text></g><g class="ursula-node" data-node="B" data-role="decision"><path class="ursula-node-box" d="M395.97 95.09 L413.91 111.03 A12 12 0 0 1 413.91 128.97 L395.97 144.91 A12 12 0 0 1 380.03 144.91 L362.09 128.97 A12 12 0 0 1 362.09 111.03 L380.03 95.09 A12 12 0 0 1 395.97 95.09Z"/><text class="ursula-node-title" x="388" y="120" text-anchor="middle" dominant-baseline="central">Valid?</text></g><g class="ursula-node" data-node="C"><rect class="ursula-node-box" x="540" y="96" width="144" height="48" rx="10"/><text class="ursula-node-title" x="612" y="120" text-anchor="middle" dominant-baseline="central">Save</text></g><g class="ursula-node" data-node="D"><rect class="ursula-node-box" x="28" y="96" width="144" height="48" rx="10"/><text class="ursula-node-title" x="100" y="120" text-anchor="middle" dominant-baseline="central">Show error</text></g><g class="ursula-node" data-node="E"><rect class="ursula-node-box" x="732" y="96" width="80" height="48" rx="24"/><text class="ursula-node-title" x="772" y="120" text-anchor="middle" dominant-baseline="central">Done</text></g><circle class="ursula-port" cx="300" cy="120" r="4"/><circle class="ursula-port" cx="417.94" cy="120" r="4"/><circle class="ursula-port" cx="388" cy="92.06" r="4"/><circle class="ursula-port" cx="172" cy="120" r="4"/><circle class="ursula-port" cx="684" cy="120" r="4"/><g class="ursula-edge-label-group" data-from="B" data-to="C"><rect class="ursula-edge-label-bg" x="460" y="108" width="40.52" height="24" rx="12"/><text class="ursula-edge-label ursula-edge-label--branch" x="480.26" y="120" text-anchor="middle" dominant-baseline="central">yes</text></g><g class="ursula-edge-label-group" data-from="B" data-to="D"><rect class="ursula-edge-label-bg" x="228" y="52" width="33.68" height="24" rx="12"/><text class="ursula-edge-label ursula-edge-label--branch" x="244.84" y="64" text-anchor="middle" dominant-baseline="central">no</text></g></svg>

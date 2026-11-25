@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 800 176" width="800" height="176" role="img"><title>Flowchart: 5 nodes, 5 edges</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#efeeed)}
+.ursula-lane-label{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#e5c37a)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-node-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#201f1e)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#201f1e);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#201f1e)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#201f1e);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#565554)}
+.ursula-arrow--accent{fill:var(--ursula-line,#565554)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-edge-label{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+@media (prefers-color-scheme: dark){
+.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#171614);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#252422)}
+.ursula-lane-label{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#171614)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#dab975)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#171614)}
+.ursula-node-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#171614)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#171614);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#efeeec)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#efeeec);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#a5a4a2)}
+.ursula-arrow--accent{fill:var(--ursula-line,#a5a4a2)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-edge-label{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+}</style><defs><marker id="ursula-arrow" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-accent" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--accent" d="M0 0L9 4.5L0 9z"/></marker></defs><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="A" data-to="B" d="M268 120 L316 120" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal ursula-edge--branch" data-style="normal" data-from="B" data-to="C" d="M404 120 L524 120" marker-end="url(#ursula-arrow-accent)"/><path class="ursula-edge ursula-edge--normal ursula-edge--branch" data-style="normal" data-from="B" data-to="D" d="M364 90.42 L364 72 A8 8 0 0 0 356 64 L84 64 A8 8 0 0 0 76 72 L76 88" marker-end="url(#ursula-arrow-accent)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="D" data-to="A" d="M124 120 L164 120" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="C" data-to="E" d="M628 120 L668 120" marker-end="url(#ursula-arrow)"/><g class="ursula-node" data-node="A" data-role="start"><rect class="ursula-node-box" x="172" y="96" width="96" height="48" rx="24"/><text class="ursula-node-title" x="220" y="120" text-anchor="middle" dominant-baseline="central">시작</text></g><g class="ursula-node" data-node="B" data-role="decision"><path class="ursula-node-box" d="M370.66 92.44 L399.56 111.71 A9.97 9.97 0 0 1 399.56 128.29 L370.66 147.56 A12 12 0 0 1 357.34 147.56 L328.44 128.29 A9.97 9.97 0 0 1 328.44 111.71 L357.34 92.44 A12 12 0 0 1 370.66 92.44Z"/><text class="ursula-node-title" x="364" y="120" text-anchor="middle" dominant-baseline="central">올바른가?</text></g><g class="ursula-node" data-node="C"><rect class="ursula-node-box" x="532" y="96" width="96" height="48" rx="10"/><text class="ursula-node-title" x="580" y="120" text-anchor="middle" dominant-baseline="central">저장</text></g><g class="ursula-node" data-node="D"><rect class="ursula-node-box" x="28" y="96" width="96" height="48" rx="10"/><text class="ursula-node-title" x="76" y="120" text-anchor="middle" dominant-baseline="central">오류 표시</text></g><g class="ursula-node" data-node="E"><rect class="ursula-node-box" x="676" y="96" width="96" height="48" rx="24"/><text class="ursula-node-title" x="724" y="120" text-anchor="middle" dominant-baseline="central">끝</text></g><circle class="ursula-port" cx="268" cy="120" r="4"/><circle class="ursula-port" cx="404" cy="120" r="4"/><circle class="ursula-port" cx="364" cy="90.42" r="4"/><circle class="ursula-port" cx="124" cy="120" r="4"/><circle class="ursula-port" cx="628" cy="120" r="4"/><g class="ursula-edge-label-group" data-from="B" data-to="C"><rect class="ursula-edge-label-bg" x="452" y="108" width="30.68" height="24" rx="12"/><text class="ursula-edge-label ursula-edge-label--branch" x="467.34" y="120" text-anchor="middle" dominant-baseline="central">예</text></g><g class="ursula-edge-label-group" data-from="B" data-to="D"><rect class="ursula-edge-label-bg" x="194" y="52" width="52.04" height="24" rx="12"/><text class="ursula-edge-label ursula-edge-label--branch" x="220.02" y="64" text-anchor="middle" dominant-baseline="central">아니오</text></g></svg>

@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 336 480" width="336" height="480" role="img"><title>Flowchart: 4 nodes, 3 edges</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#efeeed)}
+.ursula-lane-label{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#e5c37a)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-node-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#201f1e)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#201f1e);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#201f1e)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#201f1e);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#565554)}
+.ursula-arrow--accent{fill:var(--ursula-line,#565554)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-edge-label{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#efeeed)}
+.ursula-cell-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#5b5b59);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#201f1e);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#82641c)}
+.ursula-end-ring{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-fg,#201f1e);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#201f1e)}
+.ursula-bar{fill:var(--ursula-fg,#201f1e)}
+.ursula-note{fill:var(--ursula-lane,#efeeed);stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-hollow{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-solid{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#82641c);stroke:var(--ursula-accent,#82641c)}
+.ursula-end-label{fill:var(--ursula-fg,#201f1e);font-size:11px;font-weight:500}
+.ursula-zone-name{fill:var(--ursula-fg,#201f1e);font-size:13px}
+.ursula-zone-sub{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500;opacity:1}
+.ursula-cell-body{fill:var(--ursula-muted,#5b5b59)}
+@media (prefers-color-scheme: dark){
+.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#171614);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#252422)}
+.ursula-lane-label{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#171614)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#dab975)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#171614)}
+.ursula-node-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#171614)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#171614);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#efeeec)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#efeeec);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#a5a4a2)}
+.ursula-arrow--accent{fill:var(--ursula-line,#a5a4a2)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-edge-label{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#252422)}
+.ursula-cell-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#b2b1af);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#efeeec);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#dab975)}
+.ursula-end-ring{fill:var(--ursula-surface,#171614);stroke:var(--ursula-fg,#efeeec);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#efeeec)}
+.ursula-bar{fill:var(--ursula-fg,#efeeec)}
+.ursula-note{fill:var(--ursula-lane,#252422);stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-hollow{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-solid{fill:var(--ursula-line,#a5a4a2);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#dab975);stroke:var(--ursula-accent,#dab975)}
+.ursula-end-label{fill:var(--ursula-fg,#efeeec);font-size:11px;font-weight:500}
+.ursula-zone-name{fill:var(--ursula-fg,#efeeec);font-size:13px}
+.ursula-zone-sub{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500;opacity:1}
+.ursula-cell-body{fill:var(--ursula-muted,#b2b1af)}
+}</style><defs><marker id="ursula-arrow" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-accent" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--accent" d="M0 0L9 4.5L0 9z"/></marker></defs><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="buyer" data-to="store" d="M88 120 L88 176" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="store" data-to="pay" d="M88 280 L88 352" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="store" data-to="mail" d="M152 232 L240 232 A8 8 0 0 1 248 240 L248 352" marker-end="url(#ursula-arrow)"/><g class="ursula-node" data-node="buyer"><rect class="ursula-node-box" x="24" y="24" width="128" height="96" rx="18"/><clipPath id="ursula-band-buyer-24-24-128-96"><rect x="24.75" y="24.75" width="126.5" height="94.5" rx="17.25"/></clipPath><rect class="ursula-head-band" x="24" y="24" width="128" height="28" clip-path="url(#ursula-band-buyer-24-24-128-96)"/><text class="ursula-cell-tag" x="88" y="38" text-anchor="middle" dominant-baseline="central">Person</text><text class="ursula-cell-title" x="88" y="72" text-anchor="middle" dominant-baseline="central">구매자</text><text class="ursula-cell-body" x="88" y="90" text-anchor="middle" dominant-baseline="central">물건을 산다</text></g><g class="ursula-node" data-node="store"><rect class="ursula-node-box" x="24" y="184" width="128" height="96" rx="10"/><clipPath id="ursula-band-store-24-184-128-96"><rect x="24.75" y="184.75" width="126.5" height="94.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="24" y="184" width="128" height="28" clip-path="url(#ursula-band-store-24-184-128-96)"/><text class="ursula-cell-tag" x="88" y="198" text-anchor="middle" dominant-baseline="central">System</text><text class="ursula-cell-title" x="88" y="232" text-anchor="middle" dominant-baseline="central">웹 상점</text><text class="ursula-cell-body" x="88" y="250" text-anchor="middle" dominant-baseline="central">주문을 받는다</text></g><g class="ursula-node" data-node="pay"><rect class="ursula-node-box" x="24" y="360" width="128" height="96" rx="10"/><clipPath id="ursula-band-pay-24-360-128-96"><rect x="24.75" y="360.75" width="126.5" height="94.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="24" y="360" width="128" height="28" clip-path="url(#ursula-band-pay-24-360-128-96)"/><text class="ursula-cell-tag" x="88" y="374" text-anchor="middle" dominant-baseline="central">System_Ext</text><text class="ursula-cell-title" x="88" y="408" text-anchor="middle" dominant-baseline="central">결제 대행</text><text class="ursula-cell-body" x="88" y="426" text-anchor="middle" dominant-baseline="central">카드를 결제한다</text></g><g class="ursula-node" data-node="mail"><rect class="ursula-node-box" x="184" y="360" width="128" height="96" rx="10"/><clipPath id="ursula-band-mail-184-360-128-96"><rect x="184.75" y="360.75" width="126.5" height="94.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="184" y="360" width="128" height="28" clip-path="url(#ursula-band-mail-184-360-128-96)"/><text class="ursula-cell-tag" x="248" y="374" text-anchor="middle" dominant-baseline="central">System_Ext</text><text class="ursula-cell-title" x="248" y="408" text-anchor="middle" dominant-baseline="central">메일 서비스</text><text class="ursula-cell-body" x="248" y="426" text-anchor="middle" dominant-baseline="central">메일을 보낸다</text></g><circle class="ursula-port" cx="88" cy="120" r="4"/><circle class="ursula-port" cx="88" cy="280" r="4"/><circle class="ursula-port" cx="152" cy="232" r="4"/><g class="ursula-edge-label-group" data-from="buyer" data-to="store"><rect class="ursula-edge-label-bg" x="56.64" y="140" width="62.72" height="24" rx="12"/><text class="ursula-edge-label" x="88" y="152" text-anchor="middle" dominant-baseline="central">주문한다</text></g><g class="ursula-edge-label-group" data-from="store" data-to="pay"><rect class="ursula-edge-label-bg" x="44.22" y="308" width="87.56" height="24" rx="12"/><text class="ursula-edge-label" x="88" y="320" text-anchor="middle" dominant-baseline="central">결제를 맡긴다</text></g><g class="ursula-edge-label-group" data-from="store" data-to="mail"><rect class="ursula-edge-label-bg" x="198.88" y="284" width="98.24" height="24" rx="12"/><text class="ursula-edge-label" x="248" y="296" text-anchor="middle" dominant-baseline="central">영수증을 보낸다</text></g></svg>

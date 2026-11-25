@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula ursula-text" viewBox="0 0 608 152" width="608" height="152" role="img"><title>Text drawing: 8 rows, 74 columns</title><style>.ursula-text{background:var(--ursula-bg,transparent);font-family:ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'D2Coding', 'Nanum Gothic Coding', monospace;font-size:13px}
+.ursula-tt{fill:var(--ursula-fg,#201f1e)}
+.ursula-tt--dim{fill:var(--ursula-muted,#5b5b59)}
+.ursula-tt--bold{font-weight:700}
+.ursula-tt--accent{fill:var(--ursula-accent,#82641c)}
+.ursula-tl{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1;stroke-linecap:square;stroke-linejoin:miter}
+.ursula-tl--heavy{stroke-width:2.5}
+.ursula-tl--dash3{stroke-dasharray:2 2;stroke-linecap:butt}
+.ursula-tl--dash2{stroke-dasharray:4 4;stroke-linecap:butt}
+.ursula-tl--dash4{stroke-dasharray:1 3;stroke-linecap:butt}
+.ursula-tl--round{stroke-linecap:butt}
+.ursula-tl--dim{stroke:var(--ursula-faint,#878685)}
+.ursula-tl--bold{stroke:var(--ursula-fg,#201f1e)}
+.ursula-tl--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-ts{fill:var(--ursula-line,#565554);stroke:none}
+.ursula-ts--dim{fill:var(--ursula-faint,#878685)}
+.ursula-ts--bold{fill:var(--ursula-fg,#201f1e)}
+.ursula-ts--accent{fill:var(--ursula-accent,#82641c)}
+@media (prefers-color-scheme: dark){
+.ursula-text{background:var(--ursula-bg,transparent);font-family:ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'D2Coding', 'Nanum Gothic Coding', monospace;font-size:13px}
+.ursula-tt{fill:var(--ursula-fg,#efeeec)}
+.ursula-tt--dim{fill:var(--ursula-muted,#b2b1af)}
+.ursula-tt--bold{font-weight:700}
+.ursula-tt--accent{fill:var(--ursula-accent,#dab975)}
+.ursula-tl{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1;stroke-linecap:square;stroke-linejoin:miter}
+.ursula-tl--heavy{stroke-width:2.5}
+.ursula-tl--dash3{stroke-dasharray:2 2;stroke-linecap:butt}
+.ursula-tl--dash2{stroke-dasharray:4 4;stroke-linecap:butt}
+.ursula-tl--dash4{stroke-dasharray:1 3;stroke-linecap:butt}
+.ursula-tl--round{stroke-linecap:butt}
+.ursula-tl--dim{stroke:var(--ursula-faint,#757472)}
+.ursula-tl--bold{stroke:var(--ursula-fg,#efeeec)}
+.ursula-tl--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-ts{fill:var(--ursula-line,#a5a4a2);stroke:none}
+.ursula-ts--dim{fill:var(--ursula-faint,#757472)}
+.ursula-ts--bold{fill:var(--ursula-fg,#efeeec)}
+.ursula-ts--accent{fill:var(--ursula-accent,#dab975)}
+}</style><path class="ursula-tl" d="M12 16.5H124M156 16.5H268M340 16.5H452M484 16.5H596M12 16.5V50.5M124 16.5V50.5M156 16.5V50.5M156 101.5V135.5M268 16.5V50.5M268 101.5V135.5M340 16.5V50.5M452 16.5V50.5M484 16.5V50.5M596 16.5V50.5M128 33.5H144M272 33.5H288M320 33.5H328M456 33.5H472M12 50.5H124M156 50.5H268M340 50.5H452M484 50.5H596M212 59V76M204 76V93M156 101.5H268M156 135.5H268"/><path class="ursula-tl ursula-tl--round" d="M204 76V67M212 76V85"/><path class="ursula-ts" d="M144 29.5L152 33.5L144 37.5ZM328 29.5L336 33.5L328 37.5ZM472 29.5L480 33.5L472 37.5ZM200 67L204 59L208 67ZM208 85L212 93L216 85Z"/><g class="ursula-tt"><text x="32" y="38" textLength="32" lengthAdjust="spacingAndGlyphs">주문</text><text x="72" y="38" textLength="32" lengthAdjust="spacingAndGlyphs">접수</text><text x="184" y="38" textLength="48" lengthAdjust="spacingAndGlyphs">결제됨</text><text x="232" y="38" textLength="8" lengthAdjust="spacingAndGlyphs">?</text><text x="296" y="38" textLength="16" lengthAdjust="spacingAndGlyphs">예</text><text x="352" y="38" textLength="32" lengthAdjust="spacingAndGlyphs">상품</text><text x="392" y="38" textLength="48" lengthAdjust="spacingAndGlyphs">꺼내기</text><text x="520" y="38" textLength="32" lengthAdjust="spacingAndGlyphs">배송</text><text x="232" y="72" textLength="48" lengthAdjust="spacingAndGlyphs">아니오</text><text x="168" y="123" textLength="32" lengthAdjust="spacingAndGlyphs">알림</text><text x="208" y="123" textLength="48" lengthAdjust="spacingAndGlyphs">보내기</text></g></svg>
