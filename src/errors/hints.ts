@@ -13,6 +13,7 @@ const HINTS: readonly Hint[] = [
   { frontEnd: 'flowchart', pattern: /^missing '([\])}>])'/, hint: 'a bracket around the text of a node is opened and not closed', example: 'A[Text] --> B(Text)' },
   { frontEnd: 'flowchart', pattern: /^subgraph '.*' is never closed/, hint: "close every subgraph with a line 'end'", example: 'end' },
   { frontEnd: 'flowchart', pattern: /^'end' without a matching 'subgraph'/, hint: "this 'end' has no 'subgraph' above it" },
+  { frontEnd: 'state', pattern: /^"\{" is never closed/, hint: "close the block of this state with a line '}' after its last line", example: '}' },
   { frontEnd: 'state', pattern: /^a transition needs a state on both sides/, hint: 'a transition names a state on each side of -->', example: 'A --> B : event' },
   { frontEnd: 'sequence', pattern: /^message needs a sender and a receiver|^unsupported syntax/, hint: 'a message is written Sender->>Receiver: text', example: 'Alice->>Bob: Hello' },
   { frontEnd: 'class', pattern: /^Unrecognized class diagram statement/, hint: 'a line is a class, a relation such as A <|-- B, or a member such as A : +name' },

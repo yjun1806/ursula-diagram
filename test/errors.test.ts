@@ -82,6 +82,14 @@ describe('the command writes the error with the line, a mark and the advice', ()
     expect(r.stderr).toContain('example: component Tea [0.63, 0.81]\n');
   });
 
+  it('names the line of a state block left open, with the line, a mark and how to close it', () => {
+    expect(cli('stateDiagram-v2\n  [*] --> A\n  state A {\n    B --> C\n').stderr).toBe(
+      'error: line 3: "{" is never closed\n  3 |   state A {\n    |           ^\nhint: close the block of this state with a line \'}\' after its last line\nexample: }\n',
+    );
+    // The '}' closes the inner block; the outer one is the one left open.
+    expect(cli('stateDiagram-v2\n  state A {\n    state B {\n      x --> y\n    }\n').stderr).toMatch(/^error: line 2: /);
+  });
+
   it('places the mark by cells when the line holds wide characters', () => {
     const r = cli('flowchart LR\n가나 --> 다라[이름\n');
     // 가나, 다라 and 이름 take two cells each: the open bracket stands 13 cells in, and the mark covers '[이름'.
