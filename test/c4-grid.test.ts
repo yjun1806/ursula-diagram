@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { within } from './speed.ts';
 import { layout, render } from '../src/index.ts';
 import { pixelRuler } from '../src/metrics.ts';
 import { c4Graph } from '../src/c4/graph.ts';
@@ -327,7 +328,7 @@ describe('c4 grid lines that are no plain pair', () => {
     const src = head(['System(db, "db")', ...Array.from({ length: n }, (_, k) => `System(s${k}, "s${k}")`), ...Array.from({ length: n }, (_, k) => `Rel(s${k}, db, "")`)]);
     const t0 = performance.now();
     const l = layout(graphOf(src), pixelRuler());
-    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(performance.now() - t0).toBeLessThan(within(2000));
     const ends = l.edges.map((e) => JSON.stringify(e.points.at(-1)));
     expect(new Set(ends).size).toBe(n);
     for (const e of l.edges) expect(e.points.length - 2).toBeLessThanOrEqual(2);

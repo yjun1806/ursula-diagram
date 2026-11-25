@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { within } from './speed.ts';
 import { cellRuler, layout, parse, pixelRuler, render } from '../src/index.ts';
 import * as fx from './fixtures.ts';
 import { geometryViolations, widthForColumns } from './helpers.ts';
@@ -91,6 +92,6 @@ n3 --> m3`;
     const svg = render(src);
     const ms = performance.now() - t;
     expect(svg.startsWith('<svg')).toBe(true);
-    expect(ms).toBeLessThan(300);
+    expect(ms).toBeLessThan(within(300));
   });
 });

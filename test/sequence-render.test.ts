@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { within } from './speed.ts';
 import { cellRuler, cellWidth, layoutSequence, parseSequence, render, renderText, renderTextSpans, selectFrontEnd, spansToAnsi, UrsulaError } from '../src/index.ts';
 import type { TextSpan } from '../src/index.ts';
 import { pixelRuler } from '../src/metrics.ts';
@@ -480,8 +481,8 @@ describe('sequence speed', () => {
     text(big, 400);
     const textMs = performance.now() - t1;
     expect(svg).toContain('data-message="39"');
-    expect(svgMs).toBeLessThan(20);
-    expect(textMs).toBeLessThan(20);
+    expect(svgMs).toBeLessThan(within(20));
+    expect(textMs).toBeLessThan(within(20));
   });
 });
 
