@@ -598,7 +598,7 @@ export function clearUprightLabels(given: Layout, marks = false): Layout {
     const whole = l;
     const between = (row: number): boolean => !whole.nodes.some((n) => Math.round(n.y) <= row && row + 1 < Math.round(n.y) + Math.round(n.h));
     const later = Array.from({ length: run.bottom - run.top }, (_, k) => run.top + 1 + k).filter(between);
-    for (const row of [run.top, ...later]) {
+    for (const row of marks ? [run.top, ...later] : [run.top]) {
       const taller = grow(whole, row + 0.5, 1, true);
       const again = stretch({ ...taller, edges: taller.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, y: run.top } } : o)) });
       const placed = again === undefined ? undefined : place(taller, again);
