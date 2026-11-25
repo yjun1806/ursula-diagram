@@ -479,9 +479,10 @@ function withoutRow(l: Layout, y: number): Layout {
 
 /**
  * Terminal drawings: a row that only upright lines pass, each on a stretch of three cells or more, is taken out again
- * when the drawing keeps every row its bands and the marks at the ends of its lines ask for without it.
+ * when the drawing keeps every row its bands and the marks at the ends of its lines ask for without it, and `keeps`
+ * holds of the drawing without the row against the drawing with it.
  */
-export function closeSpareRows(given: Layout): Layout {
+export function closeSpareRows(given: Layout, keeps: (shorter: Layout, now: Layout) => boolean = () => true): Layout {
   if (given.clusters !== undefined) return given;
   let l = given;
   for (let y = Math.ceil(l.height) - 2; y >= 1; y--) {
@@ -516,7 +517,7 @@ export function closeSpareRows(given: Layout): Layout {
     });
     if (!spare || passes === 0) continue;
     const shorter = withoutRow(now, y);
-    if (openTextRows(shorter).height === shorter.height) l = shorter;
+    if (openTextRows(shorter).height === shorter.height && keeps(shorter, now)) l = shorter;
   }
   return l;
 }

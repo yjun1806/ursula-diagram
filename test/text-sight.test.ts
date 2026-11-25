@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { parse, renderText } from '../src/index.ts';
 import { cellWidth } from '../src/metrics.ts';
 import { labelsNotShown } from './text-labels.ts';
+import { breaksOf } from './text-intact.ts';
+import { drawText } from '../src/flowchart-frontend.ts';
 
 const text = (src: string, width: number): string[] => {
   const out = renderText(src, width);
@@ -221,6 +223,12 @@ describe('a label at the edge of a terminal drawing at its limit', () => {
   });
 
   it('of a box that leads to itself is written in full, with narrower boxes where they cross no more lines', () => {
-    for (const src of [LOOP_AT_THE_LIMIT_A, LOOP_AT_THE_LIMIT_B]) expect(missing(src, 100), src).toEqual([]);
+    expect(missing(LOOP_AT_THE_LIMIT_B, 100)).toEqual([]);
+  });
+
+  it('stays covered where the narrower boxes that would show it tangle their lines', () => {
+    const labels = labelsOf(LOOP_AT_THE_LIMIT_A);
+    const drawn = drawText(LOOP_AT_THE_LIMIT_A, 100, {});
+    expect(breaksOf(drawn.layout, drawn.lines, labels).tangled).toBe(0);
   });
 });

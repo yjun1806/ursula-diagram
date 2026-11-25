@@ -29,14 +29,10 @@ function rankNodes(graph: Graph): { rank: number[]; links: Link[] } | undefined 
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const n = graph.nodes.length;
   const raw: Link[] = [];
-  const pairs = new Set<string>();
   for (const [edge, e] of graph.edges.entries()) {
     const a = index.get(e.from);
     const b = index.get(e.to);
     if (a === undefined || b === undefined || a === b) return undefined;
-    const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
-    if (pairs.has(pair)) return undefined;
-    pairs.add(pair);
     raw.push({ edge, a, b, flipped: false, len: Math.max(1, e.minLength ?? 1) });
   }
   const out = Array.from({ length: n }, (): Link[] => []);
@@ -170,8 +166,9 @@ function assignTracks(nets: Net[]): Map<Net, number> | undefined {
 /**
  * A terminal drawing with the ranks of the graph one after another along the reading direction: the boxes a box leads
  * to stand side by side in the next rank with the box in the middle before them, the lines that leave a box leave it
- * as one line that splits, and the lines that reach a box join before it. Undefined for a graph it does not draw: one
- * with bands, clusters, boxes of another kind, two lines between the same boxes, or more line ends on a side than it holds.
+ * as one line that splits, and the lines that reach a box join before it. Left to right, a line back to an earlier box
+ * runs below the drawing. Undefined for a graph it does not draw: one with bands, clusters, boxes of another kind, or
+ * more line ends on a side than it holds.
  */
 export function layoutRanks(graph: Graph, ruler: Ruler, limit?: number): Layout | undefined {
   const td = graph.direction === 'TD';
@@ -183,6 +180,8 @@ export function layoutRanks(graph: Graph, ruler: Ruler, limit?: number): Layout 
   const ranked = rankNodes(graph);
   if (ranked === undefined) return undefined;
   const { rank, links } = ranked;
+  // Left to right, a line back to an earlier box has no side to leave or reach a box by: it runs below the drawing.
+  if (!td && links.some((l) => l.flipped)) return withLoopsBelow(graph, ruler, limit, new Set(links.filter((l) => l.flipped).map((l) => l.edge)));
   // A graph in which no box leads to two others and none is reached from two is a chain: it has nothing to set side by side.
   const ends = (pick: (l: Link) => number): boolean => graph.nodes.some((_n, i) => links.filter((l) => pick(l) === i).length >= 2);
   if (!ends((l) => l.a) && !ends((l) => l.b)) return undefined;
@@ -475,4 +474,51 @@ export function layoutRanks(graph: Graph, ruler: Ruler, limit?: number): Layout 
     // As in every terminal drawing, a flow written right to left or bottom to top is drawn the other way round, and says so.
     diagnostics: graph.mirror === undefined ? [] : [{ kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${graph.mirror} is drawn as ${graph.direction} in text.` }],
   };
+}
+
+/**
+ * A drawing left to right in which the lines `back` to earlier boxes run below it: each leaves the bottom of its box,
+ * runs along a row of its own under every box, and reaches the bottom of the box it leads to; the shortest runs
+ * nearest the boxes. Undefined when a box has two of them, a box stands in the way of one, or its label has no room.
+ */
+function withLoopsBelow(graph: Graph, ruler: Ruler, limit: number | undefined, back: ReadonlySet<number>): Layout | undefined {
+  const drawn = layoutRanks({ ...graph, edges: graph.edges.filter((_e, i) => !back.has(i)) }, ruler, limit);
+  if (drawn === undefined) return undefined;
+  const nodes = new Map(drawn.nodes.map((n) => [n.id, n] as const));
+  const middle = (n: LayoutNode): number => n.x + Math.floor(n.w / 2);
+  const loops = [...back].map((i) => ({ i, e: graph.edges[i] as GraphEdge, from: nodes.get((graph.edges[i] as GraphEdge).from) as LayoutNode, to: nodes.get((graph.edges[i] as GraphEdge).to) as LayoutNode }));
+  const ends = loops.flatMap((l) => [l.e.from, l.e.to]);
+  if (new Set(ends).size < ends.length) return undefined;
+  const order = [...loops].sort((p, q) => Math.abs(middle(p.from) - middle(p.to)) - Math.abs(middle(q.from) - middle(q.to)) || p.i - q.i);
+  const clear = (x: number, y0: number, y1: number): boolean => drawn.nodes.every((n) => x < n.x || x >= n.x + n.w || y1 < n.y || y0 >= n.y + n.h);
+  const placed = new Map<number, LayoutEdge>();
+  let row = Math.max(drawn.height + 1, ...loops.map((l) => l.to.y + l.to.h + 2));
+  for (const { i, e, from, to } of order) {
+    const [fx, tx] = [middle(from), middle(to)];
+    if (!clear(fx, from.y + from.h, row) || !clear(tx, to.y + to.h, row)) return undefined;
+    const text = e.label ?? '';
+    const width = ruler.textWidth(text, 'edge');
+    const [lo, hi] = [Math.min(fx, tx), Math.max(fx, tx)];
+    if (text !== '' && hi - lo - 1 < width + 4) return undefined;
+    const label = text === '' ? {} : { label: { text, x: Math.floor((lo + hi + 1) / 2 - (width + 2) / 2), y: row, w: width + 2, h: 1 } };
+    placed.set(i, {
+      from: e.from,
+      to: e.to,
+      style: e.style,
+      ...(e.id === undefined ? {} : { id: e.id }),
+      ...(e.startEnd === undefined ? {} : { startEnd: e.startEnd }),
+      ...(e.end === undefined ? {} : { end: e.end }),
+      points: [
+        { x: fx + 0.5, y: from.y + from.h },
+        { x: fx + 0.5, y: row + 0.5 },
+        { x: tx + 0.5, y: row + 0.5 },
+        { x: tx + 0.5, y: to.y + to.h },
+      ],
+      ...label,
+    });
+    row++;
+  }
+  const kept = drawn.edges[Symbol.iterator]();
+  const edges = graph.edges.map((_e, i) => placed.get(i) ?? (kept.next().value as LayoutEdge));
+  return { ...drawn, height: row, lanes: drawn.lanes.map((lane) => ({ ...lane, h: row })), edges };
 }

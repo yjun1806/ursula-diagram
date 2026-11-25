@@ -3,6 +3,8 @@ import { cellRuler, layout, parse, renderText, renderTextLayout } from '../src/i
 import type { Layout } from '../src/index.ts';
 import { textCost } from '../src/layout/text-cost.ts';
 import { layoutRanks } from '../src/layout/text-ranks.ts';
+import type { Breaks } from './text-intact.ts';
+import { breaksMore, breaksOf } from './text-intact.ts';
 import { labelsNotShown } from './text-labels.ts';
 import { roomViolations } from './text-room.ts';
 
@@ -116,10 +118,44 @@ describe('a terminal drawing by ranks', () => {
     expect([lines[up], lines[up + 1], lines[up + 2]].map((row) => (row ?? '').trim())).toEqual(['▲', '│', '▼']);
   });
 
-  it('is not made of a chain, of a graph in bands, or of two lines between the same boxes', () => {
+  it('is not made of a chain or of a graph in bands', () => {
     expect(ranks('flowchart TD\n  a --> b\n  b --> c')).toBeUndefined();
     expect(ranks('flowchart TD\n  subgraph s[S]\n  a --> b\n  end\n  a --> c\n  a --> d')).toBeUndefined();
-    expect(ranks('flowchart TD\n  a --> b\n  a --> c\n  c --> a')).toBeUndefined();
+  });
+
+  it('gives two lines between the same boxes an arrowhead each', () => {
+    expect(text('graph TD; A-->|HTTP|B; B-->C; B-->D; B-->C', 100)).toEqual([
+      '   ┌───┐',
+      '   │ A │',
+      '   └───┘',
+      '     │ HTTP',
+      '     ▼',
+      '   ┌───┐',
+      '   │ B │',
+      '   └───┘',
+      '     │',
+      ' ┌─┬─┴────┐',
+      ' ▼ ▼      ▼',
+      '┌───┐   ┌───┐',
+      '│ C │   │ D │',
+      '└───┘   └───┘',
+    ]);
+  });
+
+  it('runs a line back to an earlier box below the drawing in a flow written from left to right', () => {
+    const lines = text('graph LR; A-->B{검증}; B-->|통과|C; B-->|실패|D; D-->|재시도|A; C-->E', 100);
+    expect(lines).toEqual([
+      '                              ┌──────┐   ┌──────┐',
+      '                    ┌─ 통과 ─▶│  C   │──▶│  E   │',
+      '┌──────┐   ┌──────┐ │         └──────┘   └──────┘',
+      '│  A   │──▶│ 검증 │─┤',
+      '└──────┘   └──────┘ │         ┌──────┐',
+      '    ▲               └─ 실패 ─▶│  D   │',
+      '    │                         └──────┘',
+      '    │                             │',
+      '    └────────── 재시도 ───────────┘',
+    ]);
+    expect(roomViolations(lines)).toEqual(none);
   });
 
   it('is not made wider than the width it is given', () => {
@@ -147,9 +183,9 @@ describe('a terminal drawing by ranks', () => {
 });
 
 describe('the choice between a drawing by ranks and the usual one', () => {
-  const KEPT = ['crossings', 'touches', 'cut', 'blank', 'hidden', 'crossed'] as const;
+  const KEPT = ['crossings', 'touches', 'cut', 'hidden', 'crossed'] as const;
 
-  it('takes the drawing by ranks only where it loses nothing and is not much longer', () => {
+  it('takes the drawing by ranks only where it crosses no more lines and breaks nothing more', () => {
     let taken = 0;
     for (let seed = 1; seed <= 80; seed++) {
       const graph = parse(generate(seed));
@@ -158,8 +194,10 @@ describe('the choice between a drawing by ranks and the usual one', () => {
         expect(chosen).toEqual(usual);
         continue;
       }
+      const labels = graph.edges.flatMap((e) => (e.label === undefined ? [] : [e.label]));
       const [other, cost] = [textCost(byRanks), textCost(usual)];
-      const wins = KEPT.every((k) => other[k] <= cost[k]) && other.rows <= cost.rows * 1.1 + 2;
+      const breaks = (l: Layout): Breaks => breaksOf(l, renderTextLayout(l), labels);
+      const wins = KEPT.every((k) => other[k] <= cost[k]) && !breaksMore(breaks(byRanks), breaks(usual));
       expect(renderTextLayout(chosen)).toEqual(renderTextLayout(wins ? byRanks : usual));
       if (wins) taken++;
     }
@@ -224,11 +262,40 @@ describe('the drawing by ranks of a terminal flow', () => {
     '  home --> done',
   ].join('\n');
 
-  it('is not taken where it is longer than the usual drawing by more than a tenth and two rows', () => {
-    const usual = renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100, ranked: false }));
-    const byRanks = renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100, ranked: true }));
-    expect(byRanks.length).toBeGreaterThan(usual.length * 1.1 + 2);
-    expect(renderTextLayout(layout(parse(LOGIN), cellRuler(), { maxWidth: 100 }))).toEqual(usual);
+  it('is not taken where a label stands beside two lines that it could belong to', () => {
+    const graph = parse(LOGIN);
+    const labels = graph.edges.flatMap((e) => (e.label === undefined ? [] : [e.label]));
+    const [usual, byRanks] = [false, true].map((ranked) => layout(graph, cellRuler(), { maxWidth: 100, ranked })) as [Layout, Layout];
+    expect(breaksOf(byRanks, renderTextLayout(byRanks), labels).strayLabels).toBeGreaterThan(breaksOf(usual, renderTextLayout(usual), labels).strayLabels);
+    expect(renderTextLayout(layout(graph, cellRuler(), { maxWidth: 100 }))).toEqual(renderTextLayout(usual));
+  });
+
+  it('is not taken where its labels run together or two lines cross twice', () => {
+    const loop = 'graph TD\n  A[요청] --> B{검증}\n  B -->|통과| C[저장]\n  B -->|실패| D[에러]\n  D -->|재시도| A\n  C --> E[알림]';
+    const twice = [
+      'flowchart TD',
+      '  n0[Open]',
+      '  n1[Triage ticket]',
+      '  n2([환불 심사])',
+      '  n3[Pay]',
+      '  n4[Pick and pack the order]',
+      '  n5{Send}',
+      '  n6[Mail]',
+      '  n7[Store]',
+      '  n8[Undo]',
+      '  n0 x--x|통과| n3',
+      '  n7 --x|on hold| n8',
+      '  n0 -.- n2',
+      '  n3 -.-|done| n8',
+      '  n1 -->|no| n3',
+      '  n2 o--o n8',
+      '  n3 -.-> n5',
+      '  n2 --- n3',
+    ].join('\n');
+    for (const [src, width] of [[loop, 100], [twice, 120]] as const) {
+      const graph = parse(src);
+      expect(renderTextLayout(layout(graph, cellRuler(), { maxWidth: width }))).toEqual(renderTextLayout(layout(graph, cellRuler(), { maxWidth: width, ranked: false })));
+    }
   });
 
   it('is left out of a drawing made without room', () => {

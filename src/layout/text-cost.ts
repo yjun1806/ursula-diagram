@@ -25,6 +25,16 @@ export interface TextCost {
 }
 
 const EPS = 1e-6;
+
+/** The rows a terminal drawing is written in, written once for every drawing. */
+const rowsOf = new WeakMap<Layout, string[]>();
+export function writtenOf(l: Layout): string[] {
+  const known = rowsOf.get(l);
+  if (known !== undefined) return known;
+  const rows = renderTextLayout(l);
+  rowsOf.set(l, rows);
+  return rows;
+}
 const between = (v: number, a: number, b: number): boolean => v > Math.min(a, b) + EPS && v < Math.max(a, b) - EPS;
 const upright = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) < EPS;
 
@@ -93,7 +103,7 @@ export function textCost(l: Layout): TextCost {
     const line = cs.slice(0, -1);
     return line.length > 0 && line.every((c) => labels.some((r) => inside(r, c)) || l.nodes.some((n) => inside(n, c)));
   }).length;
-  const written = renderTextLayout(l);
+  const written = writtenOf(l);
   return {
     width: Math.max(0, ...written.map(cellWidth)),
     rows: written.length,

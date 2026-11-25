@@ -12,6 +12,7 @@ import { arrangementScore } from './score.ts';
 import type { LegendOption } from './legend.ts';
 import { compactColumns } from './text-compact.ts';
 import { closeSpareRows, openTextColumns, openTextRows } from './text-room.ts';
+import { endTextsClear } from './text-ends.ts';
 import { clearUprightLabels, closeTextColumns, closeTextRows, cutLeftLabels, labelsInSight, openTextLabels, packParts, shrinkDots } from './text-tidy.ts';
 import { withLegend } from './legend.ts';
 import { gridUp, measureNodes } from './place.ts';
@@ -26,7 +27,10 @@ import { drawAttached, splitAttached } from '../layered/attach.ts';
 import { layeredRuler, layoutLayered } from '../layered/index.ts';
 import { sharing } from '../layered/ports.ts';
 import type { TextCost } from './text-cost.ts';
-import { costsMore, textCost } from './text-cost.ts';
+import { costsMore, textCost, writtenOf } from './text-cost.ts';
+import type { Breaks } from './text-intact.ts';
+import { breaksMore, breaksMoreMovingLabels, breaksOf } from './text-intact.ts';
+import { renderTextLayout } from '../render/text.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
 
@@ -65,7 +69,7 @@ export interface LayoutOptions extends SolveOptions {
   sharePorts?: boolean;
   /**
    * Terminal drawings: `true` draws a graph by its ranks wherever it can be (see `layoutRanks`), so that the boxes a box leads to stand side by side, `false` never
-   * does. Absent, the graph is drawn both ways and the drawing by ranks is kept unless it loses something the other shows or is much longer.
+   * does. Absent, the graph is drawn both ways and the drawing by ranks is kept unless it crosses more lines or breaks a line, a box or a label the other keeps whole (see `breaksOf`).
    */
   ranked?: boolean;
   /** Terminal drawings: `false` leaves out the rows and columns that arrowheads and the rules of bands ask for; such a drawing is for comparing with another, not for showing. */
@@ -258,7 +262,7 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
     // The caller closes and opens the rows of what comes back.
-    const drawn = layoutOnce(plain, ruler, opts).closed;
+    const drawn = layoutOnce(plain, ruler, opts, true).closed;
     const note: Diagnostic = { kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
@@ -280,14 +284,14 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
   if (ranked !== undefined && opts.ranked === true) return ranked;
   const flow = out(layoutShared(graph, given, opts));
-  if (ranked !== undefined) return worthIt(textCost(ranked), textCost(flow)) ? ranked : flow;
+  const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
+  if (ranked !== undefined) return worthIt(ranked, flow, labels, limit) ? ranked : flow;
   // The subgraphs of a flowchart written across are drawn as bands that follow one another, their boxes set across the flow, or as bands that run alongside it. The
   // bands alongside are kept when more lines then lead the way the flow is written, unless they do not fit the width, are much longer, or lose something.
   if (plain || graph.zones !== 'groups' || flow.composition !== 'stages' || graph.direction !== 'LR') return flow;
   const alongside = out(layoutShared(graph, given, { ...opts, composition: 'lanes' }));
-  const cost = textCost(alongside);
-  const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, cost.width) <= limit;
-  return fits && onward(alongside) > onward(flow) && worthIt(cost, textCost(flow)) ? alongside : flow;
+  const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, textCost(alongside).width) <= limit;
+  return fits && onward(alongside) > onward(flow) && worthIt(alongside, flow, labels, limit) ? alongside : flow;
 }
 
 /** How many lines of a drawing lead to a box that stands wholly further on in the direction the drawing is written in. */
@@ -300,13 +304,28 @@ function onward(l: Layout): number {
   }).length;
 }
 
-/** What a drawing made another way may not cost more than the drawing it replaces, and how much longer it may be: 10% and two rows. Its width is held by the limit alone. */
-const KEPT: ReadonlyArray<keyof TextCost> = ['crossings', 'touches', 'cut', 'blank', 'hidden', 'crossed'];
-const roomFor = (rows: number): number => rows * 1.1 + 2;
+/** What a drawing made another way may not cost more than the drawing it replaces. Its width is held by the limit alone; it may be longer and bend more. */
+const KEPT: ReadonlyArray<keyof TextCost> = ['crossings', 'touches', 'cut', 'hidden', 'crossed'];
 
-/** Whether a drawing made another way replaces the usual one: it costs no more where a reader loses something, and is not much longer. */
-function worthIt(other: TextCost, usual: TextCost): boolean {
-  return KEPT.every((k) => other[k] <= usual[k]) && other.rows <= roomFor(usual.rows);
+/**
+ * Whether a drawing made another way replaces the usual one: it crosses no more lines, and breaks nothing more where
+ * it is written out (see `breaksOf`): no line, box or label that the usual drawing keeps whole.
+ */
+function worthIt(other: Layout, usual: Layout, labels: readonly string[], limit: number | undefined): boolean {
+  const [mine, theirs] = [textCost(other), textCost(usual)];
+  if (!KEPT.every((k) => mine[k] <= theirs[k])) return false;
+  return !breaksMore(breaksIn(other, labels, limit), breaksIn(usual, labels, limit));
+}
+
+/** The breaks of a terminal drawing as it is written out, counted once for every drawing. */
+const counted = new WeakMap<Layout, Breaks>();
+function breaksIn(l: Layout, labels: readonly string[], limit: number | undefined): Breaks {
+  const known = counted.get(l);
+  if (known !== undefined) return known;
+  // Only the names of bands are written past the width of a drawing, up to the limit: without them the rows written for its cost serve.
+  const found = breaksOf(l, limit === undefined || !Number.isFinite(limit) || l.lanes.every((lane) => lane.label === '') ? writtenOf(l) : renderTextLayout(l, limit), labels);
+  counted.set(l, found);
+  return found;
 }
 
 /** The usual terminal drawing, with shared ports where they cost nothing. */
@@ -342,18 +361,34 @@ interface Drawn {
   opened: () => Layout;
 }
 
-function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
+/** `out` says that the drawing without room is the one given out, as it is for a flow drawn the other way round: its labels are then checked as well. */
+function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false): Drawn {
   const drawn = layoutAny(graph, given, opts);
   if (given.terminal !== true || opts.nested === true) return { closed: drawn, opened: () => drawn };
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l: Layout): boolean => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
+  // A step that tidies a drawing up is not taken where it breaks a line, a box or a label the drawing kept whole.
+  const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
+  const intact = (after: Layout, before: Layout): boolean => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
+  // A label brought into sight may come to stand beside the line of another: that is a break of a label for one, and no worse.
+  const shown = (after: Layout, before: Layout): boolean => !breaksMoreMovingLabels(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
+  // Spare rows are taken out all at once where that breaks nothing, and one by one otherwise.
+  const spare = (l: Layout): Layout => {
+    const all = closeSpareRows(l);
+    return all === l || intact(all, l) ? all : closeSpareRows(l, intact);
+  };
+  // Texts at the ends of lines move off the labels and lines they stand on where that breaks nothing else.
+  const ends = (l: Layout): Layout => {
+    const moved = endTextsClear(l);
+    return moved === l || intact(moved, l) ? moved : l;
+  };
   // Rows and columns are closed first, so that a label is given the room that frees.
   const close = (l: Layout): Layout => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
   const finish = (fitted: Layout, room: boolean): Layout => {
     // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
     // A row that the rows opened later made needless is taken out again.
-    const closed = room ? closeSpareRows(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
+    const closed = room ? spare(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
     const fit = (): Layout => {
       if (!over(closed)) return closed;
       const pushed = openTextLabels(compactColumns(closed), limit);
@@ -363,17 +398,24 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
     const narrow = fit();
     // Last of all, every label is brought to where it is written in full: before the parts are packed, so that a part is measured as it is drawn, and again after, when a label that still has no room is cut.
     // A label left of the drawing that takes rows to show in full, by keeping a part from standing beside another, keeps its end only.
+    // Labels are brought into sight only where that breaks no line or box the drawing without it keeps whole, and leaves no more labels broken.
     const packed = (l: Layout): Layout => {
-      const full = labelsInSight(packParts(labelsInSight(l, limit, false), limit), limit);
-      if (!l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0)) return full;
+      const sighted = labelsInSight(l, limit, false);
+      const left = l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0);
+      const plain = packParts(left ? cutLeftLabels(l) : l, limit);
+      const full = sighted === l && !left ? labelsInSight(plain, limit) : labelsInSight(packParts(sighted, limit), limit);
+      if (full === plain) return full;
+      // A drawing without room that is only compared with another keeps its labels in sight unchecked.
+      if (!left) return !room && !out ? full : shown(full, plain) ? full : plain;
       const short = labelsInSight(packParts(cutLeftLabels(l), limit), limit);
       const wide = (d: Layout): boolean => limit !== undefined && Number.isFinite(limit) && d.width > limit;
-      return (wide(full) && !wide(short)) || Math.ceil(short.height) < Math.ceil(full.height) ? short : full;
+      const tried = (wide(full) && !wide(short)) || Math.ceil(short.height) < Math.ceil(full.height) ? [short, full] : [full, short];
+      return !room && !out ? (tried[0] as Layout) : (tried.find((d) => shown(d, plain)) ?? plain);
     };
-    if (!room) return packed(narrow);
+    if (!room) return ends(packed(narrow));
     // The columns an arrowhead on the side of a box asks for never take a drawing over the limit.
     const wider = openTextColumns(narrow, limit);
-    return packed(over(wider) && !over(narrow) ? narrow : wider);
+    return ends(packed(over(wider) && !over(narrow) ? narrow : wider));
   };
   let source = close(drawn);
   let best = finish(source, false);
