@@ -1,9 +1,20 @@
 {
-  "name": "@yjun1806/ursula",
-  "version": "0.0.0",
-  "description": "Draws Mermaid text as inline SVG and terminal text: every diagram type, the same drawing every time, no browser.",
+  "name": "ursula-diagram",
+  "version": "0.1.0",
+  "description": "Draws Mermaid text as SVG and as terminal text: every diagram type, the same drawing every time, no browser.",
+  "keywords": [
+    "mermaid",
+    "diagram",
+    "flowchart",
+    "sequence-diagram",
+    "svg",
+    "ascii",
+    "terminal",
+    "cli",
+    "agent-skill"
+  ],
+  "license": "MIT",
   "type": "module",
-  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -18,10 +29,13 @@
     "./global": "./dist/ursula.global.js"
   },
   "bin": {
-    "ursula": "dist/cli.js"
+    "ursula": "skills/ursula/scripts/ursula.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/cli.js",
+    "!dist/cli.d.ts",
+    "skills"
   ],
   "engines": {
     "node": ">=22"

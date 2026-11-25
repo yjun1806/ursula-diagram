@@ -46,8 +46,12 @@ The first block is the input. The text drawing and the picture under it are what
 
 ## Quick start
 
-ursula is not published to a package registry yet. Clone this repository and run the command from its folder.
-The sources run directly on Node 24 or later.
+Install the `ursula` command with npm (Node 22 or later), or run it once with `npx`:
+
+```bash
+npm install -g ursula-diagram
+npx ursula-diagram order.mmd --format text   # without installing
+```
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -58,16 +62,14 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-node src/cli.ts order.mmd --format text --width 80   # the text drawing above
-node src/cli.ts order.mmd --format svg > order.svg   # the picture above
+ursula order.mmd --format text --width 80   # the text drawing above
+ursula order.mmd --format svg > order.svg   # the picture above
 ```
 
-On Node 22, use the bundled one-file command instead: `node skills/ursula/scripts/ursula.mjs order.mmd --format text`.
-It takes the same options.
 
 ## Gallery
 
-Every picture below is the output of `node src/cli.ts <file> --format svg`, unedited.
+Every picture below is the output of `ursula <file> --format svg`, unedited.
 
 <table>
   <tr>
@@ -213,7 +215,7 @@ Swimlanes, Timeline, TreeView, Treemap, Use Case, User Journey, Venn, Wardley Ma
 `--format text` draws with box-drawing characters and arranges the drawing for `--width`. The order flowchart at the
 top runs left to right at `--width 80`; at `--width 40` the same text comes out stacked top to bottom. A drawing is
 never cut off. These are the gallery's sequence, Gantt and mindmap texts, drawn with
-`node src/cli.ts <file> --format text --width 80`.
+`ursula <file> --format text --width 80`.
 
 ```
 ┌───────────────┐   ┌─────┐       ┌───────────┐     ┌─────┐
@@ -330,23 +332,23 @@ are a few symbols that some terminals draw two cells wide (`·` `×` `—` `∩`
 | `check` | One line of counts (bends, crossings) and, sometimes, questions a writer can answer by editing the text. |
 
 ```bash
-node src/cli.ts flow.mmd --format svg > flow.svg
-node src/cli.ts flow.mmd --format text --width 100
-node src/cli.ts flow.mmd --format text --width 100 --charset ascii
-node src/cli.ts flow.mmd --format text-svg --width 100 > flow-text.svg
-node src/cli.ts flow.mmd --format html --theme dark --title "Flow" > flow.html
-node src/cli.ts flow.mmd --format check
-cat flow.mmd | node src/cli.ts --format json
+ursula flow.mmd --format svg > flow.svg
+ursula flow.mmd --format text --width 100
+ursula flow.mmd --format text --width 100 --charset ascii
+ursula flow.mmd --format text-svg --width 100 > flow-text.svg
+ursula flow.mmd --format html --theme dark --title "Flow" > flow.html
+ursula flow.mmd --format check
+cat flow.mmd | ursula --format json
 ```
 
 The command reads standard input when no file is given. `--theme auto|light|dark` sets the light or dark of an
-`html` page; `auto` follows the system setting. Run `node src/cli.ts --help` to list every option.
+`html` page; `auto` follows the system setting. Run `ursula --help` to list every option.
 
 ## Library
 
 ```ts
-import { render, renderText, renderTextSvg } from './src/index.ts';
-import { renderHtml } from './src/html.ts';
+import { render, renderText, renderTextSvg } from 'ursula-diagram';
+import { renderHtml } from 'ursula-diagram/html';
 
 const src = `flowchart LR
   A[Start] --> B{Ok?}
@@ -416,7 +418,11 @@ own and follows a page that sets the variables. Each has a light and a dark valu
 ask the engine about it with `--format check`, and which output to give the reader. `scripts/ursula.mjs` is the
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
-To use it, copy the `skills/ursula` folder into the skills folder of your agent.
+To use it, copy the `skills/ursula` folder into the skills folder of your agent. The npm package carries it too:
+
+```bash
+cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
+```
 
 ## Development
 
@@ -428,5 +434,5 @@ npm run test:rewrite  # the slow comparisons of the layered engine, about a quar
 bun scripts/build.ts  # dist/ and the command inside the skill; run it again when a drawing changes
 ```
 
-The built files run on Node 22 or later. Node 24 or later also runs the TypeScript sources directly, which is how
-the commands in this file are written.
+The built files run on Node 22 or later. In a checkout, Node 24 or later also runs the sources directly:
+`node src/cli.ts order.mmd --format text`.

@@ -46,8 +46,12 @@ flowchart LR
 
 ## 빠른 시작
 
-ursula는 아직 패키지 저장소에 올리지 않았습니다. 이 저장소를 내려받고 그 폴더에서 명령을 실행합니다. Node 24
-이상은 소스를 바로 실행합니다.
+npm으로 `ursula` 명령을 설치합니다(Node 22 이상). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
+
+```bash
+npm install -g ursula-diagram
+npx ursula-diagram order.mmd --format text   # 설치하지 않고
+```
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -58,16 +62,14 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-node src/cli.ts order.mmd --format text --width 80   # 위의 글자 그림
-node src/cli.ts order.mmd --format svg > order.svg   # 위의 그림
+ursula order.mmd --format text --width 80   # 위의 글자 그림
+ursula order.mmd --format svg > order.svg   # 위의 그림
 ```
 
-Node 22에서는 한 파일로 묶은 명령을 씁니다. `node skills/ursula/scripts/ursula.mjs order.mmd --format text`처럼
-실행하며, 옵션은 같습니다.
 
 ## 그림 모음
 
-아래 그림은 모두 `node src/cli.ts <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. SVG는 글자를 정한 자리에
+아래 그림은 모두 `ursula <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. SVG는 글자를 정한 자리에
 놓으므로 한글 라벨도 그대로 씁니다.
 
 <table>
@@ -214,7 +216,7 @@ Swimlanes, Timeline, TreeView, Treemap, Use Case, User Journey, Venn, Wardley Ma
 `--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. 맨 위의 주문 흐름도는
 `--width 80`에서 왼쪽에서 오른쪽으로 놓이고, `--width 40`에서는 같은 글이 위에서 아래로 쌓입니다. 그림을 잘라 내지는
 않습니다. 아래는 위 그림 모음의 시퀀스·간트·마인드맵을 영문 라벨로 바꿔 쓴 글을
-`node src/cli.ts <파일> --format text --width 80`으로 그린 결과입니다.
+`ursula <파일> --format text --width 80`으로 그린 결과입니다.
 
 ```
 ┌───────────────┐   ┌─────┐       ┌───────────┐     ┌─────┐
@@ -330,23 +332,23 @@ Rats   15   3.1%
 | `check` | 꺾임·교차 수를 적은 한 줄과, 때로 글을 어떻게 고치면 나아지는지 묻는 물음. |
 
 ```bash
-node src/cli.ts flow.mmd --format svg > flow.svg
-node src/cli.ts flow.mmd --format text --width 100
-node src/cli.ts flow.mmd --format text --width 100 --charset ascii
-node src/cli.ts flow.mmd --format text-svg --width 100 > flow-text.svg
-node src/cli.ts flow.mmd --format html --theme dark --title "Flow" > flow.html
-node src/cli.ts flow.mmd --format check
-cat flow.mmd | node src/cli.ts --format json
+ursula flow.mmd --format svg > flow.svg
+ursula flow.mmd --format text --width 100
+ursula flow.mmd --format text --width 100 --charset ascii
+ursula flow.mmd --format text-svg --width 100 > flow-text.svg
+ursula flow.mmd --format html --theme dark --title "Flow" > flow.html
+ursula flow.mmd --format check
+cat flow.mmd | ursula --format json
 ```
 
 파일을 주지 않으면 명령은 표준 입력에서 글을 읽습니다. `--theme auto|light|dark`는 `html` 페이지의 밝은·어두운
-모드를 정하고, `auto`는 시스템 설정을 따릅니다. 모든 옵션은 `node src/cli.ts --help`로 봅니다.
+모드를 정하고, `auto`는 시스템 설정을 따릅니다. 모든 옵션은 `ursula --help`로 봅니다.
 
 ## 라이브러리
 
 ```ts
-import { render, renderText, renderTextSvg } from './src/index.ts';
-import { renderHtml } from './src/html.ts';
+import { render, renderText, renderTextSvg } from 'ursula-diagram';
+import { renderHtml } from 'ursula-diagram/html';
 
 const src = `flowchart LR
   A[Start] --> B{Ok?}
@@ -414,7 +416,11 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습�
 엔진에 그림을 물어보는 법, 읽는 사람에게 어떤 출력을 줄지를 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이라, 스킬은 Node 22 이상만 있으면 돌고 아무것도 설치하지 않습니다.
 
-쓰려면 `skills/ursula` 폴더를 에이전트의 스킬 폴더에 복사합니다.
+쓰려면 `skills/ursula` 폴더를 에이전트의 스킬 폴더에 복사합니다. npm 패키지에도 들어 있습니다.
+
+```bash
+cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
+```
 
 ## 개발
 
@@ -426,5 +432,5 @@ npm run test:rewrite  # 층 배치 엔진의 느린 대조, 15분쯤
 bun scripts/build.ts  # dist/와 스킬 안의 명령. 그림이 바뀌면 다시 돌립니다
 ```
 
-빌드한 파일은 Node 22 이상에서 돕니다. Node 24 이상은 TypeScript 소스도 바로 실행하며, 이 문서의 명령은 그렇게
-적었습니다.
+빌드한 파일은 Node 22 이상에서 돕니다. 저장소를 받은 폴더에서는 Node 24 이상이 소스를 바로 실행합니다:
+`node src/cli.ts order.mmd --format text`.
