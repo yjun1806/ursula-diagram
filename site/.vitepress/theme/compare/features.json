@@ -1,0 +1,12 @@
+{
+  "placeholder": true,
+  "tools": ["ursula", "Tool B", "Tool C"],
+  "rows": [
+    { "feature": { "en": "PLACEHOLDER feature A", "ko": "PLACEHOLDER 기능 A" }, "values": [null, null, null] },
+    { "feature": { "en": "PLACEHOLDER feature B", "ko": "PLACEHOLDER 기능 B" }, "values": [null, null, null] }
+  ],
+  "note": {
+    "en": "PLACEHOLDER: what was checked and with which versions.",
+    "ko": "PLACEHOLDER: 무엇을 어떤 버전으로 확인했는지."
+  }
+}

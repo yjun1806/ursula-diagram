@@ -1,0 +1,15 @@
+{
+  "placeholder": true,
+  "title": { "en": "PLACEHOLDER: time to draw one diagram", "ko": "PLACEHOLDER: 그림 한 장을 그리는 시간" },
+  "conditions": {
+    "en": "PLACEHOLDER: one line naming the input, the machine, the versions and how many runs the median is taken over.",
+    "ko": "PLACEHOLDER: 입력, 기계, 버전, 중앙값을 낸 실행 횟수를 한 줄로 적는다."
+  },
+  "unit": "ms",
+  "lowerIsBetter": true,
+  "bars": [
+    { "name": "ursula", "value": null, "highlight": true },
+    { "name": "Tool B", "value": null },
+    { "name": "Tool C", "value": null }
+  ]
+}
