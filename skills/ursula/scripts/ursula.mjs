@@ -3,7 +3,6 @@ if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula ne
 
 // src/cli.ts
 import { readFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 
 // src/command/args.ts
 var FORMATS = ["svg", "text", "text-svg", "json", "check", "html"];
@@ -18625,6 +18624,7 @@ var sequence = {
 var state = {
   name: "state",
   headers: ["stateDiagram-v2"],
+  aliases: ["stateDiagram"],
   summary: "states and what moves between them",
   example: `stateDiagram-v2
   [*] --> Idle
@@ -18647,6 +18647,7 @@ var state = {
 var klass = {
   name: "class",
   headers: ["classDiagram"],
+  aliases: ["classDiagram-v2"],
   summary: "types with fields and how they relate",
   example: `classDiagram
   class Order {
@@ -18765,6 +18766,7 @@ tf 05 ui CartUI`,
 var ishikawa = {
   name: "ishikawa",
   headers: ["ishikawa-beta"],
+  aliases: ["ishikawa"],
   summary: "the causes of one effect",
   example: `ishikawa-beta
   Slow checkout
@@ -18812,6 +18814,7 @@ var cynefin = {
 var git = {
   name: "git",
   headers: ["gitGraph"],
+  aliases: ["gitGraph:", "gitgraph", "gitgraph:", "GitGraph", "GitGraph:"],
   summary: "branches, commits and merges",
   example: `gitGraph
   commit
@@ -18921,6 +18924,7 @@ digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;`,
 var block = {
   name: "block",
   headers: ["block-beta"],
+  aliases: ["block"],
   summary: "blocks on a grid",
   example: `block-beta
   columns 3
@@ -18956,6 +18960,7 @@ var pie = {
 var packet = {
   name: "packet",
   headers: ["packet-beta"],
+  aliases: ["packet"],
   summary: "the bits of a packet header",
   example: `packet-beta
   0-15: "Source port"
@@ -18974,6 +18979,7 @@ var packet = {
 var radar = {
   name: "radar",
   headers: ["radar-beta"],
+  aliases: ["radar"],
   summary: "scores of a few things on several axes",
   example: `radar-beta
   axis speed["Speed"], cost["Cost"], ease["Ease"]
@@ -19016,6 +19022,7 @@ var requirement = {
 var sankey = {
   name: "sankey",
   headers: ["sankey-beta"],
+  aliases: ["sankey"],
   summary: "flows and their amounts",
   example: `sankey-beta
 Salary,Budget,4000
@@ -19034,6 +19041,7 @@ Budget,Savings,2600`,
 var architecture = {
   name: "architecture",
   headers: ["architecture-beta"],
+  aliases: ["architecture"],
   summary: "services in groups and what connects them",
   example: `architecture-beta
   group api(cloud)[API]
@@ -19075,6 +19083,7 @@ var timeline = {
 var treeview = {
   name: "treeview",
   headers: ["treeView-beta"],
+  aliases: ["treeView"],
   summary: "a file tree",
   example: `treeView-beta
   src
@@ -19120,6 +19129,7 @@ Checkout ..> : include Browse`,
 var treemap = {
   name: "treemap",
   headers: ["treemap-beta"],
+  aliases: ["treemap"],
   summary: "sizes of nested parts",
   example: `treemap-beta
 "Frontend"
@@ -19181,6 +19191,7 @@ var c4 = {
 var wardley = {
   name: "wardley",
   headers: ["wardley-beta"],
+  aliases: ["wardley"],
   summary: "components by visibility and evolution",
   example: `wardley-beta
 title Tea shop
@@ -19203,6 +19214,7 @@ Tea -> Kettle`,
 var xychart = {
   name: "xychart",
   headers: ["xychart-beta"],
+  aliases: ["xychart"],
   summary: "numbers as bars and lines",
   example: `xychart-beta
   title "Sales"
@@ -19250,13 +19262,17 @@ var HINTS = [
   { frontEnd: "flowchart", pattern: /^expected a node id near ''/, hint: "an arrow needs a node on both ends", example: "A --> B" },
   { frontEnd: "flowchart", pattern: /^missing '([\])}>])'/, hint: "a bracket around the text of a node is opened and not closed", example: "A[Text] --> B(Text)" },
   { frontEnd: "flowchart", pattern: /^subgraph '.*' is never closed/, hint: "close every subgraph with a line 'end'", example: "end" },
-  { frontEnd: "flowchart", pattern: /^'end' without a matching 'subgraph'/, hint: "this 'end' has no 'subgraph' above it" },
+  { frontEnd: "flowchart", pattern: /^'end' without a matching 'subgraph'/, hint: "this 'end' has no 'subgraph' above it; delete it, or open the subgraph above", noExample: true },
+  { frontEnd: "state", pattern: /^"\{" is never closed/, hint: "close the block of this state with a line '}' after its last line", example: "}" },
   { frontEnd: "state", pattern: /^a transition needs a state on both sides/, hint: "a transition names a state on each side of -->", example: "A --> B : event" },
+  { frontEnd: "sequence", pattern: /^'\w+' block is never closed/, hint: "close the block with a line 'end' after its last message", example: "end" },
+  { frontEnd: "sequence", pattern: /^'end' without an open block/, hint: "this 'end' closes no loop, alt, opt, par, critical, break or rect; delete it, or open the block above", noExample: true },
   { frontEnd: "sequence", pattern: /^message needs a sender and a receiver|^unsupported syntax/, hint: "a message is written Sender->>Receiver: text", example: "Alice->>Bob: Hello" },
   { frontEnd: "class", pattern: /^Unrecognized class diagram statement/, hint: "a line is a class, a relation such as A <|-- B, or a member such as A : +name" },
   { frontEnd: "er", pattern: /^Cannot read "/, hint: "a relation is A ||--o{ B : label, and the label is required", example: "CUSTOMER ||--o{ ORDER : places" },
   { frontEnd: "c4", pattern: /^cannot read '|^unclosed quote/, hint: 'an element is Name(alias, "Label", "text") with every bracket and quote closed' },
   { frontEnd: "gantt", pattern: /^Cannot read ".*"; a task/, hint: "a task has a name, a colon, then its start and end or length", example: "Task : 2024-01-01, 3d" },
+  { frontEnd: "railroad", pattern: /^The rule ".*" does not end with ";"/, fix: (row) => `${row.trim()} ;` },
   { frontEnd: "wardley", pattern: /^Unrecognised line/, hint: "a line starts with title, anchor, component, evolve, pipeline or note, or is a link A -> B" },
   { frontEnd: "quadrant", pattern: /^Unrecognised line/, hint: "a point is Name: [x, y]; other lines start with title, x-axis, y-axis or quadrant-1..4" },
   { frontEnd: "mindmap", pattern: /^A mindmap has one root/, hint: "indent every node below the root further than the root" },
@@ -19264,9 +19280,16 @@ var HINTS = [
   { frontEnd: "timeline", pattern: /^An event line needs a time period/, hint: "an event follows a period: the first line of a period is period : event", example: "2024 : Launch" },
   { frontEnd: "ishikawa", pattern: /is indented less than the categories/, hint: "indent categories one step under the effect, and causes further under their category" }
 ];
-function hintFor(frontEnd, message) {
+function hintFor(frontEnd, message, row) {
   const found = HINTS.find((h) => h.frontEnd === frontEnd && h.pattern.test(message));
-  return found === undefined ? undefined : { hint: found.hint, ...found.example === undefined ? {} : { example: found.example } };
+  if (found === undefined)
+    return;
+  const example = found.fix !== undefined && row !== undefined ? found.fix(row) : found.example;
+  return {
+    ...found.hint === undefined ? {} : { hint: found.hint },
+    ...example === undefined ? {} : { example },
+    ...found.noExample ? { noExample: true } : {}
+  };
 }
 
 // src/errors/locate.ts
@@ -19277,6 +19300,10 @@ function quotedPieces(message) {
   return [...near === undefined ? [] : [near], ...quoted].map((p) => p.replace(/\.\.\.$/, ""));
 }
 function locate(message, row) {
+  const closer = /^missing '([\])}])'/.exec(message)?.[1];
+  const opener = closer === undefined ? undefined : unclosed(row, closer);
+  if (opener !== undefined)
+    return opener;
   const found = locatePiece(message, row);
   if (found !== undefined || row.trim() === "")
     return found;
@@ -19285,6 +19312,25 @@ function locate(message, row) {
   if (/\b(needs?|not closed|never closed|unterminated|missing|has no|is empty|three fields)\b/i.test(message))
     return row.trimEnd().length + 1;
   return;
+}
+var OPENER = { "]": "[", ")": "(", "}": "{" };
+function unclosed(row, closer) {
+  const opener = OPENER[closer];
+  const open = [];
+  let quoted = false;
+  for (let i = 0;i < row.length; i++) {
+    const ch = row[i];
+    if (ch === '"')
+      quoted = !quoted;
+    else if (quoted)
+      continue;
+    else if (ch === opener)
+      open.push(i);
+    else if (ch === closer)
+      open.pop();
+  }
+  const at = open.at(-1);
+  return at === undefined ? undefined : at + 1;
 }
 function locatePiece(message, row) {
   for (const piece of quotedPieces(message)) {
@@ -19377,13 +19423,30 @@ function likest(lines, target) {
   return best;
 }
 var hasWord = (line, word) => line.split(/[^\p{L}\p{N}_@-]+/u).includes(word);
+var shapeOf = (line) => line.trim().replace(/[\p{L}\p{N}_]+/gu, "w").replace(/\s+/g, "");
+function nearestShape(lines, row) {
+  const shape = shapeOf(row);
+  let best;
+  let score = Infinity;
+  for (const l of lines) {
+    const d = editDistance(shapeOf(l), shape) - prefix(l.trim(), row.trim()) / 1000;
+    if (d < score) {
+      best = l;
+      score = d;
+    }
+  }
+  return best;
+}
 function exampleLine(e, row, word, suggestion, hinted) {
   const lines = e.example.split(`
 `);
-  if (lines[0] !== undefined && e.headers.includes(word) && suggestion === undefined)
+  if (lines[0] !== undefined && [...e.headers, ...e.aliases ?? []].includes(word) && suggestion === undefined)
     return lines[0].trim();
   const target = (suggestion === undefined || word === "" ? row : row.replace(word, suggestion)).trim();
-  const pick = (suggestion === undefined ? undefined : likest(lines.filter((l) => hasWord(l, suggestion)), target) ?? lines.find((l) => hasWord(l, suggestion))) ?? (word === "" ? undefined : likest(lines.slice(1).filter((l) => leadingWord(l) === word), target) ?? lines.slice(1).find((l) => leadingWord(l) === word)) ?? hinted ?? likest(lines.slice(1), target) ?? lines.slice(1).find((l) => l.trim() !== "");
+  const body = lines.slice(1).filter((l) => l.trim() !== "");
+  const keywords = new Set(e.keywords);
+  const sameKind = body.filter((l) => !keywords.has(leadingWord(l)) || leadingWord(l) === word);
+  const pick = (suggestion === undefined ? undefined : likest(lines.filter((l) => hasWord(l, suggestion)), target) ?? lines.find((l) => hasWord(l, suggestion))) ?? (word === "" ? undefined : likest(body.filter((l) => leadingWord(l) === word), target) ?? body.find((l) => leadingWord(l) === word)) ?? hinted ?? nearestShape(sameKind, target);
   if (pick === undefined)
     return;
   return e.indented && pick !== hinted ? pick.trimEnd() : pick.trim();
@@ -19437,13 +19500,13 @@ function explain(err, src, ctx) {
         column = at + 1;
     }
   }
-  const hinted = entry === undefined ? undefined : hintFor(entry.name, message);
-  const example = advice.example ?? (entry === undefined ? hinted?.example : exampleLine(entry, row ?? "", word, suggestion, hinted?.example));
+  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row);
+  const example = advice.example ?? (entry === undefined || hinted?.noExample ? hinted?.example : exampleLine(entry, row ?? "", word, suggestion, hinted?.example));
   return new UrsulaError(message, err.code, err.line, {
     ...advice,
     ...column === undefined ? {} : { column },
     ...suggestion === undefined ? {} : { suggestion },
-    ...advice.hint === undefined && hinted !== undefined && suggestion === undefined ? { hint: hinted.hint } : {},
+    ...advice.hint === undefined && hinted?.hint !== undefined && suggestion === undefined ? { hint: hinted.hint } : {},
     ...example === undefined ? {} : { example }
   });
 }
@@ -34324,6 +34387,7 @@ function readItems(src) {
   const acc = createAccessibilityReader();
   const root = [];
   const stack = [root];
+  const opened = [];
   let header = false;
   for (let i = 0;i < rows.length; i++) {
     const no = i + 1;
@@ -34346,6 +34410,7 @@ function readItems(src) {
       if (stack.length === 1)
         throw new UrsulaError('"}" has no matching "{"', "state-brace", no);
       stack.pop();
+      opened.pop();
       continue;
     }
     const open = /^state\s+(.+?)\s*\{$/.exec(text);
@@ -34353,6 +34418,7 @@ function readItems(src) {
       const block = [];
       top.push({ no, text: `state ${open[1]}`, block });
       stack.push(block);
+      opened.push(no);
       continue;
     }
     if (/^note\s+(left|right)\s+of\s+\S+\s*$/.test(text)) {
@@ -34377,7 +34443,7 @@ function readItems(src) {
   if (!header)
     throw new UrsulaError('expected "stateDiagram" or "stateDiagram-v2"', "state-header", 1);
   if (stack.length > 1)
-    throw new UrsulaError('"{" is never closed', "state-brace", rows.length);
+    throw new UrsulaError('"{" is never closed', "state-brace", opened.at(-1));
   return { items: root, accTitle: acc.title };
 }
 function compositeIds(items, out = new Map) {
@@ -37367,7 +37433,7 @@ function compartmentsOf2(e, ruler) {
     }
   ];
 }
-function shapeOf(e) {
+function shapeOf2(e) {
   if (e.role === "person")
     return "round";
   return e.store === "db" ? "cylinder" : "rect";
@@ -37401,7 +37467,7 @@ function graphOf(model, ruler) {
     id: e.alias,
     title: e.label,
     lines: [],
-    shape: shapeOf(e),
+    shape: shapeOf2(e),
     lane: LANE11.id,
     ...e.boundary === undefined ? {} : { cluster: e.boundary },
     compartments: compartmentsOf2(e, ruler)
@@ -39965,18 +40031,22 @@ function renderTextSvg(lines) {
 var MOST2 = 5;
 var escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 var word = (id) => `(?<![\\p{L}\\p{N}_])${escape(id)}(?![\\p{L}\\p{N}_])`;
+var sourceId = (id) => /^\[\*\](start|end):/.test(id) ? "[*]" : id;
 function edgeLine(rows, from, to) {
   const arrow = "[^\\n]*?[-.=<>]{2,}[^\\n]*?";
-  const forward = new RegExp(`${word(from)}${arrow}${word(to)}`, "u");
-  const backward = new RegExp(`${word(to)}${arrow}${word(from)}`, "u");
-  const at = rows.findIndex((r) => !r.trim().startsWith("%%") && (forward.test(r) || backward.test(r)));
+  const a = sourceId(from);
+  const b = sourceId(to);
+  const first = (pattern) => rows.findIndex((r) => !r.trim().startsWith("%%") && pattern.test(r));
+  let at = first(new RegExp(`${word(a)}${arrow}${word(b)}`, "u"));
+  if (at < 0)
+    at = first(new RegExp(`${word(b)}${arrow}${word(a)}`, "u"));
   return at < 0 ? undefined : at + 1;
 }
 function checkDetails(l, src) {
   const rows = src.split(/\r?\n/);
   const name = (from, to) => {
     const line = edgeLine(rows, from, to);
-    return `${from} --> ${to}${line === undefined ? "" : ` (line ${line})`}`;
+    return `${sourceId(from)} --> ${sourceId(to)}${line === undefined ? "" : ` (line ${line})`}`;
   };
   const out = [];
   const crossings = l.diagnostics.filter((d) => d.kind === "crossing" && d.nodes.length === 4);
@@ -39993,12 +40063,13 @@ function checkDetails(l, src) {
   return out;
 }
 // src/syntax/lookup.ts
+var allHeaders = (e) => [...e.headers, ...e.aliases ?? []];
 function syntaxOf(type) {
   const t = type.toLowerCase();
-  return SYNTAX.find((e) => e.name.toLowerCase() === t || e.headers.some((h) => h.toLowerCase() === t));
+  return SYNTAX.find((e) => e.name.toLowerCase() === t || allHeaders(e).some((h) => h.toLowerCase() === t));
 }
 function closestType(type) {
-  return closest(type, SYNTAX.flatMap((e) => [e.name, ...e.headers]));
+  return closest(type, SYNTAX.flatMap((e) => [e.name, ...allHeaders(e)]));
 }
 function syntaxText(e) {
   return [`${e.headers[0]}: ${e.summary}.`, "", e.example, "", ...e.rules.map((r) => `- ${r}`), "", `Headers: ${e.headers.join(", ")}`, ""].join(`
@@ -40560,6 +40631,32 @@ function runCommand(args, read) {
   return drawCommand(src, req);
 }
 
+// src/mcp/lines.ts
+function lineSplitter(onLine) {
+  let rest = "";
+  const emit = (line) => onLine(line.endsWith("\r") ? line.slice(0, -1) : line);
+  return {
+    push(chunk) {
+      rest += chunk;
+      let at = rest.indexOf(`
+`);
+      while (at >= 0) {
+        emit(rest.slice(0, at));
+        rest = rest.slice(at + 1);
+        at = rest.indexOf(`
+`);
+      }
+    },
+    end() {
+      if (rest !== "")
+        emit(rest);
+      rest = "";
+    }
+  };
+}
+var messageLine = (message) => `${JSON.stringify(message).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")}
+`;
+
 // src/version.ts
 var VERSION = "0.1.1";
 
@@ -40715,14 +40812,16 @@ function answerLine(line) {
 // src/cli.ts
 var args = process.argv.slice(2);
 if (args[0] === "mcp" && args.length === 1) {
-  createInterface({ input: process.stdin, crlfDelay: Infinity }).on("line", (line) => {
+  const lines = lineSplitter((line) => {
     if (line.trim() === "")
       return;
     const out = answerLine(line);
     if (out !== undefined)
-      process.stdout.write(`${JSON.stringify(out)}
-`);
+      process.stdout.write(messageLine(out));
   });
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => lines.push(chunk));
+  process.stdin.on("end", () => lines.end());
 } else {
   const out = runCommand(args, (file) => readFileSync(file ?? 0, "utf8"));
   if (out.stdout !== "")

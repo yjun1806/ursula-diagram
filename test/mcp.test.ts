@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { lineSplitter } from '../src/mcp/lines.ts';
 import { VERSION } from '../src/version.ts';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -18,6 +19,26 @@ const ready = { jsonrpc: '2.0', method: 'notifications/initialized' };
 const call = (id: number, name: string, args: Record<string, unknown>) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 const flow = 'flowchart LR\nA[Order] --> B{Paid?}\nB -->|yes| C[Ship]\n';
 const cli = (args: string[], input: string) => spawnSync(process.execPath, [`${root}src/cli.ts`, ...args], { input, encoding: 'utf8' });
+
+describe('reading messages', () => {
+  it('ends a message at a newline only, not at U+2028, U+2029 or a lone carriage return', () => {
+    const got: string[] = [];
+    const lines = lineSplitter((l) => got.push(l));
+    lines.push('{"a":"x y z\rw"}\r\n{"b"');
+    lines.push(':1}\n{"c":2}');
+    lines.end();
+    expect(got).toEqual(['{"a":"x y z\rw"}', '{"b":1}', '{"c":2}']);
+  });
+
+  it.each(['src/cli.ts', 'skills/ursula/scripts/ursula.mjs'])('%s answers a message with U+2028 in a string, on one line', (entry) => {
+    const input = `${JSON.stringify(call(6, 'syntax', { type: 'a b' }))}\n`;
+    const r = spawnSync(process.execPath, [`${root}${entry}`, 'mcp'], { input, encoding: 'utf8' });
+    const answers = r.stdout.split('\n').filter((l) => l !== '');
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).not.toContain(' ');
+    expect(JSON.parse(answers[0] ?? '')).toMatchObject({ id: 6, result: { isError: true } });
+  });
+});
 
 describe('ursula-diagram mcp', () => {
   it('says its version, the protocol and that it has tools', () => {
