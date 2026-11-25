@@ -1,6 +1,6 @@
 {
   "name": "ursula-diagram",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Draws Mermaid text as SVG and as terminal text: every diagram type, the same drawing every time, no browser.",
   "keywords": [
     "mermaid",
@@ -14,6 +14,14 @@
     "agent-skill"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yjun1806/ursula.git"
+  },
+  "homepage": "https://github.com/yjun1806/ursula#readme",
+  "bugs": {
+    "url": "https://github.com/yjun1806/ursula/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
