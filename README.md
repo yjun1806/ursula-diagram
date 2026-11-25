@@ -101,6 +101,12 @@ and follows a page that sets the variables. Each has a light and a dark value; t
 | `--ursula-s1` … `--ursula-s8` | The eight series of a chart | | |
 | `--ursula-s1-tint` … `--ursula-s8-tint` | The pale area fill of each series | | |
 
+## Agent skill
+
+`skills/ursula` is a skill for coding agents: `SKILL.md` tells the agent how to write the text and which output to
+give, and `ursula.mjs` beside it is the command as one file, so the skill runs with Node alone. Copy the folder into
+the skills folder of the agent.
+
 ## Development
 
 ```bash
@@ -108,7 +114,7 @@ npm install
 npx tsc --noEmit
 npm test              # the whole suite but the slow comparisons
 npm run test:rewrite  # the slow comparisons of the layered engine, about a quarter of an hour
-bun scripts/build.ts  # dist/: ES modules, one global file for browsers, the command, the type declarations
+bun scripts/build.ts  # dist/ and the command inside the skill; run it again when a drawing changes
 ```
 
 Node 24 or later runs the TypeScript sources directly.

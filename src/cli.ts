@@ -5,7 +5,7 @@ import type { SequenceLayout } from './sequence/model.ts';
 import type { Layout } from './types.ts';
 
 function usage(): never {
-  process.stderr.write('usage: node src/cli.ts [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]\n');
+  process.stderr.write('usage: ursula [file.mmd] [--format svg|text|json|check|html] [--width N] [--no-legend] [--color] [--engine layered|grid] [--composition auto|lanes|stages] [--no-questions] [--no-elbows] [--detail auto|full|narrow|title] [--quality fast|best] [--title TEXT] [--theme auto|light|dark]\n');
   process.exit(2);
 }
 

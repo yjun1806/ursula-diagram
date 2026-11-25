@@ -20,6 +20,8 @@ await build({ entrypoints: [`${root}src/index.ts`, `${root}src/html.ts`], outdir
 await build({ entrypoints: [`${root}scripts/global-entry.ts`], outdir: out, format: 'iife', target: 'browser', minify: true, naming: { entry: 'ursula.global.js' } });
 // The command.
 await build({ entrypoints: [`${root}src/cli.ts`], outdir: out, format: 'esm', target: 'node', banner: '#!/usr/bin/env node', naming: { entry: 'cli.js' } });
+// The command once more as one small file inside the agent skill, so that the skill runs without installing anything.
+await build({ entrypoints: [`${root}src/cli.ts`], outdir: `${root}skills/ursula`, format: 'esm', target: 'node', minify: true, banner: '#!/usr/bin/env node', naming: { entry: 'ursula.mjs' } });
 
 const types = Bun.spawnSync(['bun', 'x', 'tsc', '-p', `${root}tsconfig.build.json`], { stdout: 'inherit', stderr: 'inherit' });
 if (types.exitCode !== 0) process.exit(types.exitCode ?? 1);

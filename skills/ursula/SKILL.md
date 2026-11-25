@@ -1,0 +1,102 @@
+---
+name: ursula
+description: Draw a diagram from Mermaid text as a terminal drawing, an SVG, or a one-file HTML page. Use when asked to draw, sketch, visualize or diagram a flow, process, architecture, sequence, state machine, class or data model, timeline, chart or any other Mermaid diagram type, or to show a picture of how something works while explaining it. Placement is computed by the bundled engine, so write Mermaid only and never coordinates.
+---
+
+# ursula
+
+Write the diagram as Mermaid text and let the bundled command draw it. The command is the file `ursula.mjs` next to
+this file; it needs Node 24 or later and nothing else. In the commands below, `URSULA` stands for
+`node <the folder of this file>/ursula.mjs`.
+
+## Steps
+
+1. **Write the Mermaid text** to a file. Pick the type by what the content is, not by habit (table below).
+2. **Ask the engine what it sees**: `URSULA diagram.mmd --format check`. It prints one line of counts (bends,
+   crossings) and, sometimes, lines that begin with `question 1:`. A question names what the engine found, what a
+   change would gain, and what to do in the text.
+3. **Answer the questions once.** Apply a suggestion only when it keeps the meaning of the diagram. Do not loop: one
+   round of edits, then draw.
+4. **Draw it in the form the reader needs** (next section).
+
+If the command prints `error: …`, the text could not be drawn. The message says what to change. Fix the text and run
+it again; do not fall back to drawing by hand.
+
+## Which output
+
+| The reader is | Command | Then |
+| --- | --- | --- |
+| In this conversation, in a terminal | `URSULA d.mmd --format text --width 100` | Paste the lines in a code block. Use `--width 80` when the terminal is narrow. |
+| Reading a document, a pull request or a page | `URSULA d.mmd --format svg > d.svg` | Reference or inline the SVG. It follows light and dark by itself. |
+| Opening one file to look, switch light and dark, and save a PNG | `URSULA d.mmd --format html --title "Name" > d.html` | Give them the file. |
+| A program | `URSULA d.mmd --format json` | Boxes, lines and labels with coordinates. |
+
+The text reads from standard input when no file is given: `cat d.mmd | URSULA --format text --width 100`.
+
+A terminal drawing never runs past `--width`. When the drawing cannot fit, the command says so: shorten the names,
+split the diagram in two, or give more width. A few types (pie, quadrant, radar, sankey, xychart, timeline, user
+journey, railroad, venn, cynefin, wardley) come out as a table or a list in a terminal, because that is more exact
+there than a picture.
+
+## Which type
+
+| The content is | Header |
+| --- | --- |
+| Steps and decisions | `flowchart LR` or `flowchart TD` |
+| Steps owned by teams, systems or roles | `swimlane-beta LR`, one `subgraph` per owner |
+| Messages between participants over time | `sequenceDiagram` |
+| States and what moves between them | `stateDiagram-v2` |
+| Types with fields and how they relate | `classDiagram` |
+| Tables and their relations | `erDiagram` |
+| Systems, containers and who uses them | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` |
+| Services in groups and what connects them | `architecture-beta` |
+| Actors and what they can do | `usecase-beta` |
+| Requirements and what satisfies them | `requirementDiagram` |
+| Commands, events and views along time | `eventmodeling` |
+| A tree of ideas, a file tree | `mindmap`, `treeView-beta` |
+| Tasks on a calendar, events in order | `gantt`, `timeline` |
+| Branches and merges | `gitGraph` |
+| Work by column | `kanban` |
+| Causes of one effect | `ishikawa-beta` |
+| Numbers | `pie`, `xychart-beta`, `quadrantChart`, `radar-beta`, `sankey-beta`, `treemap-beta` |
+| Blocks on a grid, bits of a packet | `block-beta`, `packet-beta` |
+
+Every other header of the Mermaid documentation is read as well (`journey`, `zenuml`, `venn-beta`, `wardley-beta`,
+`cynefin-beta`, the railroad grammars).
+
+## Writing text that draws well
+
+The engine places everything; the text decides what it has to work with.
+
+- **Order is meaning.** The node the first line leaves from is the start. Write the main path first, from start to
+  end, then the branches and the ways back.
+- **Short names.** Two or three words in a box; put the detail in a second line with `<br>`. Long names widen
+  every box of that kind.
+- **Label the lines that need it**: the answers of a decision (`-->|yes|`), the reason for a way back. Leave the
+  obvious ones bare.
+- **Decisions are diamonds** (`B{Valid?}`), starts and ends are rounded (`A([Start])`). The shape is how a reader
+  tells them apart.
+- **One diagram, one question.** Past about twenty boxes, split it: an overview, then one diagram per part.
+- **Group only what is owned.** A `subgraph` is for an owner or a boundary, not for decoration.
+- Never write coordinates, sizes or colours into the text. Colours come from the page (`--ursula-*` CSS
+  variables).
+
+## Example
+
+```
+swimlane-beta LR
+  subgraph shop[Storefront]
+    order([Order placed]) --> pay{Paid?}
+    pay -->|no| remind[Send reminder]
+  end
+  subgraph wh[Warehouse]
+    pick[Pick items] --> pack[Pack] --> ship([Ship])
+  end
+  pay -->|yes| pick
+  remind --> pay
+```
+
+```bash
+URSULA order.mmd --format check
+URSULA order.mmd --format text --width 100
+```
