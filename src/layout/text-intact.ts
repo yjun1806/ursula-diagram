@@ -1,6 +1,6 @@
 import { cellWidth } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode } from '../types.ts';
-import { cellsOf, labelsNotShown, roomViolations } from './text-read.ts';
+import { cellsOf, labelsMissing, roomViolations } from './text-read.ts';
 
 const N = 1;
 const E = 2;
@@ -211,7 +211,12 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
   // Cells of every line, and the lines in each.
   const byCell = new Map<string, number[]>();
   runs.forEach((run, i) => {
-    for (const [x, y] of run?.cells ?? []) byCell.set(`${x},${y}`, [...(byCell.get(`${x},${y}`) ?? []), i]);
+    for (const [x, y] of run?.cells ?? []) {
+      const key = `${x},${y}`;
+      const list = byCell.get(key);
+      if (list === undefined) byCell.set(key, [i]);
+      else list.push(i);
+    }
   });
   // Lines that share a cell other than where they cross run as one: a reader may follow them from the start of any to the end of any.
   const root = drawn.map((_, i) => i);
@@ -385,7 +390,10 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
   // The cells of the sides of boxes, corners left out, with whether the side runs along a row.
   const sides = new Map<string, Array<{ id: string; level: boolean }>>();
   const side = (x: number, y: number, id: string, level: boolean): void => {
-    sides.set(`${x},${y}`, [...(sides.get(`${x},${y}`) ?? []), { id, level }]);
+    const key = `${x},${y}`;
+    const list = sides.get(key);
+    if (list === undefined) sides.set(key, [{ id, level }]);
+    else list.push({ id, level });
   };
   for (const n of layout.nodes) {
     const [x0, y0, x1, y1] = [Math.round(n.x), Math.round(n.y), Math.round(n.x + n.w) - 1, Math.round(n.y + n.h) - 1];
@@ -408,6 +416,8 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
       const along = b === LEVEL ? [1, 0] : [0, 1];
       for (const [dx, dy] of across as Array<[number, number]>) {
         const [nx, ny] = [x + dx, y + dy];
+        // Nothing beside the cell: no box and no line to run along.
+        if (!sides.has(`${nx},${ny}`) && !byCell.has(`${nx},${ny}`)) continue;
         const [fx, fy] = [x + (along[0] as number), y + (along[1] as number)];
         if ((run.bits.get(`${fx},${fy}`) ?? 0) !== b) continue;
         const near = sides.get(`${nx},${ny}`);
@@ -430,7 +440,7 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     }
   });
 
-  const room = roomViolations(lines);
+  const room = roomViolations(lines, grid);
   const asked = labels ?? drawn.flatMap((e) => (e.label === undefined ? [] : (e.label.lines ?? [e.label.text])));
   return {
     brokenLines,
@@ -441,7 +451,7 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     coveredLabels,
     labelsAtHeads,
     room: room.headless.length + room.underName.length + room.onRule.length + room.tight.length + room.close.length,
-    unseen: labelsNotShown(asked, lines).reduce((n, m) => n + m.missing, 0),
+    unseen: labelsMissing(asked, lines),
     forks,
     crossMarks,
     mixedNets,

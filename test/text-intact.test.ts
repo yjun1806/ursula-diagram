@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, renderText, renderTextLayout } from '../src/index.ts';
 import type { Layout } from '../src/index.ts';
 import { layoutRanks } from '../src/layout/text-ranks.ts';
+import { drawText } from '../src/flowchart-frontend.ts';
 import { breaksOf } from './text-intact.ts';
 
 const DECISION = 'graph TD\n  A[요청] --> B{검증}\n  B -->|통과| C[저장]\n  B -->|실패| D[에러]\n  C --> E[알림]\n  D --> E';
@@ -276,6 +277,29 @@ describe('the breaks of a terminal drawing', () => {
       const lines = 'lines' in out ? out.lines : [];
       expect(lines.join('\n')).toContain(text);
       expect(glued(lines, text), lines.join('\n')).toBe(false);
+    }
+  });
+});
+
+describe('a terminal drawing made otherwise than the usual one', () => {
+  // The cut label on Retry -> Validate takes fewer cells than the room it is cut to.
+  const CUT = 'graph LR\n  v0{검증}\n  v1[Retry]\n  v2{Validate the order}\n  v3{Validate the order}\n  v0-->v1\n  v1-->|on failure retry|v2\n  v2-->|실패|v3';
+  // A label of the usual drawing that some other drawing would bring into sight beside the arrowhead of another line.
+  const BESIDE = 'flowchart LR\n  v0([Validate the order])\n  v1[x]\n  v2[알림 보내기]\n  v3[검증]\n  v4([DB])\n  v5{저장}\n  v6[요청]\n  v7[Worker]\n  v0-->|실패|v1\n  v1-->|예|v2\n  v1-->|재시도|v3\n  v3-->|실패|v4\n  v4-->|거절|v5\n  v1-->|실패|v6\n  v3-->|통과|v7\n  v2-->|아니오|v4';
+  const labelsOf = (src: string): string[] => parse(src).edges.flatMap((e) => (e.label === undefined ? [] : [e.label]));
+  const shown = (src: string, width: number, bare: boolean): { layout: Layout; lines: string[] } => drawText(src, width, bare ? { bare: true } : {});
+
+  it('runs a line on to a label cut short, on both sides of it', () => {
+    const { lines } = shown(CUT, 60, false);
+    const row = lines.find((line) => line.includes('on failure')) ?? '';
+    expect(row).toMatch(/─ on failure\S*… ─+▶/);
+  });
+
+  it('breaks no line, box or label the usual drawing keeps whole, and crosses no more lines', () => {
+    for (const [src, width] of [[CUT, 60], [BESIDE, 80], [DECISION, 60], [SERVICES, 60]] as const) {
+      const [mine, usual] = [shown(src, width, false), shown(src, width, true)];
+      const [a, b] = [breaksOf(mine.layout, mine.lines, labelsOf(src)), breaksOf(usual.layout, usual.lines, labelsOf(src))];
+      for (const k of Object.keys(a) as Array<keyof typeof a>) expect(a[k], `${k}\n${mine.lines.join('\n')}`).toBeLessThanOrEqual(b[k]);
     }
   });
 });

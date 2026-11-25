@@ -72,6 +72,11 @@ export interface LayoutOptions extends SolveOptions {
    * does. Absent, the graph is drawn both ways and the drawing by ranks is kept unless it crosses more lines or breaks a line, a box or a label the other keeps whole (see `breaksOf`).
    */
   ranked?: boolean;
+  /**
+   * Terminal drawings: `true` gives the usual drawing, which every drawing made otherwise is held against: it is not drawn by ranks or with its bands alongside, its labels are not
+   * brought into sight, its spare rows are not taken out and the texts at the ends of its lines are not moved. A quick drawing is the usual one unless this is `false`.
+   */
+  bare?: boolean;
   /** Terminal drawings: `false` leaves out the rows and columns that arrowheads and the rules of bands ask for; such a drawing is for comparing with another, not for showing. */
   room?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
@@ -262,7 +267,7 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
     // The caller closes and opens the rows of what comes back.
-    const drawn = layoutOnce(plain, ruler, opts, true).closed;
+    const drawn = layoutOnce(plain, ruler, opts, graph).closed;
     const note: Diagnostic = { kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
@@ -277,14 +282,19 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
   const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
-  // A quick drawing is what a caller chooses a setting on, a drawing without room is one to compare, and a caller that names the engine, the composition or the ports gets what it names: none is drawn another way.
-  const plain = given.terminal !== true || opts.nested === true || opts.quick === true || opts.room === false || opts.engine === 'grid' || (opts.composition ?? 'auto') !== 'auto' || opts.sharePorts !== undefined;
+  // A quick drawing is what a caller chooses a setting on: it is the usual drawing, so that the setting chosen is the one the usual drawing would choose.
+  if (given.terminal !== true || opts.nested === true || opts.quick === true || opts.bare === true) return out(layoutShared(graph, given, opts));
+  // A drawing without room is one to compare, and a caller that names the engine, the composition or the ports gets what it names: none is drawn another way.
+  const plain = opts.room === false || opts.engine === 'grid' || (opts.composition ?? 'auto') !== 'auto' || opts.sharePorts !== undefined;
   const limit = opts.maxWidth ?? given.defaultWidth;
   const ranks = plain || opts.ranked === false ? undefined : layoutRanks(graph, given, limit);
   const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
   if (ranked !== undefined && opts.ranked === true) return ranked;
-  const flow = out(layoutShared(graph, given, opts));
   const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
+  // Every drawing made otherwise is held against the usual drawing, arranged once for both: it crosses no more lines, and breaks no line, box or label the usual drawing keeps whole.
+  const usual = out(layoutShared(graph, given, { ...opts, bare: true }));
+  const tidied = out(layoutShared(graph, given, opts));
+  const flow = tidied === usual || sameRows(tidied, usual, limit) || keeps(tidied, usual, labels, limit) ? tidied : usual;
   if (ranked !== undefined) return worthIt(ranked, flow, labels, limit) ? ranked : flow;
   // The subgraphs of a flowchart written across are drawn as bands that follow one another, their boxes set across the flow, or as bands that run alongside it. The
   // bands alongside are kept when more lines then lead the way the flow is written, unless they do not fit the width, are much longer, or lose something.
@@ -302,6 +312,17 @@ function onward(l: Layout): number {
     const [a, b] = [nodes.get(e.from), nodes.get(e.to)];
     return a !== undefined && b !== undefined && e.invisible !== true && (down ? b.y >= a.y + a.h : b.x >= a.x + a.w);
   }).length;
+}
+
+/** Whether two drawings are written out alike. */
+function sameRows(a: Layout, b: Layout, limit: number | undefined): boolean {
+  const [x, y] = [writtenOut(a, limit), writtenOut(b, limit)];
+  return x.length === y.length && x.every((row, i) => row === y[i]);
+}
+
+/** Whether a drawing crosses no more lines than another and breaks nothing more where it is written out (see `breaksOf`). */
+function keeps(other: Layout, usual: Layout, labels: readonly string[], limit: number | undefined): boolean {
+  return textCost(other).crossings <= textCost(usual).crossings && !breaksMore(breaksIn(other, labels, limit), breaksIn(usual, labels, limit));
 }
 
 /** What a drawing made another way may not cost more than the drawing it replaces. Its width is held by the limit alone; it may be longer and bend more. */
@@ -322,10 +343,21 @@ const counted = new WeakMap<Layout, Breaks>();
 function breaksIn(l: Layout, labels: readonly string[], limit: number | undefined): Breaks {
   const known = counted.get(l);
   if (known !== undefined) return known;
-  // Only the names of bands are written past the width of a drawing, up to the limit: without them the rows written for its cost serve.
-  const found = breaksOf(l, limit === undefined || !Number.isFinite(limit) || l.lanes.every((lane) => lane.label === '') ? writtenOf(l) : renderTextLayout(l, limit), labels);
+  const found = breaksOf(l, writtenOut(l, limit), labels);
   counted.set(l, found);
   return found;
+}
+
+/** The rows a terminal drawing is written in, as it is given out. */
+const written = new WeakMap<Layout, string[]>();
+function writtenOut(l: Layout, limit: number | undefined): string[] {
+  // Only the names of bands are written past the width of a drawing, up to the limit: without them the rows written for its cost serve.
+  if (limit === undefined || !Number.isFinite(limit) || l.lanes.every((lane) => lane.label === '')) return writtenOf(l);
+  const known = written.get(l);
+  if (known !== undefined) return known;
+  const rows = renderTextLayout(l, limit);
+  written.set(l, rows);
+  return rows;
 }
 
 /** The usual terminal drawing, with shared ports where they cost nothing. */
@@ -361,10 +393,42 @@ interface Drawn {
   opened: () => Layout;
 }
 
-/** `out` says that the drawing without room is the one given out, as it is for a flow drawn the other way round: it is finished again by the caller. */
-function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false): Drawn {
-  const drawn = layoutAny(graph, given, opts);
-  if (given.terminal !== true || opts.nested === true) return { closed: drawn, opened: () => drawn };
+/**
+ * Arrangements of a graph already made, and the ports they shared (see `sharing`), by the ruler and the terms they were made on: the usual drawing and a drawing
+ * made otherwise differ only in how they are finished, so a graph is arranged once for both.
+ */
+const arrangements = new WeakMap<Ruler, WeakMap<Graph, Map<string, { layout: Layout; shared: number }>>>();
+function arranged(key: Graph, graph: Graph, how: string, given: Ruler, opts: LayoutOptions): Layout {
+  // A flow drawn the other way round is finished as it is arranged: it is arranged for each way of finishing.
+  const { bare, ...terms } = opts;
+  const id = `${how}|${graph.mirror === undefined ? '' : String(bare ?? opts.quick === true)}|${JSON.stringify(terms)}`;
+  const byGraph = arrangements.get(given) ?? new WeakMap<Graph, Map<string, { layout: Layout; shared: number }>>();
+  arrangements.set(given, byGraph);
+  const known = byGraph.get(key) ?? new Map<string, { layout: Layout; shared: number }>();
+  byGraph.set(key, known);
+  const found = known.get(id);
+  if (found !== undefined) {
+    sharing.placements += found.shared;
+    return found.layout;
+  }
+  const before = sharing.placements;
+  const layout = layoutAny(graph, given, opts);
+  known.set(id, { layout, shared: sharing.placements - before });
+  return layout;
+}
+
+/**
+ * `turned` is the graph of a flow drawn the other way round, when `graph` is that flow turned: the drawing without room is the one given out then, and it is finished again
+ * by the caller.
+ */
+function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, turned?: Graph): Drawn {
+  const out = turned !== undefined;
+  if (given.terminal !== true || opts.nested === true) {
+    const drawn = layoutAny(graph, given, opts);
+    return { closed: drawn, opened: () => drawn };
+  }
+  const bare = opts.bare ?? opts.quick === true;
+  const drawn = turned === undefined ? arranged(graph, graph, 'as given', given, opts) : arranged(turned, graph, 'turned', given, opts);
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l: Layout): boolean => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
   // A step that tidies a drawing up is not taken where it breaks a line, a box or a label the drawing kept whole.
@@ -372,31 +436,33 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
   const intact = (after: Layout, before: Layout): boolean => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
   // Spare rows are taken out all at once where that breaks nothing, and one by one otherwise.
   const spare = (l: Layout): Layout => {
+    if (bare) return l;
     const all = closeSpareRows(l);
     return all === l || intact(all, l) ? all : closeSpareRows(l, intact);
   };
   // Texts at the ends of lines move off the labels and texts they stand on where that breaks nothing else.
   const ends = (l: Layout): Layout => {
+    if (bare) return l;
     const moved = endTextsClear(l);
     return moved === l || intact(moved, l) ? moved : l;
   };
   // Rows and columns are closed first, so that a label is given the room that frees.
-  const close = (l: Layout): Layout => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit);
+  const close = (l: Layout): Layout => openTextLabels(closeTextColumns(closeTextRows(shrinkDots(l))), limit, bare);
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
   const finish = (fitted: Layout, room: boolean): Layout => {
     // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
     // A row that the rows opened later made needless is taken out again.
     const closed = room ? spare(openTextRows(clearUprightLabels(openTextRows(fitted), true))) : clearUprightLabels(fitted);
     const squeeze = (c: Layout): Layout => {
-      const pushed = openTextLabels(compactColumns(c), limit);
+      const pushed = openTextLabels(compactColumns(c), limit, bare);
       // Still too wide: the labels on level lines give way, and are cut to the room they are left.
-      return over(pushed) ? openTextLabels(compactColumns(c, true), limit) : pushed;
+      return over(pushed) ? openTextLabels(compactColumns(c, true), limit, bare) : pushed;
     };
     const fit = (): Layout => {
       if (!over(closed)) return closed;
       const pushed = squeeze(closed);
       // A label that starts left of the drawing holds the columns it stands over: still too wide, it keeps its end only, and the columns close without it.
-      if (!over(pushed) || !closed.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0)) return pushed;
+      if (bare || !over(pushed) || !closed.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0)) return pushed;
       const cut = squeeze(cutLeftLabels(closed));
       return cut.width < pushed.width ? cut : pushed;
     };
@@ -406,7 +472,7 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
     // Labels are brought into sight only where that breaks nothing the drawing without it keeps whole (see `breaksOf`): a label cut short does not trade for one that stands by another line.
     const packed = (l: Layout): Layout => {
       // The drawing of a flow drawn the other way round is finished again once it is turned: its labels are brought into sight then, where the rows they stand among are final.
-      if (out) return packParts(l, limit);
+      if (out || bare) return packParts(l, limit);
       const sighted = labelsInSight(l, limit, false);
       const left = l.edges.some((e) => e.label !== undefined && !e.invisible && e.label.x < 0);
       const plain = cutPastLimit(packParts(left ? cutLeftLabels(l) : l, limit), limit);
@@ -430,7 +496,7 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
   if (over(best) && limit !== undefined && graph.nodes.some((n) => n.attach !== undefined && n.lines.length > 0)) {
     for (const cells of [28, 22, 16]) {
       const narrow: Graph = { ...graph, nodes: graph.nodes.map((n) => (n.attach === undefined ? n : { ...n, lines: wrapWords(n.lines.join(' '), cells, cellWidth) })) };
-      const fitted = close(layoutAny(narrow, given, opts));
+      const fitted = close(arranged(graph, narrow, `notes ${cells}`, given, opts));
       const tried = finish(fitted, false);
       if (tried.width < best.width) [source, best] = [fitted, tried];
       if (best.width <= limit) break;
@@ -451,7 +517,7 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, out = false
             : { compartments: n.compartments.map((c) => ({ ...c, lines: cutLines(c.lines), ...(c.columns === undefined ? {} : { columns: c.columns.map((row) => row.map((cell) => clip(cell, Math.max(4, Math.floor(cells / Math.max(1, row.length)))))) }) })) }),
         })),
       };
-      const fitted = close(layoutAny(short, given, opts));
+      const fitted = close(arranged(graph, short, `clip ${cells}`, given, opts));
       const tried = finish(fitted, false);
       if (tried.width < best.width) [source, best] = [fitted, tried];
     }
@@ -498,7 +564,7 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, ...solveOpts } = opts;
+  const { legend, laneAxis = 'auto', engine = 'layered', composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, bare: _bare, ...solveOpts } = opts;
   if (engine === 'layered') return layoutLayered(graph, ruler, { ...solveOpts, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
   if (laneAxis === 'across' || (laneAxis === 'auto' && !considerAlong(graph))) {
     return withLegend(layoutAcross(graph, ruler, solveOpts, undefined, true), ruler, legend);

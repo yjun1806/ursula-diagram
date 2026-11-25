@@ -123,8 +123,7 @@ export function ruleRows(lines: readonly string[]): number[] {
  * boxes on either side, and two boxes one above the other that a straight line joins are two rows apart. An
  * arrowhead whose line the name of a band hides is told apart: the rule was too short for the name.
  */
-export function roomViolations(lines: readonly string[]): RoomViolations {
-  const grid = cellsOf(lines);
+export function roomViolations(lines: readonly string[], grid: readonly string[][] = cellsOf(lines)): RoomViolations {
   const at = (x: number, y: number): string => grid[y]?.[x] ?? ' ';
   const rules = ruleRows(lines);
   const onRule = new Set(rules);
@@ -174,6 +173,15 @@ export function roomViolations(lines: readonly string[]): RoomViolations {
  * in the rows of the drawing than it was asked for. A text that is part of another one is found more often than asked
  * for; that never counts. A label the drawing cut short with an ellipsis is told apart by `cut`.
  */
+/** How many label texts in all the rows of a drawing do not show in full (see `labelsNotShown`). */
+export function labelsMissing(labels: readonly string[], lines: readonly string[]): number {
+  const wanted = new Map<string, number>();
+  for (const t of labels) if (t.trim() !== '') wanted.set(t.trim(), (wanted.get(t.trim()) ?? 0) + 1);
+  let missing = 0;
+  for (const [text, count] of wanted) missing += Math.max(0, count - lines.reduce((n, line) => n + line.split(text).length - 1, 0));
+  return missing;
+}
+
 export function labelsNotShown(labels: readonly string[], lines: readonly string[]): Array<{ text: string; missing: number; cut: boolean }> {
   const wanted = new Map<string, number>();
   for (const t of labels) if (t.trim() !== '') wanted.set(t.trim(), (wanted.get(t.trim()) ?? 0) + 1);

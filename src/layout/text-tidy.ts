@@ -75,9 +75,10 @@ function grow(l: Layout, at: number, count: number, rows: boolean): Layout {
  * Terminal drawings: a label written on a level stretch of its line leaves a cell of line before it and a cell of
  * line after it, and the marks at the ends of a line (an arrowhead, the marks of a relation) leave a cell of line
  * between them. Where a stretch is too short for that the drawing gets the columns or rows it lacks; columns only
- * as long as it stays within `limit`. The drawing is also as wide as its labels.
+ * as long as it stays within `limit`. The drawing is also as wide as its labels. `bare` keeps a label as wide as the
+ * room it is cut to, and reaches the drawing to the blank after a label's text (see `LayoutOptions.bare`).
  */
-export function openTextLabels(given: Layout, limit: number | undefined): Layout {
+export function openTextLabels(given: Layout, limit: number | undefined, bare = false): Layout {
   let l = given;
   const within = (w: number): boolean => limit === undefined || !Number.isFinite(limit) || w <= limit;
   for (let ei = 0; ei < l.edges.length; ei++) {
@@ -119,8 +120,8 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
       if (moved === undefined) break;
       // A cut label keeps the blank on each side of its text.
       // Short of room, a label first gives up the blanks beside its text; only a text that still has no room is cut.
-      const bare = cellWidth(moved.text);
-      const shown = room >= lw ? moved : room >= bare ? { ...moved, w: bare } : room >= 4 ? { ...moved, text: cut(moved.text, room - 2), w: room } : undefined;
+      const text = cellWidth(moved.text);
+      const shown = room >= lw ? moved : room >= text ? { ...moved, w: text } : room >= 4 ? (bare ? { ...moved, text: cut(moved.text, room - 2), w: room } : cutTo(moved, room)) : undefined;
       if (shown === undefined) break;
       const first = a + low + 1 + Math.floor((room - shown.w) / 2);
       if (shown !== moved || added > 0 || lx < a + low + 1 || lx + lw > end - high) {
@@ -132,21 +133,23 @@ export function openTextLabels(given: Layout, limit: number | undefined): Layout
   // Texts that reach past the right side: the drawing grows to hold them, up to the limit; past it a label is cut.
   let right = Math.max(l.width, 0);
   // The blank after the text of a label is not drawn at the end of a row: a label reaches as far as its text.
-  const texts = l.edges.flatMap((e) => (e.invisible ? [] : [e.startLabel, e.endLabel])).filter((t) => t !== undefined);
+  const texts = l.edges.flatMap((e) => (e.invisible ? [] : bare ? [e.label, e.startLabel, e.endLabel] : [e.startLabel, e.endLabel])).filter((t) => t !== undefined);
   for (const t of texts) right = Math.max(right, Math.ceil(t.x + t.w));
-  for (const e of l.edges) if (e.label !== undefined && !e.invisible) right = Math.max(right, textEnd(e.label));
+  if (!bare) for (const e of l.edges) if (e.label !== undefined && !e.invisible) right = Math.max(right, textEnd(e.label));
   for (const lane of l.lanes) if (lane.label !== '') right = Math.max(right, Math.ceil(lane.labelBox.x) + cellWidth(lane.label));
   // Past the limit the drawing is as wide as its boxes and lines need, and the labels that reach further are cut.
   const solid = Math.max(0, ...l.nodes.map((n) => Math.ceil(n.x + n.w)), ...l.edges.flatMap((e) => (e.invisible ? [] : e.points.map((p) => Math.floor(p.x + 1e-9) + 1))), ...(l.legend?.items ?? []).map((item) => Math.ceil(item.captionX) + cellWidth(item.caption)));
   const width = within(right) ? right : Math.max(solid, limit ?? solid);
   const fitted = (e: LayoutEdge): LayoutEdge => {
     const t = e.label;
+    if (bare && t !== undefined && !e.invisible && t.x < 0) return cutLeftLabel(e, false);
     // A label that starts left of the drawing is left as it is: it is brought into sight once the drawing is finished.
     if (t === undefined || e.invisible || t.x < 0 || Math.ceil(t.x + t.w) <= width) return e;
+    const room = Math.floor(width - t.x);
+    if (bare) return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
     // Only the blank after the text lies past the drawing: nothing is cut. A text cut to its ellipsis alone is left to be brought into sight.
     if (textEnd(t) <= width) return e;
-    const room = Math.floor(width - t.x);
-    return room >= 4 && cut(t.text, room - 2) !== '…' ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
+    return room >= 4 && cut(t.text, room - 2) !== '…' ? { ...e, label: cutTo(t, room) } : e;
   };
   return { ...l, width, edges: l.edges.map(fitted) };
 }
@@ -609,16 +612,36 @@ export function clearUprightLabels(given: Layout, marks = false): Layout {
 
 /** Terminal drawings: a label that starts left of the drawing keeps its end, cut to the cells left of where it ends, when four or more are. */
 export function cutLeftLabels(l: Layout): Layout {
-  const fitted = (e: LayoutEdge): LayoutEdge => {
-    const t = e.label;
-    if (t === undefined || e.invisible || t.x >= 0) return e;
-    const room = Math.floor(t.x + t.w);
-    const tail = [...t.text];
-    let kept = '';
-    while (tail.length > 0 && cellWidth(`…${tail[tail.length - 1]}${kept}`) <= room - 2) kept = `${tail.pop()}${kept}`;
-    return room >= 4 ? { ...e, label: { ...t, text: `…${kept.trimStart()}`, x: 0, w: room } } : e;
-  };
-  return { ...l, edges: l.edges.map(fitted) };
+  return { ...l, edges: l.edges.map((e) => cutLeftLabel(e, true)) };
+}
+
+/** A label that starts left of the drawing, cut to its end; `close` leaves it no wider than its text and a blank on each side. */
+function cutLeftLabel(e: LayoutEdge, close: boolean): LayoutEdge {
+  const t = e.label;
+  if (t === undefined || e.invisible || t.x >= 0) return e;
+  const room = Math.floor(t.x + t.w);
+  const tail = [...t.text];
+  let kept = '';
+  while (tail.length > 0 && cellWidth(`…${tail[tail.length - 1]}${kept}`) <= room - 2) kept = `${tail.pop()}${kept}`;
+  if (room < 4) return e;
+  const label = { ...t, text: `…${kept.trimStart()}`, x: 0, w: room };
+  return { ...e, label: close ? closeTo(label) : label };
+}
+
+/** A label cut to `room` cells where it stands: its text stays where a label of that width shows it. */
+function cutTo<T extends { x: number; w: number; text: string }>(t: T, room: number): T {
+  return closeTo({ ...t, text: cut(t.text, room - 2), w: room });
+}
+
+/**
+ * A label no wider than its text and a blank on each side, its text left where it was: a cut label leaves the rest
+ * of its room to its line, so that the line runs on to the blank before its text and from the blank after it.
+ */
+function closeTo<T extends { x: number; w: number; text: string }>(t: T): T {
+  const tw = cellWidth(t.text);
+  const w = Math.round(t.w);
+  if (w <= tw + 2) return t;
+  return { ...t, x: t.x + Math.floor((w - tw) / 2) - 1, w: tw + 2 };
 }
 
 /** Terminal drawings: a label whose text reaches past `limit` is cut where it stands, to its ellipsis if need be, when four cells or more are left for it: half a text reads as another word. */
@@ -628,7 +651,7 @@ export function cutPastLimit(l: Layout, limit: number | undefined): Layout {
     const t = e.label;
     if (t === undefined || e.invisible || t.x < 0 || textEnd(t) <= limit) return e;
     const room = Math.floor(limit - t.x);
-    return room >= 4 ? { ...e, label: { ...t, text: cut(t.text, room - 2), w: room } } : e;
+    return room >= 4 ? { ...e, label: cutTo(t, room) } : e;
   };
   const edges = l.edges.map(fitted);
   return edges.every((e, i) => e === l.edges[i]) ? l : { ...l, edges };
@@ -795,11 +818,14 @@ export function labelsInSight(given: Layout, limit: number | undefined, cutting 
     }
     if (best !== undefined && best.shift > 0) {
       const moved = grow(now, -Infinity, best.shift, false);
-      const short = cut(label.text, best.w - 2);
-      l = { ...moved, edges: moved.edges.map((o, k) => (k === ei && o.label ? { ...o, label: { ...o.label, text: short, x: 0, y: (best as { y: number }).y, w: (best as { w: number }).w } } : o)) };
+      const short = cutTo({ ...label, x: 0, y: best.y }, best.w);
+      l = { ...moved, edges: moved.edges.map((o, k) => (k === ei && o.label ? { ...o, label: short } : o)) };
       continue;
     }
-    if (best !== undefined) l = put(best.x, best.y, cut(label.text, best.w - 2), best.w);
+    if (best !== undefined) {
+      const short = cutTo({ x: best.x, w: best.w, text: label.text }, best.w);
+      l = put(short.x, best.y, short.text, short.w);
+    }
     else if (lx < 0) l = put(Math.max(0, (upright[0]?.x ?? 0) - Math.floor(lw / 2)), ly);
   }
   return l;
