@@ -235,6 +235,20 @@ export function eventModelGrid(
   tidy = true,
   set: SetOut | undefined = setOut(model, variant, wrap),
 ): Layout | undefined {
+  return gridWithRoom(model, variant, wrap, strips, most, spend, tidy, set)?.layout;
+}
+
+/** The grid of `eventModelGrid`, and the rows that were opened at its rules: two ways of setting the frames out are compared without them. */
+function gridWithRoom(
+  model: EventModel,
+  variant: Variant,
+  wrap: number,
+  strips: 'one' | 'any',
+  most: number,
+  spend: (cost: number) => boolean,
+  tidy: boolean,
+  set: SetOut | undefined,
+): { layout: Layout; opened: number } | undefined {
   if (set === undefined) return undefined;
   const { bands, frames, texts, wires, slots } = set;
   const stripCount = (slots[slots.length - 1]?.strip ?? 0) + 1;
@@ -278,7 +292,7 @@ export function eventModelGrid(
   // Setting up a grid costs by its cells, before any line is searched for.
   if (!spend(gridWidth * rows.length)) return undefined;
   const routed = routeWires(rects, wires, gridWidth, rows, spend, tidy);
-  if (routed === undefined) return channels < wires.length && most < (CHANNELS[1] as number) && spend(0) ? eventModelGrid(model, variant, wrap, strips, CHANNELS[1], spend, tidy, set) : undefined;
+  if (routed === undefined) return channels < wires.length && most < (CHANNELS[1] as number) && spend(0) ? gridWithRoom(model, variant, wrap, strips, CHANNELS[1] as number, spend, tidy, set) : undefined;
   let closed: Routed = { rects, rows, paths: routed };
   for (;;) {
     const spare = spareRows(closed.rects, wires, closed.paths, closed.rows);
@@ -346,7 +360,7 @@ export function eventModelGrid(
     const y = ruleRows(state.rows)[i] as number;
     return { id: `${rule.strip}/${band.id}`, label: band.label, x: 0, y, w: width, h: rule.height + 1, labelBox: { x: NAME_AT, y, w: cellWidth(band.label), h: 1 }, bare: true };
   });
-  return { width, height: state.rows.length, direction: 'LR', laneAxis: 'across', lanes, nodes, edges, diagnostics: [] };
+  return { layout: { width, height: state.rows.length, direction: 'LR', laneAxis: 'across', lanes, nodes, edges, diagnostics: [] }, opened: state.rows.length - closed.rows.length };
 }
 
 /**
@@ -371,6 +385,8 @@ const NAME_ROWS = 2;
 interface Drawing {
   lines: string[];
   cut: number;
+  /** The rows of the drawing before any were opened at its rules. */
+  rows: number;
 }
 
 /** Whether a band name is written over a line that crosses the rule of its band. */
@@ -423,16 +439,17 @@ export function drawEventModel(model: EventModel, maxWidth: number | undefined, 
   };
   const draw = (variant: Variant, wrap: number, strips: 'one' | 'any', tidy: boolean, set: SetOut | undefined): Drawing | undefined => {
     const before = spent;
-    const layout = eventModelGrid(model, variant, wrap, strips, CHANNELS[0], (cost) => spend(cost) && spent - before <= WAY_BUDGET, tidy, set);
+    const grid = gridWithRoom(model, variant, wrap, strips, CHANNELS[0] as number, (cost) => spend(cost) && spent - before <= WAY_BUDGET, tidy, set);
     tooLarge = spent - before > WAY_BUDGET;
-    if (layout === undefined) return undefined;
+    if (grid === undefined) return undefined;
+    const layout = grid.layout;
     const first = renderTextLayout(layout, limit);
     // A name that ran past the end of its rule: the rules are drawn again long enough to hold it.
     const widest = largest(first.map(cellWidth), 0);
     const reach = Math.min(widest + 2, limit);
     const lines = widest > layout.width ? renderTextLayout({ ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) }, limit) : first;
     if (!lines.every((line) => cellWidth(line) <= limit) || nameOverLine(layout, lines)) return undefined;
-    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? '').includes(lane.label)).length };
+    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? '').includes(lane.label)).length, rows: lines.length - grid.opened };
   };
   // The first way that fits is drawn, unless it cuts a band name short and a later way writes every name whole in few more rows.
   const firstWhole = (ways: Array<() => Drawing | undefined>): Drawing | undefined => {
@@ -441,7 +458,7 @@ export function drawEventModel(model: EventModel, maxWidth: number | undefined, 
       if (fits !== undefined && spent > NAME_BUDGET) break;
       const drawing = way();
       if (drawing === undefined) continue;
-      if (drawing.cut === 0 && (fits === undefined || drawing.lines.length <= fits.lines.length + NAME_ROWS)) return drawing;
+      if (drawing.cut === 0 && (fits === undefined || drawing.rows <= fits.rows + NAME_ROWS)) return drawing;
       fits ??= drawing;
     }
     return fits;

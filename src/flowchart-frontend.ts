@@ -64,13 +64,15 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
   if (stepAttempts.title.length === 0) stepAttempts.title.push({ graph: titlesOnly(full), w: inner, list: true });
   const numberOf = { full: 1, narrow: 2, title: 3 } as const;
   const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
-  const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition): { lines: string[]; layout: Layout } => {
+  // Without `room` a drawing is made to be compared: the rows that arrowheads and bands ask for are left out, so that they do not tell which setting wins.
+  const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition, room = true): { lines: string[]; layout: Layout } => {
     const laid = layout(a.graph, cellRuler(), {
       ...layoutOptions({ legend, engine, composition: as, ...(quality === undefined ? {} : { quality }) }),
       ...(maxHeight === undefined ? {} : { maxHeight }),
       ...(maxWidth === undefined ? {} : { maxWidth }),
       fold,
       ...(quick ? { quick: true, refine: false } : {}),
+      ...(room ? {} : { room: false }),
     });
     const drawn = renderTextLayout(laid);
     const list = a.list && maxWidth !== undefined ? descriptionList(full, maxWidth) : [];
@@ -107,7 +109,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
     let first = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      const quick = draw(options[mid] as Attempt, false, true);
+      const quick = draw(options[mid] as Attempt, false, true, composition, false);
       if (widest(quick.lines) <= maxWidth) {
         first = mid;
         hi = mid - 1;
@@ -116,7 +118,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
     if (first < 0) return undefined;
     let winner: Fit | undefined;
     for (const a of options.slice(first)) {
-      const quick = draw(a, false, true);
+      const quick = draw(a, false, true, composition, false);
       if (widest(quick.lines) > maxWidth) continue;
       const cost = figureLines(quick) + (a.list ? listLines : 0);
       if (!winner || cost < winner.cost) winner = { a, quick, cost };
@@ -129,7 +131,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
   if (chosen) {
     const heavy = draw(chosen.a, false, false);
     const step: TextStep = chosen.a.list ? 3 : chosen.a.graph === full ? 1 : 2;
-    return result(chosen.a, step, widest(heavy.lines) <= maxWidth ? heavy : chosen.quick);
+    return result(chosen.a, step, widest(heavy.lines) <= maxWidth ? heavy : draw(chosen.a, false, true));
   }
   // Fold the flow at the narrowest boxes of the last step.
   const narrowest = (stepAttempts[names[names.length - 1] as keyof typeof stepAttempts].at(-1)) as Attempt;

@@ -1,5 +1,6 @@
 import { cellWidth } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
+import { placeLaneName } from './lane-names.ts';
 import { cellOf, endCells, startCells } from './text-tidy.ts';
 
 /** The fewest cells of a straight upright line that joins two boxes one above the other. */
@@ -75,6 +76,22 @@ function textsOf(l: Layout, names: boolean): Rect[] {
   return names ? [...onLines, ...l.lanes.filter((lane) => lane.label !== '').map((lane) => lane.labelBox)] : onLines;
 }
 
+/** The names of the bands that find no free place on their rule and are written over the lines that cross it, each with the blank on either side. */
+function namesOverLines(l: Layout): Rect[] {
+  const named = l.lanes.filter((lane) => lane.label !== '' && lane.bare === true);
+  if (named.length === 0) return [];
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const shown = l.edges.filter((e) => !e.invisible && e.points.length >= 2);
+  const lines = new Set(shown.flatMap((e) => cellsAlong(e, nodes).map((c) => `${c[0]},${c[1]}`)));
+  const texts = textsOf(l, false);
+  return named.flatMap((lane) => {
+    const [x0, y] = [Math.floor(lane.x), Math.floor(lane.y)];
+    const bare = (x: number): boolean => !lines.has(`${x},${y}`) && !texts.some((t) => covers(t, [x, y]));
+    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), Math.ceil(l.width), bare);
+    return placed.over ? [{ x: placed.at - 1, y, w: cellWidth(placed.text) + 2, h: 1 }] : [];
+  });
+}
+
 /** Rows a drawing lacks before one row, and the columns the boxes that ask for them stand in. */
 interface Lack {
   row: number;
@@ -135,8 +152,8 @@ function rowsLacking(l: Layout, rules: ReadonlySet<number>, texts: Rect[], joins
       let straight = 1;
       while (straight < one.cells.length && (one.cells[straight] as Cell)[0] === (one.cells[0] as Cell)[0]) straight++;
       if (!upright) want(rowBefore(one), one.marks + 1 - straight, one.node);
-      const behind = one.cells[one.marks];
-      if (behind !== undefined && texts.some((t) => covers(t, behind))) want(rowBefore(one), 1, one.node);
+      // A text over a mark, or over the cell behind it, is left a row away.
+      if (one.cells.slice(0, one.marks + 1).some((c) => texts.some((t) => covers(t, c)))) want(rowBefore(one), 1, one.node);
       const onRule = one.cells.slice(0, one.marks).findIndex((c) => rules.has(c[1]));
       if (onRule >= 0) want(rowBefore(one), one.marks - onRule, one.node);
     }
@@ -335,8 +352,10 @@ interface Asked {
   fixed: Rect[];
   least: (marks: number) => number;
   grow: boolean;
-  /** When set, the drawing grows no taller: nothing moves past the last row something stands in, or past this row when that is further. */
+  /** When set, the drawing grows no taller where it need not: nothing moves past the last row something stands in, or past this row when that is further. */
   reach?: number;
+  /** With `reach`: the rows the drawing may come to have when a row has no place within it. */
+  most?: number;
 }
 
 /**
@@ -348,15 +367,15 @@ function opened(given: Layout, asked: Asked): { layout: Layout; fixed: Rect[] } 
   let { fixed, bars } = asked;
   const left = new Set<string>();
   const key = (lack: Lack): string => `${lack.row}:${lack.spans.map((s) => s.join('-')).join(',')}`;
-  const put = (seam: Int32Array, rows: number, keep: boolean): void => {
+  const put = (seam: Int32Array, rows: number, keep: number | undefined): void => {
     const done = withRows(l, seam, rows, [...fixed, ...bars]);
     const down = (rects: Rect[], skip: number): Rect[] => rects.map((r, i) => ({ ...r, y: r.y + (done.moved[skip + i] as number) }));
-    l = keep ? { ...done.layout, height: l.height } : done.layout;
+    l = keep === undefined ? done.layout : { ...done.layout, height: Math.max(l.height, keep) };
     [fixed, bars] = [down(fixed, 0), down(bars, fixed.length)];
   };
   for (let turn = 0, most = 6 * given.nodes.length + 24; turn < most; turn++) {
     const rules = new Set(bars.map((r) => Math.round(r.y)));
-    const texts = [...textsOf(l, asked.names), ...fixed];
+    const texts = [...textsOf(l, asked.names), ...fixed, ...(bars.length > 0 ? namesOverLines(l) : [])];
     const lacking = (joins: boolean): Lack[] => rowsLacking(l, rules, texts, joins, asked.least).filter((lack) => !left.has(key(lack)));
     // The rows the marks ask for go in first: a straight line between two boxes often has its cells by then.
     const marks = lacking(false);
@@ -367,15 +386,22 @@ function opened(given: Layout, asked: Asked): { layout: Layout; fixed: Rect[] } 
     const straight = asked.reach === undefined ? lacks.filter((lack) => !through(lack.row)) : [];
     if (straight.length > 0) {
       // From the last row up, so that the rows above keep their numbers.
-      for (const lack of [...straight].reverse()) put(new Int32Array(width).fill(lack.row), lack.rows, false);
+      for (const lack of [...straight].reverse()) put(new Int32Array(width).fill(lack.row), lack.rows, undefined);
       continue;
     }
     const lack = lacks[0] as Lack;
     const sheet = sheetOf(l, texts, bars);
     const edge = asked.reach === undefined ? undefined : Math.max(asked.reach, sheet.last.reduce((far, y) => Math.max(far, y), 0));
-    const seam = seamOf(sheet, lack, asked.grow, edge);
-    if (seam === undefined) left.add(key(lack));
-    else put(seam, lack.rows, edge !== undefined);
+    const within = seamOf(sheet, lack, asked.grow, edge);
+    const wider = within === undefined && edge !== undefined && asked.most !== undefined && asked.most - 1 > edge;
+    const seam = wider ? seamOf(sheet, lack, asked.grow, (asked.most as number) - 1) : within;
+    if (seam === undefined) {
+      left.add(key(lack));
+      continue;
+    }
+    // A drawing with a `reach` grows only as far as what moved past its last row.
+    const far = sheet.last.reduce((most, y, x) => Math.max(most, y >= (seam[x] as number) ? y + lack.rows : y), -1);
+    put(seam, lack.rows, edge === undefined ? undefined : far + 1);
   }
   return { layout: l, fixed };
 }
@@ -388,8 +414,9 @@ const rulesOf = (l: Layout): Rect[] => (ruled(l) ? l.lanes.filter((lane) => lane
 /**
  * Terminal drawings: the rows are opened that the bands and the marks at the ends of upright lines ask for. A box
  * stands a row off the rule of a band on either side. A mark at the end of a line that meets the top or the bottom
- * of a box stands in the cell before the box with a cell of its own line straight behind it, never on a rule and
- * never in the cell the line turns in. Two boxes one above the other that a straight line joins are two rows apart.
+ * of a box stands in the cell before the box with a cell of its own line straight behind it, never on a rule,
+ * never in the cell the line turns in and never under a text; a line that crosses a rule under the name of its
+ * band counts as under a text. Two boxes one above the other that a straight line joins are two rows apart.
  * The rows go in along a seam that leaves every box as tall as it was where it can.
  */
 export function openTextRows(l: Layout): Layout {
@@ -404,24 +431,28 @@ export function openTextRows(l: Layout): Layout {
 }
 
 /**
- * Terminal drawings: the same for the marks at the ends of level lines, as far as it takes no width. A mark on the
- * left or the right side of a box gets the cell of line behind it where the columns for it go in along a seam that
- * moves nothing past the right edge of the drawing and runs through no box; where there is no such seam the mark
- * stays as it is.
+ * Terminal drawings: the same for the marks at the ends of level lines. A mark on the left or the right side of a
+ * box gets the cell of line behind it where the columns for it go in along a seam that runs through no box. The
+ * seam first moves nothing past the right edge of the drawing; where there is no such seam the drawing grows wider,
+ * up to `limit`, and where that is not enough the mark stays as it is.
  */
-export function openTextColumns(l: Layout): Layout {
+export function openTextColumns(l: Layout, limit?: number): Layout {
   if (l.clusters !== undefined) return l;
   const flat = turned(l);
   const rules = rulesOf(l);
   const items = l.legend?.items ?? [];
   const captions: Rect[] = items.map((item) => ({ x: Math.floor(item.y), y: Math.round(item.x), w: 1, h: Math.ceil(item.captionX) + cellWidth(item.caption) - Math.round(item.x) }));
-  const reach = Math.max(-1, ...rules.map((r) => r.x + r.w - 1));
-  const done = opened(flat, { bars: [], names: rules.length === 0, fixed: captions, least: (marks) => (marks === 0 ? 0 : marks + 1), grow: false, reach });
+  // A rule may be laid out longer than the drawing is wide: what is drawn of it ends with the drawing.
+  const reach = Math.max(-1, ...rules.map((r) => Math.min(r.x + r.w, Math.ceil(l.width)) - 1));
+  const done = opened(flat, { bars: [], names: rules.length === 0, fixed: captions, least: (marks) => (marks === 0 ? 0 : marks + 1), grow: false, reach, most: limit === undefined || !Number.isFinite(limit) ? Number.MAX_SAFE_INTEGER : Math.floor(limit) });
   if (done.layout === flat) return l;
   const back = turned(done.layout);
-  // The rule of a band is as long as it was: nothing moved past its end.
-  const lanes = back.lanes.map((lane) => ({ ...lane, w: Math.min(lane.w, l.width - lane.x) }));
+  // The rule of a band is as long as it was, or as much longer as the drawing grew wider.
+  const lanes = back.lanes.map((lane, i) => {
+    const was = l.lanes[i] as { x: number; w: number };
+    return { ...lane, w: rules.length > 0 && was.x + was.w >= l.width ? back.width - lane.x : Math.min(lane.w, back.width - lane.x) };
+  });
   if (l.legend === undefined) return { ...back, lanes };
   const right = (i: number): number => (done.fixed[i] as Rect).y - (captions[i] as Rect).y;
-  return { ...back, lanes, legend: { ...l.legend, items: l.legend.items.map((item, i) => ({ ...item, x: item.x + right(i), captionX: item.captionX + right(i) })) } };
+  return { ...back, lanes, legend: { ...l.legend, base: { ...l.legend.base, width: l.legend.base.width + back.width - l.width }, items: l.legend.items.map((item, i) => ({ ...item, x: item.x + right(i), captionX: item.captionX + right(i) })) } };
 }

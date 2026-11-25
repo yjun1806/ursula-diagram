@@ -1,5 +1,5 @@
-import { clip } from '../text/fit.ts';
 import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
+import { placeLaneName } from '../layout/lane-names.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, TextSpan, TextTone } from '../types.ts';
 
@@ -364,13 +364,9 @@ function drawLegend(c: Canvas, layout: Layout): void {
   }
 }
 
-/** The fewest cells of a lane name worth writing when it is cut. */
-const SHORT_NAME = 6;
-
 /**
  * Writes the name of every horizontal lane on its rule once everything else is drawn: `── name `. No line or label
- * is drawn over the name; where a line crosses the rule at that place the name moves to the right of the line (a
- * cell and a blank after it), and where no such place is free, to the first free stretch of the rule.
+ * is drawn over the name; where it stands is told by `placeLaneName`.
  */
 function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
   const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
@@ -379,46 +375,12 @@ function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
     if (lane.label === '' || !lane.bare) continue;
     const y = Math.floor(lane.y);
     const x0 = Math.floor(lane.x);
-    const x1 = x0 + Math.round(lane.w) - 1;
-    const w = cellWidth(lane.label);
-    const free = (x: number): boolean => {
-      for (let k = x - 1; k <= x + w; k++) if (k < x0 || k > x1 || c.get(k, y) !== '─') return false;
-      return true;
-    };
-    const preferred = Math.floor(lane.labelBox.x);
-    const lines: number[] = [];
-    for (let x = x0; x <= x1; x++) if (c.get(x, y) !== '─') lines.push(x);
-    const candidates = [preferred, ...lines.map((x) => x + 2)];
-    for (let x = preferred; x + w <= x1; x++) candidates.push(x);
-    // A rule too short for the name beside its lines lets the name run past its end, up to `limit`, rather than over a line.
-    const past = (x: number): boolean => {
-      if (x + w > limit) return false;
-      for (let k = x - 1; k <= Math.min(x + w, x1); k++) if (k < x0 || c.get(k, y) !== '─') return false;
-      return true;
-    };
-    const whole = candidates.find(free) ?? candidates.find(past);
-    if (whole === undefined) {
-      // No room for the whole name: it is cut to the longest free stretch of the rule, when that holds a few letters.
-      let best = { from: 0, len: 0 };
-      for (let x = x0, from = x0; x <= x1 + 1; x++) {
-        if (x <= x1 && c.get(x, y) === '─') continue;
-        if (x - from > best.len) best = { from, len: x - from };
-        from = x + 1;
-      }
-      if (best.len >= SHORT_NAME + 4) {
-        const cut = clip(lane.label, best.len - 4);
-        const start = best.from + 2;
-        c.put(start - 1, y, ' ');
-        c.text(start, y, cut);
-        c.put(start + cellWidth(cut), y, ' ');
-        continue;
-      }
-    }
-    const at = whole ?? preferred;
-    c.widen(at + w);
-    c.put(at - 1, y, ' ');
-    c.text(at, y, lane.label);
-    c.put(at + w, y, ' ');
+    const placed = placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), limit, (x) => c.get(x, y) === '─');
+    const w = cellWidth(placed.text);
+    c.widen(placed.at + w);
+    c.put(placed.at - 1, y, ' ');
+    c.text(placed.at, y, placed.text);
+    c.put(placed.at + w, y, ' ');
   }
 }
 

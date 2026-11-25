@@ -93,7 +93,38 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
     const lines = text('classDiagram\n  namespace Shop {\n    class Order\n  }\n  namespace Stock {\n    class Item\n  }\n  Order ..> Item : uses');
     const rule = lines.findIndex((line) => line.includes('Stock'));
     expect(lines[rule]).not.toMatch(/[v^<>]/);
-    expect(lines[rule + 1]?.trim()).toBe('v');
+    // The label stands beside its line under the rule, where it leaves the rule to the name of the band.
+    expect(lines.slice(rule, rule + 3).map((row) => row.trim())).toEqual(['────┼ Stock', '┆  uses', 'v']);
+    expect(roomViolations(lines)).toEqual(none);
+  });
+
+  it('leave every mark in sight beside a label', () => {
+    const marks = (lines: string[]): number => (lines.join('').match(/[▶◀▲▼▷◁▽△◆◇]/g) ?? []).length;
+    // The line that came level under a box turns up into it where a label stood beside the upright line next to it.
+    const flow = 'flowchart LR\n  n0{Ingest}\n  n1([Parse])\n  n2[Validate order]\n  n3(Charge)\n  n4[재고 확인]\n  n5[Ship]\n  n6{Notify}\n  n1 === n5\n  n1 --x n2\n  n0 ---|ok| n5\n  n1 === n4\n  n1 --> n4\n  n0 <--> n4\n  n4 --o|승인| n6\n  n6 ==> n6\n  n6 --x n4\n  n3 <-->|fail| n4\n  n2 -.- n4\n  n2 -->|paid| n1';
+    expect(marks(text(flow, 100))).toBe(10);
+    // The label of a level line stood over the mark of another line on the box below.
+    const body = (n: number, run: boolean): string => `class C${n} {\n${Array.from({ length: [3, 1, 1, 3, 3, 3, 3][n] as number }, (_, k) => `  +field${k} int\n`).join('')}${run ? '  +run()\n' : ''}}`;
+    const classes = `classDiagram\ndirection LR\n${[true, false, true, true, true, true, false].map((run, n) => body(n, run)).join('\n')}\nC5 ..> C3 : timeout after 30s\nC5 --* C2 : ok\nC5 --> C3 : paid\nC6 ..|> C4 : fail\nC6 --* C4\nC5 --* C4\nC4 *-- C3 : fail\nC5 --* C0\nC0 "1" *-- "*" C2\nC0 <|-- C6`;
+    expect(marks(text(classes, 100))).toBe(8);
+  });
+
+  it('leave a label off the rule of a band whose name would be written over it', () => {
+    const src = 'flowchart LR\n  subgraph G0[Web]\n    n0[Ingest]\n    n1[Parse]\n    n2[Validate order]\n  end\n  subgraph G1[Billing]\n    n3[Charge]\n    n4[재고 확인]\n    n5[Ship]\n    n6[Notify]\n  end\n  subgraph G2[Warehouse]\n    n7[Archive]\n  end\n  subgraph G3[고객 지원]\n    n8[Refund]\n    n9[고객 응대]\n    n10[Audit]\n  end\n  subgraph G4[Ops]\n    n11[Escalate]\n  end\n  n4 -->|ok| n5\n  n0 --> n11\n  n2 ==> n11\n  n11 --> n0\n  n7 -.- n10\n  n2 --x n10\n  n4 --- n1\n  n5 --x|paid| n7\n  n0 --x n10\n  n1 -.-> n4\n  n7 -.-|ok| n9\n  n9 --> n0\n  n2 <--> n6\n  n1 --> n10\n  n0 -.-> n10';
+    const lines = text(src, 60);
+    const rule = lines.findIndex((row) => row.startsWith('── Warehouse '));
+    // The name has no free place on its rule and is written over the lines that cross it: the arrowhead below gets a cell of its line first.
+    expect(lines.slice(rule, rule + 3).map((row) => row.slice(0, 16))).toEqual(['── Warehouse ──┼', '      │  paid  │', '      ▼        │']);
+    expect(roomViolations(lines)).toEqual(none);
+  });
+
+  it('leave the width of the boxes and the bands of a flowchart as they are chosen without the rows', () => {
+    const widest = (lines: string[]): number => Math.max(...lines.map((row) => [...row].length));
+    const plain = 'flowchart TD\n  n0[Ingest]\n  n1(Parse)\n  n2[Validate order]\n  n3[Charge]\n  n4[Stock]\n  n5{Ship}\n  n6[Notify]\n  n7[Archive]\n  n8[Refund]\n  n9[Support]\n  n10[Audit]\n  n0 ==> n10\n  n0 ===|ok| n5\n  n3 ===|x| n6\n  n1 -.-> n2\n  n0 --o n4\n  n8 --> n5\n  n1 -.-> n5\n  n5 ===|paid| n9\n  n3 -.- n7\n  n2 -.- n5';
+    expect(widest(text(plain, 120))).toBe(42);
+    const nested = 'flowchart TD\n  subgraph Out[Outer]\n    n0[Parse]\n    subgraph In[Inner]\n      n1[Validate order]\n      n2[Charge]\n    end\n  end\n  subgraph Side[Side]\n    n3[Stock]\n  end\n  n4[Ship]\n  n4 --> n1\n  n1 -->|needs review| n2\n  n2 --> n4\n  n0 -->|fail| n4\n  n2 --> n1';
+    const lines = text(nested, 60);
+    expect(lines.filter((row) => /^[─├].*(Outer|Inner|Side)/.test(row))).toHaveLength(3);
     expect(roomViolations(lines)).toEqual(none);
   });
 
@@ -103,9 +134,7 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
         const src = generate(seed, bands);
         for (const width of [80, 120]) {
           const found = roomViolations(text(src, width));
-          // Left as they are: a line under the name of a band on a rule too short for the name, and an arrowhead on
-          // the side of a box whose line turns in the cell beside the box where a column for it would make the drawing wider.
-          expect({ ...found, underName: [], headless: found.headless.filter((row) => !/[▶◀]/.test(row)) }, `${src}\n${width}`).toEqual(none);
+          expect(found, `${src}\n${width}`).toEqual(none);
         }
       }
     }
@@ -170,9 +199,18 @@ describe('a column that goes into a terminal drawing', () => {
     expect(roomViolations(renderTextLayout(after))).toEqual(none);
   });
 
-  it('leaves the drawing as it is where the column would make it wider', () => {
+  it('stays within the width where the rules of the bands are laid out longer than the drawing is wide', () => {
+    const src = 'swimlane-beta LR\n  subgraph G0[Web]\n    n0[Ingest]\n    n1[Parse]\n  end\n  subgraph G1[Billing]\n    n2[Validate order]\n    n3[Charge]\n    n4[재고 확인]\n  end\n  subgraph G2[Warehouse]\n    n5[Ship]\n    n6[Notify]\n    n7[Archive]\n  end\n  subgraph G3[고객 지원]\n    n8[Refund]\n  end\n  subgraph G4[Ops]\n    n9[고객 응대]\n    n10[Audit]\n    n11[Escalate]\n  end\n  n1 -.- n9\n  n3 --> n4\n  n2 -->|paid| n1\n  n0 ==> n5\n  n5 --x|x| n7\n  n0 -->|x| n3\n  n7 -->|x| n9\n  n10 -->|needs review| n5\n  n3 -.- n11\n  n2 --> n11\n  n0 === n10\n  n7 -.-|ok| n9\n  n1 -.-|paid| n4\n  n5 --> n6\n  n0 --> n2\n  n4 -->|ok| n10\n  n7 -->|paid| n8\n  n0 ---|needs review| n10';
+    const out = renderText(src, 60);
+    expect('lines' in out && out.lines.some((row) => row.includes('┌'))).toBe(true);
+  });
+
+  it('makes the drawing wider for the column only within the width it is given', () => {
     const before = turning(false);
-    expect(openTextColumns(before)).toEqual(before);
+    expect(openTextColumns(before, 13)).toEqual(before);
+    const after = openTextColumns(before, 14);
+    expect(after.width).toBe(14);
+    expect(renderTextLayout(after)[4]).toBe('   └▶│   b   │');
   });
 });
 

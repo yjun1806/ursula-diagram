@@ -1,5 +1,7 @@
 import { cellWidth, cellWidthOf } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode, Point } from '../types.ts';
+import type { LaneNamePlace } from './lane-names.ts';
+import { placeLaneName } from './lane-names.ts';
 
 /** The text cut to `cells` cells, its last cell an ellipsis; unchanged when it fits. */
 function cut(text: string, cells: number): string {
@@ -486,11 +488,57 @@ function lineCells(l: Layout): Set<string> {
   return out;
 }
 
+/** The cells of the marks at the ends of the lines of a drawing and the cell of line behind each, kept like the cells of its lines. */
+const cellsOfMarks = new WeakMap<Layout, Set<string>>();
+
+function markCells(l: Layout): Set<string> {
+  const known = cellsOfMarks.get(l);
+  if (known) return known;
+  const nodes = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const out = new Set<string>();
+  for (const e of l.edges) {
+    if (e.invisible || e.points.length < 2) continue;
+    const last = e.points.length - 1;
+    for (const [end, next, marks] of [[0, 1, startCells(e)], [last, last - 1, endCells(e)]] as const) {
+      if (marks === 0) continue;
+      const [x, y] = cellOf(e, nodes, end);
+      const [x2, y2] = cellOf(e, nodes, next);
+      const [dx, dy] = [Math.sign(x2 - x), Math.sign(y2 - y)];
+      const reach = Math.min(marks, Math.abs(dx === 0 ? y2 - y : x2 - x));
+      for (let k = 0; k <= reach; k++) out.add(`${x + k * dx},${y + k * (dx === 0 ? dy : 0)}`);
+    }
+  }
+  cellsOfMarks.set(l, out);
+  return out;
+}
+
+/**
+ * Whether the names of the bands whose rules run along `row` are written the same with a text in the columns `from`
+ * to `to` of that row as without it, and clear of it: a label does not take the place of a name on a rule.
+ */
+function namesKeep(l: Layout, ei: number, row: number, from: number, to: number): boolean {
+  if ((l.direction === 'TD') !== (l.laneAxis === 'along')) return true;
+  const named = l.lanes.filter((lane) => lane.label !== '' && lane.bare === true && Math.floor(lane.y) === row);
+  if (named.length === 0) return true;
+  const taken = lineCells(l);
+  const others = l.edges.flatMap((o, k) => (o.invisible || k === ei ? [] : [o.label, o.startLabel, o.endLabel])).filter((t) => t !== undefined && Math.round(t.y) === row) as Array<{ x: number; w: number }>;
+  const bare = (x: number): boolean => !taken.has(`${x},${row}`) && !others.some((t) => x >= Math.round(t.x) && x < Math.round(t.x) + Math.max(1, Math.round(t.w)));
+  return named.every((lane) => {
+    const x0 = Math.floor(lane.x);
+    const place = (free: (x: number) => boolean): LaneNamePlace => placeLaneName(lane.label, x0, x0 + Math.round(lane.w) - 1, Math.floor(lane.labelBox.x), Math.ceil(l.width), free);
+    const [alone, beside] = [place(bare), place((x) => bare(x) && (x < from || x > to))];
+    // A name that has no free place either way is written over what stands there: not over the label.
+    return alone.over === beside.over && alone.text === beside.text && (beside.at + cellWidth(beside.text) < from || beside.at - 1 > to);
+  });
+}
+
 /**
  * Terminal drawings: a label beside an upright stretch of its line stands on the free row nearest the middle of that
- * stretch, where no line runs under its text; when no row of it is free, the drawing gets one more row there.
+ * stretch, where no line runs under its text; when no row of it is free, the drawing gets one more row there. With
+ * `marks`, a row is free only when the label and the blank on either side of it cover no mark at the end of a line
+ * and not the cell of line behind one, and when the names of the bands on that row are written as without the label.
  */
-export function clearUprightLabels(given: Layout): Layout {
+export function clearUprightLabels(given: Layout, marks = false): Layout {
   let l = given;
   for (let ei = 0; ei < l.edges.length; ei++) {
     const e = l.edges[ei] as LayoutEdge;
@@ -518,6 +566,11 @@ export function clearUprightLabels(given: Layout): Layout {
     const free = (now: Layout, row: number): boolean => {
       const taken = lineCells(now);
       for (let x = lx + 1; x < lx + lw - 1; x++) if (taken.has(`${x},${row}`)) return false;
+      if (marks) {
+        const ends = markCells(now);
+        for (let x = lx; x < lx + lw; x++) if (ends.has(`${x},${row}`)) return false;
+        if (!namesKeep(now, ei, row, lx, lx + lw - 1)) return false;
+      }
       return !now.nodes.some((n) => row >= Math.round(n.y) && row < Math.round(n.y) + Math.round(n.h) && lx + lw - 1 > Math.round(n.x) && lx + 1 < Math.round(n.x) + Math.round(n.w)) &&
         !now.edges.some((o, k) => k !== ei && o.label !== undefined && Math.round(o.label.y) === row && lx < Math.round(o.label.x) + Math.round(o.label.w) && Math.round(o.label.x) < lx + lw);
     };

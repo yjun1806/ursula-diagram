@@ -332,6 +332,14 @@ describe('eventmodeling text', () => {
     }
   });
 
+  it('chooses between two ways of setting the frames out by their rows before any are opened at the rules', () => {
+    // The ways differ in how many bands they have, and so in the rows opened at their rules: counted with those rows another way won here.
+    const src = 'eventmodeling\ntf 06 ui Submit6\ntf 16 evt Z916\nrf 07 rmo B7\ntf 09 pcr Basket9 ->> 07\ntf 10 evt Stock.B10\nrf 12 pcr AnExtremelyLongFrameName12 ->> 10 ->> 09\ntf 05 rmo AnExtremelyLongFrameName5\nrf 13 cmd PayRequest13\ntf 04 evt Submit4\ntf 14 evt Cart.AnExtremelyLongFrameName14\nrf 03 pcr Basket3 ->> 07\ntf 02 pcr Z92\nrf 01 rmo Submit1 ->> 14 ->> 09 ->> 10\ntf 11 cmd Submit11 ->> 03 ->> 04 ->> 12\nrf 15 pcr Basket15 ->> 06 ->> 06 ->> 05\nrf 08 ui Submit8';
+    const lines = drawEventModel(parseEventModeling(src), 60) ?? [];
+    expect(Math.max(...lines.map(cellWidth))).toBe(53);
+    expect(roomViolations(lines)).toEqual({ headless: [], underName: [], onRule: [], tight: [], close: [] });
+  });
+
   it('takes the lines of one box out of it, and into it, by one stem on a side', () => {
     const fanOut = `eventmodeling\nrf 01 rmo View\n${Array.from({ length: 8 }, (_, i) => `rf ${pad(i + 2)} evt Ev${i + 2} ->> 001`).join('\n')}`;
     const fanIn = `eventmodeling\n${Array.from({ length: 6 }, (_, i) => `rf ${pad(i + 1)} evt Ev${i + 1}`).join('\n')}\nrf 007 rmo View ${Array.from({ length: 6 }, (_, i) => `->> ${pad(i + 1)}`).join(' ')}`;

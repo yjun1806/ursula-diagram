@@ -61,6 +61,8 @@ export interface LayoutOptions extends SolveOptions {
    * never share.
    */
   sharePorts?: boolean;
+  /** Terminal drawings: `false` leaves out the rows and columns that arrowheads and the rules of bands ask for; such a drawing is for comparing with another, not for showing. */
+  room?: boolean;
   /** Layered engine only: try small changes on the chosen drawing (default true). */
   refine?: boolean;
   /** Layered engine only: the graph is one level of a drawing with clusters, so edges outside it join its boxes; it keeps the lane model and is not laid out as stages or in shelves of pieces (default false). */
@@ -263,8 +265,9 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
+  const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
   // A quick drawing is what a caller chooses a setting on: it never shares ports, so that the choice does not turn on them.
-  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts).opened();
+  if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return out(layoutOnce(graph, given, opts));
   // Lines that share a port on the side of a box leave the box shorter, and may cost elsewhere: the drawing is made
   // with shared ports and without, and the one with shared ports is kept only when it costs no more in any respect
   // and less in one. Where no line found a port to share there is one drawing only. The two are compared before the
@@ -272,17 +275,17 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   const before = sharing.placements;
   const joined = layoutOnce(graph, given, { ...opts, sharePorts: true });
   const shares = joined.closed.edges.some((e) => e.sharedPort !== undefined);
-  if (sharing.placements === before && !shares) return joined.opened();
+  if (sharing.placements === before && !shares) return out(joined);
   const apart = layoutOnce(graph, given, { ...opts, sharePorts: false });
   // Sharing ports changes the width of a drawing on the way, and with it the arrangement that fits: a drawing in which
   // no line shares a port after all, or one whose bands are arranged another way, is not kept for it.
-  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed)) return apart.opened();
+  if (!shares || arrangementOf(joined.closed) !== arrangementOf(apart.closed)) return out(apart);
   const own = textCost(apart.closed);
   // A drawing that is too wide without shared ports is given as it is, so that a caller that draws again for the width does what it did without them.
   const limit = opts.maxWidth ?? given.defaultWidth;
-  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit) return apart.opened();
+  if (limit !== undefined && Number.isFinite(limit) && Math.max(apart.closed.width, own.width) > limit) return out(apart);
   const shared = textCost(joined.closed);
-  return (costsMore(shared, own) || !costsMore(own, shared) ? apart : joined).opened();
+  return out(costsMore(shared, own) || !costsMore(own, shared) ? apart : joined);
 }
 
 /** How the bands of a drawing are arranged: alongside the reading direction or across it, and which bands there are. */
@@ -304,14 +307,18 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
   // A drawing that is still too wide once its rows and columns are closed is pushed to the left.
   const finish = (fitted: Layout, room: boolean): Layout => {
     // A label that moves to its place beside an upright line may come to stand behind an arrowhead: the rows are opened once more after it.
-    const closed = room ? openTextRows(clearUprightLabels(openTextRows(fitted))) : clearUprightLabels(fitted);
+    const closed = room ? openTextRows(clearUprightLabels(openTextRows(fitted), true)) : clearUprightLabels(fitted);
     const fit = (): Layout => {
       if (!over(closed)) return closed;
       const pushed = openTextLabels(compactColumns(closed), limit);
       // Still too wide: the labels on level lines give way, and are cut to the room they are left.
       return over(pushed) ? openTextLabels(compactColumns(closed, true), limit) : pushed;
     };
-    return packParts(room ? openTextColumns(fit()) : fit(), limit);
+    const narrow = fit();
+    if (!room) return packParts(narrow, limit);
+    // The columns an arrowhead on the side of a box asks for never take a drawing over the limit.
+    const wider = openTextColumns(narrow, limit);
+    return packParts(over(wider) && !over(narrow) ? narrow : wider, limit);
   };
   let source = close(drawn);
   let best = finish(source, false);
