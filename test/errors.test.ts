@@ -65,6 +65,29 @@ describe('errors say how to fix the text', () => {
   });
 });
 
+describe('the example fits the wrong line', () => {
+  // A right line of the same kind, or the wrong line put right; never an unrelated line such as the title.
+  it.each([
+    ['a date that is not a date', 'gantt\n  dateFormat YYYY-MM-DD\n  section s\n  task1 : 2024-13-45, 3d', 'Design : a1, 2024-01-01, 5d', undefined],
+    ['a score that is not a number', 'journey\n  section a\n  task: x: me', 'Search events: 4: Me', undefined],
+    ['a point outside the chart', 'quadrantChart\n  A: [1.5, 0.2]', 'Campaign A: [0.3, 0.6]', undefined],
+    ['a rule without its semicolon', 'railroad-ebnf-beta\n  a = "x" ', 'a = "x" ;', undefined],
+    ['a loop never closed', 'sequenceDiagram\n  A->>B: hi\n  loop x\n  A->>B: y', 'end', "close the block with a line 'end' after its last message"],
+  ] as const)('%s', (_, src, example, hint) => {
+    const err = errorOf(src);
+    expect(err.example).toBe(example);
+    if (hint !== undefined) expect(err.hint).toBe(hint);
+  });
+
+  it("gives no example for an 'end' that closes nothing, and says to delete it", () => {
+    for (const src of ['sequenceDiagram\n  A->>B: hi\n  end', 'flowchart LR\n  A --> B\n  end']) {
+      const err = errorOf(src);
+      expect(err.example).toBeUndefined();
+      expect(err.hint).toMatch(/delete it/);
+    }
+  });
+});
+
 describe('the command writes the error with the line, a mark and the advice', () => {
   it('a misspelt header', () => {
     const r = cli('flowchrt LR\nA --> B\n');

@@ -4,7 +4,7 @@ import type { ErrorAdvice } from '../types.ts';
 import { UrsulaError } from '../types.ts';
 import { hintFor } from './hints.ts';
 import { leadingWord, locate, quotedPieces } from './locate.ts';
-import { closest } from './suggest.ts';
+import { closest, editDistance } from './suggest.ts';
 
 export interface ExplainContext {
   /** The front-end that read the source; undefined when no front-end claims its header. */
@@ -37,21 +37,42 @@ function likest(lines: string[], target: string): string | undefined {
 
 const hasWord = (line: string, word: string): boolean => line.split(/[^\p{L}\p{N}_@-]+/u).includes(word);
 
+/** The punctuation of a line with every run of letters and digits as one `w` and no spaces: `A: [1.5, 0.2]` is `w:[w.w,w.w]`. */
+export const shapeOf = (line: string): string => line.trim().replace(/[\p{L}\p{N}_]+/gu, 'w').replace(/\s+/g, '');
+
+/** The line of `lines` whose shape is nearest the shape of `row`; ties go to the one that starts most like it. */
+function nearestShape(lines: string[], row: string): string | undefined {
+  const shape = shapeOf(row);
+  let best: string | undefined;
+  let score = Infinity;
+  for (const l of lines) {
+    const d = editDistance(shapeOf(l), shape) - prefix(l.trim(), row.trim()) / 1000;
+    if (d < score) {
+      best = l;
+      score = d;
+    }
+  }
+  return best;
+}
+
 /**
  * The example line of `e` that best stands in for the wrong `row`: one holding the suggested word, else one starting
- * with the same word, else the hint's example, else the one that starts most like the row, else the first body line.
+ * with the same word, else the hint's example, else the body line shaped most like the row. A body line that starts
+ * with a keyword the row does not start with (such as `title`) is never picked for a row of another kind.
  */
 function exampleLine(e: SyntaxEntry, row: string, word: string, suggestion: string | undefined, hinted: string | undefined): string | undefined {
   const lines = e.example.split('\n');
   // A wrong header line is best replaced by the header line of the example.
   if (lines[0] !== undefined && [...e.headers, ...(e.aliases ?? [])].includes(word) && suggestion === undefined) return lines[0].trim();
   const target = (suggestion === undefined || word === '' ? row : row.replace(word, suggestion)).trim();
+  const body = lines.slice(1).filter((l) => l.trim() !== '');
+  const keywords = new Set(e.keywords);
+  const sameKind = body.filter((l) => !keywords.has(leadingWord(l)) || leadingWord(l) === word);
   const pick =
     (suggestion === undefined ? undefined : likest(lines.filter((l) => hasWord(l, suggestion)), target) ?? lines.find((l) => hasWord(l, suggestion))) ??
-    (word === '' ? undefined : likest(lines.slice(1).filter((l) => leadingWord(l) === word), target) ?? lines.slice(1).find((l) => leadingWord(l) === word)) ??
+    (word === '' ? undefined : likest(body.filter((l) => leadingWord(l) === word), target) ?? body.find((l) => leadingWord(l) === word)) ??
     hinted ??
-    likest(lines.slice(1), target) ??
-    lines.slice(1).find((l) => l.trim() !== '');
+    nearestShape(sameKind, target);
   if (pick === undefined) return undefined;
   return e.indented && pick !== hinted ? pick.trimEnd() : pick.trim();
 }
@@ -109,14 +130,14 @@ export function explain(err: UrsulaError, src: string, ctx: ExplainContext): Urs
       if (at >= 0) column = at + 1;
     }
   }
-  const hinted = entry === undefined ? undefined : hintFor(entry.name, message);
-  const example = advice.example ?? (entry === undefined ? hinted?.example : exampleLine(entry, row ?? '', word, suggestion, hinted?.example));
+  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row);
+  const example = advice.example ?? (entry === undefined || hinted?.noExample ? hinted?.example : exampleLine(entry, row ?? '', word, suggestion, hinted?.example));
   return new UrsulaError(message, err.code, err.line, {
     ...advice,
     ...(column === undefined ? {} : { column }),
     ...(suggestion === undefined ? {} : { suggestion }),
     // With a suggestion the table's general hint says less than the suggestion does.
-    ...(advice.hint === undefined && hinted !== undefined && suggestion === undefined ? { hint: hinted.hint } : {}),
+    ...(advice.hint === undefined && hinted?.hint !== undefined && suggestion === undefined ? { hint: hinted.hint } : {}),
     ...(example === undefined ? {} : { example }),
   });
 }
