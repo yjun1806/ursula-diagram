@@ -51,13 +51,13 @@ function sidebar(prefix, t) {
 }
 
 const en = {
-  intro: 'Introduction', why: 'Why', compared: 'Compared with other tools', quickStart: 'Quick start',
+  intro: 'Introduction', why: 'Why ursula', compared: 'Compared with other tools', quickStart: 'Quick start',
   drawings: 'Drawings', gallery: 'Gallery', larger: 'A larger drawing', terminal: 'In a terminal',
   reference: 'Reference', formats: 'Output formats', library: 'Library', colours: 'Colours', skill: 'Agent skill',
   playground: 'Playground', guide: 'Guide',
 };
 const ko = {
-  intro: '소개', why: '왜 만들었나', compared: '다른 도구와 비교', quickStart: '빠른 시작',
+  intro: '소개', why: '왜 ursula인가', compared: '다른 도구와 비교', quickStart: '빠른 시작',
   drawings: '그림', gallery: '그림 모음', larger: '큰 그림', terminal: '터미널에서',
   reference: '참고', formats: '출력 형식', library: '라이브러리', colours: '색 바꾸기', skill: '에이전트 스킬',
   playground: '플레이그라운드', guide: '안내',

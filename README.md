@@ -7,7 +7,7 @@
 <p align="center"><a href="https://yjun1806.github.io/ursula-diagram/">Docs and playground</a> · <a href="https://yjun1806.github.io/ursula-diagram/playground">Try it in the browser</a></p>
 
 <p align="center">
-  <a href="#why">Why</a> ·
+  <a href="#why-ursula">Why ursula</a> ·
   <a href="#compared-with-other-tools">Compared</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#gallery">Gallery</a> ·
@@ -50,7 +50,7 @@ flowchart LR
 The first block is the input. The text drawing and the picture under it are what ursula draws from it, with
 `--format text --width 80` and with `--format svg`.
 
-## Why
+## Why ursula
 
 An agent that wants to show a diagram usually takes one of two roads.
 
