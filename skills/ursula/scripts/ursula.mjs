@@ -3,6 +3,7 @@ if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula ne
 
 // src/cli.ts
 import { readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 
 // src/command/args.ts
 var FORMATS = ["svg", "text", "text-svg", "json", "check", "html"];
@@ -40559,10 +40560,174 @@ function runCommand(args, read) {
   return drawCommand(src, req);
 }
 
+// src/version.ts
+var VERSION = "0.1.1";
+
+// src/mcp/tools.ts
+class ArgumentError extends Error {
+}
+var plain3 = { format: "text", legend: true, color: false, questions: true, elbows: true, check: false };
+var TOOLS = [
+  {
+    name: "render",
+    title: "Draw a Mermaid diagram",
+    description: 'Draws Mermaid text. format "text" (the default) is a terminal drawing for a fixed-width font; "text-svg" is that drawing as SVG for a chat or a page; "svg" a picture; "html" one page. A text error comes back marked isError, with the line, a mark under the column, often "did you mean" and an example line; fix the text and call again. A drawing wider than width comes back as an error naming the width it needs.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: 'The Mermaid text, header first (for example "flowchart LR").' },
+        format: { type: "string", enum: ["text", "text-svg", "svg", "html"], description: "What to draw; text by default." },
+        width: { type: "integer", minimum: 1, description: "Columns for text and text-svg; 100 by default." },
+        charset: { type: "string", enum: ["unicode", "ascii"], description: "Box-drawing characters (unicode, the default) or ascii only." },
+        check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text." }
+      },
+      required: ["source"]
+    }
+  },
+  {
+    name: "check",
+    title: "Check a diagram layout",
+    description: "Lays out Mermaid text and reports what the engine sees: one line of counts (bends, crossings), the pairs of lines that cross and the most bent lines with their source line numbers, and questions that suggest a change to the text.",
+    inputSchema: { type: "object", properties: { source: { type: "string", description: "The Mermaid text." } }, required: ["source"] }
+  },
+  {
+    name: "syntax",
+    title: "Show the syntax of a diagram type",
+    description: 'Without a type: the list of diagram types and their headers. With a type (a name such as "wardley" or a header such as "sequenceDiagram"): a small example that draws and the main rules.',
+    inputSchema: { type: "object", properties: { type: { type: "string", description: "A type name or a header." } } }
+  }
+];
+var text = (t) => ({ type: "text", text: t });
+function source(args) {
+  const s = args["source"];
+  if (typeof s !== "string")
+    throw new ArgumentError('"source" must be the Mermaid text, a string');
+  return s;
+}
+function oneOf(args, key, choices) {
+  const v = args[key];
+  if (v === undefined)
+    return;
+  if (typeof v !== "string" || !choices.includes(v))
+    throw new ArgumentError(`"${key}" must be one of ${choices.join(", ")}`);
+  return v;
+}
+function render3(args) {
+  const src = source(args);
+  const format = oneOf(args, "format", ["text", "text-svg", "svg", "html"]) ?? "text";
+  const charset = oneOf(args, "charset", ["unicode", "ascii"]);
+  const width = args["width"];
+  if (width !== undefined && (typeof width !== "number" || !Number.isInteger(width) || width < 1))
+    throw new ArgumentError('"width" must be a whole number of columns, 1 or more');
+  const check = args["check"];
+  if (check !== undefined && typeof check !== "boolean")
+    throw new ArgumentError('"check" must be true or false');
+  const terminal = format === "text" || format === "text-svg";
+  const req = {
+    ...plain3,
+    format,
+    ...terminal ? { width: width ?? 100 } : {},
+    ...charset === undefined ? {} : { charset },
+    check: check === true
+  };
+  const out = drawCommand(src, req);
+  if (out.code !== 0)
+    return { content: [text(out.stderr)], isError: true };
+  return { content: [text(out.stdout), ...req.check ? [text(out.stderr)] : []], isError: false };
+}
+function check(args) {
+  const out = drawCommand(source(args), { ...plain3, format: "check" });
+  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+}
+function syntax(args) {
+  const type = args["type"];
+  if (type !== undefined && typeof type !== "string")
+    throw new ArgumentError('"type" must be a string');
+  const out = syntaxCommand(type === undefined || type === "" ? [] : [type]);
+  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+}
+var CALLS = { render: render3, check, syntax };
+function callTool(name, args) {
+  const run = typeof name === "string" && Object.hasOwn(CALLS, name) ? CALLS[name] : undefined;
+  if (run === undefined)
+    throw new ArgumentError(`no tool named ${JSON.stringify(name)}; the tools are render, check and syntax`);
+  if (args !== undefined && (typeof args !== "object" || args === null || Array.isArray(args)))
+    throw new ArgumentError('"arguments" must be an object');
+  return run(args ?? {});
+}
+
+// src/mcp/server.ts
+var PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+var INSTRUCTIONS = "Draws Mermaid diagrams. Call 'syntax' when unsure how a diagram type is written, then 'render' (format text for a terminal, text-svg for a chat or a page, svg for a document); pass check: true to get the engine's report in the same call.";
+var reply = (id, result) => ({ jsonrpc: "2.0", id, result });
+var fault = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
+function answer(message) {
+  if (typeof message !== "object" || message === null || Array.isArray(message))
+    return fault(null, -32600, "a message is a JSON object");
+  const m = message;
+  const id = m["id"];
+  const hasId = id !== undefined;
+  const validId = typeof id === "string" || typeof id === "number" ? id : null;
+  if (m["jsonrpc"] !== "2.0" || typeof m["method"] !== "string")
+    return hasId || m["method"] === undefined ? fault(validId, -32600, 'expected jsonrpc "2.0" and a method') : undefined;
+  const method = m["method"];
+  if (!hasId)
+    return;
+  const params = typeof m["params"] === "object" && m["params"] !== null ? m["params"] : {};
+  switch (method) {
+    case "initialize": {
+      const asked = params["protocolVersion"];
+      const protocolVersion = PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0];
+      return reply(validId, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "ursula-diagram", version: VERSION }, instructions: INSTRUCTIONS });
+    }
+    case "ping":
+      return reply(validId, {});
+    case "tools/list":
+      return reply(validId, { tools: TOOLS });
+    case "tools/call":
+      try {
+        return reply(validId, callTool(params["name"], params["arguments"]));
+      } catch (err) {
+        if (err instanceof ArgumentError)
+          return fault(validId, -32602, err.message);
+        return reply(validId, { content: [{ type: "text", text: internalReport(err) }], isError: true });
+      }
+    default:
+      return fault(validId, -32601, `no method ${method}`);
+  }
+}
+function answerLine(line) {
+  let parsed;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return fault(null, -32700, "the line is not JSON");
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0)
+      return fault(null, -32600, "an empty batch");
+    const answers = parsed.map(answer).filter((a) => a !== undefined);
+    return answers.length === 0 ? undefined : answers;
+  }
+  return answer(parsed);
+}
+
 // src/cli.ts
-var out = runCommand(process.argv.slice(2), (file) => readFileSync(file ?? 0, "utf8"));
-if (out.stdout !== "")
-  process.stdout.write(out.stdout);
-if (out.stderr !== "")
-  process.stderr.write(out.stderr);
-process.exitCode = out.code;
+var args = process.argv.slice(2);
+if (args[0] === "mcp" && args.length === 1) {
+  createInterface({ input: process.stdin, crlfDelay: Infinity }).on("line", (line) => {
+    if (line.trim() === "")
+      return;
+    const out = answerLine(line);
+    if (out !== undefined)
+      process.stdout.write(`${JSON.stringify(out)}
+`);
+  });
+} else {
+  const out = runCommand(args, (file) => readFileSync(file ?? 0, "utf8"));
+  if (out.stdout !== "")
+    process.stdout.write(out.stdout);
+  if (out.stderr !== "")
+    process.stderr.write(out.stderr);
+  process.exitCode = out.code;
+}
