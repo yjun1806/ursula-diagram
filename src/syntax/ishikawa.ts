@@ -19,4 +19,5 @@ export const ishikawa: SyntaxEntry = {
     "Indent with spaces; deeper causes nest under the line above.",
   ],
   keywords: [],
+  indented: true,
 };

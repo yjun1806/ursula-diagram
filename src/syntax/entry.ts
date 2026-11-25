@@ -12,4 +12,6 @@ export interface SyntaxEntry {
   rules: string[];
   /** Words that start a line of this type, for 'did you mean'. */
   keywords: string[];
+  /** Indentation carries meaning, so an example line keeps its leading spaces. */
+  indented?: true;
 }

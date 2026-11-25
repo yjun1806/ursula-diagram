@@ -2,8 +2,8 @@ import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
 import type { ArrowDirection, BlockDiagram, BlockGroup, BlockLink, BlockNode, BlockShape, LinkStyle } from './model.ts';
 
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
+function fail(message: string, line: number, code = 'syntax', column?: number): never {
+  throw new UrsulaError(message, code, line, column === undefined ? {} : { column });
 }
 
 interface Bracket {
@@ -278,7 +278,7 @@ export function parseBlock(src: string, heading?: string): BlockDiagram {
       continue;
     }
     if (tokens.some((t, i) => (i % 2 === 0) !== (t.t === 'node')) || tokens[tokens.length - 1]?.t !== 'node') {
-      fail('A link joins two blocks: A --> B.', line, 'link');
+      fail('A link joins two blocks: A --> B.', line, 'link', (rows[n] ?? '').trimEnd().length + 1);
     }
     for (const t of tokens) if (t.t === 'node') place(t, line);
     for (let i = 1; i + 1 < tokens.length; i += 2) {

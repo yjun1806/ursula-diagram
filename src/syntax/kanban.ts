@@ -18,4 +18,5 @@ export const kanban: SyntaxEntry = {
     "@{ assigned: 'x', ticket: 'T-1', priority: 'High' } adds details to a card.",
   ],
   keywords: [],
+  indented: true,
 };

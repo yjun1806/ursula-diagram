@@ -18,4 +18,5 @@ export const mindmap: SyntaxEntry = {
     "Shapes as in flowcharts: id[box], id(round), id((circle)), id{{hexagon}}.",
   ],
   keywords: [],
+  indented: true,
 };

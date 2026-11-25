@@ -68,7 +68,7 @@ describe('renderText', () => {
 
   it('returns an error for unparseable input', () => {
     const r = renderText('flowchart LR\nA ~~ B', 80);
-    expect(r).toEqual({ error: expect.stringContaining('line 2') });
+    expect(r).toMatchObject({ error: expect.stringContaining('line 2'), line: 2 });
   });
 
   it('uses heavy and dotted line glyphs', () => {

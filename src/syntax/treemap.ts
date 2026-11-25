@@ -16,4 +16,5 @@ export const treemap: SyntaxEntry = {
     "Indentation puts leaves and groups inside the group above.",
   ],
   keywords: ["classDef"],
+  indented: true,
 };

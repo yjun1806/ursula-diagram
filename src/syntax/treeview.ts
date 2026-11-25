@@ -17,4 +17,5 @@ export const treeview: SyntaxEntry = {
     "name ## text adds a note beside an entry.",
   ],
   keywords: [],
+  indented: true,
 };
