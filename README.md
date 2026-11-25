@@ -1,10 +1,15 @@
+<p align="center"><img src="assets/banner.png" alt="ursula" width="100%"></p>
+
+<p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
+
 # ursula
 
 Draws Mermaid text as inline SVG and as terminal text. The same text always gives the same drawing: placement is
 computed, with no browser, no DOM and no dependencies at run time.
 
 ```
-    ▼──── no ───┐
+    ┌──── no ───┐
+    ▼           │
 ┌───────┐   ┌───────┐        ┌───────┐
 │ Start │──▶│  Ok?  │─ yes ─▶│ Done  │
 └───────┘   └───────┘        └───────┘
