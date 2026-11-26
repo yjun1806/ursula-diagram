@@ -3,3 +3,7 @@ public/ursula.global.js
 public/assets/
 .vitepress/cache
 .vitepress/dist
+
+# Drawn by scripts/render-examples.mjs
+public/example-svg/
+.vitepress/examples/rendered.json

@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
+import { TYPES } from './examples/types.mjs';
 
 const repo = 'https://github.com/yjun1806/ursula-diagram';
 const base = '/ursula-diagram/';
+const name = 'ursula-diagram';
+// The version in the nav is the one in the repository's package.json, read at build time.
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
 // On an English page, a visitor whose browser puts Korean first goes to the same page under /ko/, with the query and
 // the hash (a playground link keeps its drawing). Once the visitor picks a language in the menu, this never runs again.
@@ -32,7 +37,12 @@ function sidebar(prefix, t) {
     {
       text: t.drawings,
       items: [
-        { text: t.gallery, link: `${prefix}/gallery` },
+        {
+          text: t.examples,
+          link: `${prefix}/examples/`,
+          collapsed: true,
+          items: TYPES.map((type) => ({ text: type[t.code], link: `${prefix}/examples/${type.id}` })),
+        },
         { text: t.larger, link: `${prefix}/guide/larger-drawing` },
         { text: t.terminal, link: `${prefix}/guide/terminal` },
       ],
@@ -51,29 +61,38 @@ function sidebar(prefix, t) {
 }
 
 const en = {
+  code: 'en',
   intro: 'Introduction', why: 'Why ursula', compared: 'Compared with other tools', quickStart: 'Quick start',
-  drawings: 'Drawings', gallery: 'Gallery', larger: 'A larger drawing', terminal: 'In a terminal',
+  drawings: 'Drawings', examples: 'Examples', larger: 'A larger drawing', terminal: 'In a terminal',
   reference: 'Reference', formats: 'Output formats', library: 'Library', colours: 'Colours', skill: 'Agent skill',
-  playground: 'Playground', guide: 'Guide',
+  playground: 'Playground', guide: 'Guide', releases: 'Release notes',
 };
 const ko = {
+  code: 'ko',
   intro: '소개', why: '왜 ursula인가', compared: '다른 도구와 비교', quickStart: '빠른 시작',
-  drawings: '그림', gallery: '그림 모음', larger: '큰 그림', terminal: '터미널에서',
+  drawings: '그림', examples: '예제', larger: '큰 그림', terminal: '터미널에서',
   reference: '참고', formats: '출력 형식', library: '라이브러리', colours: '색 바꾸기', skill: '에이전트 스킬',
-  playground: '플레이그라운드', guide: '안내',
+  playground: '플레이그라운드', guide: '안내', releases: '릴리스 노트',
 };
 
 function nav(prefix, t) {
   return [
     { text: t.guide, link: `${prefix}/guide/why` },
-    { text: t.gallery, link: `${prefix}/gallery` },
+    { text: t.examples, link: `${prefix}/examples/`, activeMatch: 'examples/' },
     { text: t.playground, link: `${prefix}/playground` },
-    { text: 'npm', link: 'https://www.npmjs.com/package/ursula-diagram' },
+    {
+      text: `v${version}`,
+      items: [
+        { text: t.releases, link: `${repo}/releases` },
+        { text: 'npm', link: `https://www.npmjs.com/package/${name}` },
+      ],
+    },
   ];
 }
 
 export default defineConfig({
-  title: 'ursula',
+  title: name,
+  titleTemplate: `:title | ${name}`,
   base,
   cleanUrls: true,
   lastUpdated: false,
@@ -124,7 +143,7 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: { src: '/icon-180.png', alt: '' },
+    logo: { src: '/icon-180.png', alt: name },
     socialLinks: [{ icon: 'github', link: repo }],
     outline: [2, 3],
     search: {

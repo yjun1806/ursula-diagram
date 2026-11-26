@@ -2,7 +2,7 @@
 
 `--format text` draws with box-drawing characters and arranges the drawing for `--width`. The order flowchart on the
 [home page](/) runs left to right at `--width 80`; at `--width 40` the same text comes out stacked top to bottom. A drawing is
-never cut off. These are the [gallery](/gallery)'s sequence, Gantt and mindmap texts, drawn with
+never cut off. These are the [examples page](/examples/)'s sequence, Gantt and mindmap texts, drawn with
 `ursula-diagram <file> --format text --width 80`.
 
 ```

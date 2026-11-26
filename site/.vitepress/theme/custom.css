@@ -228,3 +228,116 @@ h3,
 .vp-doc .compare-table th:not(:first-child) {
   text-align: center;
 }
+
+/* Examples: one page per type, each example's Mermaid text on the left and its picture on the right. */
+.examples-type .vp-doc h2 {
+  margin-top: 40px;
+  padding-top: 20px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 17px;
+  font-weight: 600;
+}
+.ex-jump select {
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  background: var(--vp-c-bg-alt);
+  color: var(--vp-c-text-1);
+  font-size: 14px;
+}
+.ex-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (min-width: 960px) {
+  .ex-item {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+.vp-doc .ex-code pre {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--vp-code-block-bg);
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vp-doc .ex-code pre code {
+  padding: 0;
+  background: none;
+  color: var(--vp-c-text-1);
+  font-size: inherit;
+  white-space: pre;
+}
+.ex-pic {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ex-size {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-alt);
+  font-size: 12px;
+  color: var(--vp-c-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ex-pic .ursula-frame {
+  padding: 16px;
+  overflow-x: auto;
+  background: var(--ursula-surface);
+}
+.ex-pic img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.ex-error {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  color: var(--vp-c-danger-1);
+  white-space: pre-wrap;
+}
+.ex-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.vp-doc a.ex-type {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  color: var(--vp-c-text-1);
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.2s;
+}
+.vp-doc a.ex-type:hover {
+  border-color: var(--vp-c-brand-1);
+}
+.ex-type-count {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ex-total {
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}

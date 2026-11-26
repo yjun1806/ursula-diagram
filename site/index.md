@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: ursula
+  name: ursula-diagram
   text: Mermaid text to SVG and terminal text
   tagline: No browser, no runtime dependencies. The same text always gives the same drawing.
   actions:
@@ -31,7 +31,7 @@ features:
 
 ## What it does
 
-ursula reads the Mermaid text of any of the 35 diagram types in the Mermaid documentation and computes where every
+ursula-diagram reads the Mermaid text of any of the 35 diagram types in the Mermaid documentation and computes where every
 box, line and label goes. It is made for coding agents: the agent writes a few lines of Mermaid, and the engine lays
 them out, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. The same text always gives the
 same drawing. It runs on Node alone: no browser, no DOM, nothing to install at run time.
