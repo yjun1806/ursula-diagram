@@ -8,13 +8,12 @@ import type { Layout } from '../types.ts';
 import { parseState } from './parse.ts';
 import { titledLines, titledSpans } from '../front/title.ts';
 
-type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'>;
+type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'composition' | 'questions' | 'elbows' | 'quality'>;
 
 function drawn(src: string, ruler: ReturnType<typeof pixelRuler>, opts: Opts): { layout: Layout; title: string | undefined } {
   const { graph, accTitle } = parseState(src);
   const laid = layout(graph, ruler, {
     legend: false,
-    ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.composition === undefined ? {} : { composition: opts.composition }),
     ...(opts.questions === undefined ? {} : { questions: opts.questions }),
     ...(opts.elbows === undefined ? {} : { elbows: opts.elbows }),

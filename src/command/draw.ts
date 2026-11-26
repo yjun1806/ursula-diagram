@@ -35,7 +35,6 @@ function layoutOptions(req: DrawRequest) {
   return {
     ...(req.width === undefined ? {} : { maxWidth: req.width }),
     ...(req.legend ? {} : { legend: false as const }),
-    ...(req.engine === undefined ? {} : { engine: req.engine }),
     ...(req.composition === undefined ? {} : { composition: req.composition }),
     ...(req.questions ? {} : { questions: false }),
     ...(req.elbows ? {} : { elbows: false }),

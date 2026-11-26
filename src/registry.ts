@@ -14,7 +14,6 @@ export interface RenderOptions extends SvgOptions {
   /** Every key of a leading front-matter block, for front-ends that read keys outside `config` (for example `displayMode`). */
   frontMatter?: Record<string, FrontValue>;
   maxWidth?: number;
-  engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
   questions?: boolean;
   elbows?: boolean;
@@ -31,7 +30,6 @@ export interface TextOptions {
   frontMatter?: Record<string, FrontValue>;
   legend?: SvgOptions['legend'];
   maxHeight?: number;
-  engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
   questions?: boolean;
   elbows?: boolean;

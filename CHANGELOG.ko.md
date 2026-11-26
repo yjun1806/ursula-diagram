@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+### Removed
+
+- 둘째 flowchart 배치 엔진을 지웠습니다. `--engine` 옵션, 라이브러리의 `engine` 옵션(`LayoutOptions`, `RenderOptions`, `TextOptions`, `renderText`, `renderTextSpans`, `renderTextSvg`), 그 엔진만 읽던 `LayoutOptions`의 `laneAxis` 옵션이 없어졌습니다. 그림은 하나도 바뀌지 않습니다. [#70](https://github.com/yjun1806/ursula-diagram/pull/70)
+
 ## 0.2.1 (2026-11-26)
 
 ### Fixed
