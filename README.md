@@ -87,6 +87,7 @@ claude mcp add ursula -- npx -y ursula-diagram mcp
 - [Colours](https://yjun1806.github.io/ursula-diagram/guide/colours): the CSS variables of a drawing
 - [Compared with other tools](https://yjun1806.github.io/ursula-diagram/guide/compared): mermaid-cli, Pele, termaid, beautiful-mermaid, mmdflux, mermaid-ascii
 - [Roadmap](https://yjun1806.github.io/ursula-diagram/roadmap): what is planned next, backed by GitHub issues
+- [Changelog](https://yjun1806.github.io/ursula-diagram/changelog): what changed in each version
 
 ## Contributing
 

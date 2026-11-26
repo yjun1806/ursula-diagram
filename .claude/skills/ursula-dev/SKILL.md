@@ -96,7 +96,7 @@ Docs never paste what the command prints; they show what it prints now:
 - Every command a page, a README or a skill names is run by `npm test` (`test/docs.test.ts`) and by the site check against the built command, and must end with 0, or with N given by an `<!-- exit N -->` line above its fence. A command that installs, needs the network or works on the checkout itself is listed in `ALLOWED` of `scripts/docs/commands.mjs` with the reason; a command that neither runs ursula nor is listed fails.
 - The same test fails when Output formats misses a `--format`, Agent skill misses an MCP tool or argument, or a page imports a name the package does not export.
 
-The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest. The one exception is the release headings under "Done" on the roadmap pages.
+The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest. Versions belong only in `CHANGELOG.md` and `CHANGELOG.ko.md`, which the Changelog pages show.
 
 ## The bundled command
 
@@ -120,14 +120,21 @@ Treat these as the public interface and update the site pages (en and ko) and te
 
 ## Roadmap
 
-`site/roadmap.md` and `site/ko/roadmap.md` list the open issues labelled `roadmap`, one line and a link each. GitHub issues are the source of truth; the page follows them.
+`site/roadmap.md` and `site/ko/roadmap.md` list only work still to do: the open issues labelled `roadmap`, one line and a link each, under Planned, In progress and Not planned. GitHub issues are the source of truth; the page follows them. Shipped work goes in the changelog, not on the roadmap.
 
 - New planned work: open an issue with the `roadmap` label, then add one line to Planned on both pages.
-- When a pull request ships a roadmap item: in the same pull request, move its line to "Done" ("완료" on the Korean page) as a plain line (strike through only the finished sub-points of an item that stays under Planned), under `### Unreleased` (`### 출시 예정`; add the heading if it is missing, and the release pull request renames it to the version), with the issue and pull request links (keep about ten lines there), and write `Fixes #<n>` so merging closes the issue.
-- When a pull request ships only part of a roadmap item: keep the item under Planned with its issue link, list its parts as sub-points, and strike through the finished parts with the pull request link. Link only pull requests there, not issues: the check reads every issue link under Planned and In progress as open.
+- When a pull request ships a roadmap item: in the same pull request, remove its line from both pages and write `Fixes #<n>` so merging closes the issue.
+- When a pull request ships only part of a roadmap item: keep the item under Planned with its issue link and remove the finished sub-point. The issue keeps the history.
 - When an issue closes or changes without such a pull request (closed by hand, scope narrowed), update both pages in a pull request of their own.
 - `npm run check` in `site/` fails when the two pages list different issues, and, when it can reach GitHub, when Planned and In progress differ from the open `roadmap` issues. Without network it prints `skip the roadmap against GitHub` and the rules above are the only guard.
 
+## Changelog
+
+`CHANGELOG.md` (English) and `CHANGELOG.ko.md` (Korean, 합니다체) are the record of each version; the site pages `/changelog` and `/ko/changelog` include them at build time, so edit only the two files.
+
+- Every pull request that users of the package would notice (the command, the library, the agent skill, the MCP server; not the docs site) adds one line under `## Unreleased` in both files, under `### Added`, `### Changed`, `### Removed` or `### Fixed` (English names in both), ending with the pull request link.
+- `test/changelog.test.ts` fails when the two files differ in their headings or in the pull requests they link under each heading, and when `CHANGELOG.md` has no section with notes for the version in `package.json`.
+
 ## Releases
 
-Follow `RELEASING.md`: a release is a pull request `chore: release <version>` that sets the version in `package.json` and `src/version.ts` and rebuilds the bundled command. Merging it publishes to npm, tags `v<version>` and creates the GitHub release.
+Follow `RELEASING.md`: a release is a pull request `chore: release <version>` that sets the version in `package.json` and `src/version.ts`, rebuilds the bundled command, and renames `## Unreleased` in both changelogs to `## <version> (<yyyy-mm-dd>)` with a new empty `## Unreleased` above. Merging it publishes to npm, tags `v<version>` and creates the GitHub release with that changelog section as its notes.

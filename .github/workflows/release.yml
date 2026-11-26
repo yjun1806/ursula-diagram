@@ -67,4 +67,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v${{ steps.version.outputs.version }}"
-          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          # The notes are the section of this version in CHANGELOG.md; without one, GitHub generates them.
+          node scripts/changelog.mjs notes "${{ steps.version.outputs.version }}" > "$RUNNER_TEMP/notes.md"
+          if [ -s "$RUNNER_TEMP/notes.md" ]; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          fi
