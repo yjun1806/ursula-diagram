@@ -1,4 +1,5 @@
 ---
+description: 'ursula compared with mermaid-cli, beautiful-mermaid, mermaid-ascii and other Mermaid renderers: examples drawn of 531, speed per command, agent time.'
 aside: false
 pageClass: compare-page
 ---

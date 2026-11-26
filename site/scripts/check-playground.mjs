@@ -65,7 +65,8 @@ if (existsSync(built)) {
     readdirSync(join(d, rel), { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? (rel === '' && ['ko', 'assets'].includes(e.name) ? [] : pages(d, join(rel, e.name))) : e.name.endsWith('.html') && e.name !== '404.html' ? [join(rel, e.name)] : [],
     );
-  const missingKo = pages(built).filter((p) => !existsSync(join(built, 'ko', p)));
+  // A file copied from public/ as it is (the search console verification file) is not a page and has no twin.
+  const missingKo = pages(built).filter((p) => !existsSync(join(site, 'public', p)) && !existsSync(join(built, 'ko', p)));
   if (missingKo.length) fail(`no Korean page for ${missingKo.join(', ')}`);
   else console.log('ok   every English page has a Korean page');
   if (!readFileSync(join(built, 'index.html'), 'utf8').includes('ursula-lang')) fail('the language redirect is not in the page head');

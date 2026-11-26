@@ -1,3 +1,7 @@
+---
+description: 'Two C4 diagrams from the Mermaid documentation, a container and a deployment diagram, drawn by ursula as SVG with no crossings, with their check reports.'
+---
+
 # A larger drawing
 
 Two C4 examples from the Mermaid documentation, drawn as they are. The container diagram has 10 elements, 13

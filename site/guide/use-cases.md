@@ -1,3 +1,7 @@
+---
+description: 'Ways to use ursula: a Mermaid CLI in the terminal, an agent skill, a Mermaid MCP server, a library for Node and the browser, and one browser file.'
+---
+
 # Ways to use ursula
 
 The same engine draws the same picture as a command, an agent skill, an MCP server, a library for Node and the

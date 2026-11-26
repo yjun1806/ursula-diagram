@@ -1,3 +1,7 @@
+---
+description: 'Mermaid in the terminal: ursula --format text draws a diagram in box-drawing characters laid out for --width, and shows charts as tables or lists.'
+---
+
 # In a terminal
 
 `--format text` draws with box-drawing characters and arranges the drawing for `--width`. The order flowchart on the

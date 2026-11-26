@@ -1,3 +1,7 @@
+---
+description: 'Develop ursula-diagram: install the dependencies, check the types, run the tests and run the docs site and playground of this Mermaid renderer.'
+---
+
 # Development
 
 The repository holds the engine (`src/`), its tests (`test/`), the agent skill (`skills/ursula`) and this site

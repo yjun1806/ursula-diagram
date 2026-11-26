@@ -1,4 +1,7 @@
 ---
+title: 'ursula-diagram: 브라우저 없이 Mermaid를 SVG와 터미널 그림으로'
+titleTemplate: false
+description: 'ursula-diagram은 브라우저 없이 Mermaid를 SVG와 터미널 글자 그림으로 그리는 Mermaid CLI이자 라이브러리입니다. 오류가 고치는 법을 알려 주어 AI 코딩 에이전트가 스스로 고칩니다.'
 layout: home
 
 hero:

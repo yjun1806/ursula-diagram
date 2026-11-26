@@ -1,3 +1,7 @@
+---
+description: 'What ursula-diagram plans next: Mermaid styling, docs build plugins, a GitHub Action and tidier terminal drawings. Each item links to its GitHub issue.'
+---
+
 # Roadmap
 
 What ursula plans to support next. Each item is a GitHub issue, and the issue is where the work is discussed and

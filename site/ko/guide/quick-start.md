@@ -1,3 +1,7 @@
+---
+description: 'Mermaid CLI ursula-diagram을 npm, pnpm, bun으로 설치하거나(Node 22 이상) npx로 실행해, Mermaid 다이어그램을 SVG나 터미널 글자 그림으로 그립니다.'
+---
+
 # 빠른 시작
 
 사용하는 패키지 매니저로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 이름 `ud`와 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다. `npx ud`는 안 됩니다. npx는 짧은 이름을 패키지 이름으로 찾는데, npm에는 `ud`라는 다른 패키지가 있습니다.

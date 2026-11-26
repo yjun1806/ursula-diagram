@@ -1,3 +1,7 @@
+---
+description: 'ursula-diagram이 다음에 할 일입니다. Mermaid 스타일 적용, 문서 빌드 플러그인, GitHub Action, 터미널 그림 다듬기를 GitHub 이슈와 함께 적습니다.'
+---
+
 # 로드맵
 
 ursula가 앞으로 지원할 계획입니다. 항목마다 GitHub 이슈가 하나씩 있고, 논의와 진행은 그 이슈에서 합니다. 이 페이지는 이슈를 모아 보여 줍니다. 날짜는 정하지 않습니다. 제안이 있으면 [이슈를 열어 주세요](https://github.com/yjun1806/ursula-diagram/issues/new).

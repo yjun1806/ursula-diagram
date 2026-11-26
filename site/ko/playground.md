@@ -1,4 +1,5 @@
 ---
+description: '브라우저에서 Mermaid를 SVG로 바꿔 봅니다. Mermaid 글을 쓰면 ursula가 SVG와 터미널 글자 그림으로 바로 그립니다. 결과를 복사하거나 내려받거나 링크로 나눕니다.'
 layout: page
 title: 플레이그라운드
 sidebar: false

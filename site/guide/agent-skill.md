@@ -1,3 +1,7 @@
+---
+description: 'The ursula skill for Claude Code, Codex, Cursor and other AI coding agents: write Mermaid, then check and draw it in one call. Install it with npx skills add.'
+---
+
 # Agent skill
 
 `skills/ursula` is a skill for coding agents. `SKILL.md` tells the agent how to write the Mermaid text, how to

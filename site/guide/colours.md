@@ -1,3 +1,7 @@
+---
+description: 'Change the colours of a Mermaid SVG drawn by ursula: every colour is a CSS variable with a light and a dark value, so the drawing follows its page.'
+---
+
 # Colours
 
 An SVG drawing reads every colour from a CSS variable and carries the value as a fallback, so it looks right on its

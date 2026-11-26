@@ -24,6 +24,9 @@ export const EXAMPLE_STRINGS = {
     copyText: 'Copy text',
     enlarge: 'Enlarge picture',
     cells: (cols, rows) => `${cols} columns × ${rows} lines`,
+    title: (name) => `Mermaid ${name} examples`,
+    description: (n, name) =>
+      `${n === 1 ? `The official Mermaid ${name} example` : `${n} official Mermaid ${name} examples`} drawn by ursula as SVG and terminal text, each beside its Mermaid text.`,
   },
   ko: {
     lead: (n, link) =>
@@ -43,6 +46,9 @@ export const EXAMPLE_STRINGS = {
     copyText: '글 복사',
     enlarge: '그림 크게 보기',
     cells: (cols, rows) => `${cols}열 × ${rows}줄`,
+    title: (name) => `Mermaid ${name} 예시`,
+    description: (n, name) =>
+      `Mermaid 문서의 공식 ${name} 예시 ${n}개를 ursula가 SVG와 터미널 글자 그림으로 그렸습니다. 예시마다 Mermaid 글과 나란히 보여 줍니다.`,
   },
 };
 
@@ -118,6 +124,7 @@ export function examplePages(lang) {
       `[← ${t.all}](${prefix}/examples/#types)`,
       '',
     ].join('\n');
-    return { params: { type: type.id, title: name }, content };
+    // title and description become the page's <title> and meta description (transformPageData in config.mjs).
+    return { params: { type: type.id, title: t.title(name), description: t.description(items.length, name) }, content };
   });
 }

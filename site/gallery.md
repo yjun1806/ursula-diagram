@@ -1,4 +1,5 @@
 ---
+title: Examples
 head:
   - - meta
     - http-equiv: refresh

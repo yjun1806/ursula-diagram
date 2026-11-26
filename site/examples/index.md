@@ -1,4 +1,5 @@
 ---
+description: 'All 531 examples of the Mermaid documentation drawn by ursula as SVG and terminal text, unedited and grouped by diagram type.'
 aside: false
 pageClass: examples-index
 ---
