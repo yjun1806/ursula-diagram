@@ -1,6 +1,7 @@
 <script setup>
 // The first thing under the hero: the time per drawing of the ursula skill next to a skill that has the model lay out
-// the drawing, and the drawings both made from the same three texts, so the speed is never shown without the result.
+// the drawing, where that time went, and the drawings both made from the same three texts, so the speed is never shown
+// without the result.
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { MEASURE, MEASURE_SCALE } from './agents.js';
@@ -15,6 +16,7 @@ const comparePage = withBase(`${code === 'ko' ? '/ko' : ''}/guide/compared`);
 const rows = MEASURE.map((m, i) => ({
   ...m,
   name: t.measureRows[i],
+  command: t.split.command[i],
   low: `${(m.seconds[0] / MEASURE_SCALE) * 100}%`,
   high: `${(m.seconds[1] / MEASURE_SCALE) * 100}%`,
 }));
@@ -32,6 +34,7 @@ const rows = MEASURE.map((m, i) => ({
           <span class="ag-low" :style="{ width: r.low }"></span>
         </span>
         <span class="ag-value"><b>{{ r.seconds[0] }}–{{ r.seconds[1] }} s</b> · {{ r.tokens }} {{ t.tokens }}</span>
+        <span class="ag-split">{{ t.split.model }} {{ r.split.model }} s · {{ r.command }} {{ r.split.command }} s · {{ t.split.other }} {{ r.split.other }} s</span>
       </div>
       <p class="sk-note">{{ t.measureLead }} {{ t.measureNote }}</p>
     </div>
@@ -153,5 +156,17 @@ const rows = MEASURE.map((m, i) => ({
 }
 .ag-value b {
   color: var(--vp-c-text-1);
+}
+/* Where the seconds went, under the bar. */
+.ag-split {
+  color: var(--vp-c-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 768px) {
+  .ag-split {
+    grid-column: 2 / -1;
+    margin-top: -10px;
+  }
 }
 </style>

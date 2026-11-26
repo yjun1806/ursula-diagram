@@ -3,7 +3,8 @@
 // Where the pictures come from:
 // - skill: the first of two runs per text of the skill experiment (the time and tokens are the mean of both runs),
 //   measured on 26 November 2026 in Claude Code with claude-opus-5-5. The skill's pages were saved as 2× PNG with
-//   headless Chrome and scaled to 1600 px wide; ursula's are the SVGs that run wrote.
+//   headless Chrome and scaled to 1600 px wide; ursula's are the SVGs that run wrote. ursula's time and tokens are
+//   from the runs measured again later that day with the skill at commit 8c8222c, which wrote byte-identical SVGs.
 // - mermaid: ursula's from this site's engine at build time (scripts/render-examples.mjs); Mermaid's from Mermaid.js
 //   12.3.0 in headless Chrome, the page the home-page timing ran in, saved as SVG with a width and height added.
 // - tools: TOOLS_EXAMPLE drawn by every tool with a bar in the speed chart, the versions of the Compared page, at
@@ -46,7 +47,7 @@ const SKILL = {
         w('The two runs differ: lanes here, group boxes in the other run.', '두 번 그린 그림이 다릅니다: 이 판은 가로 띠, 다른 판은 구역 상자입니다.'),
       ],
       [
-        w('15 s · 63k tokens', '15초 · 토큰 63k'),
+        w('13 s · 51k tokens', '13초 · 토큰 51k'),
         w('0 bends, 0 crossings (engine check)', '꺾임 0·교차 0(엔진 점검)'),
         SAME_TWICE,
         w('Flaw: the thick “paid” line (==>) is drawn as thin as the others, and the legend shows Flow and Request alike.', '결함: 굵은 「paid」 선(==>)이 다른 선과 같은 굵기로 그려지고, 범례의 Flow와 Request가 같은 모양입니다.'),
@@ -63,7 +64,7 @@ const SKILL = {
         w('The two runs differ: the other run has 4 bends.', '두 번 그린 그림이 다릅니다: 다른 판은 꺾임이 4입니다.'),
       ],
       [
-        w('18 s · 55k tokens', '18초 · 토큰 55k'),
+        w('20 s · 57k tokens', '20초 · 토큰 57k'),
         w('7 bends, 0 crossings (engine check)', '꺾임 7·교차 0(엔진 점검)'),
         SAME_TWICE,
         w('Flaw: macro names such as Container_Boundary and ContainerDb_Ext show as box tags.', '결함: Container_Boundary, ContainerDb_Ext 같은 매크로 이름이 상자 꼬리표에 그대로 나옵니다.'),
@@ -79,7 +80,7 @@ const SKILL = {
         w('Message 8 is a dashed reply (-->>) in the input; this run draws it solid.', '입력에서 메시지 8은 점선 응답(-->>)인데, 이 판은 실선으로 그렸습니다.'),
         w('The two runs differ: the other run draws message 8 dashed.', '두 번 그린 그림이 다릅니다: 다른 판은 메시지 8을 점선으로 그렸습니다.'),
       ],
-      [w('12 s · 38k tokens', '12초 · 토큰 38k'), SAME_TWICE],
+      [w('14 s · 46k tokens', '14초 · 토큰 46k'), SAME_TWICE],
       BOTH_COMPLETE,
     ),
   ],

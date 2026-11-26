@@ -1,0 +1,1677 @@
+[
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "c4-container",
+    "run": "run1",
+    "session_s": 153.93,
+    "wall_s": 154.608,
+    "model_s": 150.58,
+    "skill_command_s": 0.5,
+    "other_tools_s": 2.85,
+    "unaccounted_s": -0.0,
+    "model_turns": 9,
+    "num_turns": 11,
+    "output_tokens": 15380,
+    "cost_usd": 0.7939934,
+    "turns": [
+      {
+        "model_s": 1.367,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.021
+          }
+        ]
+      },
+      {
+        "model_s": 2.497,
+        "did": [
+          "Bash: cat, head, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, head, ls",
+            "s": 1.526
+          }
+        ]
+      },
+      {
+        "model_s": 3.411,
+        "did": [
+          "Read",
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.008
+          },
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.006
+          }
+        ]
+      },
+      {
+        "model_s": 2.154,
+        "did": [
+          "Bash: grep, head, rule, soft"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: grep, head, rule, soft",
+            "s": 0.06
+          }
+        ]
+      },
+      {
+        "model_s": 124.697,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.299
+          }
+        ]
+      },
+      {
+        "model_s": 3.07,
+        "did": [
+          "answer",
+          "Bash: chrome screenshot, ls, pwd, tail"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: chrome screenshot, ls, pwd, tail",
+            "s": 1.215
+          }
+        ]
+      },
+      {
+        "model_s": 1.664,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.015
+          }
+        ]
+      },
+      {
+        "model_s": 4.179,
+        "did": [
+          "answer",
+          "skill scripts: self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: self_check, verify_geometry",
+            "s": 0.197
+          }
+        ]
+      },
+      {
+        "model_s": 7.544,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "c4-container",
+    "run": "run2",
+    "session_s": 173.85,
+    "wall_s": 177.562,
+    "model_s": 169.83,
+    "skill_command_s": 1.39,
+    "other_tools_s": 2.62,
+    "unaccounted_s": 0.0,
+    "model_turns": 13,
+    "num_turns": 14,
+    "output_tokens": 17653,
+    "cost_usd": 1.0152162,
+    "turns": [
+      {
+        "model_s": 1.347,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.017
+          }
+        ]
+      },
+      {
+        "model_s": 2.406,
+        "did": [
+          "Bash: cat, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, ls",
+            "s": 1.472
+          }
+        ]
+      },
+      {
+        "model_s": 2.478,
+        "did": [
+          "Bash: cat, grep, head"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, grep, head",
+            "s": 0.042
+          }
+        ]
+      },
+      {
+        "model_s": 3.657,
+        "did": [
+          "Bash: cat, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, sed",
+            "s": 0.033
+          }
+        ]
+      },
+      {
+        "model_s": 2.634,
+        "did": [
+          "Bash: cat, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, sed",
+            "s": 0.032
+          }
+        ]
+      },
+      {
+        "model_s": 88.323,
+        "did": [
+          "answer",
+          "Bash: fit, grep, head, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: fit, grep, head, sed",
+            "s": 0.049
+          }
+        ]
+      },
+      {
+        "model_s": 38.677,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.245
+          }
+        ]
+      },
+      {
+        "model_s": 3.917,
+        "did": [
+          "skill scripts: verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: verify_geometry",
+            "s": 0.105
+          }
+        ]
+      },
+      {
+        "model_s": 3.614,
+        "did": [
+          "Bash: chrome screenshot, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: chrome screenshot, ls",
+            "s": 0.957
+          }
+        ]
+      },
+      {
+        "model_s": 1.171,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.013
+          }
+        ]
+      },
+      {
+        "model_s": 10.569,
+        "did": [
+          "skill scripts: self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: self_check, verify_geometry",
+            "s": 1.042
+          }
+        ]
+      },
+      {
+        "model_s": 2.451,
+        "did": [
+          "answer",
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.008
+          }
+        ]
+      },
+      {
+        "model_s": 8.589,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "session_s": 161.21,
+    "wall_s": 161.937,
+    "model_s": 156.48,
+    "skill_command_s": 1.89,
+    "other_tools_s": 2.85,
+    "unaccounted_s": -0.0,
+    "model_turns": 13,
+    "num_turns": 14,
+    "output_tokens": 18826,
+    "cost_usd": 1.0173438000000001,
+    "turns": [
+      {
+        "model_s": 1.959,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.02
+          }
+        ]
+      },
+      {
+        "model_s": 2.176,
+        "did": [
+          "Bash: cat, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, ls",
+            "s": 1.571
+          }
+        ]
+      },
+      {
+        "model_s": 2.257,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.015
+          }
+        ]
+      },
+      {
+        "model_s": 2.369,
+        "did": [
+          "Bash: cat, doc-wide, grep, head, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, doc-wide, grep, head, sed",
+            "s": 0.047
+          }
+        ]
+      },
+      {
+        "model_s": 5.074,
+        "did": [
+          "skill scripts: mermaid_extract"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: mermaid_extract",
+            "s": 0.151
+          }
+        ]
+      },
+      {
+        "model_s": 106.364,
+        "did": [
+          "answer",
+          "Write (18,393 chars)"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Write (18,393 chars)",
+            "s": 0.016
+          }
+        ]
+      },
+      {
+        "model_s": 2.697,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.195
+          }
+        ]
+      },
+      {
+        "model_s": 4.932,
+        "did": [
+          "skill scripts: self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: self_check, verify_geometry",
+            "s": 0.203
+          }
+        ]
+      },
+      {
+        "model_s": 2.197,
+        "did": [
+          "Bash: chrome screenshot, pwd, tail"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: chrome screenshot, pwd, tail",
+            "s": 1.158
+          }
+        ]
+      },
+      {
+        "model_s": 1.112,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.007
+          }
+        ]
+      },
+      {
+        "model_s": 14.287,
+        "did": [
+          "answer",
+          "skill scripts: self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: self_check, verify_geometry",
+            "s": 1.342
+          }
+        ]
+      },
+      {
+        "model_s": 0.969,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.013
+          }
+        ]
+      },
+      {
+        "model_s": 10.083,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "session_s": 146.99,
+    "wall_s": 150.872,
+    "model_s": 145.01,
+    "skill_command_s": 0.65,
+    "other_tools_s": 1.34,
+    "unaccounted_s": 0.0,
+    "model_turns": 9,
+    "num_turns": 10,
+    "output_tokens": 17887,
+    "cost_usd": 0.8881656,
+    "turns": [
+      {
+        "model_s": 1.021,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.019
+          }
+        ]
+      },
+      {
+        "model_s": 2.168,
+        "did": [
+          "Bash: cat, grep, head, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, grep, head, ls",
+            "s": 1.265
+          }
+        ]
+      },
+      {
+        "model_s": 2.177,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.014
+          }
+        ]
+      },
+      {
+        "model_s": 5.952,
+        "did": [
+          "skill scripts: mermaid_extract"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: mermaid_extract",
+            "s": 0.161
+          }
+        ]
+      },
+      {
+        "model_s": 4.872,
+        "did": [
+          "skill scripts: mermaid_extract"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: mermaid_extract",
+            "s": 0.106
+          }
+        ]
+      },
+      {
+        "model_s": 114.957,
+        "did": [
+          "answer",
+          "Write (19,753 chars)"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Write (19,753 chars)",
+            "s": 0.038
+          }
+        ]
+      },
+      {
+        "model_s": 2.028,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.206
+          }
+        ]
+      },
+      {
+        "model_s": 2.638,
+        "did": [
+          "skill scripts: self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: self_check, verify_geometry",
+            "s": 0.176
+          }
+        ]
+      },
+      {
+        "model_s": 9.195,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "order-flow",
+    "run": "run1",
+    "session_s": 65.11,
+    "wall_s": 65.779,
+    "model_s": 62.6,
+    "skill_command_s": 0.37,
+    "other_tools_s": 2.15,
+    "unaccounted_s": -0.0,
+    "model_turns": 9,
+    "num_turns": 10,
+    "output_tokens": 6663,
+    "cost_usd": 0.5523404,
+    "turns": [
+      {
+        "model_s": 1.652,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.017
+          }
+        ]
+      },
+      {
+        "model_s": 2.243,
+        "did": [
+          "Bash: cat, head, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, head, ls",
+            "s": 1.875
+          }
+        ]
+      },
+      {
+        "model_s": 4.779,
+        "did": [
+          "Bash: cat, end, flowchart, mkdir, paid, python3"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, end, flowchart, mkdir, paid, python3",
+            "s": 0.157
+          }
+        ]
+      },
+      {
+        "model_s": 4.035,
+        "did": [
+          "Bash: cat, grep, head"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, grep, head",
+            "s": 0.066
+          }
+        ]
+      },
+      {
+        "model_s": 3.453,
+        "did": [
+          "Bash: arrow, eyebrow, grep, head, px, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: arrow, eyebrow, grep, head, px, sed",
+            "s": 0.017
+          }
+        ]
+      },
+      {
+        "model_s": 2.785,
+        "did": [
+          "answer",
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.017
+          }
+        ]
+      },
+      {
+        "model_s": 34.557,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.287
+          }
+        ]
+      },
+      {
+        "model_s": 3.434,
+        "did": [
+          "skill scripts: verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: verify_geometry",
+            "s": 0.079
+          }
+        ]
+      },
+      {
+        "model_s": 5.66,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "diagram-design",
+    "input": "order-flow",
+    "run": "run2",
+    "session_s": 77.75,
+    "wall_s": 81.51,
+    "model_s": 75.95,
+    "skill_command_s": 0.53,
+    "other_tools_s": 1.27,
+    "unaccounted_s": 0.0,
+    "model_turns": 11,
+    "num_turns": 12,
+    "output_tokens": 8530,
+    "cost_usd": 0.6413156,
+    "turns": [
+      {
+        "model_s": 1.22,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.017
+          }
+        ]
+      },
+      {
+        "model_s": 2.004,
+        "did": [
+          "Bash: cat, ls"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: cat, ls",
+            "s": 1.215
+          }
+        ]
+      },
+      {
+        "model_s": 5.27,
+        "did": [
+          "skill scripts: mermaid_extract"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: mermaid_extract",
+            "s": 0.134
+          }
+        ]
+      },
+      {
+        "model_s": 2.046,
+        "did": [
+          "skill scripts: mermaid_extract"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: mermaid_extract",
+            "s": 0.124
+          }
+        ]
+      },
+      {
+        "model_s": 3.442,
+        "did": [
+          "Bash: grep, head, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: grep, head, sed",
+            "s": 0.011
+          }
+        ]
+      },
+      {
+        "model_s": 2.533,
+        "did": [
+          "answer",
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.013
+          }
+        ]
+      },
+      {
+        "model_s": 2.713,
+        "did": [
+          "Read"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Read",
+            "s": 0.007
+          }
+        ]
+      },
+      {
+        "model_s": 44.883,
+        "did": [
+          "answer",
+          "Write (8,851 chars)"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Write (8,851 chars)",
+            "s": 0.011
+          }
+        ]
+      },
+      {
+        "model_s": 3.092,
+        "did": [
+          "skill scripts: export_png, self_check, verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: export_png, self_check, verify_geometry",
+            "s": 0.187
+          }
+        ]
+      },
+      {
+        "model_s": 3.058,
+        "did": [
+          "skill scripts: verify_geometry"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "skill scripts: verify_geometry",
+            "s": 0.08
+          }
+        ]
+      },
+      {
+        "model_s": 5.689,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run1",
+    "session_s": 18.0,
+    "wall_s": 18.862,
+    "model_s": 16.0,
+    "skill_command_s": 1.98,
+    "other_tools_s": 0.02,
+    "unaccounted_s": -0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 1726,
+    "cost_usd": 0.1283554,
+    "turns": [
+      {
+        "model_s": 1.408,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.02
+          }
+        ]
+      },
+      {
+        "model_s": 8.123,
+        "did": [
+          "ursula --format check"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check",
+            "s": 1.665
+          }
+        ]
+      },
+      {
+        "model_s": 2.635,
+        "did": [
+          "ursula --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg",
+            "s": 0.31
+          }
+        ]
+      },
+      {
+        "model_s": 3.836,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run2",
+    "session_s": 17.4,
+    "wall_s": 18.054,
+    "model_s": 15.59,
+    "skill_command_s": 1.79,
+    "other_tools_s": 0.02,
+    "unaccounted_s": -0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 1714,
+    "cost_usd": 0.1280732,
+    "turns": [
+      {
+        "model_s": 1.227,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.019
+          }
+        ]
+      },
+      {
+        "model_s": 8.084,
+        "did": [
+          "ursula --format check"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check",
+            "s": 1.49
+          }
+        ]
+      },
+      {
+        "model_s": 2.614,
+        "did": [
+          "ursula --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg",
+            "s": 0.301
+          }
+        ]
+      },
+      {
+        "model_s": 3.67,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "session_s": 11.86,
+    "wall_s": 12.943,
+    "model_s": 8.95,
+    "skill_command_s": 2.88,
+    "other_tools_s": 0.03,
+    "unaccounted_s": 0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 862,
+    "cost_usd": 0.0983628,
+    "turns": [
+      {
+        "model_s": 1.342,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.026
+          }
+        ]
+      },
+      {
+        "model_s": 4.885,
+        "did": [
+          "ursula --format check --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check --format svg",
+            "s": 2.883
+          }
+        ]
+      },
+      {
+        "model_s": 2.722,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "session_s": 11.91,
+    "wall_s": 12.735,
+    "model_s": 10.45,
+    "skill_command_s": 1.44,
+    "other_tools_s": 0.02,
+    "unaccounted_s": -0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 1034,
+    "cost_usd": 0.1027468,
+    "turns": [
+      {
+        "model_s": 1.48,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.02
+          }
+        ]
+      },
+      {
+        "model_s": 5.265,
+        "did": [
+          "ursula --format check --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check --format svg",
+            "s": 1.44
+          }
+        ]
+      },
+      {
+        "model_s": 3.704,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run1",
+    "session_s": 15.47,
+    "wall_s": 16.325,
+    "model_s": 13.52,
+    "skill_command_s": 1.88,
+    "other_tools_s": 0.07,
+    "unaccounted_s": 0.0,
+    "model_turns": 5,
+    "num_turns": 6,
+    "output_tokens": 1114,
+    "cost_usd": 0.10807440000000001,
+    "turns": [
+      {
+        "model_s": 1.589,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.024
+          }
+        ]
+      },
+      {
+        "model_s": 3.354,
+        "did": [
+          "ursula --format check"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check",
+            "s": 1.642
+          }
+        ]
+      },
+      {
+        "model_s": 2.57,
+        "did": [
+          "ursula --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg",
+            "s": 0.241
+          }
+        ]
+      },
+      {
+        "model_s": 2.521,
+        "did": [
+          "Bash: grep, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: grep, sed",
+            "s": 0.043
+          }
+        ]
+      },
+      {
+        "model_s": 3.486,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run2",
+    "session_s": 14.15,
+    "wall_s": 14.996,
+    "model_s": 12.17,
+    "skill_command_s": 1.92,
+    "other_tools_s": 0.06,
+    "unaccounted_s": 0.0,
+    "model_turns": 5,
+    "num_turns": 6,
+    "output_tokens": 884,
+    "cost_usd": 0.1012662,
+    "turns": [
+      {
+        "model_s": 1.584,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.02
+          }
+        ]
+      },
+      {
+        "model_s": 2.594,
+        "did": [
+          "ursula --format check"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format check",
+            "s": 1.685
+          }
+        ]
+      },
+      {
+        "model_s": 2.173,
+        "did": [
+          "ursula --format svg"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg",
+            "s": 0.239
+          }
+        ]
+      },
+      {
+        "model_s": 2.192,
+        "did": [
+          "Bash: grep, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: grep, sed",
+            "s": 0.043
+          }
+        ]
+      },
+      {
+        "model_s": 3.624,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run1",
+    "session_s": 18.43,
+    "wall_s": 19.077,
+    "model_s": 16.43,
+    "skill_command_s": 1.81,
+    "other_tools_s": 0.19,
+    "unaccounted_s": -0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 1771,
+    "cost_usd": 0.13370200000000002,
+    "turns": [
+      {
+        "model_s": 1.39,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.02
+          }
+        ]
+      },
+      {
+        "model_s": 8.63,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 1.809
+          }
+        ]
+      },
+      {
+        "model_s": 3.098,
+        "did": [
+          "Bash: do, done, for, grep"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: do, done, for, grep",
+            "s": 0.17
+          }
+        ]
+      },
+      {
+        "model_s": 3.314,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run2",
+    "session_s": 21.63,
+    "wall_s": 22.614,
+    "model_s": 17.55,
+    "skill_command_s": 3.79,
+    "other_tools_s": 0.28,
+    "unaccounted_s": 0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 1680,
+    "cost_usd": 0.13082680000000002,
+    "turns": [
+      {
+        "model_s": 2.355,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.03
+          }
+        ]
+      },
+      {
+        "model_s": 8.236,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 3.795
+          }
+        ]
+      },
+      {
+        "model_s": 2.942,
+        "did": [
+          "Bash: do, done, for, grep"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: do, done, for, grep",
+            "s": 0.253
+          }
+        ]
+      },
+      {
+        "model_s": 4.017,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "session_s": 11.89,
+    "wall_s": 12.707,
+    "model_s": 10.41,
+    "skill_command_s": 1.46,
+    "other_tools_s": 0.02,
+    "unaccounted_s": 0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 933,
+    "cost_usd": 0.10286000000000001,
+    "turns": [
+      {
+        "model_s": 1.397,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.018
+          }
+        ]
+      },
+      {
+        "model_s": 4.663,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 1.456
+          }
+        ]
+      },
+      {
+        "model_s": 4.354,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "session_s": 15.41,
+    "wall_s": 16.419,
+    "model_s": 13.78,
+    "skill_command_s": 1.38,
+    "other_tools_s": 0.24,
+    "unaccounted_s": -0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 1351,
+    "cost_usd": 0.1175848,
+    "turns": [
+      {
+        "model_s": 1.314,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.023
+          }
+        ]
+      },
+      {
+        "model_s": 4.934,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 1.383
+          }
+        ]
+      },
+      {
+        "model_s": 3.858,
+        "did": [
+          "Bash: do, done, for"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: do, done, for",
+            "s": 0.221
+          }
+        ]
+      },
+      {
+        "model_s": 3.675,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run1",
+    "session_s": 11.74,
+    "wall_s": 12.657,
+    "model_s": 9.71,
+    "skill_command_s": 1.86,
+    "other_tools_s": 0.18,
+    "unaccounted_s": 0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 762,
+    "cost_usd": 0.0984946,
+    "turns": [
+      {
+        "model_s": 1.19,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.022
+          }
+        ]
+      },
+      {
+        "model_s": 2.785,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 1.857
+          }
+        ]
+      },
+      {
+        "model_s": 2.225,
+        "did": [
+          "Bash: do, done, for, sed"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: do, done, for, sed",
+            "s": 0.154
+          }
+        ]
+      },
+      {
+        "model_s": 3.509,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-8c8222c.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run2",
+    "session_s": 14.94,
+    "wall_s": 15.789,
+    "model_s": 11.76,
+    "skill_command_s": 2.95,
+    "other_tools_s": 0.23,
+    "unaccounted_s": 0.0,
+    "model_turns": 4,
+    "num_turns": 5,
+    "output_tokens": 941,
+    "cost_usd": 0.103285,
+    "turns": [
+      {
+        "model_s": 1.894,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.021
+          }
+        ]
+      },
+      {
+        "model_s": 3.566,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 2.954
+          }
+        ]
+      },
+      {
+        "model_s": 3.123,
+        "did": [
+          "Bash: do, done, for, grep"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Bash: do, done, for, grep",
+            "s": 0.21
+          }
+        ]
+      },
+      {
+        "model_s": 3.176,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  }
+]

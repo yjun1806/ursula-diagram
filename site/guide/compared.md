@@ -7,7 +7,7 @@ pageClass: compare-page
 
 ursula is the only tool here that draws all 531 examples in the Mermaid documentation both as SVG and as terminal
 text. Per command it is about 6 times faster than mermaid-cli and about 10 times slower than the native text tools.
-Against a skill where the model lays out the picture itself, an agent with ursula took 5 to 13 times less time.
+Against a skill where the model lays out the picture itself, an agent with ursula took 5 to 11 times less time.
 
 Every number below was measured on one Apple M2 Max (macOS 26.6, Node 26.12.1) on 2026-11-26, with the same input
 for every tool. The other tools are mermaid-cli 12.2.0, Mermaid 12.3.0, Pele 1.13.0, beautiful-mermaid 1.1.3,
@@ -20,11 +20,17 @@ engine lays it out. The same three drawings went through [diagram-design](https:
 a skill of the first kind, and through the ursula skill.
 
 diagram-design makes the more designed pictures: a title, zones, a legend, a highlight it chose. ursula's are plainer,
-but complete, clean and the same every time, and the agent finished them 5 to 13 times sooner.
+but complete, clean and the same every time, and the agent finished them 5 to 11 times sooner.
 
 <FeatureTable name="skill" />
 
 <BenchmarkBars name="skill" />
+
+Almost all of that time is the model's. The engine itself draws in about 0.1–0.4 s per call; the rest is the model
+reading the skill, writing the Mermaid text and answering. The model wrote 0.8k–1.8k tokens with ursula against
+6.7k–18.8k when it wrote the drawing itself, and writing tokens takes time.
+
+<FeatureTable name="skillTime" />
 
 The pictures below are the first of the two runs per text, unedited. Under each: the mean time and total tokens of the
 two runs, then what we checked in the picture. Click a picture to enlarge it; the name links to the input text.
