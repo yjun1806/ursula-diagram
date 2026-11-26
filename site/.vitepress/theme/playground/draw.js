@@ -45,6 +45,36 @@ export function draw(engine, src, tab, width) {
   }
 }
 
+// --- What the copy and download buttons hand over ---
+
+/** The file each tab downloads as. */
+export const FILES = {
+  svg: { name: 'ursula.svg', type: 'image/svg+xml' },
+  text: { name: 'ursula.txt', type: 'text/plain' },
+  ascii: { name: 'ursula-ascii.txt', type: 'text/plain' },
+  'text-svg': { name: 'ursula-text.svg', type: 'image/svg+xml' },
+};
+
+/**
+ * What a tab copies: the SVG markup exactly as the engine returned it, or the text drawing as plain lines without
+ * tones (what `renderText` returns, joined by newlines). Null for an error.
+ */
+export function copyText(out) {
+  if (!out || out.error !== undefined) return null;
+  if (out.svg !== undefined) return out.svg;
+  if (out.lines !== undefined) return out.lines.map((line) => line.map((s) => s.text).join('')).join('\n');
+  return null;
+}
+
+/**
+ * The SVG with every colour variable (`var(--ursula-fg,#201f1e)`) replaced by the value `lookup` gives for it, or by
+ * the fallback the engine wrote when `lookup` gives nothing. An image keeps no CSS variables, so this fixes the
+ * colours of the light or dark page before the SVG is drawn on a canvas.
+ */
+export function resolveColours(svg, lookup) {
+  return svg.replace(/var\(--([\w-]+)\s*,\s*([^()]*?)\s*\)/g, (_, name, fallback) => lookup(name) || fallback);
+}
+
 // --- Sharing by the URL hash: #tab=text&w=80&z=<deflate-raw, base64url> (or b=<base64url> without compression) ---
 
 function toBase64Url(bytes) {

@@ -13,6 +13,8 @@ aside: false
 Write Mermaid text on the left; the drawing follows as you type. The engine runs in this page, built from the same
 sources as the <code>ursula-diagram</code> package. <b>Width</b> is the number of terminal columns for the text
 outputs. <b>Copy link</b> puts the text in the address, so the link opens this drawing.
+The buttons above the output copy or download it as the engine returned it: the SVG markup, or the text drawing
+as plain text. <b>Copy as image</b> copies the SVG as a PNG in the colours the page shows now.
 </p>
 
 <Playground />
