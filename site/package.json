@@ -8,7 +8,7 @@
     "dev": "node scripts/prepare.mjs && vitepress dev",
     "build": "node scripts/prepare.mjs && vitepress build",
     "preview": "vitepress preview",
-    "check": "node scripts/check-playground.mjs && node scripts/check-locale-switch.mjs && node scripts/check-seo.mjs"
+    "check": "node scripts/check-playground.mjs && node scripts/check-locale-switch.mjs && node scripts/check-seo.mjs && node scripts/check-llms.mjs"
   },
   "devDependencies": {
     "vitepress": "1.6.4"

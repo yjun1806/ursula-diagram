@@ -38,9 +38,12 @@ export function seoHead({ pageData, siteConfig, title, description }) {
     : [];
   const og = (property, content) => ['meta', { property, content }];
   const twitter = (name, content) => ['meta', { name, content }];
+  // An English page names its Markdown twin, which llms/index.mjs writes beside it for AI agents.
+  const markdown = lang === 'en' ? [['link', { rel: 'alternate', type: 'text/markdown', href: SITE_URL + path }]] : [];
   return [
     ['link', { rel: 'canonical', href: url }],
     ...alternates,
+    ...markdown,
     og('og:type', path === 'index.md' || path === 'ko/index.md' ? 'website' : 'article'),
     og('og:site_name', siteConfig.site.title),
     og('og:title', title),

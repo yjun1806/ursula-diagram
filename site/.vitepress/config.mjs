@@ -7,10 +7,12 @@ import { mermaidFences } from './mermaid-fence.mjs';
 import { ursulaOutputs } from './ursula-output.mjs';
 import { pageDataFromParams, seoHead, sitemap } from './seo.mjs';
 import { verificationHead } from './verification.mjs';
+import { writeLlms } from './llms/index.mjs';
 
 const repo = 'https://github.com/yjun1806/ursula-diagram';
 const base = '/ursula-diagram/';
 const name = 'ursula-diagram';
+const description = 'A Mermaid CLI and library that renders Mermaid to SVG and terminal text without a browser, with errors an AI coding agent can fix alone.';
 // The version in the nav is the one in the repository's package.json, read at build time.
 const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
@@ -120,11 +122,18 @@ export default defineConfig({
   sitemap: sitemap(fileURLToPath(new URL('..', import.meta.url))),
   transformPageData: pageDataFromParams,
   transformHead: seoHead,
+  // llms.txt, llms-full.txt and a Markdown twin of every English page, for AI agents (llms/index.mjs).
+  buildEnd: (siteConfig) =>
+    writeLlms(siteConfig, {
+      sidebar: sidebar('', en),
+      title: name,
+      description,
+    }),
   locales: {
     root: {
       label: 'English',
       lang: 'en-US',
-      description: 'A Mermaid CLI and library that renders Mermaid to SVG and terminal text without a browser, with errors an AI coding agent can fix alone.',
+      description,
       themeConfig: {
         nav: nav('', en),
         sidebar: sidebar('', en),
