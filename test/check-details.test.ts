@@ -2,8 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkDetails, checkLines, selectFrontEnd } from '../src/index.ts';
-import { TERMINAL_NOTE } from '../src/command/draw.ts';
+import { TERMINAL_NOTE, checkReport } from '../src/command/draw.ts';
 import { edgeLine } from '../src/layered/details.ts';
+import type { DrawRequest } from '../src/command/args.ts';
 import type { Layout } from '../src/index.ts';
 import * as fixtures from './fixtures.ts';
 
@@ -119,5 +120,17 @@ describe('--check', () => {
     const r = run(['--format', 'text', '--width', '8', '--check'], 'flowchart LR\nA[First box] --> B[Second box]\n');
     expect(r.status).toBe(3);
     expect(r.stderr).not.toMatch(/composition/);
+  });
+});
+
+describe('notes from the front end', () => {
+  it('tells an agent that a Gantt chart has no tasks', () => {
+    const out = checkReport('gantt\n  tickInterval 1week\n', { format: 'check' } as DrawRequest);
+    expect(out).toContain('no checks for this kind of diagram');
+    expect(out).toMatch(/note: the chart has no tasks/);
+  });
+  it('adds no note to a Gantt chart with tasks', () => {
+    const out = checkReport('gantt\n  dateFormat YYYY-MM-DD\n  Build : 2026-01-01, 3d\n', { format: 'check' } as DrawRequest);
+    expect(out).not.toMatch(/note:/);
   });
 });

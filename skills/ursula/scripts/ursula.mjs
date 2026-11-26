@@ -22678,6 +22678,7 @@ var TAG_PAD2 = 9;
 var MAX_REORDER = 7;
 var MIN_RUN2 = 28;
 var ARROW_REACH = 3;
+var EMPTY_WIDTH = 320;
 var UNITS_MS = [1, 1000, 60000, 3600000, DAY, 7 * DAY, 30 * DAY, ...Array.from({ length: 8 }, (_, k) => 365 * DAY * 10 ** k)];
 var SCALES = [32, 24, 16, 12, 8, 6, 4, 3, 2, 1.5, 1];
 function chooseScale(span) {
@@ -22693,6 +22694,8 @@ function layoutGantt(model, ruler) {
   const w12 = (s) => ruler.textWidth(s, "line");
   const w13 = (s) => ruler.textWidth(s, "title");
   const taskOf = (i) => model.tasks[i];
+  if (model.tasks.length === 0)
+    return emptyLayout(model, w13);
   const rowTasks = model.tasks.flatMap((t, i) => t.vert ? [] : [i]);
   const vertTasks = model.tasks.flatMap((t, i) => t.vert ? [i] : []);
   const centreOf = (t) => t.milestone ? t.start + (t.end - t.start) / 2 : t.start;
@@ -22948,9 +22951,21 @@ function layoutGantt(model, ruler) {
     }
   }
   items.push(...portItems);
-  const name = model.accTitle ?? (model.title === undefined ? "gantt" : `gantt — ${model.title}`);
-  const scene = { width, height, title: name, items };
+  const scene = { width, height, title: sceneName(model), items };
   return { scene, bars, ticks: plan, scale, origin: x0, omitted };
+}
+function sceneName(model) {
+  return model.accTitle ?? (model.title === undefined ? "gantt" : `gantt — ${model.title}`);
+}
+function emptyLayout(model, titleWidth) {
+  const titleRight = model.title === undefined ? 0 : LEFT2 + titleWidth(model.title) * 15 / 13;
+  const width = Math.max(EMPTY_WIDTH, ceilTo(titleRight) + 40);
+  const height = model.title === undefined ? 80 : 120;
+  const items = [{ kind: "box", x: 16, y: 16, w: width - 32, h: height - 32, role: ["panel"] }];
+  if (model.title !== undefined)
+    items.push({ kind: "text", x: LEFT2, y: 52, text: model.title, role: ["title"] });
+  const ticks = { unit: "d", step: 1, twoRow: false, ticks: [] };
+  return { scene: { width, height, title: sceneName(model), items }, bars: [], ticks, scale: 0, origin: LEFT2, omitted: [] };
 }
 function crosses2(x, a, b, spansAt) {
   return range(Math.min(a, b) + 1, Math.max(a, b)).some((r) => spansAt(r).some(([x0, x1]) => x >= x0 - 4 && x <= x1 + 4));
@@ -23147,8 +23162,6 @@ function parseGantt(src, opts = {}) {
   }
   if (!headerSeen)
     fail2('A Gantt chart starts with "gantt".', 1, "header");
-  if (raws.length === 0)
-    fail2("A Gantt chart needs at least one task.", rows.length, "empty");
   const format = compileDateFormat(dateFormat);
   const excludes = readExcludes(excludeTokens, weekend, format);
   const tasks = resolve(raws, format, excludes);
@@ -23383,6 +23396,8 @@ function layoutGanttText(model, maxWidth) {
   const width = maxWidth ?? DEFAULT_WIDTH;
   if (width < MIN_WIDTH)
     throw new UrsulaError(`A Gantt drawing needs at least ${MIN_WIDTH} columns of width; the limit is ${width}.`, "gantt-width", undefined, { minWidth: MIN_WIDTH });
+  if (model.tasks.length === 0)
+    return [...model.title === undefined ? [] : [[span2(cut2(model.title, width), "bold")]], [span2("(no tasks)", "dim")]];
   const rowsOf = model.tasks.flatMap((t, i) => t.vert ? [] : [i]);
   const tasks = model.tasks;
   const task = (i) => tasks[i];
@@ -23488,6 +23503,7 @@ function layoutGanttText(model, maxWidth) {
 }
 
 // src/gantt/frontend.ts
+var EMPTY_NOTE = 'the chart has no tasks, so it draws an empty frame; a task is written "name : start, end"';
 registerFrontEnd({
   name: "gantt",
   headers: ["gantt"],
@@ -23505,9 +23521,10 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const model = parseGantt(src, { heading: opts.heading, config: opts.config, frontMatter: opts.frontMatter });
+    const notes = model.tasks.length === 0 ? { notes: [EMPTY_NOTE] } : {};
     if (mode === "text")
-      return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans) };
-    return { model, ...layoutGantt(model, pixelRuler()) };
+      return { model, lines: layoutGanttText(model, opts.maxWidth).map(joinSpans), ...notes };
+    return { model, ...layoutGantt(model, pixelRuler()), ...notes };
   }
 });
 
@@ -40464,7 +40481,8 @@ function graphReport(laid, src, terminal) {
 function checkReport(src, req, terminal = false) {
   const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
   const lines = "edges" in laid && "diagnostics" in laid ? graphReport(laid, src, terminal) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
-  return `${lines.join(`
+  const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.map((n) => `note: ${String(n)}`) : [];
+  return `${[...lines, ...notes].join(`
 `)}
 `;
 }

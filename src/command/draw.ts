@@ -49,7 +49,9 @@ export function checkReport(src: string, req: DrawRequest, terminal = false): st
       : 'messages' in laid
         ? sequenceCheckLines(laid)
         : ['no checks for this kind of diagram'];
-  return `${lines.join('\n')}\n`;
+  // A front end may add notes about the text itself, such as a Gantt chart with no tasks.
+  const notes = 'notes' in laid && Array.isArray(laid.notes) ? laid.notes.map((n: unknown) => `note: ${String(n)}`) : [];
+  return `${[...lines, ...notes].join('\n')}\n`;
 }
 
 /** The terminal drawing as rows of plain text, and as what the command prints. */
