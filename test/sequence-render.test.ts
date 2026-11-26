@@ -425,10 +425,10 @@ describe('sequence text spans', () => {
     );
   });
 
-  it('gives flowcharts a single normal span per line', () => {
+  it('gives flowcharts tones too: the names of the boxes in bold', () => {
     const r = renderTextSpans('flowchart LR\nA --> B', 40);
     if ('error' in r) throw new Error(r.error);
-    for (const l of r.lines) for (const s of l) expect(s.tone).toBe('normal');
+    expect(r.lines.flat().filter((s) => s.tone === 'bold').map((s) => s.text)).toEqual(['A', 'B']);
   });
 });
 
