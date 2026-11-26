@@ -5,9 +5,9 @@
 //   the page choice is kept in localStorage;
 // - the copy button of a terminal view copies the plain text from its .txt file;
 // - a picture opens large through the shared lightbox (../zoom/ZoomLayer.vue).
-import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useData, withBase } from 'vitepress';
-import { langOf } from '../playground/strings.js';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { withBase } from 'vitepress';
+import { useWords } from '../locale.js';
 
 const KEY = 'ursula-examples-view';
 const VIEWS = ['svg', 'term'];
@@ -25,8 +25,7 @@ const T = {
   },
 };
 
-const { lang } = useData();
-const t = computed(() => T[langOf(lang.value)]);
+const t = useWords(T);
 const pageView = ref('svg');
 
 function readChoice() {

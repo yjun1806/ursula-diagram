@@ -1,19 +1,17 @@
 <script setup>
 // The install command with one tab per package manager, the agent skill and the MCP server, and a copy button.
 import { ref } from 'vue';
-import { useData } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
-import { langOf } from '../playground/strings.js';
+import { useWords } from '../locale.js';
 import CopyButton from './CopyButton.vue';
 import { INSTALL as MANAGERS } from './install.js';
 
-const { lang } = useData();
-const t = HOME_STRINGS[langOf(lang.value)];
+const t = useWords(HOME_STRINGS);
 
 const picked = ref(MANAGERS[0].id);
 
 const commandOf = (id) => MANAGERS.find((m) => m.id === id).command;
-const noteOf = (id) => (id === 'skill' ? t.skillNote : id === 'mcp' ? t.mcpNote : t.needsNode);
+const noteOf = (id) => (id === 'skill' ? t.value.skillNote : id === 'mcp' ? t.value.mcpNote : t.value.needsNode);
 </script>
 
 <template>

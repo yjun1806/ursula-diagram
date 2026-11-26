@@ -1,23 +1,21 @@
 <script setup>
 // The table of the 35 types on the Examples index page, each with its number of examples and a link to its page.
 import { computed } from 'vue';
-import { useData, withBase } from 'vitepress';
 import { TYPES } from '../../examples/types.mjs';
 import { data as counts } from './counts.data.mjs';
-import { langOf } from '../playground/strings.js';
+import { localPath, useLang, useWords } from '../locale.js';
 
-const { lang } = useData();
-const code = computed(() => langOf(lang.value));
+const code = useLang();
 const T = {
   en: { type: 'Type', count: 'Examples', failed: (n) => `${n} not drawn`, total: 'Total' },
   ko: { type: '유형', count: '예시', failed: (n) => `${n}개 못 그림`, total: '합계' },
 };
-const t = computed(() => T[code.value]);
+const t = useWords(T, code);
 const rows = computed(() =>
   TYPES.map((type) => ({
     id: type.id,
     name: type.name,
-    href: withBase(`${code.value === 'ko' ? '/ko' : ''}/examples/${type.id}`),
+    href: localPath(code.value, `/examples/${type.id}`),
     ...counts[type.id],
   })),
 );

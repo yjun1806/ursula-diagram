@@ -1,20 +1,20 @@
 <script setup>
 // The home page's first drawing: the Mermaid text, and the SVG and the terminal text ursula draws from it, both drawn at
 // build time by scripts/render-home.mjs (public/assets/hero.svg and outputs.json).
-import { useData, withBase } from 'vitepress';
+import { computed } from 'vue';
+import { withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { SOURCE } from './sample.js';
 import OUTPUTS from './outputs.json';
-import { langOf } from '../playground/strings.js';
+import { localPath, useLang, useWords } from '../locale.js';
 import CodeBlock from './CodeBlock.vue';
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const t = HOME_STRINGS[code];
-const playground = code === 'ko' ? '/ko/playground' : '/playground';
+const code = useLang();
+const t = useWords(HOME_STRINGS, code);
+const playground = computed(() => localPath(code.value, '/playground'));
 const TEXT_WIDE = OUTPUTS.terminal.wide;
 const TEXT_NARROW = OUTPUTS.terminal.narrow;
-const alt = code === 'ko' ? '같은 flowchart를 ursula가 SVG로 그린 그림' : 'The same flowchart drawn by ursula as SVG';
+const alt = useWords({ en: 'The same flowchart drawn by ursula as SVG', ko: '같은 flowchart를 ursula가 SVG로 그린 그림' }, code);
 </script>
 
 <template>
@@ -52,7 +52,7 @@ const alt = code === 'ko' ? '같은 flowchart를 ursula가 SVG로 그린 그림'
     </div>
     <p class="hs-foot">
       {{ t.sameText }}
-      <a :href="withBase(playground)">{{ t.tryIt }} →</a>
+      <a :href="playground">{{ t.tryIt }} →</a>
     </p>
   </section>
 </template>

@@ -3,20 +3,21 @@
 // (dist/ursula.global.js, which the site serves), in a frame that follows the site's light and dark switch.
 //
 // Usage in Markdown: <ArtifactDemo />
-import { onMounted, ref } from 'vue';
-import { useData, withBase } from 'vitepress';
+import { computed, onMounted, ref } from 'vue';
+import { withBase } from 'vitepress';
 import { ARTIFACT_SAMPLE } from './artifact-sample.js';
-import { langOf } from '../playground/strings.js';
+import { useWords } from '../locale.js';
 
-const { lang } = useData();
 const WORDS = {
   en: { loading: 'Loading the engine…', failed: 'The engine did not load.', label: 'The flowchart of the HTML page above, drawn in this page' },
   ko: { loading: '엔진을 불러오는 중…', failed: '엔진을 불러오지 못했습니다.', label: '위 HTML 페이지의 flowchart를 이 페이지에서 그린 결과' },
 };
-const w = WORDS[langOf(lang.value)];
+const w = useWords(WORDS);
 
 const svg = ref('');
-const status = ref(w.loading);
+// 'loading', 'failed' or '' once drawn; the words follow the page's language.
+const state = ref('loading');
+const status = computed(() => (state.value ? w.value[state.value] : ''));
 
 /** Loads the browser build the site serves, as the playground does. */
 function loadEngine() {
@@ -34,9 +35,9 @@ onMounted(async () => {
   try {
     const engine = await loadEngine();
     svg.value = engine.render(ARTIFACT_SAMPLE);
-    status.value = '';
+    state.value = '';
   } catch {
-    status.value = w.failed;
+    state.value = 'failed';
   }
 });
 </script>

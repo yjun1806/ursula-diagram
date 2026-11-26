@@ -1,13 +1,11 @@
 <script setup>
 // Under the skill comparison: one sentence with the measured numbers, a short table against Mermaid.js, and three of
 // the timed flowcharts drawn by both.
-import { useData } from 'vitepress';
 import { WHY } from './why.js';
-import { langOf } from '../playground/strings.js';
+import { useWords } from '../locale.js';
 import PicGrid from '../compare/PicGrid.vue';
 
-const { lang } = useData();
-const t = WHY[langOf(lang.value)];
+const t = useWords(WHY);
 </script>
 
 <template>

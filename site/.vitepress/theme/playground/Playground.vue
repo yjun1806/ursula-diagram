@@ -1,21 +1,25 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useData, withBase } from 'vitepress';
+import { withBase } from 'vitepress';
 import { DEFAULT_WIDTH, FILES, MAX_WIDTH, MIN_WIDTH, TABS, clampWidth, copyText as outputText, decodeState, draw, encodeState } from './draw.js';
 import { canCopyImage, copyImage, copyText, download } from './clipboard.js';
 import { examplesFor } from './examples.js';
-import { STRINGS, langOf } from './strings.js';
+import { STRINGS } from './strings.js';
+import { useLang, useWords } from '../locale.js';
 
-const { lang } = useData();
-const t = STRINGS[langOf(lang.value)];
-const EXAMPLES = examplesFor(langOf(lang.value));
+const code = useLang();
+const t = useWords(STRINGS, code);
+const examples = computed(() => examplesFor(code.value));
 
-const src = ref(EXAMPLES[0].src);
-const exampleId = ref(EXAMPLES[0].id);
+const src = ref(examples.value[0].src);
+const exampleId = ref(examples.value[0].id);
 const tab = ref('svg');
 const width = ref(DEFAULT_WIDTH);
 const result = ref(null);
-const status = ref(t.loading);
+const loading = ref(true);
+const loadError = ref('');
+/** What stands in the output box instead of a drawing: the loading words, an engine error, or '' once it draws. */
+const status = computed(() => (loading.value ? t.value.loading : loadError.value));
 const outEl = ref(null);
 const imageCopy = ref(false);
 /** The last action's word ("Copied") and which button it belongs to, shown beside the buttons and read out. */
@@ -39,8 +43,8 @@ function loadEngine() {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = withBase('/ursula.global.js');
-    script.onload = () => (window.ursula ? resolve(window.ursula) : reject(new Error(t.engineMissing)));
-    script.onerror = () => reject(new Error(t.engineFetch));
+    script.onload = () => (window.ursula ? resolve(window.ursula) : reject(new Error(t.value.engineMissing)));
+    script.onerror = () => reject(new Error(t.value.engineFetch));
     document.head.appendChild(script);
   });
 }
@@ -88,31 +92,31 @@ function say(key, text) {
 async function copyLink() {
   await saveHash();
   // If the clipboard refuses, the link is still in the address bar.
-  say('link', (await copyText(location.href)) ? t.copied : t.failed);
+  say('link', (await copyText(location.href)) ? t.value.copied : t.value.failed);
 }
 
 async function copyMermaid() {
-  say('mermaid', (await copyText(src.value)) ? t.done : t.failed);
+  say('mermaid', (await copyText(src.value)) ? t.value.done : t.value.failed);
 }
 
 async function copyOutput() {
   if (payload.value === null) return;
-  say('output', (await copyText(payload.value)) ? t.done : t.failed);
+  say('output', (await copyText(payload.value)) ? t.value.done : t.value.failed);
 }
 
 async function copyOutputImage() {
   if (payload.value === null || !outEl.value) return;
-  say('image', (await copyImage(payload.value, outEl.value)) ? t.done : t.failed);
+  say('image', (await copyImage(payload.value, outEl.value)) ? t.value.done : t.value.failed);
 }
 
 function downloadOutput() {
   if (payload.value === null) return;
   download(isSvg.value ? payload.value : `${payload.value}\n`, FILES[tab.value]);
-  say('download', t.saved);
+  say('download', t.value.saved);
 }
 
 function pickExample() {
-  const found = EXAMPLES.find((e) => e.id === exampleId.value);
+  const found = examples.value.find((e) => e.id === exampleId.value);
   if (found) src.value = found.src;
 }
 
@@ -138,23 +142,29 @@ async function readHash() {
   const state = await decodeState(hash);
   if (state.src !== undefined) {
     src.value = state.src;
-    exampleId.value = EXAMPLES.find((e) => e.src === state.src)?.id ?? '';
+    exampleId.value = examples.value.find((e) => e.src === state.src)?.id ?? '';
   }
   if (state.tab) tab.value = state.tab;
   if (state.width) width.value = state.width;
 }
 
 watch([src, tab, width], schedule);
+// The language changed while the playground stayed on screen: an example follows it, a text of the visitor's own stays.
+watch(code, () => {
+  const found = examples.value.find((e) => e.id === exampleId.value);
+  if (found) src.value = found.src;
+});
 
 onMounted(async () => {
   imageCopy.value = canCopyImage();
   await readHash();
   try {
     engine = await loadEngine();
-    status.value = '';
+    loading.value = false;
     redraw();
   } catch (err) {
-    status.value = err.message;
+    loading.value = false;
+    loadError.value = err.message;
   }
 });
 
@@ -172,7 +182,7 @@ onBeforeUnmount(() => {
         <span>{{ t.example }}</span>
         <select v-model="exampleId" @change="pickExample">
           <option v-if="exampleId === ''" value="">{{ t.yourText }}</option>
-          <option v-for="e in EXAMPLES" :key="e.id" :value="e.id">{{ e.label }}</option>
+          <option v-for="e in examples" :key="e.id" :value="e.id">{{ e.label }}</option>
         </select>
       </label>
       <label class="pg-field" :class="{ 'pg-off': !usesWidth }" :title="t.widthTitle">

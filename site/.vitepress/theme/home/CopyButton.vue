@@ -1,13 +1,11 @@
 <script setup>
 // A button that copies `text` and says so for a moment. Used by every code block of the home page.
 import { ref } from 'vue';
-import { useData } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
-import { langOf } from '../playground/strings.js';
+import { useWords } from '../locale.js';
 
 const props = defineProps({ text: { type: String, required: true }, dark: { type: Boolean, default: false } });
-const { lang } = useData();
-const t = HOME_STRINGS[langOf(lang.value)];
+const t = useWords(HOME_STRINGS);
 
 const copied = ref(false);
 let timer = 0;

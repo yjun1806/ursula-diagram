@@ -81,12 +81,13 @@ When you change `site/` or a README:
 cd site && npm ci && npm run build && npm run check
 ```
 
-`npm run check` (`site/scripts/check-playground.mjs`) fails when:
+`npm run check` (`site/scripts/check-playground.mjs`, then `site/scripts/check-locale-switch.mjs` in headless Chrome) fails when:
 
 - a code block has no copy button, or Mermaid text is not in a `mermaid` block (those wrap instead of scrolling);
 - a shell block holds more than one command or a trailing `# comment`. Say what a command is for in the sentence before it. Mark a block whose lines must run together in order with `<!-- sequence -->` in a README, or wrap it in `<div class="cmd-sequence">` on the site;
 - an English page has no Korean page, or an example fails to draw;
 - a command the docs name fails (the same check as `npm test`), or a page claims another number of Mermaid documentation examples than the Examples pages show.
+- switching the language in the nav menu leaves a page different from a fresh load of the other language. A component that stays mounted across the switch (the home page's sections in the layout) keeps the old words when it reads the language once in `setup()`; read it through `useLang()` / `useWords()` in `.vitepress/theme/locale.js`. The check finds Chrome at `CHROME_PATH` or the usual install paths.
 
 Docs never paste what the command prints; they show what it prints now:
 

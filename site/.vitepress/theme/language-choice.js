@@ -1,5 +1,7 @@
 // Remembers the language a visitor picks in the language menu, so the redirect in the page head stops for good,
-// and carries the playground's hash (its drawing) over to the other language.
+// and carries the playground's hash (its drawing) over to the other language. The listener runs in the capture phase
+// on the document, before VitePress's router (a bubbling listener on window) reads the link, so the choice is stored
+// before the switch starts. The redirect runs only on a full page load, never on the router's switch.
 
 const MENUS = '.VPNavBarTranslations a, .VPNavScreenTranslations a, .VPNavBarExtra .translations a';
 
