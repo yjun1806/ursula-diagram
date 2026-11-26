@@ -9,6 +9,7 @@
 ### Changed
 
 - class diagram의 json이 svg처럼 `maxWidth`, `composition`, `quality`를 받고, requirement diagram의 json이 `quality`를 받습니다. 그래서 `--check`가 그려진 배치를 설명합니다. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
+- 모든 다이어그램 종류의 SVG와 그것을 감싼 HTML 페이지가 시스템 글꼴 목록(`-apple-system, BlinkMacSystemFont, 'Segoe UI', …`)을 씁니다. pie, gantt, sequence 등 차트 쪽 종류는 IBM Plex Sans KR을 먼저 썼습니다. [#73](https://github.com/yjun1806/ursula-diagram/pull/73)
 
 ### Removed
 

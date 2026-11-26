@@ -10,6 +10,7 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 ### Changed
 
 - The json of a class diagram takes `maxWidth`, `composition` and `quality` like its svg, and the json of a requirement diagram takes `quality`, so `--check` describes the drawn layout. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
+- The SVG of every diagram type, and the HTML page around it, use the system font stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', …`); pie, gantt, sequence and the other chart types named IBM Plex Sans KR first. [#73](https://github.com/yjun1806/ursula-diagram/pull/73)
 
 ### Removed
 
