@@ -68,19 +68,19 @@ flowchart LR
   원문만 봅니다.
 
 ursula는 이 둘 사이를 메웁니다. 모델은 Mermaid 글만 쓰고 좌표는 쓰지 않습니다. 공식 예시의 글 크기는 중앙값이
-154바이트이고, 위의 주문 흐름도는 315바이트입니다. 배치는 모델 없이 엔진이 계산하므로 같은 글은 같은 그림이 됩니다.
+154바이트이고, 위의 주문 flowchart는 315바이트입니다. 배치는 모델 없이 엔진이 계산하므로 같은 글은 같은 그림이 됩니다.
 엔진 하나가 SVG와 터미널 칸 단위 글자 그림을 함께 그립니다. 그래서 에이전트가 실제로 답하는 터미널에서도 그림이
 보입니다.
 
 아래 표는 Apple M2 Max, Node 26에서 Mermaid 문서의 예시 531장을 다섯 번씩 그려 잰 값입니다. 마지막 두 줄만
-흐름도 한 장을 명령으로 여섯 번씩 실행해 잰 값입니다.
+flowchart 한 장을 명령으로 여섯 번씩 실행해 잰 값입니다.
 
 | | 중앙값 | 가장 느린 장 |
 | --- | --- | --- |
 | SVG, 라이브러리에서 | 0.36ms | 79.6ms |
 | 터미널 글자 그림(폭 100), 라이브러리에서 | 0.29ms | 46.3ms |
-| 명령 한 번, 주문 흐름도, `--format text` | 0.15초 | |
-| 명령 한 번, 주문 흐름도, `--format svg` | 0.35초 | |
+| 명령 한 번, 주문 flowchart, `--format text` | 0.15초 | |
+| 명령 한 번, 주문 flowchart, `--format svg` | 0.35초 | |
 
 명령 한 번에 드는 시간은 대부분 Node를 띄우고 한 파일로 묶은 명령(1.56MB)을 읽는 데 씁니다. 모델이 자기 그림을
 보고 판단하는 대신, `--format check`가 꺾임·교차 수를 출력하고 때로 글에 대한 질문도 함께 냅니다. 에이전트 스킬은
@@ -303,12 +303,12 @@ Swimlanes, Timeline, TreeView, Treemap, Use Case, User Journey, Venn, Wardley Ma
 
 ## 큰 그림
 
-아래는 Mermaid 문서에 있는 C4 예시 두 장을 고치지 않고 그린 그림입니다. 컨테이너 그림은 요소 10개, 관계 13개, 경계 하나로
-이루어지며, 경계 밖의 사람·시스템이 경계 안의 앱들과 이어집니다. 배포 그림은 노드가 3단까지 겹치고(데이터센터, 서버,
+아래는 Mermaid 문서에 있는 C4 예시 두 장을 고치지 않고 그린 그림입니다. container 그림은 요소 10개, 관계 13개, 경계 하나로
+이루어지며, 경계 밖의 사람·시스템이 경계 안의 앱들과 이어집니다. deployment 그림은 노드가 3단까지 겹치고(데이터센터, 서버,
 Tomcat, 앱) 복제되는 데이터베이스로 끝납니다. 두 장 모두 교차가 없습니다(`--format check`: 꺾임 7개, 4개).
 
-<p align="center"><img src="assets/c4-container.svg" alt="인터넷 뱅킹 시스템의 C4 컨테이너 그림" width="100%"></p>
-<p align="center"><img src="assets/c4-deployment.svg" alt="인터넷 뱅킹 시스템의 C4 배포 그림" width="80%"></p>
+<p align="center"><img src="assets/c4-container.svg" alt="인터넷 뱅킹 시스템의 C4 container 그림" width="100%"></p>
+<p align="center"><img src="assets/c4-deployment.svg" alt="인터넷 뱅킹 시스템의 C4 deployment 그림" width="80%"></p>
 
 글은 [examples/c4-container.mmd](examples/c4-container.mmd)와 [examples/c4-deployment.mmd](examples/c4-deployment.mmd)에
 있습니다. 터미널에서도 그릴 수 있지만, 이 크기에서는 긴 관계 라벨을 줄이고 경계를 띠로 그립니다. 그래서 이런 그림은 SVG가
@@ -316,9 +316,9 @@ Tomcat, 앱) 복제되는 데이터베이스로 끝납니다. 두 장 모두 교
 
 ## 터미널에서
 
-`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. 맨 위의 주문 흐름도는
+`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. 맨 위의 주문 flowchart는
 `--width 80`에서 왼쪽에서 오른쪽으로 놓이고, `--width 40`에서는 같은 글이 위에서 아래로 쌓입니다. 그림을 잘라 내지는
-않습니다. 아래는 위 그림 모음의 시퀀스·간트·마인드맵을 영문 라벨로 바꿔 쓴 글을
+않습니다. 아래는 위 그림 모음의 sequence·Gantt·mindmap을 영문 라벨로 바꿔 쓴 글을
 `ursula-diagram <파일> --format text --width 80`으로 그린 결과입니다.
 
 ```
@@ -519,7 +519,7 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습�
 | `--ursula-start-fill` | 시작 상자와 가장 높은 막대의 면 | `#e5c37a` | `#dab975` |
 | `--ursula-accent-tint` | 옅은 강조 면 | `#f6ecd7` | `#372c15` |
 | `--ursula-on-accent` | 시작 상자 위의 글자 | `#201f1e` | `#171614` |
-| `--ursula-bg` | 흐름도, 클래스, 상태, ER, 요구사항, C4, 유스케이스 그림의 배경 | `transparent` | `transparent` |
+| `--ursula-bg` | flowchart, class, state, ER, requirement, C4, use case 그림의 배경 | `transparent` | `transparent` |
 | `--ursula-panel` | 차트 뒤의 판 | `none` | `none` |
 | `--ursula-bar` | 차트의 중립 막대 | `#c8c7c6` | `#434241` |
 | `--ursula-tint-outer` | C4 그림의 가장 바깥 경계 | `#f4f3f1` | `#1e1d1b` |

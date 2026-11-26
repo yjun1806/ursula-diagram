@@ -1,8 +1,8 @@
 # 터미널에서
 
-`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. [첫 화면](/ko/)의 주문 흐름도는
+`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. [첫 화면](/ko/)의 주문 flowchart는
 `--width 80`에서 왼쪽에서 오른쪽으로 놓이고, `--width 40`에서는 같은 글이 위에서 아래로 쌓입니다. 그림을 잘라 내지는
-않습니다. 아래는 [예제](/ko/examples/) 페이지의 시퀀스·간트·마인드맵을 영문 라벨로 바꿔 쓴 글을
+않습니다. 아래는 [예제](/ko/examples/) 페이지의 sequence·Gantt·mindmap을 영문 라벨로 바꿔 쓴 글을
 `ursula-diagram <파일> --format text --width 80`으로 그린 결과입니다.
 
 ```

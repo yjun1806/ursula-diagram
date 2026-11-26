@@ -22,12 +22,12 @@ const LABELS = {
     pie: 'Pie',
   },
   ko: {
-    home: '첫 화면 흐름도',
-    'order-flow': '주문 흐름', 'login-sequence': '로그인 시퀀스', 'checkout-sequence': '결제 시퀀스',
-    'c4-container': 'C4 컨테이너', 'c4-deployment': 'C4 배포',
-    flowchart: '한눈에 보기: 흐름도', sequence: '한눈에 보기: 시퀀스', class: '한눈에 보기: 클래스', state: '한눈에 보기: 상태',
-    er: '한눈에 보기: ER', c4: '한눈에 보기: C4 컨텍스트', gantt: '한눈에 보기: 간트', mindmap: '한눈에 보기: 마인드맵',
-    pie: '파이',
+    home: '첫 화면 flowchart',
+    'order-flow': '주문 흐름', 'login-sequence': '로그인 sequence', 'checkout-sequence': '결제 sequence',
+    'c4-container': 'C4 container', 'c4-deployment': 'C4 deployment',
+    flowchart: '한눈에 보기: flowchart', sequence: '한눈에 보기: sequence', class: '한눈에 보기: class', state: '한눈에 보기: state',
+    er: '한눈에 보기: ER', c4: '한눈에 보기: C4 context', gantt: '한눈에 보기: Gantt', mindmap: '한눈에 보기: mindmap',
+    pie: 'pie',
   },
 };
 

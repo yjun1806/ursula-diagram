@@ -28,7 +28,7 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습�
 | `--ursula-start-fill` | 시작 상자와 가장 높은 막대의 면 | `#e5c37a` | `#dab975` |
 | `--ursula-accent-tint` | 옅은 강조 면 | `#f6ecd7` | `#372c15` |
 | `--ursula-on-accent` | 시작 상자 위의 글자 | `#201f1e` | `#171614` |
-| `--ursula-bg` | 흐름도, 클래스, 상태, ER, 요구사항, C4, 유스케이스 그림의 배경 | `transparent` | `transparent` |
+| `--ursula-bg` | flowchart, class, state, ER, requirement, C4, use case 그림의 배경 | `transparent` | `transparent` |
 | `--ursula-panel` | 차트 뒤의 판 | `none` | `none` |
 | `--ursula-bar` | 차트의 중립 막대 | `#c8c7c6` | `#434241` |
 | `--ursula-tint-outer` | C4 그림의 가장 바깥 경계 | `#f4f3f1` | `#1e1d1b` |
