@@ -70,13 +70,14 @@ export const OPTIONS: readonly OptionSpec[] = [
 
 export const USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? '' : ` ${o.choices ? o.choices.join('|') : o.value}`}]`).join(' ')}`;
 
-export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'usage' };
+export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'version' } | { kind: 'usage' };
 
 export function parseDrawArgs(args: readonly string[]): Parsed {
   let req: DrawRequest = { format: 'svg', legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i] as string;
     if (a === '--help' || a === '-h') return { kind: 'help' };
+    if (a === '--version' || a === '-v') return { kind: 'version' };
     const spec = OPTIONS.find((o) => o.name === a);
     if (spec) {
       let value = '';

@@ -8,6 +8,9 @@ import { createRequire } from "node:module";
 import { join as join3 } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// src/version.ts
+var VERSION = "0.2.0";
+
 // src/render/colors.ts
 var COLORS = {
   fg: ["#201f1e", "#efeeec"],
@@ -10678,6 +10681,8 @@ function parseDrawArgs(args) {
     const a = args[i];
     if (a === "--help" || a === "-h")
       return { kind: "help" };
+    if (a === "--version" || a === "-v")
+      return { kind: "version" };
     const spec = OPTIONS.find((o) => o.name === a);
     if (spec) {
       let value = "";
@@ -41033,6 +41038,7 @@ Options
 ${optionLines.join(`
 `)}
   -h, --help        this text
+  -v, --version     the version of ursula-diagram
 
 Errors
   A text error names the line and column, and often adds 'did you mean' and an
@@ -41073,6 +41079,9 @@ function runCommand(args, read, host = {}) {
   const parsed = parseDrawArgs(args);
   if (parsed.kind === "help")
     return { stdout: HELP, stderr: "", code: 0 };
+  if (parsed.kind === "version")
+    return { stdout: `${VERSION}
+`, stderr: "", code: 0 };
   if (parsed.kind === "usage")
     return usageError();
   const req = parsed.request;
@@ -41115,9 +41124,6 @@ function lineSplitter(onLine) {
 }
 var messageLine = (message) => `${JSON.stringify(message).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")}
 `;
-
-// src/version.ts
-var VERSION = "0.2.0";
 
 // src/mcp/tools.ts
 class ArgumentError extends Error {
