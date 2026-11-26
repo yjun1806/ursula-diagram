@@ -1,4 +1,7 @@
-import type { GraphEdge, LayoutEdge } from './types.ts';
+import type { EdgeEnd, GraphEdge, LayoutEdge } from './types.ts';
+
+/** The marks of relation lines (class, ER and requirement): triangles, diamonds, open arrows, crow's feet and the rest. */
+export const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
 
 /** The fields of a graph edge that a layout edge carries on: its id, its ends and whether it is drawn. */
 export function endFields(e: GraphEdge): Pick<LayoutEdge, 'id' | 'startEnd' | 'end' | 'invisible'> {

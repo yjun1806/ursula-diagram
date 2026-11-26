@@ -1,7 +1,7 @@
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { fillColors } from './colors.ts';
 import { SCENE_THEME } from './scene-theme.ts';
-import { escapeXml, num, pathData } from './svg.ts';
+import { escapeXml, num, pathData, trimStart } from './svg.ts';
 import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
 
 const FONT = "'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif";
@@ -234,15 +234,6 @@ function textSvg(item: SceneText): string {
 function arrowsOf(roles: readonly string[]): { variant: Variant; end: boolean; start: boolean } {
   const variant: Variant = roles.includes('edge--accent') ? 'accent' : roles.includes('edge--msg') ? 'msg' : 'edge';
   return { variant, end: roles.includes('edge--arrow'), start: roles.includes('edge--arrow-start') };
-}
-
-/** `points` with the first point moved `by` along the first piece, keeping at least 1 of it. */
-function trimStart(points: readonly Point[], by: number): Point[] {
-  const [a, b, ...rest] = points;
-  if (a === undefined || b === undefined) return [...points];
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  const cut = len === 0 ? 0 : Math.min(by, Math.max(0, len - 1));
-  return [{ x: a.x + ((b.x - a.x) / (len || 1)) * cut, y: a.y + ((b.y - a.y) / (len || 1)) * cut }, b, ...rest];
 }
 
 function lineSvg(item: SceneLine): string {

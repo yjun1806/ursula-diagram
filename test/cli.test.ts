@@ -83,3 +83,23 @@ describe('exit codes', () => {
     expect(r.stderr).toContain('issues');
   });
 });
+
+describe('terminal drawings without --width', () => {
+  const src = 'flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]';
+  const run = (...args: string[]) => runCommand(args, () => src);
+
+  it('prints plain rows, coloured rows or an SVG of the cells as asked', () => {
+    const plain = run('--format', 'text');
+    expect(plain.code).toBe(0);
+    expect(plain.stdout).toContain('Start');
+    expect(plain.stdout).not.toContain('\u001b[');
+    const colour = run('--format', 'text', '--color');
+    expect(colour.code).toBe(0);
+    expect(colour.stdout).toContain('\u001b[');
+    expect(colour.stdout.replace(/\u001b\[[0-9;]*m/gu, '')).toBe(plain.stdout);
+    const svg = run('--format', 'text-svg');
+    expect(svg.code).toBe(0);
+    expect(svg.stdout.startsWith('<svg')).toBe(true);
+    expect(svg.stdout).toContain('Start');
+  });
+});

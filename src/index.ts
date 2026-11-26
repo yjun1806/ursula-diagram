@@ -75,21 +75,26 @@ export interface TextError extends ErrorAdvice {
 
 const lineOf = (err: UrsulaError): { line?: number } => (err.line === undefined ? {} : { line: err.line });
 
-/** Picks the front-end by the header of `src`, lays it out in terminal cells and draws it as text. */
-export function renderText(
-  src: string,
-  maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
-): { lines: string[] } | TextError {
+/** The lines `draw` gives when the widest fits `maxWidth`; else, or when the text has an error, what went wrong. */
+function withinWidth<T>(maxWidth: number, draw: () => T[], width: (line: T) => number): { lines: T[] } | TextError {
   try {
-    const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
-    const widest = Math.max(0, ...lines.map(cellWidth));
+    const lines = draw();
+    const widest = Math.max(0, ...lines.map(width));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {
     if (err instanceof UrsulaError) return { error: err.message, ...lineOf(err), ...err.advice };
     throw err;
   }
+}
+
+/** Picks the front-end by the header of `src`, lays it out in terminal cells and draws it as text. */
+export function renderText(
+  src: string,
+  maxWidth: number,
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
+): { lines: string[] } | TextError {
+  return withinWidth(maxWidth, () => selectFrontEnd(src).textLines(src, maxWidth, opts), cellWidth);
 }
 
 /**
@@ -101,21 +106,13 @@ export function renderTextSpans(
   maxWidth: number,
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { lines: TextSpan[][] } | TextError {
-  try {
+  const draw = (): TextSpan[][] => {
     const frontEnd = selectFrontEnd(src);
-    const spans = (o: typeof opts): TextSpan[][] =>
-      frontEnd.textSpans
-        ? frontEnd.textSpans(src, maxWidth, o)
-        : frontEnd.textLines(src, maxWidth, o).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
-    const widthOf = (ls: TextSpan[][]): number => Math.max(0, ...ls.map((l) => cellWidth(l.map((s) => s.text).join(''))));
-    const lines = spans(opts);
-    const widest = widthOf(lines);
-    if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
-    return { lines };
-  } catch (err) {
-    if (err instanceof UrsulaError) return { error: err.message, ...lineOf(err), ...err.advice };
-    throw err;
-  }
+    return frontEnd.textSpans
+      ? frontEnd.textSpans(src, maxWidth, opts)
+      : frontEnd.textLines(src, maxWidth, opts).map((text): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]));
+  };
+  return withinWidth(maxWidth, draw, (line) => cellWidth(line.map((s) => s.text).join('')));
 }
 
 /**

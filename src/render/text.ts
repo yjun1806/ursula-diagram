@@ -2,6 +2,7 @@ import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { placeLaneName } from '../layout/lane-names.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import { cornersOf } from '../text/corners.ts';
+import { RELATION_MARKS } from '../edge-ends.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutLane, LayoutNode, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
@@ -236,8 +237,6 @@ export function markGlyphs(end: EdgeEnd, heading: Heading): string[] {
   }
 }
 
-const RELATION_MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
-
 /** The rows the rules of the bands are drawn in, with the first and the last column of each rule. */
 function rulesOf(layout: Layout): Map<number, readonly [number, number]> {
   const vertical = (layout.direction === 'TD') !== (layout.laneAxis === 'along');
@@ -261,10 +260,6 @@ function drawEdges(c: Canvas, layout: Layout): void {
     return next;
   };
   const arrows: Array<{ x: number; y: number; ch: string }> = [];
-  // A drawing of records says what sits at each end of a line: a line that ends in nothing has no arrow.
-  const records =
-    layout.nodes.some((n) => hasCompartments(n) || ['start-dot', 'end-dot', 'bar', 'note', 'ellipse', 'actor'].includes(n.shape)) ||
-    layout.edges.some((e) => (e.end !== undefined && RELATION_MARKS.has(e.end)) || (e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd)));
   /** Writes the glyphs of a relation mark at an end of a line, from the cell next to the box outwards. */
   const mark = (end: EdgeEnd, at: readonly [number, number], from: readonly [number, number]): void => {
     const dx = Math.sign(at[0] - from[0]);

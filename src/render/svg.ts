@@ -7,6 +7,8 @@ import { fillColors } from './colors.ts';
 import { SCENE_THEME } from './scene-theme.ts';
 import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { ARROW_TRIM, flowMarker, flowRules, recordRules, THEME } from './theme.ts';
+import { RELATION_MARKS } from '../edge-ends.ts';
+import { HEAD_BAND } from './head-band.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutCluster, LayoutEdge, LayoutLane, LayoutNode, Legend, Point } from '../types.ts';
 import { CLUSTER_NAME_INSET } from '../layout/clusters.ts';
 
@@ -75,7 +77,7 @@ export function num(v: number): string {
  * `endTrim` (the length an arrowhead takes), and the bend before it is made smaller when the piece is too short to
  * keep that much straight.
  */
-export function pathData(points: Point[], radius = CORNER_RADIUS, endTrim = 0, hops: readonly Point[] = []): string {
+export function pathData(points: readonly Point[], radius = CORNER_RADIUS, endTrim = 0, hops: readonly Point[] = []): string {
   const first = points[0];
   if (!first) return '';
   let d = `M${num(first.x)} ${num(first.y)}`;
@@ -302,9 +304,6 @@ const accented = (edge: LayoutEdge, paint: Paint): boolean => edge.style === 'th
 /** Length of the marks of relation lines (triangle, diamonds, open arrow, crow's feet): the line stops this far short of its end. */
 const MARK = 12;
 
-/** The marks of relation lines. */
-const MARKS: ReadonlySet<EdgeEnd> = new Set<EdgeEnd>(['triangle-open', 'diamond-filled', 'diamond-open', 'arrow-open', 'one', 'zero-one', 'many', 'one-many', 'zero-many', 'circle-plus', 'lollipop']);
-
 /** Id of the marker that ends a line in `end`, or undefined when nothing sits there. */
 function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | undefined {
   switch (end) {
@@ -323,7 +322,7 @@ function endMarkerId(end: EdgeEnd, accent: boolean, atStart: boolean): string | 
 
 /** How far a line stops short of its end so that the mark there is not drawn over a line. */
 function endTrim(end: EdgeEnd): number {
-  return end === 'arrow' ? ARROW_TRIM : end === 'none' ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+  return end === 'arrow' ? ARROW_TRIM : end === 'none' ? 0 : RELATION_MARKS.has(end) ? MARK : DOT / 2;
 }
 
 /**
@@ -364,7 +363,7 @@ function markBody(end: EdgeEnd, accent: boolean): string {
 }
 
 /** The points with the first one moved along the first piece by `amount`, keeping at least 1 of it. */
-function trimStart(pts: Point[], amount: number): Point[] {
+export function trimStart(pts: readonly Point[], amount: number): readonly Point[] {
   const [a, b] = pts;
   if (amount <= 0 || !a || !b) return pts;
   const len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -427,7 +426,7 @@ function extraEnds(layout: Layout, paint: Paint): { markers: string[]; rules: st
       if (atStart) wanted.set(id, reversed(flowMarker(id, accent ? 'ursula-arrow ursula-arrow--accent' : 'ursula-arrow')));
       return;
     }
-    if (MARKS.has(end)) {
+    if (RELATION_MARKS.has(end)) {
       wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
       return;
     }
@@ -510,7 +509,7 @@ function endLabelSvg(edge: LayoutEdge): string {
 function usesRecords(layout: Layout): boolean {
   return (
     layout.nodes.some(isRecordNode) ||
-    layout.edges.some((e) => (e.end !== undefined && MARKS.has(e.end)) || (e.startEnd !== undefined && MARKS.has(e.startEnd)) || e.startLabel !== undefined || e.endLabel !== undefined)
+    layout.edges.some((e) => (e.end !== undefined && RELATION_MARKS.has(e.end)) || (e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd)) || e.startLabel !== undefined || e.endLabel !== undefined)
   );
 }
 
@@ -600,8 +599,7 @@ function shapeSvg(node: LayoutNode): string {
 }
 
 /** A band along the top of a box, cut to the corners of the box's outline so that the outline's stroke stays whole. */
-/** Height of the head band of a C4 element, and the room between the band and the name under it. */
-const HEAD_BAND = 28;
+/** The room between the head band of a C4 element and the name under it. */
 const HEAD_BAND_GAP = 10;
 
 function headBandSvg(node: LayoutNode, radius: number, height: number): string {
