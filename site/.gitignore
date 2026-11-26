@@ -6,4 +6,5 @@ public/assets/
 
 # Drawn by scripts/render-examples.mjs
 public/example-svg/
+public/example-term/
 .vitepress/examples/rendered.json

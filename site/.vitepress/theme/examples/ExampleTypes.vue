@@ -16,7 +16,7 @@ const t = computed(() => T[code.value]);
 const rows = computed(() =>
   TYPES.map((type) => ({
     id: type.id,
-    name: type[code.value],
+    name: type.name,
     href: withBase(`${code.value === 'ko' ? '/ko' : ''}/examples/${type.id}`),
     ...counts[type.id],
   })),
