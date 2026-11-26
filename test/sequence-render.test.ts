@@ -453,7 +453,7 @@ describe('dispatcher', () => {
   });
 
   it('reports sequence parse errors with their line', () => {
-    expect(renderText('sequenceDiagram\nA->>B: ok\nnope', 80)).toEqual({ error: "line 3: unsupported syntax 'nope'" });
+    expect(renderText('sequenceDiagram\nA->>B: ok\nnope', 80)).toMatchObject({ error: "line 3: unsupported syntax 'nope'", line: 3 });
     expect(() => render('sequenceDiagram\nend')).toThrow(/line 2/);
   });
 });

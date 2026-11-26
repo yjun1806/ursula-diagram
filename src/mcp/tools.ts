@@ -1,0 +1,104 @@
+import type { DrawRequest } from '../command/args.ts';
+import { drawCommand } from '../command/draw.ts';
+import { syntaxCommand } from '../command/syntax.ts';
+
+export interface ToolResult {
+  content: Array<{ type: 'text'; text: string }>;
+  isError: boolean;
+}
+
+/** A wrong argument: the server answers with a JSON-RPC error, not with a result. */
+export class ArgumentError extends Error {}
+
+const plain: DrawRequest = { format: 'text', legend: true, color: false, questions: true, elbows: true, check: false };
+
+export const TOOLS = [
+  {
+    name: 'render',
+    title: 'Draw a Mermaid diagram',
+    description:
+      'Draws Mermaid text. format "text" (the default) is a terminal drawing for a fixed-width font; "text-svg" is that drawing as SVG for a chat or a page; "svg" a picture; "html" one page. A text error comes back marked isError, with the line, a mark under the column, often "did you mean" and an example line; fix the text and call again. A drawing wider than width comes back as an error naming the width it needs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', description: 'The Mermaid text, header first (for example "flowchart LR").' },
+        format: { type: 'string', enum: ['text', 'text-svg', 'svg', 'html'], description: 'What to draw; text by default.' },
+        width: { type: 'integer', minimum: 1, description: 'Columns for text and text-svg; 100 by default.' },
+        charset: { type: 'string', enum: ['unicode', 'ascii'], description: 'Box-drawing characters (unicode, the default) or ascii only.' },
+        check: { type: 'boolean', description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." },
+      },
+      required: ['source'],
+    },
+  },
+  {
+    name: 'check',
+    title: 'Check a diagram layout',
+    description:
+      'Lays out Mermaid text and reports what the engine sees: one line of counts (bends, crossings), the pairs of lines that cross and the most bent lines with their source line numbers, and questions that suggest a change to the text.',
+    inputSchema: { type: 'object', properties: { source: { type: 'string', description: 'The Mermaid text.' } }, required: ['source'] },
+  },
+  {
+    name: 'syntax',
+    title: 'Show the syntax of a diagram type',
+    description: 'Without a type: the list of diagram types and their headers. With a type (a name such as "wardley" or a header such as "sequenceDiagram"): a small example that draws and the main rules.',
+    inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'A type name or a header.' } } },
+  },
+] as const;
+
+const text = (t: string): { type: 'text'; text: string } => ({ type: 'text', text: t });
+
+function source(args: Record<string, unknown>): string {
+  const s = args['source'];
+  if (typeof s !== 'string') throw new ArgumentError('"source" must be the Mermaid text, a string');
+  return s;
+}
+
+function oneOf<T extends string>(args: Record<string, unknown>, key: string, choices: readonly T[]): T | undefined {
+  const v = args[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string' || !(choices as readonly string[]).includes(v)) throw new ArgumentError(`"${key}" must be one of ${choices.join(', ')}`);
+  return v as T;
+}
+
+function render(args: Record<string, unknown>): ToolResult {
+  const src = source(args);
+  const format = oneOf(args, 'format', ['text', 'text-svg', 'svg', 'html'] as const) ?? 'text';
+  const charset = oneOf(args, 'charset', ['unicode', 'ascii'] as const);
+  const width = args['width'];
+  if (width !== undefined && (typeof width !== 'number' || !Number.isInteger(width) || width < 1)) throw new ArgumentError('"width" must be a whole number of columns, 1 or more');
+  const check = args['check'];
+  if (check !== undefined && typeof check !== 'boolean') throw new ArgumentError('"check" must be true or false');
+  const terminal = format === 'text' || format === 'text-svg';
+  const req: DrawRequest = {
+    ...plain,
+    format,
+    ...(terminal ? { width: width ?? 100 } : {}),
+    ...(charset === undefined ? {} : { charset }),
+    check: check === true,
+  };
+  const out = drawCommand(src, req);
+  if (out.code !== 0) return { content: [text(out.stderr)], isError: true };
+  return { content: [text(out.stdout), ...(req.check ? [text(out.stderr)] : [])], isError: false };
+}
+
+function check(args: Record<string, unknown>): ToolResult {
+  const out = drawCommand(source(args), { ...plain, format: 'check' });
+  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+}
+
+function syntax(args: Record<string, unknown>): ToolResult {
+  const type = args['type'];
+  if (type !== undefined && typeof type !== 'string') throw new ArgumentError('"type" must be a string');
+  const out = syntaxCommand(type === undefined || type === '' ? [] : [type]);
+  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+}
+
+const CALLS: Record<string, (args: Record<string, unknown>) => ToolResult> = { render, check, syntax };
+
+/** Runs the tool `name`; throws ArgumentError for an unknown tool or a wrong argument. */
+export function callTool(name: unknown, args: unknown): ToolResult {
+  const run = typeof name === 'string' && Object.hasOwn(CALLS, name) ? CALLS[name] : undefined;
+  if (run === undefined) throw new ArgumentError(`no tool named ${JSON.stringify(name)}; the tools are render, check and syntax`);
+  if (args !== undefined && (typeof args !== 'object' || args === null || Array.isArray(args))) throw new ArgumentError('"arguments" must be an object');
+  return run((args ?? {}) as Record<string, unknown>);
+}

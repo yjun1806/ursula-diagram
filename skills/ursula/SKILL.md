@@ -12,16 +12,21 @@ Write the diagram as Mermaid text and let the bundled command draw it. The comma
 
 ## Steps
 
-1. **Write the Mermaid text** to a file. Pick the type by what the content is, not by habit (table below).
-2. **Ask the engine what it sees**: `URSULA diagram.mmd --format check`. It prints one line of counts (bends,
-   crossings) and, sometimes, lines that begin with `question 1:`. A question names what the engine found, what a
-   change would gain, and what to do in the text.
-3. **Answer the questions once.** Apply a suggestion only when it keeps the meaning of the diagram. Do not loop: one
-   round of edits, then draw.
-4. **Draw it in the form the reader needs** (next section).
+1. **Write the Mermaid text** to a file. Pick the type by what the content is, not by habit (table below). When
+   unsure how a type is written, run `URSULA syntax <type>` for a small example and the rules; `URSULA syntax` lists
+   the types.
+2. **Draw it and ask the engine in one call**: add `--check` to the command of the next section, for example
+   `URSULA d.mmd --format text --width 100 --check`. The drawing goes to standard output; the report goes to
+   standard error: one line of counts (bends, crossings), the lines that cross with their source line numbers, and
+   sometimes lines that begin with `question 1:`. A question names what the engine found, what a change would gain,
+   and what to do in the text. The counts are for the svg layout; a terminal drawing routes its lines on its own
+   grid, so do not chase a crossing the terminal drawing does not show.
+3. **Answer the questions once.** When there are any, apply a suggestion only when it keeps the meaning of the
+   diagram, then draw again. Do not loop: one round of edits.
 
-If the command prints `error: …`, the text could not be drawn. The message says what to change. Fix the text and run
-it again; do not fall back to drawing by hand.
+If the command prints `error: …`, the text could not be drawn. The error names the line and marks the column; follow
+its `did you mean:`, `hint:` and `example:` lines, fix the text and run it again. Do not fall back to drawing by hand. Exit
+codes: 1 an error in the text, 2 wrong options, 3 too narrow (below), 4 a failure inside the engine.
 
 ## Which output
 
@@ -43,8 +48,8 @@ not in a terminal, give `svg` or `text-svg` instead. With `--charset ascii` a li
 and `#`, a dashed line `.` and `:`, a corner `+`, and a hollow arrowhead `--|>`; the legend uses the same
 characters.
 
-A terminal drawing never runs past `--width`. When the drawing cannot fit, the command says so: shorten the names,
-split the diagram in two, or give more width. A few types (pie, quadrant, radar, sankey, xychart, timeline, user
+A terminal drawing never runs past `--width`. When the drawing cannot fit, the command prints no drawing, ends with
+code 3 and names a width that fits: give that width, shorten the names, or split the diagram in two. A few types (pie, quadrant, radar, sankey, xychart, timeline, user
 journey, railroad, venn, cynefin, wardley) come out as a table or a list in a terminal, because that is more exact
 there than a picture.
 
@@ -72,7 +77,7 @@ there than a picture.
 | Blocks on a grid, bits of a packet | `block-beta`, `packet-beta` |
 
 Every other header of the Mermaid documentation is read as well (`journey`, `zenuml`, `venn-beta`, `wardley-beta`,
-`cynefin-beta`, the railroad grammars).
+`cynefin-beta`, the railroad grammars). `URSULA syntax <type>` shows how any of them is written.
 
 ## Writing text that draws well
 
@@ -107,6 +112,5 @@ swimlane-beta LR
 ```
 
 ```bash
-URSULA order.mmd --format check
-URSULA order.mmd --format text --width 100
+URSULA order.mmd --format text --width 100 --check
 ```

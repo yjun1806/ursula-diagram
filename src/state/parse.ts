@@ -39,6 +39,8 @@ function readItems(src: string): { items: Item[]; accTitle: string | undefined }
   const acc = createAccessibilityReader();
   const root: Item[] = [];
   const stack: Item[][] = [root];
+  /** The line of each `{` still open, innermost last. */
+  const opened: number[] = [];
   let header = false;
   for (let i = 0; i < rows.length; i++) {
     const no = i + 1;
@@ -56,6 +58,7 @@ function readItems(src: string): { items: Item[]; accTitle: string | undefined }
     if (text === '}') {
       if (stack.length === 1) throw new UrsulaError('"}" has no matching "{"', 'state-brace', no);
       stack.pop();
+      opened.pop();
       continue;
     }
     const open = /^state\s+(.+?)\s*\{$/.exec(text);
@@ -63,6 +66,7 @@ function readItems(src: string): { items: Item[]; accTitle: string | undefined }
       const block: Item[] = [];
       top.push({ no, text: `state ${open[1] as string}`, block });
       stack.push(block);
+      opened.push(no);
       continue;
     }
     if (/^note\s+(left|right)\s+of\s+\S+\s*$/.test(text)) {
@@ -83,7 +87,7 @@ function readItems(src: string): { items: Item[]; accTitle: string | undefined }
     top.push({ no, text });
   }
   if (!header) throw new UrsulaError('expected "stateDiagram" or "stateDiagram-v2"', 'state-header', 1);
-  if (stack.length > 1) throw new UrsulaError('"{" is never closed', 'state-brace', rows.length);
+  if (stack.length > 1) throw new UrsulaError('"{" is never closed', 'state-brace', opened.at(-1));
   return { items: root, accTitle: acc.title };
 }
 

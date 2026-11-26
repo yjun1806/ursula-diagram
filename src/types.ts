@@ -387,15 +387,56 @@ export interface Layout {
   legend?: Legend;
 }
 
+/** What an error can say beyond its message, to help fix the text. Every field is optional. */
+export interface ErrorAdvice {
+  /** The character of the line where the trouble starts, counted from 1. */
+  column?: number;
+  /** What is wrong, in one sentence. */
+  hint?: string;
+  /** The header or keyword the text most likely meant. */
+  suggestion?: string;
+  /** One line written the right way. */
+  example?: string;
+  /** For a drawing that does not fit: columns of width it needs. */
+  minWidth?: number;
+}
+
 export class UrsulaError extends Error {
   readonly code: string;
   readonly line?: number;
+  readonly column?: number;
+  readonly hint?: string;
+  readonly suggestion?: string;
+  readonly example?: string;
+  readonly minWidth?: number;
 
-  constructor(message: string, code: string, line?: number) {
+  /** `message` is without the `line N: ` that the error puts in front of it. */
+  constructor(message: string, code: string, line?: number, advice: ErrorAdvice = {}) {
     super(line === undefined ? message : `line ${line}: ${message}`);
     this.name = 'UrsulaError';
     this.code = code;
     if (line !== undefined) this.line = line;
+    if (advice.column !== undefined) this.column = advice.column;
+    if (advice.hint !== undefined) this.hint = advice.hint;
+    if (advice.suggestion !== undefined) this.suggestion = advice.suggestion;
+    if (advice.example !== undefined) this.example = advice.example;
+    if (advice.minWidth !== undefined) this.minWidth = advice.minWidth;
+  }
+
+  /** The message as it was given, without `line N: `. */
+  get bare(): string {
+    return this.line === undefined ? this.message : this.message.slice(`line ${this.line}: `.length);
+  }
+
+  /** The fields beyond the message. */
+  get advice(): ErrorAdvice {
+    return {
+      ...(this.column === undefined ? {} : { column: this.column }),
+      ...(this.hint === undefined ? {} : { hint: this.hint }),
+      ...(this.suggestion === undefined ? {} : { suggestion: this.suggestion }),
+      ...(this.example === undefined ? {} : { example: this.example }),
+      ...(this.minWidth === undefined ? {} : { minWidth: this.minWidth }),
+    };
   }
 }
 

@@ -35,13 +35,14 @@ import './wardley/frontend.ts';
 import './xychart/frontend.ts';
 import './zenuml/frontend.ts';
 import { UrsulaError } from './types.ts';
-import type { TextSpan } from './types.ts';
+import type { ErrorAdvice, TextSpan } from './types.ts';
 import { renderTextSvg as drawTextSvg } from './render/text-svg.ts';
 
 export { parse } from './parse.ts';
 export { layout } from './layout/index.ts';
 export { layoutLayered, layeredRuler } from './layered/index.ts';
 export { checkLines } from './layered/questions.ts';
+export { checkDetails } from './layered/details.ts';
 export type { LayoutOptions, LegendOption } from './layout/index.ts';
 export { cellRuler, cellWidth, pixelRuler } from './metrics.ts';
 export type { Ruler, TextRole } from './metrics.ts';
@@ -51,7 +52,9 @@ export { renderTextLayout, spansToAnsi } from './render/text.ts';
 export { spansToAscii, toAscii } from './render/ascii.ts';
 export type { AsciiOptions } from './render/ascii.ts';
 export { renderTextSvg as spansToSvg } from './render/text-svg.ts';
-export { registerFrontEnd, selectFrontEnd } from './registry.ts';
+export { registerFrontEnd, registeredFrontEnds, selectFrontEnd } from './registry.ts';
+export { syntaxOf, syntaxTypes } from './syntax/lookup.ts';
+export type { SyntaxEntry } from './syntax/entry.ts';
 export type { FrontEnd, RenderOptions, TextOptions } from './registry.ts';
 export { layoutSequenceText } from './sequence/text.ts';
 export { parseSequence } from './sequence/parse.ts';
@@ -62,19 +65,27 @@ export type * from './sequence/model.ts';
 export { UrsulaError } from './types.ts';
 export type * from './types.ts';
 
+/** Why a terminal drawing failed: the message, and for a text error where it is and how to fix it. */
+export interface TextError extends ErrorAdvice {
+  error: string;
+  line?: number;
+}
+
+const lineOf = (err: UrsulaError): { line?: number } => (err.line === undefined ? {} : { line: err.line });
+
 /** Picks the front-end by the header of `src`, lays it out in terminal cells and draws it as text. */
 export function renderText(
   src: string,
   maxWidth: number,
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
-): { lines: string[] } | { error: string } {
+): { lines: string[] } | TextError {
   try {
     const lines = selectFrontEnd(src).textLines(src, maxWidth, opts);
     const widest = Math.max(0, ...lines.map(cellWidth));
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {
-    if (err instanceof UrsulaError) return { error: err.message };
+    if (err instanceof UrsulaError) return { error: err.message, ...lineOf(err), ...err.advice };
     throw err;
   }
 }
@@ -87,7 +98,7 @@ export function renderTextSpans(
   src: string,
   maxWidth: number,
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
-): { lines: TextSpan[][] } | { error: string } {
+): { lines: TextSpan[][] } | TextError {
   try {
     const frontEnd = selectFrontEnd(src);
     const spans = (o: typeof opts): TextSpan[][] =>
@@ -100,7 +111,7 @@ export function renderTextSpans(
     if (widest > maxWidth) return { error: `Drawing is ${widest} columns wide; the limit is ${maxWidth}.` };
     return { lines };
   } catch (err) {
-    if (err instanceof UrsulaError) return { error: err.message };
+    if (err instanceof UrsulaError) return { error: err.message, ...lineOf(err), ...err.advice };
     throw err;
   }
 }
@@ -113,7 +124,7 @@ export function renderTextSvg(
   src: string,
   maxWidth: number,
   opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
-): { svg: string } | { error: string } {
+): { svg: string } | TextError {
   const drawn = renderTextSpans(src, maxWidth, opts);
   return 'error' in drawn ? drawn : { svg: drawTextSvg(drawn.lines) };
 }

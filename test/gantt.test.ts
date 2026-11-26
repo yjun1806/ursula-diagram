@@ -579,7 +579,7 @@ describe('gantt without tasks', () => {
     const r = run(settingsOnly, 'check');
     expect(r.signal).toBeNull();
     expect(r.status).toBe(0);
-    expect(r.stdout).toBe('no checks for this kind of diagram\n');
+    expect(r.stdout).toMatch(/^no checks for this kind of diagram\nnote: the chart has no tasks/);
   });
 
   it('says in the JSON that the chart has no tasks', () => {

@@ -3,6 +3,8 @@ import type { TextSpan } from './types.ts';
 import { frontMatterRows, readFrontMatter } from './front-matter.ts';
 import type { FrontValue } from './front-matter.ts';
 import { spansToAscii, toAscii } from './render/ascii.ts';
+import { explain } from './errors/explain.ts';
+import { UrsulaError } from './types.ts';
 
 export interface RenderOptions extends SvgOptions {
   /** Title from a leading front-matter block (`title: ...`); a front-end draws it when the diagram text gives none. */
@@ -61,6 +63,11 @@ export function registerFrontEnd(frontEnd: FrontEnd): void {
   frontEnds.push(frontEnd);
 }
 
+/** The name and headers of every registered front-end, in the order they were registered. */
+export function registeredFrontEnds(): Array<{ name: string; headers: readonly string[] }> {
+  return frontEnds.map((f) => ({ name: f.name, headers: f.headers }));
+}
+
 /**
  * The source with a leading `---` front-matter block turned into blank lines, so line numbers stay the same.
  * Front-ends read diagram text only; the block reaches them as `heading` and `config` options.
@@ -91,8 +98,18 @@ export function firstWord(src: string): string {
 /** The front-end for the header of `src`; its calls see the source with the front-matter block blanked. */
 export function selectFrontEnd(src: string): FrontEnd {
   const word = firstWord(src);
-  const found = frontEnds.find((f) => f.headers.includes(word)) ?? frontEnds[0];
+  const claimed = frontEnds.find((f) => f.headers.includes(word));
+  const found = claimed ?? frontEnds[0];
   if (!found) throw new Error('no front-end registered');
+  // Every call goes through `guard`, so a text error reaches the caller with its column, suggestion and example.
+  const guard = <A extends [string, ...unknown[]], R>(call: (...a: A) => R) => (...a: A): R => {
+    try {
+      return call(...a);
+    } catch (err) {
+      if (!(err instanceof UrsulaError)) throw err;
+      throw explain(err, a[0], { frontEnd: claimed?.name, header: word, headers: frontEnds.flatMap((f) => f.headers) });
+    }
+  };
   const spans = found.textSpans;
   const ascii = { countBars: found.name === 'er' };
   const head = <T extends { heading?: string; config?: Record<string, FrontValue>; frontMatter?: Record<string, FrontValue> }>(s: string, o: T): T => {
@@ -109,18 +126,18 @@ export function selectFrontEnd(src: string): FrontEnd {
   };
   return {
     ...found,
-    svg: (s, o) => found.svg(blankFrontMatter(s), head(s, o)),
-    textLines: (s, w, o) => {
+    svg: guard((s: string, o: RenderOptions) => found.svg(blankFrontMatter(s), head(s, o))),
+    textLines: guard((s: string, w: number | undefined, o: TextOptions) => {
       const lines = found.textLines(blankFrontMatter(s), w, head(s, o));
       return o.charset === 'ascii' ? toAscii(lines, ascii) : lines;
-    },
-    json: (s, m, o) => found.json(blankFrontMatter(s), m, head(s, o)),
+    }),
+    json: guard((s: string, m: 'svg' | 'text', o: RenderOptions) => found.json(blankFrontMatter(s), m, head(s, o))),
     ...(spans
       ? {
-          textSpans: (s: string, w: number | undefined, o: TextOptions) => {
+          textSpans: guard((s: string, w: number | undefined, o: TextOptions) => {
             const lines = spans.call(found, blankFrontMatter(s), w, head(s, o));
             return o.charset === 'ascii' ? spansToAscii(lines, ascii) : lines;
-          },
+          }),
         }
       : {}),
   };
