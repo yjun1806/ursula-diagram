@@ -987,7 +987,22 @@ function sharedWidths(w, nodes, ruler) {
   }
   return out;
 }
+var measured = new WeakMap;
 function measureNodes(nodes, lanes, ruler, td) {
+  let byRuler = measured.get(nodes);
+  if (byRuler === undefined)
+    measured.set(nodes, byRuler = new WeakMap);
+  let byDirection = byRuler.get(ruler);
+  if (byDirection === undefined)
+    byRuler.set(ruler, byDirection = new Map);
+  const known = byDirection.get(td);
+  if (known !== undefined && known.lanes === lanes)
+    return known.measure;
+  const measure = measureAfresh(nodes, lanes, ruler, td);
+  byDirection.set(td, { lanes, measure });
+  return measure;
+}
+function measureAfresh(nodes, lanes, ruler, td) {
   const border = ruler.nodeBorder;
   const snapW = (v) => gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 0.000000001) * ruler.widthStep));
   const fit = (v, minimum = ruler.nodeGrid) => {

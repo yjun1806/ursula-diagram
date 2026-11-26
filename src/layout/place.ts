@@ -178,13 +178,28 @@ function sharedWidths(w: number[], nodes: ReadonlyArray<{ shape?: NodeShape | un
   return out;
 }
 
+type MeasuredNodes = ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined; box?: { w: number; h: number } | undefined }>;
+
+/**
+ * Measures already taken, by node array, ruler and direction. A layout measures the same nodes with the same ruler
+ * many times over; nodes and rulers are not changed once made, so the same objects give the same sizes.
+ */
+const measured = new WeakMap<MeasuredNodes, WeakMap<Ruler, Map<boolean, { lanes: ReadonlyArray<{ label: string }>; measure: Measure }>>>();
+
 /** Sizes that depend on the text alone, never on where a node is placed. */
-export function measureNodes(
-  nodes: ReadonlyArray<{ title: string; lines: string[]; shape?: NodeShape | undefined; compartments?: readonly Compartment[] | undefined; box?: { w: number; h: number } | undefined }>,
-  lanes: ReadonlyArray<{ label: string }>,
-  ruler: Ruler,
-  td: boolean,
-): Measure {
+export function measureNodes(nodes: MeasuredNodes, lanes: ReadonlyArray<{ label: string }>, ruler: Ruler, td: boolean): Measure {
+  let byRuler = measured.get(nodes);
+  if (byRuler === undefined) measured.set(nodes, (byRuler = new WeakMap()));
+  let byDirection = byRuler.get(ruler);
+  if (byDirection === undefined) byRuler.set(ruler, (byDirection = new Map()));
+  const known = byDirection.get(td);
+  if (known !== undefined && known.lanes === lanes) return known.measure;
+  const measure = measureAfresh(nodes, lanes, ruler, td);
+  byDirection.set(td, { lanes, measure });
+  return measure;
+}
+
+function measureAfresh(nodes: MeasuredNodes, lanes: ReadonlyArray<{ label: string }>, ruler: Ruler, td: boolean): Measure {
   const border = ruler.nodeBorder;
   const snapW = (v: number): number =>
     gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 1e-9) * ruler.widthStep));

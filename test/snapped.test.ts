@@ -230,3 +230,19 @@ describe('ports', () => {
     });
   }
 });
+
+describe('measuring nodes', () => {
+  it('measures the same nodes with the same ruler once, and again for another ruler, direction or lanes', () => {
+    const graph = parse(fx.library);
+    const ruler = pixelRuler();
+    const first = measureNodes(graph.nodes, graph.lanes, ruler, false);
+    expect(measureNodes(graph.nodes, graph.lanes, ruler, false)).toBe(first);
+    const wider: Ruler = { ...ruler, rankGap: ruler.rankGap * 2 };
+    expect(measureNodes(graph.nodes, graph.lanes, wider, false)).not.toBe(first);
+    expect(measureNodes(graph.nodes, graph.lanes, wider, false)).toEqual(measureNodes([...graph.nodes], graph.lanes, wider, false));
+    expect(measureNodes(graph.nodes, graph.lanes, ruler, true)).toEqual(measureNodes([...graph.nodes], graph.lanes, ruler, true));
+    const labelled = [{ label: 'a lane with a long label' }];
+    expect(measureNodes(graph.nodes, labelled, ruler, false)).toEqual(measureNodes([...graph.nodes], labelled, ruler, false));
+    expect(measureNodes(graph.nodes, graph.lanes, ruler, false)).toEqual(first);
+  });
+});
