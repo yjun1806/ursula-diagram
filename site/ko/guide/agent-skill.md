@@ -4,13 +4,23 @@
 엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이어서, 스킬은 Node 22 이상만 있으면 아무것도 설치하지 않고 돌아갑니다.
 
-[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다.
+[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다. 스킬을 둘 곳을 고릅니다. 이 프로젝트, 모든 프로젝트(`-g`), 한 에이전트(`-a`) 가운데 하나입니다.
 
-```bash
-npx skills add yjun1806/ursula-diagram            # 이 프로젝트에
-npx skills add yjun1806/ursula-diagram -g         # 모든 프로젝트에
-npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
+::: code-group
+
+```bash [이 프로젝트]
+npx skills add yjun1806/ursula-diagram
 ```
+
+```bash [모든 프로젝트]
+npx skills add yjun1806/ursula-diagram -g
+```
+
+```bash [한 에이전트]
+npx skills add yjun1806/ursula-diagram -a claude-code
+```
+
+:::
 
 `skills/ursula` 폴더를 에이전트의 스킬 폴더에 직접 복사해도 됩니다. 이 폴더는 npm 패키지에도 들어 있습니다.
 

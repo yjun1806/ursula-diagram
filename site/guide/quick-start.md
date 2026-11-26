@@ -18,10 +18,12 @@ bun add -g ursula-diagram
 ```
 
 ```bash [npx]
-npx ursula-diagram order.mmd --format text   # without installing
+npx ursula-diagram order.mmd --format text
 ```
 
 :::
+
+Write the flowchart of the home page into `order.mmd`:
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -32,9 +34,21 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-ursula-diagram order.mmd --format text --width 80   # the text drawing on the home page
-ursula-diagram order.mmd --format svg > order.svg   # the picture on the home page
 ```
+
+Then draw it: `text` prints the terminal drawing of the home page, 80 columns wide, and `svg` saves its picture.
+
+::: code-group
+
+```bash [text]
+ursula-diagram order.mmd --format text --width 80
+```
+
+```bash [svg]
+ursula-diagram order.mmd --format svg > order.svg
+```
+
+:::
 
 To try a text without installing anything, open the [playground](/playground).
 

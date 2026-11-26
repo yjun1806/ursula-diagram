@@ -5,13 +5,23 @@ ask the engine about it with `--format check`, and which output to give the read
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
 Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
-agents:
+agents. Pick where the skill goes: into this project, for every project (`-g`), or for one agent only (`-a`):
 
-```bash
-npx skills add yjun1806/ursula-diagram            # into this project
-npx skills add yjun1806/ursula-diagram -g         # for every project
-npx skills add yjun1806/ursula-diagram -a claude-code   # for one agent only
+::: code-group
+
+```bash [this project]
+npx skills add yjun1806/ursula-diagram
 ```
+
+```bash [every project]
+npx skills add yjun1806/ursula-diagram -g
+```
+
+```bash [one agent]
+npx skills add yjun1806/ursula-diagram -a claude-code
+```
+
+:::
 
 Or copy the `skills/ursula` folder into the skills folder of your agent by hand. The npm package carries it too:
 

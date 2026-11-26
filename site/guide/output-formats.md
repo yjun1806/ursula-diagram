@@ -9,15 +9,39 @@
 | `json` | The placement: boxes, lines and labels with their coordinates. |
 | `check` | One line of counts (bends, crossings) and, sometimes, questions a writer can answer by editing the text. |
 
-```bash
+One command per format, each in its own tab. The `json` tab reads the text from standard input:
+
+::: code-group
+
+```bash [svg]
 ursula-diagram flow.mmd --format svg > flow.svg
+```
+
+```bash [text]
 ursula-diagram flow.mmd --format text --width 100
+```
+
+```bash [text, ASCII]
 ursula-diagram flow.mmd --format text --width 100 --charset ascii
+```
+
+```bash [text-svg]
 ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
+```
+
+```bash [html]
 ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
+```
+
+```bash [check]
 ursula-diagram flow.mmd --format check
+```
+
+```bash [json]
 cat flow.mmd | ursula --format json
 ```
+
+:::
 
 The command reads standard input when no file is given. `--theme auto|light|dark` sets the light or dark of an
 `html` page; `auto` follows the system setting. Run `ursula-diagram --help` to list every option.

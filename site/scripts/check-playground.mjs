@@ -9,6 +9,8 @@ import { existsSync } from 'node:fs';
 import { TABS, decodeState, draw, encodeState } from '../.vitepress/theme/playground/draw.js';
 import { GALLERY_EN, GALLERY_KO } from '../.vitepress/theme/playground/gallery-texts.js';
 import { isMermaid } from '../.vitepress/mermaid-fence.mjs';
+import { CARDS } from '../.vitepress/theme/home/agents.js';
+import { INSTALL } from '../.vitepress/theme/home/install.js';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -103,7 +105,10 @@ if (existsSync(built)) {
 // in a `mermaid` block, which custom.css wraps instead of scrolling sideways.
 const unescape = (s) => s.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
-/** The <pre> blocks of a page, each with the class of the <div> around it and whether that <div> has a copy button. */
+/**
+ * The <pre> blocks of a page, each with the class of the <div> around it, the classes of every <div> it sits in, and
+ * whether that <div> has a copy button.
+ */
 function preBlocks(html) {
   const blocks = [];
   const stack = [];
@@ -120,11 +125,68 @@ function preBlocks(html) {
     } else if (name === 'pre' && !close) {
       const end = html.indexOf('</pre>', tag.lastIndex);
       const parent = stack[stack.length - 1] ?? { cls: '', copy: false };
-      blocks.push({ ...parent, text: unescape(html.slice(tag.lastIndex, end)) });
+      blocks.push({ ...parent, outer: stack.map((d) => d.cls).join(' '), text: unescape(html.slice(tag.lastIndex, end)) });
       tag.lastIndex = end;
     }
   }
   return blocks;
+}
+
+// One command per shell block: a copy button copies the whole block, so a block of alternatives (install here or
+// everywhere, one format or another) hands the reader every line at once. A command may run over several lines with
+// a trailing `\\`, `&&`, `||` or `|`, or carry a here-document; a block whose lines must run together in order sits in
+// a <div class="cmd-sequence">. A copied command carries no `# comment` either: the sentence before the block says
+// what it is for.
+const SHELL = /(^|\s)language-(bash|sh|shell|zsh|console)(\s|$)/;
+
+/** The problems of a shell block's text: more than one command, or a command with a trailing comment. */
+function shellProblems(text, console = false) {
+  const commands = [];
+  let heredoc = null;
+  let joining = false;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (heredoc) {
+      if (line === heredoc) heredoc = null;
+      continue;
+    }
+    if (!line || line.startsWith('#')) continue;
+    if (console && !joining && !line.startsWith('$')) continue;
+    if (joining) commands[commands.length - 1] += ` ${line}`;
+    else commands.push(line);
+    heredoc = line.match(/<<-?\s*['"]?(\w+)['"]?/)?.[1] ?? null;
+    joining = /(\\|&&|\|\||\|)$/.test(line);
+  }
+  const problems = [];
+  if (commands.length > 1) problems.push(`${commands.length} commands in one block`);
+  const commented = commands.filter((c) => /\s#\s/.test(c.replace(/'[^']*'|"[^"]*"/g, '')));
+  if (commented.length) problems.push(`a comment after ${commented[0]}`);
+  return problems;
+}
+
+// The READMEs have no tabs: a shell fence there holds one command too, unless the line before it is <!-- sequence -->.
+for (const readme of ['README.md', 'README.ko.md']) {
+  const lines = readFileSync(join(site, '..', readme), 'utf8').split('\n');
+  let total = 0;
+  let bad = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const open = lines[i].match(/^(`{3,})(bash|sh|shell|zsh|console)\s*$/);
+    if (!open) continue;
+    const end = lines.findIndex((l, j) => j > i && l.trim() === open[1]);
+    total++;
+    const problems = lines[i - 1]?.trim() === '<!-- sequence -->' ? [] : shellProblems(lines.slice(i + 1, end).join('\n'), open[2] === 'console');
+    if (problems.length) {
+      bad++;
+      fail(`${readme}:${i + 1}: ${problems.join(', ')}; give each command its own block and say what it is for before it`);
+    }
+    i = end;
+  }
+  console.log(`ok   ${readme}: ${total - bad} of ${total} shell blocks hold one command without a comment`);
+}
+
+for (const [where, commands] of [['home install tabs', INSTALL.map((m) => m.command)], ['home agent cards', CARDS.flatMap((c) => c.commands)]]) {
+  for (const c of commands) for (const p of shellProblems(c)) fail(`${where}: ${p}`);
+  console.log(`ok   ${where}: ${commands.length} commands, each with its own copy button`);
 }
 
 if (existsSync(built)) {
@@ -134,12 +196,23 @@ if (existsSync(built)) {
     );
   let pres = 0;
   let mermaid = 0;
+  let shells = 0;
+  let sequences = 0;
+  const mixed = [];
   const noCopy = new Map();
   const noWrap = new Map();
   for (const page of allPages(built)) {
     for (const b of preBlocks(readFileSync(join(built, page), 'utf8'))) {
       pres++;
       if (!(/language-/.test(b.cls) && b.copy)) noCopy.set(page, (noCopy.get(page) ?? 0) + 1);
+      if (SHELL.test(b.cls)) {
+        shells++;
+        if (/(^|\s)cmd-sequence(\s|$)/.test(b.outer)) sequences++;
+        else {
+          const problems = shellProblems(b.text, /language-console/.test(b.cls));
+          if (problems.length) mixed.push(`${page}: ${problems.join(', ')}`);
+        }
+      }
       if (isMermaid(b.text)) {
         mermaid++;
         if (!/language-mermaid/.test(b.cls)) noWrap.set(page, (noWrap.get(page) ?? 0) + 1);
@@ -148,6 +221,8 @@ if (existsSync(built)) {
   }
   for (const [page, n] of noCopy) fail(`${page}: ${n} code blocks without a copy button`);
   for (const [page, n] of noWrap) fail(`${page}: ${n} Mermaid blocks not marked as mermaid, so they do not wrap`);
+  for (const m of mixed) fail(`${m}; give each command its own block (or code-group tab) and say what it is for before it`);
+  console.log(`ok   ${shells - mixed.length} of ${shells} shell blocks on the built pages hold one command without a comment (${sequences} marked as a sequence)`);
   const count = (m) => [...m.values()].reduce((a, b) => a + b, 0);
   console.log(`ok   ${pres - count(noCopy)} of ${pres} code blocks on the built pages have a copy button`);
   console.log(`ok   ${mermaid - count(noWrap)} of ${mermaid} Mermaid blocks on the built pages are mermaid blocks`);

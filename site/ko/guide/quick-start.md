@@ -17,10 +17,12 @@ bun add -g ursula-diagram
 ```
 
 ```bash [npx]
-npx ursula-diagram order.mmd --format text   # 설치하지 않고
+npx ursula-diagram order.mmd --format text
 ```
 
 :::
+
+첫 화면의 flowchart를 `order.mmd`에 씁니다.
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -31,9 +33,21 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-ursula-diagram order.mmd --format text --width 80   # 첫 화면의 글자 그림
-ursula-diagram order.mmd --format svg > order.svg   # 첫 화면의 그림
 ```
+
+그다음 그립니다. `text`는 첫 화면의 글자 그림을 80칸 폭으로 출력하고, `svg`는 첫 화면의 그림을 파일로 저장합니다.
+
+::: code-group
+
+```bash [text]
+ursula-diagram order.mmd --format text --width 80
+```
+
+```bash [svg]
+ursula-diagram order.mmd --format svg > order.svg
+```
+
+:::
 
 설치하지 않고 글을 그려 보려면 [플레이그라운드](/ko/playground)를 엽니다.
 
