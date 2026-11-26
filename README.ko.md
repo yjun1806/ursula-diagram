@@ -707,5 +707,13 @@ bun scripts/build.ts
 cd site && npm install && npm run dev
 ```
 
+엔진을 바꾸는 풀 리퀘스트를 열기 전에 공식 예시의 그림을 `main`과 비교합니다. 출력된 내용을 풀 리퀘스트에 붙입니다.
+
+```bash
+npm run compare
+```
+
+기여하기: 풀 리퀘스트 템플릿이 이 출력을 묻고, `.claude/skills/ursula-dev/`의 기여자 스킬이 사람이나 에이전트에게 소스 구조, 시험, 풀 리퀘스트 절차를 안내합니다.
+
 빌드한 파일은 Node 22 이상에서 돕니다. 저장소를 받은 폴더에서는 Node 24 이상이 소스를 바로 실행합니다:
 `node src/cli.ts order.mmd --format text`.
