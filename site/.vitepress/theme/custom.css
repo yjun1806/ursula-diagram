@@ -1,4 +1,4 @@
-/* The engine's colour variables (README, Colours), set by the site's light or dark switch rather than the system's. */
+/* The engine's colour variables (Colours), set by the site's light or dark switch rather than the system's. */
 .ursula-frame {
   --ursula-fg: #201f1e;
   --ursula-muted: #5b5b59;

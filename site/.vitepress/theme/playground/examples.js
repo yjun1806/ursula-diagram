@@ -1,4 +1,4 @@
-// The texts the playground offers: the home page's flowchart, the files in examples/ and the README gallery texts.
+// The texts the playground offers: the home page's flowchart, the files in examples/ and the Examples page's gallery texts.
 import { GALLERY_EN, GALLERY_KO } from './gallery-texts.js';
 import { SOURCE as HOME_SOURCE } from '../home/sample.js';
 

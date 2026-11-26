@@ -27,7 +27,7 @@ const cards = SHOWN[code].map(([id, name]) => ({
   href: withBase(`${prefix}/examples/${id}`),
 }));
 
-// The README's list, in its order.
+// Every type the engine draws, in alphabetical order.
 const ALL = [
   'Architecture', 'Block', 'C4', 'Class', 'Cynefin', 'Entity Relationship', 'Event Modeling', 'Flowchart', 'Gantt',
   'Git Graph', 'Ishikawa', 'Kanban', 'Mindmap', 'Packet', 'Pie', 'Quadrant', 'Radar', 'Railroad (IR, ABNF, EBNF, PEG)',

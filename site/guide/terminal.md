@@ -62,6 +62,26 @@ Cats   85  17.5%
 Rats   15   3.1%
 ```
 
+## Errors, the check and exit codes
+
+When a drawing cannot fit in `--width`, the command prints no drawing, ends with code 3 and names a width that fits.
+`--check` with any drawing format adds the engine's report on standard error: the counts, the lines that cross with
+their source line numbers, and questions. The report counts the svg layout; a terminal drawing routes its lines on its
+own grid, so its crossings can differ. `ursula-diagram syntax` lists every type, and
+`ursula-diagram syntax <type>` prints a small example and the rules. An error names the line and the column and,
+when it can, the word that was meant and a line written the right way:
+
+```
+error: line 1: expected a 'flowchart' or 'graph' header
+  1 | flowchrt LR
+    | ^^^^^^^^
+did you mean: flowchart
+example: flowchart LR
+```
+
+The exit code is 0 when drawn, 1 for an error in the text, 2 for wrong options, 3 when the drawing is too wide and 4
+for a failure inside the engine. `ursula-diagram --help` lists every option.
+
 # When the columns do not line up
 
 A text drawing keeps its columns only where every character is as wide as the engine counts it: one cell for a line

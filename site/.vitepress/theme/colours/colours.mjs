@@ -1,6 +1,6 @@
 // The colour variables of a drawing, read from the engine's one colour table (src/render/colors.ts), each with what it
-// colours in English and Korean. The Colours pages, the README tables (scripts/colour-table.mjs) and `npm run check`
-// all read colourRows(), so a colour the engine adds, drops or changes cannot go unlisted or listed wrong.
+// colours in English and Korean. The Colours pages and `npm run check` both read colourRows(), so a colour the engine
+// adds, drops or changes cannot go unlisted or listed wrong.
 import { COLORS } from '../../../../src/render/colors.ts';
 
 const SERIES = Array.from({ length: 8 }, (_, i) => i + 1);
@@ -54,14 +54,4 @@ export function colourRows() {
     const [light, dark] = COLORS[name];
     return { name, variable: `--ursula-${name}`, light, dark, ...DESCRIPTIONS[name] };
   });
-}
-
-/** The colour table of a README in one language, as Markdown. */
-export function markdownTable(lang) {
-  const head = lang === 'ko' ? ['변수', '칠하는 것', '밝은 값', '어두운 값'] : ['Variable', 'What it colours', 'Light', 'Dark'];
-  return [
-    `| ${head.join(' | ')} |`,
-    '| --- | --- | --- | --- |',
-    ...colourRows().map((r) => `| \`${r.variable}\` | ${r[lang]} | \`${r.light}\` | \`${r.dark}\` |`),
-  ].join('\n');
 }

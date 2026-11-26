@@ -1,7 +1,7 @@
 # Agent skill
 
 `skills/ursula` is a skill for coding agents. `SKILL.md` tells the agent how to write the Mermaid text, how to
-ask the engine about it with `--format check`, and which output to give the reader. `scripts/ursula.mjs` is the
+draw it and ask the engine about it in one call with `--check`, and which output to give the reader. `scripts/ursula.mjs` is the
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
 Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
@@ -29,8 +29,27 @@ Or copy the `skills/ursula` folder into the skills folder of your agent by hand.
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
-With the skill, the agent writes the Mermaid text, runs `--format check`, and picks the output by where the reader
-is: `text` for a terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.
+With the skill, the agent writes the Mermaid text, draws it with `--check` and `--fix` (which fixes a misspelt header
+or keyword and a flowchart `->`, and names each fix), and picks the output by where the reader is: `text` for a
+terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.
+
+## Over MCP
+
+Where an agent has no shell, `ursula-diagram mcp` serves the command over MCP on standard input and output. It has
+three tools: `render` (with `format`, `width`, `charset`, `check` for the report, and `fix`), `check` (with `fix`) and
+`syntax`. With `fix: true` the result ends with the fixes and the fixed source.
+
+In Claude Code:
+
+```bash
+claude mcp add ursula -- npx -y ursula-diagram mcp
+```
+
+In `claude_desktop_config.json` of Claude Desktop, and in other clients that take the same form:
+
+```json
+{ "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
+```
 
 # In an agent's terminal
 

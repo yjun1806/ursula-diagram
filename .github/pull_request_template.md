@@ -37,7 +37,7 @@ None, because
 
 ## Public surface
 
-<!-- Tick what this changes, and update the docs (README.md, README.ko.md, site/ and site/ko/) with it. -->
+<!-- Tick what this changes, and update the docs (site/ and site/ko/; the READMEs only link there) with it. -->
 
 - [ ] Command options or `--help`
 - [ ] Exit codes

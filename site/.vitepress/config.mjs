@@ -55,6 +55,7 @@ function sidebar(prefix, t) {
         { text: t.library, link: `${prefix}/guide/library` },
         { text: t.colours, link: `${prefix}/guide/colours` },
         { text: t.skill, link: `${prefix}/guide/agent-skill` },
+        { text: t.development, link: `${prefix}/guide/development` },
       ],
     },
     { text: t.playground, link: `${prefix}/playground` },
@@ -66,14 +67,14 @@ const en = {
   code: 'en',
   intro: 'Introduction', why: 'Why ursula', compared: 'Compared with other tools', quickStart: 'Quick start',
   drawings: 'Drawings', examples: 'Examples', larger: 'A larger drawing', terminal: 'In a terminal',
-  reference: 'Reference', formats: 'Output formats', library: 'Library', colours: 'Colours', skill: 'Agent skill',
+  reference: 'Reference', formats: 'Output formats', library: 'Library', colours: 'Colours', skill: 'Agent skill', development: 'Development',
   playground: 'Playground', roadmap: 'Roadmap', guide: 'Guide', releases: 'Release notes',
 };
 const ko = {
   code: 'ko',
   intro: '소개', why: '왜 ursula인가', compared: '다른 도구와 비교', quickStart: '빠른 시작',
   drawings: '그림', examples: '예제', larger: '큰 그림', terminal: '터미널에서',
-  reference: '참고', formats: '출력 형식', library: '라이브러리', colours: '색 바꾸기', skill: '에이전트 스킬',
+  reference: '참고', formats: '출력 형식', library: '라이브러리', colours: '색 바꾸기', skill: '에이전트 스킬', development: '개발',
   playground: '플레이그라운드', roadmap: '로드맵', guide: '안내', releases: '릴리스 노트',
 };
 
