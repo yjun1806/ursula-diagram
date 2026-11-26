@@ -16,6 +16,10 @@
 - 둘째 flowchart 배치 엔진을 지웠습니다. `--engine` 옵션, 라이브러리의 `engine` 옵션(`LayoutOptions`, `RenderOptions`, `TextOptions`, `renderText`, `renderTextSpans`, `renderTextSvg`), 그 엔진만 읽던 `LayoutOptions`의 `laneAxis` 옵션이 없어졌습니다. 그림은 하나도 바뀌지 않습니다. [#70](https://github.com/yjun1806/ursula-diagram/pull/70)
 - `--no-questions`와 `--no-elbows` 옵션, 라이브러리의 `questions`와 `elbows` 옵션(`RenderOptions`, `TextOptions`, `LayoutOptions`, renderText 계열)을 지웠습니다. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
 
+### Fixed
+
+- block의 터미널 그림에서 넓은 글자(한글 등)가 든 라벨 둘이 겹쳐도 줄이 밀리지 않습니다. 넓은 글자의 반쪽 위에 글자를 쓰면 남은 반쪽을 지웁니다. [#74](https://github.com/yjun1806/ursula-diagram/pull/74)
+
 ## 0.2.1 (2026-11-26)
 
 ### Fixed
