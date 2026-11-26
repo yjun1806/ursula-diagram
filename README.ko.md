@@ -550,13 +550,15 @@ npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
-스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--check`를 붙여 그린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
+스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--check`와 `--fix`(틀린 머리글·키워드와 flowchart의 `->`를 고치고 고친 곳을
+알립니다)를 붙여 그린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
 `text`, 채팅이나 웹 페이지에는 `text-svg`, 파일에는 `svg`나 `html`을 줍니다.
 
 ### MCP로
 
 셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 띄웁니다. 도구는 셋입니다.
-`render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`), `check`, `syntax`.
+`render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`, `fix`), `check`(`fix`), `syntax`. `fix: true`를 주면
+결과 끝에 고친 곳과 고친 글이 붙습니다.
 
 ```bash
 claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code

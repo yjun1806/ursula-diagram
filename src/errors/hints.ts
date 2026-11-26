@@ -7,8 +7,10 @@ interface Hint {
   hint?: string;
   /** A fixed example line. */
   example?: string;
-  /** The wrong line itself, put right; wins over `example`. */
-  fix?: (row: string) => string;
+  /** The wrong line itself, put right; wins over `example`. `column` is where the error points, from 1. */
+  fix?: (row: string, column: number | undefined) => string;
+  /** The fix has one reading only, so `fixSource` may make it without asking. */
+  autofix?: true;
   /** The fix is to delete the line, so no line can stand in for it. */
   noExample?: true;
 }
@@ -18,9 +20,20 @@ export interface HintFound {
   hint?: string;
   example?: string;
   noExample?: true;
+  /** The example is the wrong line put right, and `fixSource` may make that change. */
+  autofix?: true;
+}
+
+/** The row with the `->` at `column` (else the first lone `->`) written `-->`. */
+function flowArrow(row: string, column: number | undefined): string {
+  const t = row.trim();
+  const at = column === undefined ? -1 : column - 1 - (row.length - row.trimStart().length);
+  if (at >= 0 && t.startsWith('->', at) && !/[-=.<]/.test(t[at - 1] ?? '')) return `${t.slice(0, at)}-->${t.slice(at + 2)}`;
+  return t.replace(/(?<![-=.<])->(?!>)/, '-->');
 }
 
 const HINTS: readonly Hint[] = [
+  { frontEnd: 'flowchart', pattern: /^unsupported syntax near '->(?!>)/, hint: 'a flowchart arrow is -->; -> is not one', fix: flowArrow, autofix: true },
   { frontEnd: 'flowchart', pattern: /^expected a node id near ''/, hint: 'an arrow needs a node on both ends', example: 'A --> B' },
   { frontEnd: 'flowchart', pattern: /^missing '([\])}>])'/, hint: 'a bracket around the text of a node is opened and not closed', example: 'A[Text] --> B(Text)' },
   { frontEnd: 'flowchart', pattern: /^subgraph '.*' is never closed/, hint: "close every subgraph with a line 'end'", example: 'end' },
@@ -43,14 +56,19 @@ const HINTS: readonly Hint[] = [
   { frontEnd: 'ishikawa', pattern: /is indented less than the categories/, hint: 'indent categories one step under the effect, and causes further under their category' },
 ];
 
-/** The hint for an error of this front-end with this message (without `line N: `) on `row`, if the table has one. */
-export function hintFor(frontEnd: string, message: string, row: string | undefined): HintFound | undefined {
+/**
+ * The hint for an error of this front-end with this message (without `line N: `) on `row`, pointing at `column`, if
+ * the table has one.
+ */
+export function hintFor(frontEnd: string, message: string, row: string | undefined, column?: number): HintFound | undefined {
   const found = HINTS.find((h) => h.frontEnd === frontEnd && h.pattern.test(message));
   if (found === undefined) return undefined;
-  const example = found.fix !== undefined && row !== undefined ? found.fix(row) : found.example;
+  const fixed = found.fix !== undefined && row !== undefined ? found.fix(row, column) : undefined;
+  const example = fixed ?? found.example;
   return {
     ...(found.hint === undefined ? {} : { hint: found.hint }),
     ...(example === undefined ? {} : { example }),
     ...(found.noExample ? { noExample: true as const } : {}),
+    ...(found.autofix && fixed !== undefined ? { autofix: true as const } : {}),
   };
 }

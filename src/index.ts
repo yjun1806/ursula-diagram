@@ -63,6 +63,8 @@ export { sequenceCheckLines } from './sequence/check.ts';
 export type { SequenceLayoutOptions } from './sequence/layout.ts';
 export type * from './sequence/model.ts';
 export { UrsulaError } from './types.ts';
+export { fixSource } from './errors/fix.ts';
+export type { FixedSource, SourceFix } from './errors/fix.ts';
 export type * from './types.ts';
 
 /** Why a terminal drawing failed: the message, and for a text error where it is and how to fix it. */

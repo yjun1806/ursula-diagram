@@ -1,11 +1,11 @@
 import { renderHtml } from '../html.ts';
-import { checkLines, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg } from '../index.ts';
+import { checkLines, fixSource, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg } from '../index.ts';
 import { checkDetails } from '../layered/details.ts';
 import type { SequenceLayout } from '../sequence/model.ts';
 import type { Layout } from '../types.ts';
 import { UrsulaError } from '../types.ts';
 import type { DrawRequest } from './args.ts';
-import { errorReport, internalReport } from './report.ts';
+import { errorReport, fixReport, internalReport } from './report.ts';
 import { attemptWith, isTooNarrow, neededWidth, widestOf, widthHint } from './width.ts';
 
 /** 0 drawn, 1 the text has an error, 2 wrong options, 3 too narrow, 4 a failure inside the engine. */
@@ -118,8 +118,22 @@ function drawing(src: string, req: DrawRequest): string {
   }
 }
 
-/** Draws `src` as the request asks; never throws. */
+/** Draws `src` as the request asks; never throws. With `fix`, or format `fixed`, it first fixes what has one reading. */
 export function drawCommand(src: string, req: DrawRequest): Outcome {
+  if (!req.fix && req.format !== 'fixed') return drawn(src, req);
+  let fixed: ReturnType<typeof fixSource>;
+  try {
+    fixed = fixSource(src);
+  } catch (err) {
+    return { stdout: '', stderr: internalReport(err), code: 4 };
+  }
+  const named = fixReport(fixed.fixes);
+  // `fixed` prints the text, fixed as far as it goes, and says whether it draws the way `check` would.
+  const out = drawn(fixed.source, req.format === 'fixed' ? { ...req, format: 'check', check: false } : req);
+  return req.format === 'fixed' ? { stdout: fixed.source, stderr: `${named}${out.stderr}`, code: out.code } : { ...out, stderr: `${named}${out.stderr}` };
+}
+
+function drawn(src: string, req: DrawRequest): Outcome {
   try {
     if ((req.format === 'text' || req.format === 'text-svg') && req.width !== undefined) {
       const out = fitted(src, req, req.width);

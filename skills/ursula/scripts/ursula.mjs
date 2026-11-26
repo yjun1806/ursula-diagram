@@ -5,16 +5,17 @@ if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula ne
 import { readFileSync } from "node:fs";
 
 // src/command/args.ts
-var FORMATS = ["svg", "text", "text-svg", "json", "check", "html"];
+var FORMATS = ["svg", "text", "text-svg", "json", "check", "html", "fixed"];
 var choice = (key, choices) => (req, v) => choices.includes(v) ? { ...req, [key]: v } : undefined;
 var OPTIONS = [
-  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, json or check", apply: choice("format", FORMATS) },
+  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, json, check or fixed", apply: choice("format", FORMATS) },
   {
     name: "--width",
     value: "N",
     help: "columns for text and text-svg; fails with code 3 when the drawing cannot fit",
     apply: (req, v) => v.trim() !== "" && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined
   },
+  { name: "--fix", help: "fix a misspelt header or keyword and a flowchart ->, draw, and name each fix on stderr", apply: (req) => ({ ...req, fix: true }) },
   { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)", apply: (req) => ({ ...req, check: true }) },
   { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
   { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
@@ -30,7 +31,7 @@ var OPTIONS = [
 ];
 var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
 function parseDrawArgs(args) {
-  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false };
+  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
   for (let i = 0;i < args.length; i++) {
     const a = args[i];
     if (a === "--help" || a === "-h")
@@ -19258,7 +19259,15 @@ var zenuml = {
 var SYNTAX = [flowchart, sequence, state, klass, er, gantt, journey, eventmodeling, ishikawa, cynefin, git, kanban, mindmap, quadrant, railroad, block, pie, packet, radar, requirement, sankey, architecture, timeline, treeview, usecase, treemap, venn, c4, wardley, xychart, zenuml];
 
 // src/errors/hints.ts
+function flowArrow(row, column) {
+  const t = row.trim();
+  const at = column === undefined ? -1 : column - 1 - (row.length - row.trimStart().length);
+  if (at >= 0 && t.startsWith("->", at) && !/[-=.<]/.test(t[at - 1] ?? ""))
+    return `${t.slice(0, at)}-->${t.slice(at + 2)}`;
+  return t.replace(/(?<![-=.<])->(?!>)/, "-->");
+}
 var HINTS = [
+  { frontEnd: "flowchart", pattern: /^unsupported syntax near '->(?!>)/, hint: "a flowchart arrow is -->; -> is not one", fix: flowArrow, autofix: true },
   { frontEnd: "flowchart", pattern: /^expected a node id near ''/, hint: "an arrow needs a node on both ends", example: "A --> B" },
   { frontEnd: "flowchart", pattern: /^missing '([\])}>])'/, hint: "a bracket around the text of a node is opened and not closed", example: "A[Text] --> B(Text)" },
   { frontEnd: "flowchart", pattern: /^subgraph '.*' is never closed/, hint: "close every subgraph with a line 'end'", example: "end" },
@@ -19280,15 +19289,17 @@ var HINTS = [
   { frontEnd: "timeline", pattern: /^An event line needs a time period/, hint: "an event follows a period: the first line of a period is period : event", example: "2024 : Launch" },
   { frontEnd: "ishikawa", pattern: /is indented less than the categories/, hint: "indent categories one step under the effect, and causes further under their category" }
 ];
-function hintFor(frontEnd, message, row) {
+function hintFor(frontEnd, message, row, column) {
   const found = HINTS.find((h) => h.frontEnd === frontEnd && h.pattern.test(message));
   if (found === undefined)
     return;
-  const example = found.fix !== undefined && row !== undefined ? found.fix(row) : found.example;
+  const fixed = found.fix !== undefined && row !== undefined ? found.fix(row, column) : undefined;
+  const example = fixed ?? found.example;
   return {
     ...found.hint === undefined ? {} : { hint: found.hint },
     ...example === undefined ? {} : { example },
-    ...found.noExample ? { noExample: true } : {}
+    ...found.noExample ? { noExample: true } : {},
+    ...found.autofix && fixed !== undefined ? { autofix: true } : {}
   };
 }
 
@@ -19500,8 +19511,8 @@ function explain(err, src, ctx) {
         column = at + 1;
     }
   }
-  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row);
-  const example = advice.example ?? (entry === undefined || hinted?.noExample ? hinted?.example : exampleLine(entry, row ?? "", word, suggestion, hinted?.example));
+  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row, column);
+  const example = advice.example ?? (entry === undefined || hinted?.noExample || hinted?.autofix ? hinted?.example : exampleLine(entry, row ?? "", word, suggestion, hinted?.example));
   return new UrsulaError(message, err.code, err.line, {
     ...advice,
     ...column === undefined ? {} : { column },
@@ -19515,6 +19526,9 @@ function explain(err, src, ctx) {
 var frontEnds = [];
 function registerFrontEnd(frontEnd) {
   frontEnds.push(frontEnd);
+}
+function registeredFrontEnds() {
+  return frontEnds.map((f) => ({ name: f.name, headers: f.headers }));
 }
 function blankFrontMatter(src) {
   const rows = src.split(/\r?\n/);
@@ -40145,6 +40159,121 @@ function sequenceCheckLines(l) {
   const summary = `width ${l.width} · overflow ${overflow.length > 0 ? "yes" : "none"} · text overlaps ${textOverlaps} · labels on lines ${onLines}`;
   return [summary, ...details];
 }
+// src/errors/fix.ts
+var MOST_FIXES = 5;
+function failure(src) {
+  try {
+    selectFrontEnd(src).json(src, "svg", { quality: "fast" });
+    return;
+  } catch (err) {
+    return err;
+  }
+}
+var rowsOf3 = (src) => src.split(`
+`);
+function applied(src, e) {
+  const rows = rowsOf3(src);
+  const row = rows[e.line - 1] ?? "";
+  const at = e.column - 1;
+  return rows.map((r, i) => i === e.line - 1 ? `${row.slice(0, at)}${e.to}${row.slice(at + e.from.length)}` : r).join(`
+`);
+}
+function headerFix(src) {
+  const word = firstWord(src);
+  const headers = registeredFrontEnds().flatMap((f) => f.headers);
+  if (word === "" || headers.includes(word))
+    return;
+  const to = closest(word, headers);
+  if (to === undefined)
+    return;
+  const rows = rowsOf3(blankFrontMatter(src));
+  const at = rows.findIndex((r) => r.trim() !== "" && !r.trim().startsWith("%%"));
+  const column = (rows[at] ?? "").indexOf(word);
+  if (at < 0 || column < 0)
+    return;
+  return { line: at + 1, column: column + 1, from: word, to, reason: `'${word}' is no diagram type; '${to}' is the only one this close` };
+}
+var WORD = /[\p{L}\p{N}_@]+(?:-[\p{L}\p{N}_]+)*/uy;
+function uses(src, word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...src.matchAll(new RegExp(`(?<![\\p{L}\\p{N}_@-])${escaped}(?![\\p{L}\\p{N}_@-])`, "gu"))].length;
+}
+function wordAt(row, at) {
+  if (at > 0 && /[\p{L}\p{N}_@-]/u.test(row[at - 1] ?? ""))
+    return "";
+  WORD.lastIndex = at;
+  return WORD.exec(row)?.[0] ?? "";
+}
+function keywordFix(src, err) {
+  const to = err.suggestion;
+  if (to === undefined || err.line === undefined)
+    return;
+  const row = rowsOf3(src)[err.line - 1] ?? "";
+  const lead = leadingWord(row);
+  const spots = [
+    ...err.column === undefined ? [] : [{ word: wordAt(row, err.column - 1), at: err.column - 1 }],
+    { word: lead, at: row.indexOf(lead) }
+  ];
+  const spot = spots.find((s) => s.word !== "" && s.at >= 0 && s.word !== to && closest(s.word, [to]) === to && uses(src, s.word) === 1);
+  if (spot === undefined)
+    return;
+  return { line: err.line, column: spot.at + 1, from: spot.word, to, reason: `'${spot.word}' is no keyword here; '${to}' is the only one this close` };
+}
+function difference(before, after) {
+  if (before === after)
+    return;
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start])
+    start++;
+  let tail = 0;
+  while (tail < before.length - start && tail < after.length - start && before[before.length - 1 - tail] === after[after.length - 1 - tail])
+    tail++;
+  while (start > 0 && !/\s/.test(before[start - 1] ?? ""))
+    start--;
+  while (tail > 0 && !/\s/.test(before[before.length - tail] ?? ""))
+    tail--;
+  return { at: start, from: before.slice(start, before.length - tail), to: after.slice(start, after.length - tail) };
+}
+function hintedFix(src, err) {
+  if (err.line === undefined)
+    return;
+  const row = rowsOf3(src)[err.line - 1] ?? "";
+  const found = hintFor(selectFrontEnd(src).name, err.bare, row, err.column);
+  if (!found?.autofix || found.example === undefined)
+    return;
+  const change = difference(row.trim(), found.example);
+  if (change === undefined || change.from === "")
+    return;
+  const indent = row.length - row.trimStart().length;
+  return { line: err.line, column: indent + change.at + 1, from: change.from, to: change.to, reason: found.hint ?? "the hint table puts this line right" };
+}
+function holds2(err, e, after) {
+  if (after === undefined)
+    return true;
+  if (!(after instanceof UrsulaError))
+    return false;
+  if (after.line === err.line && after.bare === err.bare)
+    return false;
+  return !(after.line === e.line && after.column !== undefined && after.column >= e.column && after.column < e.column + e.to.length);
+}
+function fixSource(src) {
+  let source = src;
+  const fixes = [];
+  let err = failure(source);
+  while (fixes.length < MOST_FIXES && err instanceof UrsulaError && !/width$/.test(err.code)) {
+    const edit = headerFix(source) ?? keywordFix(source, err) ?? hintedFix(source, err);
+    if (edit === undefined)
+      break;
+    const next = applied(source, edit);
+    const after = failure(next);
+    if (!holds2(err, edit, after))
+      break;
+    source = next;
+    fixes.push(edit);
+    err = after;
+  }
+  return { source, fixes };
+}
 // src/render/html.ts
 var PAPER = ["#ffffff", "#16181d"];
 function variables(mode) {
@@ -40414,6 +40543,10 @@ function internalReport(err) {
 This is a fault in ursula-diagram, not in the text. Please report it with the diagram text: ${ISSUES}
 `;
 }
+function fixReport(fixes) {
+  return fixes.map((f) => `fixed: line ${f.line}: ${f.from} → ${f.to}
+`).join("");
+}
 
 // src/command/width.ts
 var isTooNarrow = (err) => /width$/.test(err.code);
@@ -40555,6 +40688,19 @@ function drawing(src, req) {
   }
 }
 function drawCommand(src, req) {
+  if (!req.fix && req.format !== "fixed")
+    return drawn4(src, req);
+  let fixed;
+  try {
+    fixed = fixSource(src);
+  } catch (err) {
+    return { stdout: "", stderr: internalReport(err), code: 4 };
+  }
+  const named = fixReport(fixed.fixes);
+  const out = drawn4(fixed.source, req.format === "fixed" ? { ...req, format: "check", check: false } : req);
+  return req.format === "fixed" ? { stdout: fixed.source, stderr: `${named}${out.stderr}`, code: out.code } : { ...out, stderr: `${named}${out.stderr}` };
+}
+function drawn4(src, req) {
   try {
     if ((req.format === "text" || req.format === "text-svg") && req.width !== undefined) {
       const out = fitted(src, req, req.width);
@@ -40598,6 +40744,7 @@ Which format
   json      boxes, lines and labels with coordinates, for a program
   check     the engine's report on the svg layout, without the drawing; a
             terminal drawing routes its lines on its own grid and can differ
+  fixed     the text with the fixes of --fix made, to save in place of it
 
 Options
 ${optionLines.join(`
@@ -40607,6 +40754,8 @@ ${optionLines.join(`
 Errors
   A text error names the line and column, and often adds 'did you mean' and an
   example line. Fix the text and run again; 'syntax <type>' shows the grammar.
+  --fix makes the fixes that have one reading and names each on stderr, such as
+  'fixed: line 1: flowchrt → flowchart'; make the same change in your text.
 
 Exit codes
   0 drawn   1 the text has an error   2 wrong options   3 too narrow   4 engine failure
@@ -40687,7 +40836,11 @@ var VERSION = "0.1.1";
 // src/mcp/tools.ts
 class ArgumentError extends Error {
 }
-var plain3 = { format: "text", legend: true, color: false, questions: true, elbows: true, check: false };
+var plain3 = { format: "text", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+var FIX = {
+  type: "boolean",
+  description: "Fix what has one reading (a misspelt header or keyword, a flowchart ->) before drawing. The last text of the result then names each fix and gives the fixed source; keep that source in place of yours."
+};
 var TOOLS = [
   {
     name: "render",
@@ -40700,7 +40853,8 @@ var TOOLS = [
         format: { type: "string", enum: ["text", "text-svg", "svg", "html"], description: "What to draw; text by default." },
         width: { type: "integer", minimum: 1, description: "Columns for text and text-svg; 100 by default." },
         charset: { type: "string", enum: ["unicode", "ascii"], description: "Box-drawing characters (unicode, the default) or ascii only." },
-        check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." }
+        check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." },
+        fix: FIX
       },
       required: ["source"]
     }
@@ -40709,7 +40863,7 @@ var TOOLS = [
     name: "check",
     title: "Check a diagram layout",
     description: "Lays out Mermaid text and reports what the engine sees: one line of counts (bends, crossings), the pairs of lines that cross and the most bent lines with their source line numbers, and questions that suggest a change to the text.",
-    inputSchema: { type: "object", properties: { source: { type: "string", description: "The Mermaid text." } }, required: ["source"] }
+    inputSchema: { type: "object", properties: { source: { type: "string", description: "The Mermaid text." }, fix: FIX }, required: ["source"] }
   },
   {
     name: "syntax",
@@ -40733,8 +40887,22 @@ function oneOf(args, key, choices) {
     throw new ArgumentError(`"${key}" must be one of ${choices.join(", ")}`);
   return v;
 }
-function render3(args) {
+function fixedSource(args) {
   const src = source(args);
+  const fix = args["fix"];
+  if (fix !== undefined && typeof fix !== "boolean")
+    throw new ArgumentError('"fix" must be true or false');
+  if (fix !== true)
+    return { src, note: [] };
+  const fixed = fixSource(src);
+  if (fixed.fixes.length === 0)
+    return { src, note: [] };
+  return { src: fixed.source, note: [text(`${fixReport(fixed.fixes)}
+fixed source:
+${fixed.source}`)] };
+}
+function render3(args) {
+  const { src, note } = fixedSource(args);
   const format = oneOf(args, "format", ["text", "text-svg", "svg", "html"]) ?? "text";
   const charset = oneOf(args, "charset", ["unicode", "ascii"]);
   const width = args["width"];
@@ -40753,12 +40921,13 @@ function render3(args) {
   };
   const out = drawCommand(src, req);
   if (out.code !== 0)
-    return { content: [text(out.stderr)], isError: true };
-  return { content: [text(out.stdout), ...req.check ? [text(out.stderr)] : []], isError: false };
+    return { content: [text(out.stderr), ...note], isError: true };
+  return { content: [text(out.stdout), ...req.check ? [text(out.stderr)] : [], ...note], isError: false };
 }
 function check(args) {
-  const out = drawCommand(source(args), { ...plain3, format: "check" });
-  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+  const { src, note } = fixedSource(args);
+  const out = drawCommand(src, { ...plain3, format: "check" });
+  return out.code === 0 ? { content: [text(out.stdout), ...note], isError: false } : { content: [text(out.stderr), ...note], isError: true };
 }
 function syntax(args) {
   const type = args["type"];
