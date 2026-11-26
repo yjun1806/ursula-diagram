@@ -41117,7 +41117,7 @@ var messageLine = (message) => `${JSON.stringify(message).replace(/\u2028/g, "\\
 `;
 
 // src/version.ts
-var VERSION = "0.1.1";
+var VERSION = "0.2.0";
 
 // src/mcp/tools.ts
 class ArgumentError extends Error {
