@@ -416,3 +416,23 @@ describe('sankey: node label', () => {
     expect(render(EXAMPLES['basic'] ?? '')).toMatch(/<text class="ursula-name ursula-(start|end|middle)"[^>]*><tspan>[^<]+<\/tspan><tspan class="ursula-value ursula-value--plain" dx="6">[0-9]/u);
   });
 });
+
+describe('sankey: crossing weight', () => {
+  it('is the sum of the weights of every pair taken alone', () => {
+    let seed = 7;
+    const random = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    for (let round = 0; round < 20; round++) {
+      const lines = Array.from({ length: 30 }, () => {
+        const c0 = Math.floor(random() * 4);
+        const c1 = c0 + 1 + Math.floor(random() * 3);
+        return { x0: c0 * 120 + 20, x1: c1 * 120, y0: random() * 400, y1: random() * 400, weight: 1 + Math.floor(random() * 9) };
+      });
+      let pairs = 0;
+      for (let a = 0; a < lines.length; a++) for (let b = a + 1; b < lines.length; b++) pairs += crossingWeight([lines[a], lines[b]] as typeof lines);
+      expect(crossingWeight(lines)).toBe(pairs);
+    }
+  });
+});

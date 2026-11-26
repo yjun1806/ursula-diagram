@@ -127,6 +127,21 @@ function centreAt(c: Centreline, x: number): number {
 
 /** Sum over every pair of bands that swap their up-down order inside their common span, weighted by the thinner band. */
 export function crossingWeight(lines: Centreline[]): number {
+  // A common span starts and ends at band ends, so each band's centre is wanted only at the x of some band end.
+  // Every centre is worked out once, the first time a pair asks for it.
+  const xs = [...new Set(lines.flatMap((c) => [c.x0, c.x1]))];
+  const slot = new Map(xs.map((x, k) => [x, k]));
+  const start = lines.map((c) => slot.get(c.x0) as number);
+  const end = lines.map((c) => slot.get(c.x1) as number);
+  const centres = new Float64Array(lines.length * xs.length).fill(Number.NaN);
+  const centre = (i: number, k: number): number => {
+    const at = i * xs.length + k;
+    const known = centres[at] as number;
+    if (!Number.isNaN(known)) return known;
+    const y = centreAt(lines[i] as Centreline, xs[k] as number);
+    centres[at] = y;
+    return y;
+  };
   let total = 0;
   for (let a = 0; a < lines.length; a++) {
     const p = lines[a] as Centreline;
@@ -135,8 +150,10 @@ export function crossingWeight(lines: Centreline[]): number {
       const lo = Math.max(p.x0, q.x0);
       const hi = Math.min(p.x1, q.x1);
       if (hi - lo < 1e-6) continue;
-      const before = centreAt(p, lo) - centreAt(q, lo);
-      const after = centreAt(p, hi) - centreAt(q, hi);
+      const kLo = (p.x0 >= q.x0 ? start[a] : start[b]) as number;
+      const kHi = (p.x1 <= q.x1 ? end[a] : end[b]) as number;
+      const before = centre(a, kLo) - centre(b, kLo);
+      const after = centre(a, kHi) - centre(b, kHi);
       if (before * after < -1e-9) total += Math.min(p.weight, q.weight);
     }
   }
