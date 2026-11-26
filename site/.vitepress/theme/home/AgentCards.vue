@@ -27,7 +27,7 @@ const rows = MEASURE.map((m, i) => ({
 
 <template>
   <section class="ag">
-    <h2 class="ag-title">{{ t.agentsTitle }}</h2>
+    <h2 id="agents" class="ag-title" tabindex="-1">{{ t.agentsTitle }} <a class="header-anchor" href="#agents">&#8203;</a></h2>
     <p class="ag-lead">{{ t.agentsLead }}</p>
     <div class="ag-loop ursula-frame">
       <img :src="loopSrc" :alt="t.loopAlt" loading="lazy" />

@@ -13,8 +13,10 @@ import ExampleJump from './examples/ExampleJump.vue';
 import ExampleTypes from './examples/ExampleTypes.vue';
 import ExampleView from './examples/ExampleView.vue';
 import { watchLanguageChoice } from './language-choice.js';
+import { watchSectionLinks } from './section-link.js';
 import './theme.css';
 import './custom.css';
+import './section-link.css';
 
 export default {
   extends: DefaultTheme,
@@ -34,6 +36,9 @@ export default {
     app.component('ExampleJump', ExampleJump);
     app.component('ExampleTypes', ExampleTypes);
     app.component('ExampleView', ExampleView);
-    if (inBrowser) watchLanguageChoice(siteData.value.base);
+    if (inBrowser) {
+      watchLanguageChoice(siteData.value.base);
+      watchSectionLinks();
+    }
   },
 };
