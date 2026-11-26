@@ -21213,16 +21213,12 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const graph = read(src, opts.config);
     const draw = (g) => renderTextLayout(layout(g, cellRuler(), { legend: false, fold: true, ...maxWidth === undefined ? {} : { maxWidth } }));
-    const widest = (lines) => Math.max(0, ...lines.map(cellWidth));
     let lines = draw(graph);
-    if (maxWidth === undefined)
+    if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined))
       return titledLines(lines, opts.heading, maxWidth);
+    const widest = (ls) => Math.max(0, ...ls.map(cellWidth));
     for (let limit = 40;widest(lines) > maxWidth && limit >= 8; limit -= 4) {
-      const clipLines = (ls) => ls.map((l) => clip(l, limit));
-      lines = draw({
-        ...graph,
-        nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: clipLines(n.lines), ...n.compartments === undefined ? {} : { compartments: n.compartments.map((c) => ({ ...c, lines: clipLines(c.lines) })) } }))
-      });
+      lines = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
     }
     return titledLines(lines, opts.heading, maxWidth);
   },
