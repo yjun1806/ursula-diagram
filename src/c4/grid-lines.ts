@@ -316,7 +316,17 @@ export function drawLines(scene: LineScene): { edges: LayoutEdge[]; diagnostics:
    * What a line costs on its own: undefined when it goes through a box or a cluster it may not; else the price of what it
    * runs along or over, or of an arrowhead right on a corner, and the small price of the borders it crosses.
    */
+  // The same line through the same points is priced again and again while shapes are tried and drawings compared;
+  // within one call nothing it is priced against changes, so each price is worked out once.
+  const ownCosts = new Map<string, { penalty: number; soft: number } | undefined>();
   const ownCost = (pts: readonly Point[], i: number): { penalty: number; soft: number } | undefined => {
+    const key = `${i}:${pts.map((p) => `${p.x},${p.y}`).join(' ')}`;
+    if (ownCosts.has(key)) return ownCosts.get(key);
+    const price = ownCostAfresh(pts, i);
+    ownCosts.set(key, price);
+    return price;
+  };
+  const ownCostAfresh = (pts: readonly Point[], i: number): { penalty: number; soft: number } | undefined => {
     const e = graph.edges[i] as { from: string; to: string };
     const size = scene.labelOf(i);
     let cost = 0;

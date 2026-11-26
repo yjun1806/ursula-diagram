@@ -10631,7 +10631,16 @@ function drawLines(scene) {
     }
     return [fa, fb];
   });
+  const ownCosts = new Map;
   const ownCost = (pts, i) => {
+    const key = `${i}:${pts.map((p) => `${p.x},${p.y}`).join(" ")}`;
+    if (ownCosts.has(key))
+      return ownCosts.get(key);
+    const price = ownCostAfresh(pts, i);
+    ownCosts.set(key, price);
+    return price;
+  };
+  const ownCostAfresh = (pts, i) => {
     const e = graph.edges[i];
     const size = scene.labelOf(i);
     let cost = 0;
