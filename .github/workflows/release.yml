@@ -1,14 +1,20 @@
 name: Release
 
-# Push a tag such as v0.1.1 on main whose version matches package.json (see RELEASING.md). The package is published to npm through trusted
-# publishing (no token), with provenance, and a GitHub release is made for the tag.
+# Runs on every push to main. When the version in package.json is not on npm yet (a release pull request was merged),
+# it tests and builds, publishes to npm through trusted publishing (no token, with provenance), tags the commit
+# v<version> and creates the GitHub release. Otherwise it stops after the version check. See RELEASING.md.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -21,22 +27,44 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - uses: oven-sh/setup-bun@v2
-      - run: npm install -g npm@latest
-      - run: bun install --frozen-lockfile
-      - name: The tag is on main
+      - name: Is this version new?
+        id: version
+        # The tag is the record of a release: npm can take minutes to serve a version it accepted, so a push that
+        # lands in that window must not publish the same version again.
         run: |
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: The tag matches the version
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-      - run: npx tsc --noEmit
-      - run: npm test
-      - run: bun scripts/build.ts
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is already tagged; nothing to release."
+          elif npm view "ursula-diagram@$version" version >/dev/null 2>&1; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "ursula-diagram@$version is already on npm; nothing to release."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing ursula-diagram@$version."
+          fi
+      - uses: oven-sh/setup-bun@v2
+        if: steps.version.outputs.new == 'true'
+      - if: steps.version.outputs.new == 'true'
+        run: npm install -g npm@latest
+      - if: steps.version.outputs.new == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.version.outputs.new == 'true'
+        run: npx tsc --noEmit
+      - if: steps.version.outputs.new == 'true'
+        run: npm test
+      - if: steps.version.outputs.new == 'true'
+        run: bun scripts/build.ts
       - name: The command inside the skill matches the sources
+        if: steps.version.outputs.new == 'true'
         run: git diff --exit-code -- skills/
-      - run: npm publish --provenance
-      - name: GitHub release
+      - if: steps.version.outputs.new == 'true'
+        run: npm publish --provenance
+      - name: Tag and GitHub release
+        if: steps.version.outputs.new == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
