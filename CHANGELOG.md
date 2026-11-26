@@ -7,6 +7,10 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 
 ## Unreleased
 
+### Removed
+
+- The second flowchart layout engine: the `--engine` option and the `engine` option of the library (`LayoutOptions`, `RenderOptions`, `TextOptions`, `renderText`, `renderTextSpans`, `renderTextSvg`), and the `laneAxis` option of `LayoutOptions` that only it read. Every drawing stays the same. [#70](https://github.com/yjun1806/ursula-diagram/pull/70)
+
 ## 0.2.1 (2026-11-26)
 
 ### Fixed
