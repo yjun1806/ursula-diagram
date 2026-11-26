@@ -46,6 +46,7 @@ function sidebar(prefix, t) {
           collapsed: true,
           items: TYPES.map((type) => ({ text: type.name, link: `${prefix}/examples/${type.id}` })),
         },
+        { text: t.useCases, link: `${prefix}/guide/use-cases` },
         { text: t.larger, link: `${prefix}/guide/larger-drawing` },
         { text: t.terminal, link: `${prefix}/guide/terminal` },
       ],
@@ -69,14 +70,14 @@ function sidebar(prefix, t) {
 const en = {
   code: 'en',
   intro: 'Introduction', why: 'Why ursula', compared: 'Compared with other tools', quickStart: 'Quick start',
-  drawings: 'Drawings', examples: 'Examples', larger: 'A larger drawing', terminal: 'In a terminal',
+  drawings: 'Drawings', examples: 'Examples', useCases: 'Ways to use', larger: 'A larger drawing', terminal: 'In a terminal',
   reference: 'Reference', formats: 'Output formats', library: 'Library', colours: 'Colours', skill: 'Agent skill', development: 'Development',
   playground: 'Playground', roadmap: 'Roadmap', changelog: 'Changelog', guide: 'Guide', releases: 'Release notes',
 };
 const ko = {
   code: 'ko',
   intro: '소개', why: '왜 ursula인가', compared: '다른 도구와 비교', quickStart: '빠른 시작',
-  drawings: '그림', examples: '예제', larger: '큰 그림', terminal: '터미널에서',
+  drawings: '그림', examples: '예제', useCases: '쓰는 방법', larger: '큰 그림', terminal: '터미널에서',
   reference: '참고', formats: '출력 형식', library: '라이브러리', colours: '색 바꾸기', skill: '에이전트 스킬', development: '개발',
   playground: '플레이그라운드', roadmap: '로드맵', changelog: '변경 내역', guide: '안내', releases: '릴리스 노트',
 };
@@ -85,6 +86,7 @@ function nav(prefix, t) {
   return [
     { text: t.guide, link: `${prefix}/guide/why` },
     { text: t.examples, link: `${prefix}/examples/`, activeMatch: 'examples/' },
+    { text: t.useCases, link: `${prefix}/guide/use-cases` },
     { text: t.playground, link: `${prefix}/playground` },
     { text: t.roadmap, link: `${prefix}/roadmap` },
     { text: t.changelog, link: `${prefix}/changelog` },
