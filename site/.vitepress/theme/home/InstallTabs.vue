@@ -69,7 +69,7 @@ const noteOf = (id) => (id === 'skill' ? t.skillNote : id === 'mcp' ? t.mcpNote 
 }
 .it-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-top: -1px;
   padding: 10px 10px 10px 16px;
@@ -80,8 +80,12 @@ const noteOf = (id) => (id === 'skill' ? t.skillNote : id === 'mcp' ? t.mcpNote 
 .it-line code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
+  padding: 3px 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
   font-family: var(--vp-font-family-mono);
   font-size: 14px;
   color: var(--vp-c-text-1);

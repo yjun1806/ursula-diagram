@@ -34,8 +34,8 @@ const rows = MEASURE.map((m, i) => ({
     </div>
 
     <div class="ag-grid">
-      <article v-for="c in cards" :key="c.id" class="ag-card" :class="{ featured: c.featured }">
-        <h3><span class="ag-step">{{ c.step }}</span>{{ c.title }}</h3>
+      <article v-for="c in cards" :key="c.id" class="ag-card">
+        <h3><span class="ag-step">{{ c.step }}.</span> {{ c.title }}</h3>
         <p>{{ c.body }}</p>
         <div class="ag-code">
           <div v-for="cmd in c.commands" :key="cmd" class="ag-cmd">
@@ -123,26 +123,9 @@ const rows = MEASURE.map((m, i) => ({
   height: auto;
   margin: 0 auto;
 }
-.ag-card.featured {
-  border-color: var(--vp-c-brand-1);
-  box-shadow: inset 4px 0 0 var(--vp-c-brand-1);
-}
-.ag-card.featured > p {
-  color: var(--vp-c-text-1);
-}
 .ag-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background: var(--vp-c-brand-soft);
-  color: var(--vp-c-brand-1);
-  font-size: 12px;
-  font-weight: 700;
-  vertical-align: 1px;
+  color: var(--vp-c-text-3);
+  font-variant-numeric: tabular-nums;
 }
 .ag-cmd + .ag-cmd {
   border-top: 1px solid var(--vp-c-divider);
@@ -170,15 +153,20 @@ const rows = MEASURE.map((m, i) => ({
 }
 .ag-cmd {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 6px 6px 6px 12px;
 }
+/* A command wraps instead of running under the copy button, which sits beside it in the flex row. */
 .ag-cmd code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
+  padding: 3px 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
   font-family: var(--vp-font-family-mono);
   font-size: 12.5px;
   color: var(--vp-c-text-1);

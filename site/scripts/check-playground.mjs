@@ -239,6 +239,18 @@ for (const readme of ['README.md', 'README.ko.md']) {
   console.log(`ok   ${readme}: ${total - bad} of ${total} shell blocks hold one command without a comment`);
 }
 
+// No callout boxes: no VitePress tip/info/warning/danger/details container and no GitHub alert on the site or in the
+// READMEs, and no home card drawn apart from the others. Say the point in a plain paragraph instead. A raw <details>
+// may still fold long reference material (the Mermaid text of each picture, the --charset ascii table).
+const CALLOUT_HTML = /class="(?=[^"]*\bcustom-block\b)(?=[^"]*\b(?:tip|info|warning|danger|details|note|important|caution|github-alert)\b)[^"]*"|\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/;
+for (const readme of ['README.md', 'README.ko.md']) {
+  const lines = readFileSync(join(site, '..', readme), 'utf8').split('\n');
+  const alerts = lines.flatMap((l, i) => (/^\s*>\s*\[!/.test(l) ? [i + 1] : []));
+  if (alerts.length) fail(`${readme}:${alerts.join(',')}: a > [! alert; write it as a plain paragraph`);
+  else console.log(`ok   ${readme} has no > [! alert`);
+}
+if (CARDS.some((c) => 'featured' in c || 'highlight' in c)) fail('home agent cards: a card is marked featured; every card looks the same');
+
 for (const [where, commands] of [['home install tabs', INSTALL.map((m) => m.command)], ['home agent cards', CARDS.flatMap((c) => c.commands)]]) {
   for (const c of commands) for (const p of shellProblems(c)) fail(`${where}: ${p}`);
   console.log(`ok   ${where}: ${commands.length} commands, each with its own copy button`);
@@ -254,10 +266,14 @@ if (existsSync(built)) {
   let shells = 0;
   let sequences = 0;
   const mixed = [];
+  const callouts = [];
   const noCopy = new Map();
   const noWrap = new Map();
   for (const page of allPages(built)) {
-    for (const b of preBlocks(readFileSync(join(built, page), 'utf8'))) {
+    const html = readFileSync(join(built, page), 'utf8');
+    const callout = html.match(CALLOUT_HTML);
+    if (callout) callouts.push(`${page}: ${callout[0]}`);
+    for (const b of preBlocks(html)) {
       pres++;
       if (!(/language-/.test(b.cls) && b.copy)) noCopy.set(page, (noCopy.get(page) ?? 0) + 1);
       if (SHELL.test(b.cls)) {
@@ -274,6 +290,8 @@ if (existsSync(built)) {
       }
     }
   }
+  for (const c of callouts) fail(`${c}; write it as a plain paragraph, not a callout box`);
+  if (!callouts.length) console.log('ok   no built page carries a callout box (::: tip/info/warning/danger, > [!NOTE])');
   for (const [page, n] of noCopy) fail(`${page}: ${n} code blocks without a copy button`);
   for (const [page, n] of noWrap) fail(`${page}: ${n} Mermaid blocks not marked as mermaid, so they do not wrap`);
   for (const m of mixed) fail(`${m}; give each command its own block (or code-group tab) and say what it is for before it`);
