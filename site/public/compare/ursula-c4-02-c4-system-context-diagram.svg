@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 1224 1120" width="1224" height="1120" role="img"><title>System Context diagram for Internet Banking System</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#efeeed)}
+.ursula-lane-label{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#e5c37a)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-node-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#201f1e)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#201f1e);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#201f1e)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#201f1e);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#565554)}
+.ursula-arrow--accent{fill:var(--ursula-line,#565554)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-edge-label{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+.ursula-zone{fill:var(--ursula-lane,#efeeed);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-zone--plain{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-zone--dashed{fill:none;stroke:var(--ursula-faint,#878685);stroke-width:1.5;stroke-dasharray:5 4;stroke-linecap:round}
+.ursula-zone--dashed.ursula-zone--tint-outer{fill:var(--ursula-tint-outer,#f4f3f1)}
+.ursula-zone-knock--dashed.ursula-zone--tint-outer{fill:var(--ursula-tint-outer,#f4f3f1)}
+.ursula-edge-label--on-tint-outer .ursula-edge-label-bg{fill:var(--ursula-tint-chip,#ebeae8)}
+.ursula-zone--dashed.ursula-zone--tint-mid{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1;stroke-dasharray:none}
+.ursula-zone-knock--dashed.ursula-zone--tint-mid{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-edge-label--on-tint-mid .ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-zone--dashed.ursula-zone--tint-inner{fill:var(--ursula-tint-inner,#f6f5f3);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1;stroke-dasharray:none}
+.ursula-zone-knock--dashed.ursula-zone--tint-inner{fill:var(--ursula-tint-inner,#f6f5f3)}
+.ursula-edge-label--on-tint-inner .ursula-edge-label-bg{fill:var(--ursula-tint-chip,#ebeae8)}
+.ursula-zone-name{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:600}
+.ursula-zone-sub{font-weight:400;opacity:.75}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#efeeed)}
+.ursula-cell-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#5b5b59);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#201f1e);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#82641c)}
+.ursula-end-ring{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-fg,#201f1e);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#201f1e)}
+.ursula-bar{fill:var(--ursula-fg,#201f1e)}
+.ursula-note{fill:var(--ursula-lane,#efeeed);stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-hollow{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-solid{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#82641c);stroke:var(--ursula-accent,#82641c)}
+.ursula-end-label{fill:var(--ursula-fg,#201f1e);font-size:11px;font-weight:500}
+.ursula-zone-name{fill:var(--ursula-fg,#201f1e);font-size:13px}
+.ursula-zone-sub{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500;opacity:1}
+.ursula-cell-body{fill:var(--ursula-muted,#5b5b59)}
+.ursula-edge-label-tech{font-weight:400;opacity:.7}
+.ursula-title{fill:var(--ursula-fg,#201f1e);font-size:15px;font-weight:600}
+@media (prefers-color-scheme: dark){
+.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#171614);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#252422)}
+.ursula-lane-label{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#171614)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#dab975)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#171614)}
+.ursula-node-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#171614)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#171614);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#efeeec)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#efeeec);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#a5a4a2)}
+.ursula-arrow--accent{fill:var(--ursula-line,#a5a4a2)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-edge-label{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+.ursula-zone{fill:var(--ursula-lane,#252422);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-zone--plain{fill:var(--ursula-surface,#171614)}
+.ursula-zone--dashed{fill:none;stroke:var(--ursula-faint,#757472);stroke-width:1.5;stroke-dasharray:5 4;stroke-linecap:round}
+.ursula-zone--dashed.ursula-zone--tint-outer{fill:var(--ursula-tint-outer,#1e1d1b)}
+.ursula-zone-knock--dashed.ursula-zone--tint-outer{fill:var(--ursula-tint-outer,#1e1d1b)}
+.ursula-edge-label--on-tint-outer .ursula-edge-label-bg{fill:var(--ursula-tint-chip,#262523)}
+.ursula-zone--dashed.ursula-zone--tint-mid{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1;stroke-dasharray:none}
+.ursula-zone-knock--dashed.ursula-zone--tint-mid{fill:var(--ursula-surface,#171614)}
+.ursula-edge-label--on-tint-mid .ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-zone--dashed.ursula-zone--tint-inner{fill:var(--ursula-tint-inner,#1c1b19);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1;stroke-dasharray:none}
+.ursula-zone-knock--dashed.ursula-zone--tint-inner{fill:var(--ursula-tint-inner,#1c1b19)}
+.ursula-edge-label--on-tint-inner .ursula-edge-label-bg{fill:var(--ursula-tint-chip,#262523)}
+.ursula-zone-name{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:600}
+.ursula-zone-sub{font-weight:400;opacity:.75}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#252422)}
+.ursula-cell-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#b2b1af);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#efeeec);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#dab975)}
+.ursula-end-ring{fill:var(--ursula-surface,#171614);stroke:var(--ursula-fg,#efeeec);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#efeeec)}
+.ursula-bar{fill:var(--ursula-fg,#efeeec)}
+.ursula-note{fill:var(--ursula-lane,#252422);stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-hollow{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-solid{fill:var(--ursula-line,#a5a4a2);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#dab975);stroke:var(--ursula-accent,#dab975)}
+.ursula-end-label{fill:var(--ursula-fg,#efeeec);font-size:11px;font-weight:500}
+.ursula-zone-name{fill:var(--ursula-fg,#efeeec);font-size:13px}
+.ursula-zone-sub{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500;opacity:1}
+.ursula-cell-body{fill:var(--ursula-muted,#b2b1af)}
+.ursula-edge-label-tech{font-weight:400;opacity:.7}
+.ursula-title{fill:var(--ursula-fg,#efeeec);font-size:15px;font-weight:600}
+}</style><defs><marker id="ursula-arrow" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-accent" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--accent" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-start" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker></defs><text class="ursula-title ursula-diagram-title" x="24" y="33" dominant-baseline="central">System Context diagram for Internet Banking System</text><g transform="translate(0 40)"><g class="ursula-cluster" data-cluster="b0"><rect class="ursula-zone ursula-zone--dashed ursula-zone--tint-outer" x="24" y="24" width="1176" height="1032" rx="14"/><text class="ursula-zone-name" x="40" y="48">BankBoundary0</text><text class="ursula-zone-name ursula-zone-sub" x="40" y="66">Enterprise_Boundary</text></g><g class="ursula-cluster" data-cluster="b1"><rect class="ursula-zone ursula-zone--dashed ursula-zone--tint-mid" x="48" y="512" width="1128" height="520" rx="14"/><text class="ursula-zone-name" x="64" y="536">BankBoundary</text><text class="ursula-zone-name ursula-zone-sub" x="64" y="554">Enterprise_Boundary</text></g><g class="ursula-cluster" data-cluster="b2"><rect class="ursula-zone ursula-zone--dashed ursula-zone--tint-inner" x="624" y="536" width="528" height="224" rx="14"/><text class="ursula-zone-name" x="640" y="560">BankBoundary2</text><text class="ursula-zone-name ursula-zone-sub" x="640" y="578">System_Boundary</text></g><g class="ursula-cluster" data-cluster="b3"><rect class="ursula-zone ursula-zone--dashed ursula-zone--tint-inner" x="624" y="784" width="528" height="224" rx="14"/><text class="ursula-zone-name" x="640" y="808">BankBoundary3</text><text class="ursula-zone-name ursula-zone-sub" x="640" y="826">boundary</text></g><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="customerA" data-to="SystemAA" d="M208 232 L208 296" marker-start="url(#ursula-arrow-start)" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="SystemAA" data-to="SystemE" d="M208 440 L208 600" marker-start="url(#ursula-arrow-start)" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="SystemAA" data-to="SystemC" d="M320 368 L392 368 A8 8 0 0 1 400 376 L400 600" marker-end="url(#ursula-arrow)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="customerA" data-to="SystemC" d="M272 232 L272 256 A8 8 0 0 0 280 264 L520 264 A8 8 0 0 1 528 272 L528 608" marker-start="url(#ursula-arrow-start)"/><g class="ursula-node" data-node="customerA"><rect class="ursula-node-box" x="96" y="96" width="224" height="128" rx="18"/><clipPath id="ursula-band-customerA-96-96-224-128"><rect x="96.75" y="96.75" width="222.5" height="126.5" rx="17.25"/></clipPath><rect class="ursula-head-band" x="96" y="96" width="224" height="28" clip-path="url(#ursula-band-customerA-96-96-224-128)"/><text class="ursula-cell-tag" x="208" y="110" text-anchor="middle" dominant-baseline="central">Person</text><text class="ursula-cell-title" x="208" y="144" text-anchor="middle" dominant-baseline="central">Banking Customer A</text><text class="ursula-cell-body" x="208" y="162" text-anchor="middle" dominant-baseline="central">A customer of the bank, with</text><text class="ursula-cell-body" x="208" y="178" text-anchor="middle" dominant-baseline="central">personal bank accounts.</text></g><g class="ursula-node" data-node="customerB"><rect class="ursula-node-box" x="352" y="96" width="224" height="128" rx="18"/><clipPath id="ursula-band-customerB-352-96-224-128"><rect x="352.75" y="96.75" width="222.5" height="126.5" rx="17.25"/></clipPath><rect class="ursula-head-band" x="352" y="96" width="224" height="28" clip-path="url(#ursula-band-customerB-352-96-224-128)"/><text class="ursula-cell-tag" x="464" y="110" text-anchor="middle" dominant-baseline="central">Person</text><text class="ursula-cell-title" x="464" y="144" text-anchor="middle" dominant-baseline="central">Banking Customer B</text></g><g class="ursula-node" data-node="customerC"><rect class="ursula-node-box" x="648" y="96" width="224" height="128" rx="18"/><clipPath id="ursula-band-customerC-648-96-224-128"><rect x="648.75" y="96.75" width="222.5" height="126.5" rx="17.25"/></clipPath><rect class="ursula-head-band" x="648" y="96" width="224" height="28" clip-path="url(#ursula-band-customerC-648-96-224-128)"/><text class="ursula-cell-tag" x="760" y="110" text-anchor="middle" dominant-baseline="central">Person_Ext</text><text class="ursula-cell-title" x="760" y="144" text-anchor="middle" dominant-baseline="central">Banking Customer C</text><text class="ursula-cell-body" x="760" y="162" text-anchor="middle" dominant-baseline="central">desc</text></g><g class="ursula-node" data-node="customerD"><rect class="ursula-node-box" x="904" y="96" width="224" height="128" rx="18"/><clipPath id="ursula-band-customerD-904-96-224-128"><rect x="904.75" y="96.75" width="222.5" height="126.5" rx="17.25"/></clipPath><rect class="ursula-head-band" x="904" y="96" width="224" height="28" clip-path="url(#ursula-band-customerD-904-96-224-128)"/><text class="ursula-cell-tag" x="1016" y="110" text-anchor="middle" dominant-baseline="central">Person</text><text class="ursula-cell-title" x="1016" y="144" text-anchor="middle" dominant-baseline="central">Banking Customer D</text><text class="ursula-cell-body" x="1016" y="162" text-anchor="middle" dominant-baseline="central">A customer of the bank,</text><text class="ursula-cell-body" x="1016" y="178" text-anchor="middle" dominant-baseline="central">with personal bank accounts.</text></g><g class="ursula-node" data-node="SystemAA"><rect class="ursula-node-box" x="96" y="304" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemAA-96-304-224-128"><rect x="96.75" y="304.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="96" y="304" width="224" height="28" clip-path="url(#ursula-band-SystemAA-96-304-224-128)"/><text class="ursula-cell-tag" x="208" y="318" text-anchor="middle" dominant-baseline="central">System</text><text class="ursula-cell-title" x="208" y="352" text-anchor="middle" dominant-baseline="central">Internet Banking System</text><text class="ursula-cell-body" x="208" y="370" text-anchor="middle" dominant-baseline="central">Allows customers to view</text><text class="ursula-cell-body" x="208" y="386" text-anchor="middle" dominant-baseline="central">information about their bank</text><text class="ursula-cell-body" x="208" y="402" text-anchor="middle" dominant-baseline="central">accounts, and make payments.</text></g><g class="ursula-node" data-node="SystemE"><path class="ursula-node-box ursula-node-box--lined" d="M96 614 A112 6 0 0 1 320 614 A112 6 0 0 1 96 614 M96 614 V730 A112 6 0 0 0 320 730 V614"/><text class="ursula-cell-tag" x="208" y="642" text-anchor="middle" dominant-baseline="central">SystemDb_Ext</text><text class="ursula-cell-title" x="208" y="666" text-anchor="middle" dominant-baseline="central">Mainframe Banking System</text><text class="ursula-cell-body" x="208" y="684" text-anchor="middle" dominant-baseline="central">Stores all of the core banking</text><text class="ursula-cell-body" x="208" y="700" text-anchor="middle" dominant-baseline="central">information about customers,</text><text class="ursula-cell-body" x="208" y="716" text-anchor="middle" dominant-baseline="central">accounts, transactions, etc.</text></g><g class="ursula-node" data-node="SystemA"><rect class="ursula-node-box" x="648" y="608" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemA-648-608-224-128"><rect x="648.75" y="608.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="648" y="608" width="224" height="28" clip-path="url(#ursula-band-SystemA-648-608-224-128)"/><text class="ursula-cell-tag" x="760" y="622" text-anchor="middle" dominant-baseline="central">System</text><text class="ursula-cell-title" x="760" y="656" text-anchor="middle" dominant-baseline="central">Banking System A</text></g><g class="ursula-node" data-node="SystemB"><rect class="ursula-node-box" x="904" y="608" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemB-904-608-224-128"><rect x="904.75" y="608.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="904" y="608" width="224" height="28" clip-path="url(#ursula-band-SystemB-904-608-224-128)"/><text class="ursula-cell-tag" x="1016" y="622" text-anchor="middle" dominant-baseline="central">System</text><text class="ursula-cell-title" x="1016" y="656" text-anchor="middle" dominant-baseline="central">Banking System B</text><text class="ursula-cell-body" x="1016" y="674" text-anchor="middle" dominant-baseline="central">A system of the bank, with</text><text class="ursula-cell-body" x="1016" y="690" text-anchor="middle" dominant-baseline="central">personal bank accounts. next</text><text class="ursula-cell-body" x="1016" y="706" text-anchor="middle" dominant-baseline="central">line.</text></g><g class="ursula-node" data-node="SystemC"><rect class="ursula-node-box" x="352" y="608" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemC-352-608-224-128"><rect x="352.75" y="608.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="352" y="608" width="224" height="28" clip-path="url(#ursula-band-SystemC-352-608-224-128)"/><text class="ursula-cell-tag" x="464" y="622" text-anchor="middle" dominant-baseline="central">System_Ext</text><text class="ursula-cell-title" x="464" y="656" text-anchor="middle" dominant-baseline="central">E-mail system</text><text class="ursula-cell-body" x="464" y="674" text-anchor="middle" dominant-baseline="central">The internal Microsoft</text><text class="ursula-cell-body" x="464" y="690" text-anchor="middle" dominant-baseline="central">Exchange e-mail system.</text></g><g class="ursula-node" data-node="SystemD"><path class="ursula-node-box ursula-node-box--lined" d="M96 862 A112 6 0 0 1 320 862 A112 6 0 0 1 96 862 M96 862 V978 A112 6 0 0 0 320 978 V862"/><text class="ursula-cell-tag" x="208" y="898" text-anchor="middle" dominant-baseline="central">SystemDb</text><text class="ursula-cell-title" x="208" y="922" text-anchor="middle" dominant-baseline="central">Banking System D Database</text><text class="ursula-cell-body" x="208" y="940" text-anchor="middle" dominant-baseline="central">A system of the bank, with</text><text class="ursula-cell-body" x="208" y="956" text-anchor="middle" dominant-baseline="central">personal bank accounts.</text></g><g class="ursula-node" data-node="SystemF"><rect class="ursula-node-box" x="648" y="856" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemF-648-856-224-128"><rect x="648.75" y="856.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="648" y="856" width="224" height="28" clip-path="url(#ursula-band-SystemF-648-856-224-128)"/><text class="ursula-cell-tag" x="760" y="870" text-anchor="middle" dominant-baseline="central">SystemQueue</text><text class="ursula-cell-title" x="760" y="904" text-anchor="middle" dominant-baseline="central">Banking System F Queue</text><text class="ursula-cell-body" x="760" y="922" text-anchor="middle" dominant-baseline="central">A system of the bank.</text></g><g class="ursula-node" data-node="SystemG"><rect class="ursula-node-box" x="904" y="856" width="224" height="128" rx="10"/><clipPath id="ursula-band-SystemG-904-856-224-128"><rect x="904.75" y="856.75" width="222.5" height="126.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="904" y="856" width="224" height="28" clip-path="url(#ursula-band-SystemG-904-856-224-128)"/><text class="ursula-cell-tag" x="1016" y="870" text-anchor="middle" dominant-baseline="central">SystemQueue_Ext</text><text class="ursula-cell-title" x="1016" y="904" text-anchor="middle" dominant-baseline="central">Banking System G Queue</text><text class="ursula-cell-body" x="1016" y="922" text-anchor="middle" dominant-baseline="central">A system of the bank, with</text><text class="ursula-cell-body" x="1016" y="938" text-anchor="middle" dominant-baseline="central">personal bank accounts.</text></g><circle class="ursula-port" cx="320" cy="368" r="4"/><circle class="ursula-port" cx="528" cy="608" r="4"/><g class="ursula-edge-label-group ursula-edge-label--on-tint-outer" data-from="customerA" data-to="SystemAA"><rect class="ursula-edge-label-bg" x="183.48" y="252" width="49.04" height="24" rx="12"/><text class="ursula-edge-label" x="208" y="264" text-anchor="middle" dominant-baseline="central">Uses</text></g><g class="ursula-edge-label-group ursula-edge-label--on-tint-outer" data-from="SystemAA" data-to="SystemE"><rect class="ursula-edge-label-bg" x="183.48" y="460" width="49.04" height="24" rx="12"/><text class="ursula-edge-label" x="208" y="472" text-anchor="middle" dominant-baseline="central">Uses</text></g><g class="ursula-edge-label-group ursula-edge-label--on-tint-outer" data-from="SystemAA" data-to="SystemC"><rect class="ursula-edge-label-bg" x="327.84" y="428" width="144.32" height="24" rx="12"/><text class="ursula-edge-label" x="400" y="440" text-anchor="middle" dominant-baseline="central">Sends e-mails<tspan class="ursula-edge-label-tech" role="note"> SMTP</tspan></text></g><g class="ursula-edge-label-group ursula-edge-label--on-tint-outer" data-from="customerA" data-to="SystemC"><rect class="ursula-edge-label-bg" x="341.1" y="252" width="117.8" height="24" rx="12"/><text class="ursula-edge-label" x="400" y="264" text-anchor="middle" dominant-baseline="central">Sends e-mails to</text></g></g></svg>

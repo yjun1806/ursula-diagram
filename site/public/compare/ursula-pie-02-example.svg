@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 504 484" width="504" height="484" role="img"><title>Pie chart: Key elements in Product X</title><style>.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula-bg{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-panel{fill:var(--ursula-panel,none)}
+.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e)}
+.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e);text-anchor:middle}
+.ursula-value{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e);text-anchor:middle;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--ursula-surface,#fcfcfa);stroke-width:3px;stroke-linejoin:round}
+.ursula-start{text-anchor:start}
+.ursula-middle{text-anchor:middle}
+.ursula-end{text-anchor:end}
+.ursula-guide{fill:none;stroke:var(--ursula-hair,#e2e1e0);stroke-width:1;stroke-linecap:round;stroke-linejoin:round}
+.ursula-series-1--tint{fill:var(--ursula-s1-tint,#f1e7d2);stroke:var(--ursula-s1,#82641c);stroke-width:0}
+.ursula-series-2--tint{fill:var(--ursula-s2-tint,#d2eef1);stroke:var(--ursula-s2,#007883);stroke-width:0}
+.ursula-series-3--tint{fill:var(--ursula-s3-tint,#fce1de);stroke:var(--ursula-s3,#98524d);stroke-width:0}
+.ursula-series-4--tint{fill:var(--ursula-s4-tint,#dceedc);stroke:var(--ursula-s4,#437746);stroke-width:0}
+@media (prefers-color-scheme: dark){
+.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula-bg{fill:var(--ursula-surface,#171614)}
+.ursula-panel{fill:var(--ursula-panel,none)}
+.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec)}
+.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec);text-anchor:middle}
+.ursula-value{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec);text-anchor:middle;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--ursula-surface,#171614);stroke-width:3px;stroke-linejoin:round}
+.ursula-start{text-anchor:start}
+.ursula-middle{text-anchor:middle}
+.ursula-end{text-anchor:end}
+.ursula-guide{fill:none;stroke:var(--ursula-hair,#2c2b2a);stroke-width:1;stroke-linecap:round;stroke-linejoin:round}
+.ursula-series-1--tint{fill:var(--ursula-s1-tint,#3f3112);stroke:var(--ursula-s1,#cdad69);stroke-width:0}
+.ursula-series-2--tint{fill:var(--ursula-s2-tint,#093a3f);stroke:var(--ursula-s2,#5ec3ce);stroke-width:0}
+.ursula-series-3--tint{fill:var(--ursula-s3-tint,#492826);stroke:var(--ursula-s3,#e79a93);stroke-width:0}
+.ursula-series-4--tint{fill:var(--ursula-s4-tint,#223a23);stroke:var(--ursula-s4,#8bc18c);stroke-width:0}
+}</style><rect class="ursula-bg" x="0" y="0" width="504" height="484"/><rect class="ursula-panel" x="16" y="16" width="472" height="452" rx="18"/><text class="ursula-title ursula-start" x="40" y="49" dominant-baseline="central">Key elements in Product X</text><path class="ursula-series-1--tint" d="M241 252.02L241 128Q241 124 245 124.08A160 160 0 0 1 339.86 409.01Q336.7 411.47 334.3 408.27L259.97 309A32 32 0 0 0 241 252.02Z" data-label="Calcium" data-value="42.96"/><path class="ursula-series-2--tint" d="M258.37 310.2L332.7 409.47Q335.1 412.67 331.85 415.01A160 160 0 0 1 114.24 185.09Q116.75 181.97 119.81 184.54L214.85 264.22A32 32 0 0 0 258.37 310.2Z" data-label="Potassium" data-value="50.05"/><path class="ursula-series-3--tint" d="M216.13 262.68L121.1 183.01Q118.03 180.44 120.66 177.42A160 160 0 0 1 189.35 132.23Q193.16 131.01 194.31 134.84L229.87 253.65A32 32 0 0 0 216.13 262.68Z" data-label="Magnesium" data-value="10.01"/><path class="ursula-series-4--tint" d="M231.79 253.07L196.23 134.27Q195.08 130.44 198.93 129.36A160 160 0 0 1 235 124.08Q239 124 239 128L239 252.02A32 32 0 0 0 231.79 253.07Z" data-label="Iron" data-value="5"/><path class="ursula-guide" d="M395.6 232.2 L407 228.4"/><text class="ursula-name ursula-start" x="413" y="228" dominant-baseline="central">Calcium</text><text class="ursula-value ursula-start" x="413" y="244" dominant-baseline="central">42.96</text><path class="ursula-guide" d="M120.89 396.73 L112 405.15"/><text class="ursula-name ursula-end" x="106" y="405" dominant-baseline="central">Potassium</text><text class="ursula-value ursula-end" x="106" y="421" dominant-baseline="central">50.05</text><path class="ursula-guide" d="M149.86 147 L131 118.34"/><text class="ursula-name ursula-end" x="125" y="137" dominant-baseline="central">Magnesium</text><text class="ursula-value ursula-end" x="125" y="153" dominant-baseline="central">10.01</text><path class="ursula-guide" d="M216.24 121.73 L214.5 109.86"/><text class="ursula-name ursula-middle" x="214.5" y="80" dominant-baseline="central">Iron</text><text class="ursula-value ursula-middle" x="214.5" y="96" dominant-baseline="central">5</text></svg>

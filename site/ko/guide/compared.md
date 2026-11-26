@@ -1,32 +1,120 @@
+---
+aside: false
+pageClass: compare-page
+---
+
 # 다른 도구와 비교
 
-아래 도구는 저마다 ursula가 하지 않는 일을 합니다. 표에는 잰 것만 적고, 재지 않은 칸은 「확인 안 함」으로 둡니다.
-장 수는 Mermaid 문서의 예시 531장(35개 유형) 가운데 그린 수입니다.
+Mermaid 문서의 예시 531개를 SVG와 터미널 글 양쪽으로 모두 그리는 도구는 여기서 ursula 하나입니다. 명령 한 번으로 그리면
+mermaid-cli보다 약 6배 빠르고, 네이티브 글자 그림 도구보다 약 10배 느립니다. 모델이 직접 배치하는 스킬과 견주면 ursula를 쓴
+에이전트가 5~13배 짧은 시간에 그렸습니다.
 
-| | 출력 | 그리는 것 | 실행 환경 | 속도 | 터미널 | 한글 같은 넓은 글자 |
-| --- | --- | --- | --- | --- | --- | --- |
-| **ursula** 0.1.0 | SVG, 터미널 글, 글자 그림 SVG, HTML 한 파일, JSON | 531장 중 530장, 35개 유형 모두 | Node 22 이상, 실행 의존성 0개, 브라우저 불필요 | 라이브러리에서 중앙값 1ms 미만, 명령 한 번 0.1~0.4초 | 됨: 21개 유형은 상자와 선, 14개는 표나 목록 | 터미널 칸으로 셈: 한글 시험 13장에서 끊김이 늘지 않음. 이모지는 1칸으로 셈(틀림) |
-| **그림 그리기 스킬** | 모델이 쓴 SVG나 HTML | 모델이 배치할 수 있는 것, 그림마다 배치를 고름 | 에이전트의 모델 | 그림 한 장에 모델 차례 여럿(재지 않음) | 확인 안 함 | 확인 안 함 |
-| **Mermaid** 브라우저 렌더(12.3.0) | SVG | 531장 중 515장(ZenUML 실패) | 브라우저, 의존성 22개 | 확인 안 함 | 확인 안 함 | 확인 안 함 |
-| **mermaid-cli**(12.2.0) | SVG, PNG | Mermaid의 유형(장 수는 세지 않음) | Node 22.13 이상, Puppeteer로 띄우는 Chromium | 확인 안 함 | 안 됨 | 확인 안 함 |
-| **글자 그림 도구**: mermaid-ascii, termaid, mmdflux, beautiful-mermaid | 터미널 글. mmdflux와 beautiful-mermaid는 SVG도 | mmdflux 531장 중 206장(4개 유형), beautiful-mermaid 226장(6개 유형), 나머지는 세지 않음 | Go(mermaid-ascii), Python(termaid), Rust(mmdflux), Node 라이브러리(beautiful-mermaid) | mmdflux 프로세스 한 번에 7.9ms, 나머지는 확인 안 함 | 됨 | termaid는 13장 모두 끊김이 늘지 않음. mermaid-ascii는 그린 10장에서 0, mmdflux는 그린 11장에서 1(라벨이 교차점을 덮음). 셋 다 이모지를 2칸으로 셈. beautiful-mermaid 1.1.2는 칸이 아니라 글자 수로 세어 한글 13장이 모두 어긋남 |
+아래 수치는 모두 2026-11-26에 Apple M2 Max 한 대(macOS 26.6, Node 26.12.1)에서, 모든 도구에 같은 입력을 주고 잰 값입니다.
+다른 도구의 판은 mermaid-cli 12.2.0, Mermaid 12.3.0, Pele 1.13.0, beautiful-mermaid 1.1.3, mmdflux 2.6.1,
+mermaid-ascii 1.6.2, termaid 0.14.0입니다.
 
-프로세스 단위로는 mmdflux가 `ursula-diagram` 명령보다 약 12배 빠릅니다(흐름도 예시 116장의 중앙값 7.9ms 대 99ms). 차이는
-대부분 Node를 띄우는 시간입니다. 프로그램 하나 안에서 부르면 ursula도 1ms 아래입니다.
+## 손으로 그리는 스킬과 비교
 
-# ursula를 쓰지 않는 편이 나은 때
+에이전트가 그림을 그리는 방법은 둘입니다. 모델이 배치를 정하고 SVG를 쓰거나, 모델은 Mermaid만 쓰고 엔진이 배치합니다. 같은
+그림 세 장을 앞 방식의 스킬인 [diagram-design](https://github.com/cathrynlavery/diagram-design)과 ursula 스킬로 그렸습니다.
 
-- **손으로 다듬은 그림이 필요할 때.** 그림 그리기 스킬이나 사람은 그림마다 구역·범례·강조를 고릅니다. ursula는 생김새가
-  하나이고 색만 CSS 변수로 바꿉니다. 유형에 따라 곧은 선이 적습니다. 공식 예시에서 곧은 선의 비율은 흐름도 87%,
-  C4 60%, 유스케이스 67%이고, Event Modeling은 선이 모두 꺾입니다.
-- **명령줄에서 PNG가 필요할 때.** mermaid-cli가 PNG를 씁니다. ursula는 `html` 페이지에서만 PNG로 저장합니다.
-- **프로세스를 장마다 새로 띄워 많이 그릴 때.** mmdflux 같은 네이티브 바이너리가 약 12배 빨리 뜹니다. Node 프로그램
-  하나에서 라이브러리를 부르면 이 비용이 없습니다.
-- **라벨에 이모지가 있고 터미널에 그릴 때.** ursula는 이모지를 1칸으로 세어 그 상자의 오른쪽 변이 한 칸 밀립니다.
-  mermaid-ascii, mmdflux, termaid는 2칸으로 셉니다.
-- **터미널에 차트를 그림으로 그리고 싶을 때.** pie, XY chart, radar, quadrant, Sankey, Wardley, timeline,
-  user journey, railroad, Venn, Cynefin은 터미널에서 그림이 아니라 표나 목록으로 나옵니다.
-- **subgraph가 겹쳐 있고 터미널에 그릴 때.** 안쪽 subgraph는 상자 안의 상자가 아니라 「바깥 / 안」처럼 이름을 이은 띠로
-  그려져, 포함 관계가 보이지 않습니다.
-- **API가 굳어 있어야 할 때.** 첫 판 0.1.0입니다. 라이브러리는 모르는 옵션을 경고 없이 무시합니다(명령은 거절합니다).
+<FeatureTable name="skill" />
 
+<BenchmarkBars name="skill" />
+
+두 스킬 모두 노드·간선·라벨을 빠짐없이 그렸습니다. diagram-design은 그림마다 배치와 제목, 범례 문구도 골랐습니다. ursula는
+생김새가 하나이고 색만 바꿉니다.
+
+## 그리는 예시 수
+
+<FeatureTable name="coverage" />
+
+## 속도
+
+<BenchmarkBars name="speed" />
+
+103ms의 대부분은 Node를 띄우는 시간입니다. 프로그램 하나 안에서 라이브러리로 부르면 두 도구와는 순서가 뒤집힙니다.
+
+<FeatureTable name="inProcess" />
+
+## 한글 같은 넓은 글자
+
+한글과 한자는 터미널에서 두 칸을 차지합니다. 한 칸으로 세는 도구는 상자의 오른쪽 변을 밀어, 그 변에 닿는 선이 끊깁니다.
+
+<FeatureTable name="wide" />
+
+## 출력과 실행 환경
+
+<FeatureTable name="outputs" />
+
+<FeatureTable name="runtime" />
+
+## 같은 예시를 나란히
+
+Mermaid 문서의 예시를 네 도구가 각자의 기본값으로 그린 그림입니다. 모두 밝은 바탕에 놓았습니다. Mermaid와 Pele는 헤드리스
+Chrome에서 그렸습니다.
+
+### flowchart
+
+<div class="compare-pics">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-flowchart-100-subgraphs-2.svg" alt="flowchart: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-flowchart-100-subgraphs-2.svg" alt="flowchart: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-flowchart-100-subgraphs-2.svg" alt="flowchart: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-flowchart-100-subgraphs-2.svg" alt="flowchart: beautiful-mermaid" loading="lazy"></div></figure>
+</div>
+
+### sequence
+
+<div class="compare-pics">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-sequence-02-with-the-defaults.svg" alt="sequence: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-sequence-02-with-the-defaults.svg" alt="sequence: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-sequence-02-with-the-defaults.svg" alt="sequence: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-sequence-02-with-the-defaults.svg" alt="sequence: beautiful-mermaid" loading="lazy"></div></figure>
+</div>
+
+### class
+
+<div class="compare-pics">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-class-02-with-the-defaults.svg" alt="class: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-class-02-with-the-defaults.svg" alt="class: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-class-02-with-the-defaults.svg" alt="class: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-class-02-with-the-defaults.svg" alt="class: beautiful-mermaid" loading="lazy"></div></figure>
+</div>
+
+### ER
+
+<div class="compare-pics compare-pics-large">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-er-02-entity-relationship-diagrams-2.svg" alt="ER: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-er-02-entity-relationship-diagrams-2.svg" alt="ER: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-er-02-entity-relationship-diagrams-2.svg" alt="ER: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-er-02-entity-relationship-diagrams-2.svg" alt="ER: beautiful-mermaid" loading="lazy"></div></figure>
+</div>
+
+### C4 system context
+
+<div class="compare-pics compare-pics-large">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-c4-02-c4-system-context-diagram.svg" alt="C4 system context: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">이 유형을 그리지 않습니다</span></div></figure>
+</div>
+
+### pie
+
+<div class="compare-pics">
+  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-pie-02-example.svg" alt="pie: ursula" loading="lazy"></div></figure>
+  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-pie-02-example.svg" alt="pie: Mermaid" loading="lazy"></div></figure>
+  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-pie-02-example.svg" alt="pie: Pele" loading="lazy"></div></figure>
+  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">이 유형을 그리지 않습니다</span></div></figure>
+</div>
+
+## 다른 도구가 더 맞는 경우
+
+- **명령줄에서 PNG가 필요할 때.** mermaid-cli가 PNG를 씁니다. 대신 한 장에 630ms와 Chromium이 듭니다. ursula는 한 파일
+  HTML 페이지에서만 PNG로 저장합니다.
+- **그림마다 새 프로세스를 띄울 때.** mmdflux와 mermaid-ascii는 9~11ms가 걸립니다. ursula는 103ms가 걸리고, 그중
+  59ms는 빈 Node 스크립트도 쓰는 시간입니다.
+- **한 프로그램 안에서 라이브러리를 여러 번 부를 때.** flowchart 한 장에 Pele(0.015ms)와 beautiful-mermaid의 글자
+  출력(0.009ms)이 ursula(0.6ms)보다 빠릅니다.
+- **터미널로 보낼 그림의 라벨에 이모지가 있을 때.** ursula는 이모지를 한 칸으로 세어, 이모지 그림에서 끊김이 18개
+  늘었습니다. mmdflux, mermaid-ascii, termaid는 0개였습니다.

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 472 802" width="472" height="802" role="img"><title>Class diagram: 4 classes, 3 relations</title><style>.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#efeeed)}
+.ursula-lane-label{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#e5c37a)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#fcfcfa)}
+.ursula-node-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#201f1e)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#201f1e);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#201f1e)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#201f1e);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#565554)}
+.ursula-arrow--accent{fill:var(--ursula-line,#565554)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#f1f0ef)}
+.ursula-edge-label{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:400}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#e2e1e0);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#efeeed)}
+.ursula-cell-title{fill:var(--ursula-fg,#201f1e);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#5b5b59);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#201f1e);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#82641c)}
+.ursula-end-ring{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-fg,#201f1e);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#201f1e)}
+.ursula-bar{fill:var(--ursula-fg,#201f1e)}
+.ursula-note{fill:var(--ursula-lane,#efeeed);stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#484846);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#5b5b59);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-hollow{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#82641c)}
+.ursula-end-solid{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#82641c);stroke:var(--ursula-accent,#82641c)}
+.ursula-end-label{fill:var(--ursula-fg,#201f1e);font-size:11px;font-weight:500}
+@media (prefers-color-scheme: dark){
+.ursula{background:var(--ursula-bg,transparent);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;font-size:12px}
+.ursula-lane{fill:var(--ursula-surface,#171614);stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-lane--tint{fill:var(--ursula-lane,#252422)}
+.ursula-lane-label{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5}
+.ursula-node--on-lane .ursula-node-box{fill:var(--ursula-surface,#171614)}
+[data-role="start"] .ursula-node-box{fill:var(--ursula-start-fill,#dab975)}
+[data-role="decision"] .ursula-node-box{fill:var(--ursula-surface,#171614)}
+.ursula-node-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-node-line{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+[data-role="start"] .ursula-node-title{fill:var(--ursula-on-accent,#171614)}
+[data-role="start"] .ursula-node-line{fill:var(--ursula-on-accent,#171614);fill-opacity:.8}
+[data-role="decision"] .ursula-node-title{fill:var(--ursula-fg,#efeeec)}
+[data-role="decision"] .ursula-node-line{fill:var(--ursula-fg,#efeeec);fill-opacity:.8}
+.ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-edge--dotted{stroke-dasharray:5 4}
+.ursula-arrow{fill:var(--ursula-line,#a5a4a2)}
+.ursula-arrow--accent{fill:var(--ursula-line,#a5a4a2)}
+.ursula-edge-label-bg{fill:var(--ursula-chip-fill,#252422)}
+.ursula-edge-label{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-port{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5}
+.ursula-legend-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-legend-text{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:400}
+.ursula-rule{fill:none;stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-node--on-lane .ursula-rule{stroke:var(--ursula-hair,#2c2b2a);stroke-width:1}
+.ursula-head-band{fill:var(--ursula-lane,#252422)}
+.ursula-cell-title{fill:var(--ursula-fg,#efeeec);font-size:13px;font-weight:600}
+.ursula-cell-tag{fill:var(--ursula-muted,#b2b1af);font-size:11px;font-weight:500}
+.ursula-cell-body{fill:var(--ursula-fg,#efeeec);font-size:12px;font-weight:400}
+.ursula-start-dot{fill:var(--ursula-accent,#dab975)}
+.ursula-end-ring{fill:var(--ursula-surface,#171614);stroke:var(--ursula-fg,#efeeec);stroke-width:1.5}
+.ursula-end-core{fill:var(--ursula-fg,#efeeec)}
+.ursula-bar{fill:var(--ursula-fg,#efeeec)}
+.ursula-note{fill:var(--ursula-lane,#252422);stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-note-fold{fill:none;stroke:var(--ursula-border,#bebdbb);stroke-width:1;stroke-linejoin:round}
+.ursula-actor{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-actor-name{fill:var(--ursula-muted,#b2b1af);font-size:12px;font-weight:500}
+.ursula-end-stroke{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ursula-end-stroke--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-hollow{fill:var(--ursula-surface,#171614);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-hollow--accent{stroke:var(--ursula-accent,#dab975)}
+.ursula-end-solid{fill:var(--ursula-line,#a5a4a2);stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linejoin:round}
+.ursula-end-solid--accent{fill:var(--ursula-accent,#dab975);stroke:var(--ursula-accent,#dab975)}
+.ursula-end-label{fill:var(--ursula-fg,#efeeec);font-size:11px;font-weight:500}
+}</style><defs><marker id="ursula-arrow" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-arrow-accent" viewBox="0 0 9 9" refX="1" refY="4.5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="ursula-arrow ursula-arrow--accent" d="M0 0L9 4.5L0 9z"/></marker><marker id="ursula-end-arrow-open" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible"><path class="ursula-end-stroke" d="M0 0H12M4 -5L12 0L4 5"/></marker><marker id="ursula-end-diamond-filled" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible"><polygon class="ursula-end-solid" points="0,0 6,-5 12,0 6,5"/></marker></defs><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="Customer" data-to="Order" d="M104 156 L104 310" marker-end="url(#ursula-end-arrow-open)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="Order" data-to="LineItem" d="M104 466 L104 630" marker-start="url(#ursula-end-diamond-filled)"/><path class="ursula-edge ursula-edge--normal" data-style="normal" data-from="Order" data-to="Payment" d="M176 388 L284 388" marker-end="url(#ursula-end-arrow-open)"/><g class="ursula-node" data-node="Customer"><rect class="ursula-node-box" x="32" y="44" width="144" height="112" rx="10"/><clipPath id="ursula-band-Customer-32-44-144-112"><rect x="32.75" y="44.75" width="142.5" height="110.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="32" y="44" width="144" height="40" clip-path="url(#ursula-band-Customer-32-44-144-112)"/><text class="ursula-cell-title" x="104" y="64" text-anchor="middle" dominant-baseline="central">Customer</text><path class="ursula-rule" d="M32 84H176"/><text class="ursula-cell-body" x="48" y="102" dominant-baseline="central">+String name</text><text class="ursula-cell-body" x="48" y="122" dominant-baseline="central">+String email</text><path class="ursula-rule" d="M32 140H176"/></g><g class="ursula-node" data-node="Order"><rect class="ursula-node-box" x="32" y="322" width="144" height="132" rx="10"/><clipPath id="ursula-band-Order-32-322-144-132"><rect x="32.75" y="322.75" width="142.5" height="130.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="32" y="322" width="144" height="40" clip-path="url(#ursula-band-Order-32-322-144-132)"/><text class="ursula-cell-title" x="104" y="342" text-anchor="middle" dominant-baseline="central">Order</text><path class="ursula-rule" d="M32 362H176"/><text class="ursula-cell-body" x="48" y="380" dominant-baseline="central">+String id</text><text class="ursula-cell-body" x="48" y="400" dominant-baseline="central">+Date placedAt</text><path class="ursula-rule" d="M32 418H176"/><text class="ursula-cell-body" x="48" y="436" dominant-baseline="central">+total() Money</text></g><g class="ursula-node" data-node="LineItem"><rect class="ursula-node-box" x="32" y="630" width="144" height="92" rx="10"/><clipPath id="ursula-band-LineItem-32-630-144-92"><rect x="32.75" y="630.75" width="142.5" height="90.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="32" y="630" width="144" height="40" clip-path="url(#ursula-band-LineItem-32-630-144-92)"/><text class="ursula-cell-title" x="104" y="650" text-anchor="middle" dominant-baseline="central">LineItem</text><path class="ursula-rule" d="M32 670H176"/><text class="ursula-cell-body" x="48" y="688" dominant-baseline="central">+int quantity</text><path class="ursula-rule" d="M32 706H176"/></g><g class="ursula-node" data-node="Payment"><rect class="ursula-node-box" x="296" y="332" width="144" height="112" rx="10"/><clipPath id="ursula-band-Payment-296-332-144-112"><rect x="296.75" y="332.75" width="142.5" height="110.5" rx="9.25"/></clipPath><rect class="ursula-head-band" x="296" y="332" width="144" height="60" clip-path="url(#ursula-band-Payment-296-332-144-112)"/><text class="ursula-cell-tag" x="368" y="352" text-anchor="middle" dominant-baseline="central">«interface»</text><text class="ursula-cell-title" x="368" y="372" text-anchor="middle" dominant-baseline="central">Payment</text><path class="ursula-rule" d="M296 392H440"/><path class="ursula-rule" d="M296 408H440"/><text class="ursula-cell-body" x="312" y="426" dominant-baseline="central">+authorise() bool</text></g><circle class="ursula-port" cx="104" cy="156" r="4"/><circle class="ursula-port" cx="104" cy="630" r="4"/><circle class="ursula-port" cx="176" cy="388" r="4"/><g class="ursula-edge-label-group" data-from="Customer" data-to="Order"><rect class="ursula-edge-label-bg" x="74" y="228" width="58.16" height="24" rx="12"/><text class="ursula-edge-label" x="103.08" y="240" text-anchor="middle" dominant-baseline="central">places</text></g><g class="ursula-edge-label-group" data-from="Order" data-to="LineItem"><rect class="ursula-edge-label-bg" x="68" y="530" width="71.84" height="24" rx="12"/><text class="ursula-edge-label" x="103.92" y="542" text-anchor="middle" dominant-baseline="central">contains</text></g><g class="ursula-edge-label-group" data-from="Order" data-to="Payment"><rect class="ursula-edge-label-bg" x="194" y="376" width="82.16" height="24" rx="12"/><text class="ursula-edge-label" x="235.08" y="388" text-anchor="middle" dominant-baseline="central">settled by</text></g><text class="ursula-end-label" data-from="Customer" data-to="Order" data-end="start" x="116" y="179" text-anchor="middle" dominant-baseline="central">1</text><text class="ursula-end-label" data-from="Customer" data-to="Order" data-end="end" x="115" y="299" text-anchor="middle" dominant-baseline="central">*</text><text class="ursula-end-label" data-from="Order" data-to="LineItem" data-end="start" x="116" y="477" text-anchor="middle" dominant-baseline="central">1</text><text class="ursula-end-label" data-from="Order" data-to="LineItem" data-end="end" x="115" y="607" text-anchor="middle" dominant-baseline="central">*</text></svg>
