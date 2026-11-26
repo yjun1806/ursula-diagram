@@ -246,6 +246,11 @@ function faceRules(layout: Layout): string[] {
   ];
 }
 
+/** A thick line, and its sample in the legend, is twice as wide as a normal one. */
+function thickRules(layout: Layout): string[] {
+  return layout.edges.some((e) => e.style === 'thick' && !e.invisible) ? [`.ursula-edge--thick{stroke-width:${THEME.lineWidth * 2}}`] : [];
+}
+
 /**
  * A dashed boundary by depth: its fill, the fill of a label chip on it, and the outline that replaces the dashes. The
  * outermost keeps its dashes, the next is the face of the page in a thin solid line, the innermost a fill in a hairline.
@@ -743,7 +748,7 @@ export function renderSvg(input: Layout, opts: SvgOptions = {}): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...(usesRecords(layout) ? recordRules() : []), ...faceRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])])}</style>`,
+    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...(usesRecords(layout) ? recordRules() : []), ...faceRules(layout), ...thickRules(layout), ...(heading === undefined ? [] : ['.ursula-title{fill:$fg;font-size:15px;font-weight:600}'])])}</style>`,
     `<defs>${flowMarker('ursula-arrow', 'ursula-arrow')}${flowMarker('ursula-arrow-accent', 'ursula-arrow ursula-arrow--accent')}${ends.markers.join('')}</defs>`,
     ...(heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`]),
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === 'along' && (layout.direction === 'LR' || layout.direction === 'RL'))),

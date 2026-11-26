@@ -125,7 +125,7 @@
  "generated-40 svg": "a9f0a2773be40",
  "generated-40 text80": "1c5fb63f1a8e0e",
  "generated-40 text120": "93827871871b3",
- "order-flow svg": "17dfe347c639c5",
+ "order-flow svg": "a725de5d04cc5",
  "order-flow text80": "a1303565bfaa7",
  "order-flow text120": "1b0844a28517bb",
  "checkout-sequence svg": "a8220b9d14a49",
@@ -146,7 +146,7 @@
  "lanes-fanIn svg": "f301ff1bcf4e3",
  "lanes-fanIn text80": "1375a3b7e44ce3",
  "lanes-fanIn text120": "1375a3b7e44ce3",
- "lanes-order-flow svg": "17dfe347c639c5",
+ "lanes-order-flow svg": "a725de5d04cc5",
  "lanes-order-flow text80": "a1303565bfaa7",
  "lanes-order-flow text120": "1b0844a28517bb"
 }

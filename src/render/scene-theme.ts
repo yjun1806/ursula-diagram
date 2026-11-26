@@ -30,6 +30,7 @@ export const SCENE_THEME: SceneThemeSpec = {
     'note-w': '1',
     'rule-w': '1',
     'edge-w': '1.5',
+    'edge-thick-w': '3',
     dash: '5 4',
     'dash-msg': '5 4',
     'lifeline-w': '1',

@@ -254,6 +254,13 @@ describe('block parse', () => {
     ]);
   });
 
+  it('draws a thick link wider than a normal one', () => {
+    const svg = render('block\n  A B C\n  A-->B\n  B==>C');
+    expect(svg).toMatch(/<path class="ursula-edge[^"]*ursula-edge--thick[^"]*"/);
+    expect(svg).toContain('.ursula-edge--thick{stroke-width:3}');
+    expect((svg.match(/ursula-edge--thick/g) ?? []).length).toBeGreaterThan(1);
+  });
+
   it('reads styles and classes and leaves them out', () => {
     const model = parseBlock(example('25'));
     expect(model.ignored).toHaveLength(3);

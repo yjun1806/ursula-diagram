@@ -265,7 +265,7 @@ function sceneItems(blocks: readonly PlacedBlock[], links: readonly PlacedLink[]
   }
   for (const link of links) {
     if (link.invisible || link.points.length < 2) continue;
-    const role = ['edge', ...(link.arrow ? ['edge--arrow'] : []), ...(link.arrowStart ? ['edge--arrow-start'] : []), ...(link.style === 'dotted' ? ['edge--pending'] : []), ...(link.style === 'thick' ? ['edge--accent'] : [])];
+    const role = ['edge', ...(link.arrow ? ['edge--arrow'] : []), ...(link.arrowStart ? ['edge--arrow-start'] : []), ...(link.style === 'dotted' ? ['edge--pending'] : []), ...(link.style === 'thick' ? ['edge--accent', 'edge--thick'] : [])];
     const line: SceneLine = { kind: 'line', points: link.points, role, data: { from: link.from, to: link.to } };
     items.push(line);
   }

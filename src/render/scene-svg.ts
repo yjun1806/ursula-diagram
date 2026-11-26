@@ -76,6 +76,7 @@ function sceneRules(): string[] {
     '.ursula-head-band{fill:$lane}',
     '.ursula-edge{fill:none;stroke:$line;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}',
     '.ursula-edge--accent{stroke:$accent}',
+    '.ursula-edge--thick{stroke-width:%edge-thick-w}',
     '.ursula-edge--pending{stroke-dasharray:%dash}',
     '.ursula-edge--msg{stroke:$line}',
     '.ursula-edge--msg.ursula-edge--pending{stroke-dasharray:%dash-msg}',
