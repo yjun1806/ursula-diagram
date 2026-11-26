@@ -12,7 +12,7 @@ the [conditions](#conditions) at the end of the page.
 
 | Premise | What ursula does | Measured |
 | --- | --- | --- |
-| The agent draws several pictures a session | The model writes Mermaid only; the engine computes the layout | 12–22 s a drawing, against 65–174 s for a skill that has the model lay it out; the engine's part is 0.1–0.4 s. Two runs give byte-identical SVGs |
+| The agent draws several pictures a session | The model writes Mermaid only; the engine computes the layout | 11–17 s a drawing, against 65–174 s for a skill that has the model lay it out; the engine's part is 0.1–0.4 s. Two runs give byte-identical SVGs |
 | The agent fixes it alone | An error names the place, the word likely meant and a correct example line. The check names crossing lines by their source line | In 93 deliberately broken texts, replacing the line with the error's example drew all 93. `--fix` draws 50 of them with no extra turn |
 | There may be no browser | It runs on Node alone | 0 runtime dependencies. 103 ms per run of the command |
 | It is read in several places | One engine draws an SVG, a terminal drawing and that drawing as an SVG (`text-svg`). Clients without a shell get it over MCP | All 531 examples in the Mermaid documentation, as SVG and as terminal text (35 types) |
@@ -31,31 +31,30 @@ second run.
 | Drawing | Skill | Seconds | Tokens the model wrote | Total tokens | Turns |
 | --- | --- | ---: | ---: | ---: | ---: |
 | Flowchart, 9 nodes | diagram-design | 65 / 78 | 6.7k / 8.5k | 330k / 443k | 10 / 12 |
-| | ursula | 12 / 15 | 0.8k / 0.9k | 51k / 51k | 5 / 5 |
+| | ursula | 12 / 11 | 0.7k / 0.6k | 36k / 36k | 4 / 4 |
 | C4, 7 elements | diagram-design | 154 / 174 | 15.4k / 17.7k | 379k / 672k | 11 / 14 |
-| | ursula | 18 / 22 | 1.8k / 1.7k | 57k / 57k | 5 / 5 |
+| | ursula | 16 / 17 | 1.3k / 1.3k | 40k / 40k | 4 / 4 |
 | Sequence, 10 messages | diagram-design | 161 / 144 | 18.8k / 17.9k | 666k / 392k | 14 / 10 |
-| | ursula | 12 / 15 | 0.9k / 1.4k | 39k / 53k | 4 / 5 |
+| | ursula | 13 / 14 | 0.8k / 0.9k | 37k / 37k | 4 / 4 |
 
 The total includes each skill's own instructions and the conversation that is sent again on every turn. What the
-model actually wrote is the column of output tokens. The ursula rows are from the skill at commit 8c8222c, measured
-later the same day as diagram-design.
+model actually wrote is the column of output tokens. The ursula rows are from the skill of
+[pull request #49](https://github.com/yjun1806/ursula-diagram/pull/49), measured later the same day as diagram-design.
 
 Where the time went, per run, from the timestamps in each session's stream:
 
 | Skill | Waiting for the model | The skill's own command | Other commands |
 | --- | ---: | ---: | ---: |
-| ursula | 10–18 s | 1.4–3.8 s (ursula) | 0–0.3 s |
+| ursula | 8–12 s | 3.4–5.5 s (ursula) | 0–0.1 s |
 | diagram-design | 63–170 s | 0.4–1.9 s (its scripts) | 1.3–2.9 s |
 
 The engine itself draws in about 0.1–0.4 s per call; the rest is the model reading the skill, writing the Mermaid text
-and answering. The model wrote 0.8k–1.8k tokens with ursula against 6.7k–18.8k when it wrote the drawing itself, and
-writing tokens takes time. A run with ursula went: load the skill, write the text and run the command, in 5 of 6 runs
-search the SVG for the labels, then answer. A run with diagram-design read its references, spent 35–127 s planning
+and answering. The model wrote 0.6k–1.3k tokens with ursula against 6.7k–18.8k when it wrote the drawing itself, and
+writing tokens takes time. A run with ursula went: load the skill, write the text and run the command, then answer. A run with diagram-design read its references, spent 35–127 s planning
 and writing the drawing (or a script that writes it), then checked it, looked at a screenshot and fixed it.
 
 The ursula command took longer inside the session than alone, most likely because it was the session's first command:
-the first command took 1.2–3.8 s whatever it ran, and diagram-design's, a cat, took 1.2–1.9 s.
+the first command took 1.2–5.5 s whatever it ran, and diagram-design's, a cat, took 1.2–1.9 s.
 
 diagram-design drew the same text differently from run to run. The flowchart came out as horizontal lanes the first
 time and as zone boxes the second. Its title ("Order fulfilment flow") and legend ("Paid handoff to warehouse") are
@@ -141,7 +140,7 @@ npx skills add yjun1806/ursula-diagram
 
 Everything was measured on 26 November 2026 on one Apple M2 Max (macOS 26.6, Node 26.12.1). The skills were run in
 Claude Code with claude-opus-5-5, a fresh session and the same prompt for each run, on three public Mermaid texts, two
-runs each; the ursula skill was at commit 8c8222c and diagram-design at b228c5d. One run of the command is the median over 103 flowchart examples of the Mermaid documentation. Browser
+runs each; the ursula skill was that of pull request #49 and diagram-design at commit b228c5d. One run of the command is the median over 103 flowchart examples of the Mermaid documentation. Browser
 speed is the median over 116 flowchart examples drawn as SVG by both in one page of headless Chrome 158. Tool
 versions: mermaid-cli 12.2.0, Mermaid 12.3.0, mmdflux 2.6.1, mermaid-ascii 1.6.2, termaid 0.14.0.
 

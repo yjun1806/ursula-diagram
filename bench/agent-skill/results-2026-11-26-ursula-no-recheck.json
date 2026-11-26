@@ -1,0 +1,188 @@
+[
+  {
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 16371,
+    "duration_api_ms": 11769,
+    "wall_ms": 17109,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 1317,
+      "cache_read": 28428,
+      "cache_creation": 10094
+    },
+    "tokens_total": 39845,
+    "cost_usd": 0.1128016,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 17414,
+    "duration_api_ms": 11609,
+    "wall_ms": 18292,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 1319,
+      "cache_read": 28434,
+      "cache_creation": 10220
+    },
+    "tokens_total": 39979,
+    "cost_usd": 0.1138508,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 12810,
+    "duration_api_ms": 9025,
+    "wall_ms": 14072,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 810,
+      "cache_read": 27351,
+      "cache_creation": 9081
+    },
+    "tokens_total": 37248,
+    "cost_usd": 0.09434220000000001,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 13814,
+    "duration_api_ms": 10158,
+    "wall_ms": 15119,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 936,
+      "cache_read": 27357,
+      "cache_creation": 9152
+    },
+    "tokens_total": 37451,
+    "cost_usd": 0.0974314,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 11775,
+    "duration_api_ms": 7864,
+    "wall_ms": 12712,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 675,
+      "cache_read": 26892,
+      "cache_creation": 8663
+    },
+    "tokens_total": 36236,
+    "cost_usd": 0.0882064,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 11156,
+    "duration_api_ms": 7361,
+    "wall_ms": 12526,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 558,
+      "cache_read": 26892,
+      "cache_creation": 8605
+    },
+    "tokens_total": 36061,
+    "cost_usd": 0.08540239999999999,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "d.mmd",
+      "out.svg"
+    ]
+  }
+]

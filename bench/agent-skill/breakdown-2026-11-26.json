@@ -1673,5 +1673,311 @@
         "tools": []
       }
     ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run1",
+    "session_s": 16.37,
+    "wall_s": 17.109,
+    "model_s": 12.04,
+    "skill_command_s": 4.32,
+    "other_tools_s": 0.02,
+    "unaccounted_s": 0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 1317,
+    "cost_usd": 0.1128016,
+    "turns": [
+      {
+        "model_s": 1.724,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.019
+          }
+        ]
+      },
+      {
+        "model_s": 7.351,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 4.315
+          }
+        ]
+      },
+      {
+        "model_s": 2.962,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run2",
+    "session_s": 17.41,
+    "wall_s": 18.292,
+    "model_s": 11.85,
+    "skill_command_s": 5.52,
+    "other_tools_s": 0.04,
+    "unaccounted_s": 0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 1319,
+    "cost_usd": 0.1138508,
+    "turns": [
+      {
+        "model_s": 1.517,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.045
+          }
+        ]
+      },
+      {
+        "model_s": 8.343,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 5.522
+          }
+        ]
+      },
+      {
+        "model_s": 1.987,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "session_s": 12.81,
+    "wall_s": 14.072,
+    "model_s": 9.22,
+    "skill_command_s": 3.57,
+    "other_tools_s": 0.03,
+    "unaccounted_s": -0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 810,
+    "cost_usd": 0.09434220000000001,
+    "turns": [
+      {
+        "model_s": 1.441,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.026
+          }
+        ]
+      },
+      {
+        "model_s": 4.59,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 3.566
+          }
+        ]
+      },
+      {
+        "model_s": 3.187,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "session_s": 13.81,
+    "wall_s": 15.119,
+    "model_s": 10.35,
+    "skill_command_s": 3.44,
+    "other_tools_s": 0.03,
+    "unaccounted_s": -0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 936,
+    "cost_usd": 0.0974314,
+    "turns": [
+      {
+        "model_s": 1.528,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.025
+          }
+        ]
+      },
+      {
+        "model_s": 4.868,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 3.442
+          }
+        ]
+      },
+      {
+        "model_s": 3.951,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run1",
+    "session_s": 11.78,
+    "wall_s": 12.712,
+    "model_s": 8.06,
+    "skill_command_s": 3.69,
+    "other_tools_s": 0.03,
+    "unaccounted_s": 0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 675,
+    "cost_usd": 0.0882064,
+    "turns": [
+      {
+        "model_s": 1.555,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.031
+          }
+        ]
+      },
+      {
+        "model_s": 3.559,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 3.687
+          }
+        ]
+      },
+      {
+        "model_s": 2.943,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
+  },
+  {
+    "set": "results-2026-11-26-ursula-no-recheck.json",
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run2",
+    "session_s": 11.16,
+    "wall_s": 12.526,
+    "model_s": 7.68,
+    "skill_command_s": 3.44,
+    "other_tools_s": 0.03,
+    "unaccounted_s": -0.0,
+    "model_turns": 3,
+    "num_turns": 4,
+    "output_tokens": 558,
+    "cost_usd": 0.08540239999999999,
+    "turns": [
+      {
+        "model_s": 1.803,
+        "did": [
+          "Skill"
+        ],
+        "tools": [
+          {
+            "kind": "other",
+            "label": "Skill",
+            "s": 0.031
+          }
+        ]
+      },
+      {
+        "model_s": 3.088,
+        "did": [
+          "ursula --format svg --check --fix"
+        ],
+        "tools": [
+          {
+            "kind": "skill_command",
+            "label": "ursula --format svg --check --fix",
+            "s": 3.445
+          }
+        ]
+      },
+      {
+        "model_s": 2.789,
+        "did": [
+          "answer"
+        ],
+        "tools": []
+      }
+    ]
   }
 ]

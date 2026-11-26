@@ -31,6 +31,7 @@ the table above were taken while other work loaded the machine.
 | `site.json` | The numbers above in the shape of the site's chart and table data |
 | `../agent-skill/results.json` | Time, turns, tokens and cost of every agent-skill run of the first measurement |
 | `../agent-skill/results-2026-11-26-ursula-8c8222c.json` | The same for the ursula skill measured again with the skill at commit 8c8222c |
+| `../agent-skill/results-2026-11-26-ursula-no-recheck.json` | The same for the ursula skill of pull request #49, which tells the agent not to re-check a drawn diagram |
 | `../agent-skill/breakdown-2026-11-26.json` | Where the time of each of those runs went: model, the skill's command, other commands, turn by turn |
 
 Times depend on the machine and on what else runs on it. Expect your times to differ from ours; the ratios between
@@ -117,7 +118,9 @@ settings only, with no MCP servers and the same five tools (Bash, Read, Write, E
 `bench/.cache/agent-skill/out`.
 
 The site quotes the diagram-design runs from `results.json` and the ursula runs measured again later the same day with
-the skill at commit 8c8222c, in `results-2026-11-26-ursula-8c8222c.json`. Those six ursula runs cost 0.69 USD. To run
+the skill of pull request #49, in `results-2026-11-26-ursula-no-recheck.json`. Those six ursula runs cost 0.59 USD, at a
+one-minute load average of 38–54. With the skill at commit 8c8222c (`results-2026-11-26-ursula-8c8222c.json`), the
+agent searched the SVG for its labels in 5 of 6 runs, one more model turn; with #49 it did so in none. To run
 only one skill, call `run.sh` per input and run, then name the output file:
 
 ```bash
@@ -126,7 +129,7 @@ python3 -I bench/agent-skill/summarize.py bench/agent-skill/results-ursula.json
 
 [breakdown.py](agent-skill/breakdown.py) splits each run's time, from the timestamps in its stream, into waiting for
 the model, the skill's own command (ursula, or diagram-design's scripts) and other commands, and lists what each turn
-did. The first command of every session took 1.2–3.8 s whatever it ran, so the ursula command's time there is more
+did. The first command of every session took 1.2–5.5 s whatever it ran, so the ursula command's time there is more
 than the 0.1–0.4 s it takes on these texts alone.
 
 ```bash
