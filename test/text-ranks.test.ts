@@ -230,12 +230,12 @@ describe('the bands of the subgraphs of a flowchart in a terminal', () => {
 
   it('follow one another when the lines lead from band to band', () => {
     const lines = text('flowchart LR\n  subgraph early[Early]\n    hub[Source]\n  end\n  subgraph late[Late]\n    t1[One]\n    t2[Two]\n    t3[Three]\n  end\n  hub --> t1\n  hub --> t2\n  hub --> t3');
-    expect(lines[0]).toMatch(/^Early +Late$/);
+    expect(lines[0]).toMatch(/^Early +╎ +Late$/);
   });
 
   it('follow one another when the bands alongside the flow do not fit the width', () => {
     const src = 'graph LR\n  subgraph a[접수]\n  A[요청] --> B[검증]\n  end\n  subgraph b[처리]\n  C[저장] --> D[알림]\n  end\n  B --> C';
-    expect(text(src, 21)[0]).toMatch(/^접수 +처리$/);
+    expect(text(src, 21)[0]).toMatch(/^접수 +╎ +처리$/);
   });
 
   it('follow one another when the bands alongside the flow would run a line right along a box it does not reach', () => {
@@ -255,7 +255,7 @@ describe('the bands of the subgraphs of a flowchart in a terminal', () => {
       "  n1 -.->|yes| n2",
       "  n0 <-.-> n2",
     ].join('\n');
-    expect(text(src, 100)[0]).toMatch(/^App +Payments$/);
+    expect(text(src, 100)[0]).toMatch(/^App +╎ +Payments$/);
   });
 });
 

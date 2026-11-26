@@ -2,7 +2,7 @@ import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { placeLaneName } from '../layout/lane-names.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import { cornersOf } from '../text/corners.ts';
-import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, TextSpan, TextTone } from '../types.ts';
+import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutLane, LayoutNode, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
 const E = 2;
@@ -138,6 +138,33 @@ function drawLanes(c: Canvas, layout: Layout): void {
       continue;
     }
     c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, 'bold');
+  }
+}
+
+/** Glyphs that reach the cell above or below them: a rule that touched one would read as part of its line. */
+const UPRIGHT = new Set([...'│┆┃╎┌┐└┘├┤┬┴┼╭╮╰╯┏┓┗┛┣┫┳┻╋▲▼△▽^v']);
+
+/**
+ * Bands that stand side by side as columns have no border of their own, only their name on top: a dashed rule down the
+ * middle of the gap between two neighbouring columns shows which boxes stand in which. It is drawn last, in blank cells
+ * only, and stops a cell short of any line that runs up or down, so that it never reads as part of a line. A gap of
+ * fewer than three cells has no room for a rule with a blank on either side, and gets none.
+ */
+function drawColumnRules(c: Canvas, layout: Layout): void {
+  if ((layout.direction === 'TD') === (layout.laneAxis === 'along')) return;
+  const columns = layout.lanes.filter((l) => l.label !== '' && l.bare === true).sort((a, b) => a.x - b.x);
+  for (let i = 0; i + 1 < columns.length; i++) {
+    const a = columns[i] as LayoutLane;
+    const b = columns[i + 1] as LayoutLane;
+    const end = Math.floor(a.x) + Math.round(a.w);
+    const gap = Math.floor(b.x) - end;
+    if (gap < 3) continue;
+    const x = end + Math.floor(gap / 2);
+    const top = Math.max(Math.floor(a.y), Math.floor(b.y));
+    const bottom = Math.min(Math.floor(a.y) + Math.round(a.h), Math.floor(b.y) + Math.round(b.h)) - 1;
+    const free = (y: number): boolean => c.get(x, y) === ' ' && !UPRIGHT.has(c.get(x, y - 1)) && !UPRIGHT.has(c.get(x, y + 1));
+    const rows = Array.from({ length: bottom - top + 1 }, (_, k) => top + k).filter(free);
+    for (const y of rows) c.put(x, y, '╎', 'dim');
   }
 }
 
@@ -463,6 +490,7 @@ function drawLayout(layout: Layout, maxWidth: number | undefined, toned: boolean
   for (const n of layout.nodes) drawNode(c, n);
   drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
+  drawColumnRules(c, layout);
   return c;
 }
 
