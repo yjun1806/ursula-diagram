@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tightPasses } from '../src/layered/clearance.ts';
+import type { LayoutEdge, LayoutNode } from '../src/types.ts';
 
 const box = (id: string, x: number, y: number) => ({ id, x, y, w: 100, h: 60 });
 
@@ -33,5 +34,40 @@ describe('lines in the outer bands', () => {
     expect(left - Math.min(...xs)).toBe(24);
     // The line on the right bends into a mark: it stands as far out as the straight piece before a mark is long.
     expect(Math.max(...xs) - right).toBe(32);
+  });
+});
+
+describe('a line drawn again onto another face of its box', () => {
+  // The end on Expired moves off the face Expired's own line leaves from; the line it then takes passed Cancelled 6px
+  // and 12px away, and its label touched the box.
+  const src = `stateDiagram-v2
+  state "Pending" as pending
+  state "Earned" as earned
+  state "Used" as used
+  state "Expired" as expired
+  state "Reclaimed" as reclaimed
+  state "Cancelled" as cancelled
+  [*] --> pending: order confirmed
+  pending --> earned: seven days after purchase
+  pending --> cancelled: order cancelled
+  earned --> used: paid with
+  earned --> expired: one year later
+  earned --> reclaimed: returned
+  used --> [*]
+  expired --> [*]
+  reclaimed --> [*]
+  cancelled --> [*]`;
+
+  it('keeps the room of a passing line from the boxes it passes, and its label off them', async () => {
+    const { layout, pixelRuler } = await import('../src/index.ts');
+    const { parseState } = await import('../src/state/parse.ts');
+    const l = layout(parseState(src).graph, pixelRuler(), { legend: false });
+    const edge = l.edges.find((e) => e.from === 'earned' && e.to === 'expired');
+    expect(edge).toBeDefined();
+    expect(tightPasses({ nodes: l.nodes, edges: [edge as LayoutEdge] })).toBe(0);
+    const label = edge?.label as NonNullable<LayoutEdge['label']>;
+    const cancelled = l.nodes.find((n) => n.id === 'cancelled') as LayoutNode;
+    const gap = Math.max(cancelled.x - (label.x + label.w), label.x - (cancelled.x + cancelled.w), cancelled.y - (label.y + label.h), label.y - (cancelled.y + cancelled.h));
+    expect(gap).toBeGreaterThanOrEqual(8);
   });
 });

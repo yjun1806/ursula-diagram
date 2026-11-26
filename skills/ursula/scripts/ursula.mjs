@@ -3270,7 +3270,7 @@ function measure(r, q) {
   const chip = chipOf(r, q);
   const overlap = q.nodes.some((n) => overlaps(chip, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS6;
   const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS6);
-  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS6 && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS6);
+  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS6 && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS6) && (q.passed ?? []).every((n) => gapOf(chip, n) >= LABEL_CLEAR - EPS6);
   return { line, clean, overlap, marked };
 }
 function sideOf(seg, r) {
@@ -3363,6 +3363,7 @@ function marksOf(edge) {
   const last = edge.points.at(-1);
   return [...first !== undefined && edge.startEnd !== undefined && edge.startEnd !== "none" ? [first] : [], ...last !== undefined && edge.end !== "none" ? [last] : []];
 }
+var passedBy = (layout, edge) => layout.nodes.flatMap((n) => n.id === edge.from || n.id === edge.to ? [] : [{ x: n.x, y: n.y, w: n.w, h: n.h }]);
 function refineLabels(layout, ruler, redrawn = new Set, avoid = []) {
   const segsOf = (points) => points.slice(1).map((q, i) => [points[i], q]);
   const all = layout.edges.map((e) => segsOf(e.points));
@@ -3378,7 +3379,7 @@ function refineLabels(layout, ruler, redrawn = new Set, avoid = []) {
     const foreign = all.flatMap((ss, k) => k === ei ? [] : ss);
     const basic = redrawn.has(ei) ? onLongest(own, label, ruler) : { x: label.x, y: label.y, w: label.w, h: label.h };
     const near = own.map((sg) => segmentToRect(sg, basic));
-    const spot = chooseSpot({ own, foreign, nodes, placed: [...finals, ...endTexts], size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...avoid.length === 0 ? {} : { avoid }, marks: marksOf(edge) });
+    const spot = chooseSpot({ own, foreign, nodes, placed: [...finals, ...endTexts], size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...avoid.length === 0 ? {} : { avoid }, marks: marksOf(edge), passed: passedBy(layout, edge) });
     finals.push(spot.rect);
     if (!spot.moved && !redrawn.has(ei))
       return edge;
@@ -3495,7 +3496,7 @@ function placeAgain(layout, ei, ruler, avoid = []) {
   const placed = layout.edges.flatMap((e, k) => [k === ei ? undefined : e.label, e.startLabel, e.endLabel].flatMap((t) => t === undefined ? [] : [{ x: t.x, y: t.y, w: t.w, h: t.h }]));
   const basic = { x: label.x, y: label.y, w: label.w, h: label.h };
   const near = own.map((sg) => segmentToRect(sg, basic));
-  const q = { own, foreign, nodes: layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h })), placed, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...avoid.length === 0 ? {} : { avoid }, marks: marksOf(edge) };
+  const q = { own, foreign, nodes: layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h })), placed, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...avoid.length === 0 ? {} : { avoid }, marks: marksOf(edge), passed: passedBy(layout, edge) };
   const spot = chooseSpot(q);
   if (!measure(spot.rect, q).clean)
     return;
@@ -3909,6 +3910,10 @@ var ON_FACE = 0.5;
 var LEG = 16;
 var PORT_APART = 8;
 var WINDOW = 96;
+var once = (count) => {
+  let made;
+  return () => made ??= count();
+};
 var FACES = ["top", "bottom", "left", "right"];
 var NORMAL = { top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 var OPPOSITE = { top: "bottom", bottom: "top", left: "right", right: "left" };
@@ -3939,7 +3944,8 @@ var offCentre = (e) => {
 };
 var lean = (e) => horizontal(e.face) ? Math.abs(centreX(e.other) - centreX(e.node)) : Math.abs(centreY(e.other) - centreY(e.node));
 var apart = (e) => Math.hypot(centreX(e.other) - centreX(e.node), centreY(e.other) - centreY(e.node));
-function kit(edges, nodes, ruler, step) {
+function kit(edges, nodes, ruler, step, roomy = false) {
+  const closer = (a, b) => roomy && a.tight() !== b.tight() ? a.tight() < b.tight() : a.length < b.length - EPS9;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const clear = ruler.trackGap / 2;
   const grid = ruler.edgeGrid;
@@ -3970,6 +3976,10 @@ function kit(edges, nodes, ruler, step) {
       const [a0, a1] = axis === "x" ? [b.x, b.x + b.w] : [b.y, b.y + b.h];
       vals.add(down(a0 - clear));
       vals.add(up(a1 + clear));
+      if (roomy) {
+        vals.add(down(a0 - PASS_CLEAR));
+        vals.add(up(a1 + PASS_CLEAR));
+      }
       edgesOf.push(a0, a1);
     }
     edgesOf.sort((a, b) => a - b);
@@ -4062,6 +4072,7 @@ function kit(edges, nodes, ruler, step) {
       return true;
     };
     const length = (path) => segs(path).reduce((sum, s) => sum + run(s), 0);
+    const tightness = (path) => tightPasses({ nodes, edges: [{ ...end.edge, points: path }] });
     const crossings = (path) => {
       let count = 0;
       for (const s of segs(path)) {
@@ -4096,7 +4107,7 @@ function kit(edges, nodes, ruler, step) {
           const tidied = path.map((p) => ({ x: tidy3(p.x), y: tidy3(p.y) }));
           const crossed = crossings(tidied);
           cap = Math.min(cap, crossed);
-          found.push({ path: tidied, crossings: crossed, bends, length: length(path) });
+          found.push({ path: tidied, crossings: crossed, bends, tight: once(() => tightness(tidied)), length: length(path) });
         }
         if (found.some((w) => w.crossings === 0))
           break;
@@ -4109,7 +4120,7 @@ function kit(edges, nodes, ruler, step) {
   const pathFor = (end, face, c) => {
     let best;
     for (const way of waysFor(end, face, c))
-      if (!best || way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9)
+      if (!best || way.bends < best.bends || way.bends === best.bends && closer(way, best))
         best = way;
     return best?.path;
   };
@@ -4150,13 +4161,13 @@ function kit(edges, nodes, ruler, step) {
       if (!c)
         continue;
       for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity))) {
-        if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9))
+        if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && closer(way, best)))
           best = way;
       }
     }
     return best;
   };
-  const bestWayBoth = (end, limit = Infinity) => {
+  const bestWayBoth = (end, limit = Infinity, sameFace = false) => {
     const pts = end.edge.points;
     const q = end.first ? pts[pts.length - 1] : pts[0];
     const held = faceAt(end.other, q);
@@ -4169,13 +4180,13 @@ function kit(edges, nodes, ruler, step) {
       if (!c)
         continue;
       for (const farFace of FACES) {
-        if (farFace === held)
+        if (farFace === held && !sameFace)
           continue;
         const at = freePort(end.other, farFace, farEnd);
         if (!at)
           continue;
         for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity), { at, face: farFace })) {
-          if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9))
+          if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && closer(way, best)))
             best = way;
         }
       }
@@ -4230,7 +4241,7 @@ function settleVertices(edges, nodes, ruler, step) {
 function settleMixedSides(edges, nodes, ruler, step) {
   if (ruler.uniform)
     return { moved: 0, diagnostics: [] };
-  const { endsOf, apply, bestWay, bestWayBoth, moved } = kit(edges, nodes, ruler, step);
+  const { endsOf, apply, bestWay, bestWayBoth, moved } = kit(edges, nodes, ruler, step, true);
   const crossing = (edge) => {
     const mine = segs(edge.points);
     return edges.reduce((sum, e) => e === edge ? sum : sum + segs(e.points).reduce((k, t) => k + mine.filter((s) => properCross(s, t)).length, 0), 0);
@@ -4245,7 +4256,8 @@ function settleMixedSides(edges, nodes, ruler, step) {
         const bends = Math.max(0, end.edge.points.length - 2);
         const way = bestWay(end, had);
         if (way && way.crossings <= had && way.bends <= bends + 2) {
-          apply(end, way.path);
+          const roomier = way.tight() > 0 ? bestWayBoth(end, way.crossings, true) : undefined;
+          apply(end, roomier && roomier.crossings <= way.crossings && roomier.bends <= way.bends && roomier.tight() < way.tight() ? roomier.path : way.path);
           continue;
         }
         const both = bestWayBoth(end, had);

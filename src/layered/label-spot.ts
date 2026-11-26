@@ -36,6 +36,8 @@ export interface SpotQuery {
   avoid?: Rect[];
   /** Ends of the line that carry a mark: a label keeps `MARK_CLEAR` from each. */
   marks?: Point[];
+  /** Boxes the line passes without ending on them: the chip of a clean label keeps `LABEL_CLEAR` from each. */
+  passed?: Rect[];
 }
 
 export interface Spot {
@@ -96,7 +98,7 @@ function measure(r: Rect, q: SpotQuery): { line: number; clean: boolean; overlap
   const chip = chipOf(r, q);
   const overlap = q.nodes.some((n) => overlaps(chip, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS;
   const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS);
-  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS);
+  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS) && (q.passed ?? []).every((n) => gapOf(chip, n) >= LABEL_CLEAR - EPS);
   return { line, clean, overlap, marked };
 }
 
@@ -216,6 +218,9 @@ function marksOf(edge: LayoutEdge): Point[] {
   return [...(first !== undefined && edge.startEnd !== undefined && edge.startEnd !== 'none' ? [first] : []), ...(last !== undefined && edge.end !== 'none' ? [last] : [])];
 }
 
+/** The boxes of a drawing that an edge does not end on. */
+const passedBy = (layout: Layout, edge: LayoutEdge): Rect[] => layout.nodes.flatMap((n) => (n.id === edge.from || n.id === edge.to ? [] : [{ x: n.x, y: n.y, w: n.w, h: n.h }]));
+
 /**
  * Moves the labels of a finished drawing that stand too near the line of another edge or another label. Labels are
  * handled in the order of the edges, each against the labels before it; edges and boxes stay where they are.
@@ -235,7 +240,7 @@ export function refineLabels(layout: Layout, ruler: Ruler, redrawn: ReadonlySet<
     const foreign = all.flatMap((ss, k) => (k === ei ? [] : ss));
     const basic: Rect = redrawn.has(ei) ? onLongest(own, label, ruler) : { x: label.x, y: label.y, w: label.w, h: label.h };
     const near = own.map((sg) => segmentToRect(sg, basic));
-    const spot = chooseSpot({ own, foreign, nodes, placed: [...finals, ...endTexts], size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) });
+    const spot = chooseSpot({ own, foreign, nodes, placed: [...finals, ...endTexts], size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge), passed: passedBy(layout, edge) });
     finals.push(spot.rect);
     if (!spot.moved && !redrawn.has(ei)) return edge;
     changed = true;
@@ -356,7 +361,7 @@ export function placeAgain(layout: Layout, ei: number, ruler: Ruler, avoid: Rect
   const placed: Rect[] = layout.edges.flatMap((e, k) => [k === ei ? undefined : e.label, e.startLabel, e.endLabel].flatMap((t) => (t === undefined ? [] : [{ x: t.x, y: t.y, w: t.w, h: t.h }])));
   const basic: Rect = { x: label.x, y: label.y, w: label.w, h: label.h };
   const near = own.map((sg) => segmentToRect(sg, basic));
-  const q: SpotQuery = { own, foreign, nodes: layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h })), placed, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge) };
+  const q: SpotQuery = { own, foreign, nodes: layout.nodes.map(({ x, y, w, h }) => ({ x, y, w, h })), placed, size: { w: label.w, h: label.h }, style: edge.style, ruler, basic, basicSeg: near.indexOf(Math.min(...near)), ...(avoid.length === 0 ? {} : { avoid }), marks: marksOf(edge), passed: passedBy(layout, edge) };
   const spot = chooseSpot(q);
   if (!measure(spot.rect, q).clean) return undefined;
   return { ...layout, edges: layout.edges.map((e, k) => (k === ei ? { ...e, label: { ...label, x: spot.rect.x, y: spot.rect.y } } : e)) };

@@ -1,5 +1,6 @@
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, LayoutEdge, LayoutNode, Point } from '../types.ts';
+import { PASS_CLEAR, tightPasses } from './clearance.ts';
 import { hits, overlap, properCross, segs } from './elbows.ts';
 import type { Seg } from './elbows.ts';
 import type { Face } from './ports.ts';
@@ -19,6 +20,12 @@ const PORT_APART = 8;
 
 /** Pixels: lines of a path are looked for this far around the two ends before the whole drawing is searched. */
 const WINDOW = 96;
+
+/** A count made the first time it is asked for. */
+const once = (count: () => number): (() => number) => {
+  let made: number | undefined;
+  return () => (made ??= count());
+};
 
 const FACES: readonly Face[] = ['top', 'bottom', 'left', 'right'];
 
@@ -77,6 +84,8 @@ interface Way {
   path: Point[];
   crossings: number;
   bends: number;
+  /** Pieces of the path that run beside a box it does not end on, nearer than PASS_CLEAR; counted when first asked. */
+  tight: () => number;
   length: number;
 }
 
@@ -86,8 +95,13 @@ export interface Settled {
   diagnostics: Diagnostic[];
 }
 
-/** The tools both vertex steps share: the ends of a node, a path drawn again, the best free face for an end. `moved` counts the ends drawn again. */
-function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number) {
+/**
+ * The tools both vertex steps share: the ends of a node, a path drawn again, the best free face for an end. `moved` counts the ends drawn again.
+ * With `roomy`, bends may also stand where they keep the room a passing line keeps from a box (PASS_CLEAR), and of two
+ * ways with as many crossings and bends the one that passes fewer boxes nearer than that wins before the shorter one.
+ */
+function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number, roomy = false) {
+  const closer = (a: Way, b: Way): boolean => (roomy && a.tight() !== b.tight() ? a.tight() < b.tight() : a.length < b.length - EPS);
   const byId = new Map(nodes.map((n) => [n.id, n] as const));
   const clear = ruler.trackGap / 2;
   const grid = ruler.edgeGrid;
@@ -118,6 +132,10 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
       const [a0, a1] = axis === 'x' ? [b.x, b.x + b.w] : [b.y, b.y + b.h];
       vals.add(down(a0 - clear));
       vals.add(up(a1 + clear));
+      if (roomy) {
+        vals.add(down(a0 - PASS_CLEAR));
+        vals.add(up(a1 + PASS_CLEAR));
+      }
       edgesOf.push(a0, a1);
     }
     edgesOf.sort((a, b) => a - b);
@@ -185,6 +203,7 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
       return true;
     };
     const length = (path: Point[]): number => segs(path).reduce((sum, s) => sum + run(s), 0);
+    const tightness = (path: Point[]): number => tightPasses({ nodes, edges: [{ ...end.edge, points: path }] });
     const crossings = (path: Point[]): number => {
       let count = 0;
       for (const s of segs(path)) {
@@ -215,7 +234,7 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
           const tidied = path.map((p) => ({ x: tidy(p.x), y: tidy(p.y) }));
           const crossed = crossings(tidied);
           cap = Math.min(cap, crossed);
-          found.push({ path: tidied, crossings: crossed, bends, length: length(path) });
+          found.push({ path: tidied, crossings: crossed, bends, tight: once(() => tightness(tidied)), length: length(path) });
         }
         // A path with more bends never beats one that crosses nothing.
         if (found.some((w) => w.crossings === 0)) break;
@@ -228,7 +247,7 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
   /** The path with the fewest bends, the shortest of those, from the face point `c` of `end.node` to the other end of the edge, or nothing. */
   const pathFor = (end: End, face: Face, c: Point): Point[] | undefined => {
     let best: Way | undefined;
-    for (const way of waysFor(end, face, c)) if (!best || way.bends < best.bends || (way.bends === best.bends && way.length < best.length - EPS)) best = way;
+    for (const way of waysFor(end, face, c)) if (!best || way.bends < best.bends || (way.bends === best.bends && closer(way, best))) best = way;
     return best?.path;
   };
 
@@ -275,7 +294,7 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
       const c = freePort(end.node, face, end);
       if (!c) continue;
       for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity))) {
-        if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && way.length < best.length - EPS)))) best = way;
+        if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && closer(way, best))))) best = way;
       }
     }
     return best;
@@ -285,7 +304,7 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
    * As `bestWay`, with the other end of the edge moved too: every free face of the box at the other end that the edge
    * does not stand on yet is tried against every free face of this one.
    */
-  const bestWayBoth = (end: End, limit = Infinity): Way | undefined => {
+  const bestWayBoth = (end: End, limit = Infinity, sameFace = false): Way | undefined => {
     const pts = end.edge.points;
     const q = end.first ? (pts[pts.length - 1] as Point) : (pts[0] as Point);
     const held = faceAt(end.other, q);
@@ -296,11 +315,11 @@ function kit(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: numbe
       const c = freePort(end.node, face, end);
       if (!c) continue;
       for (const farFace of FACES) {
-        if (farFace === held) continue;
+        if (farFace === held && !sameFace) continue;
         const at = freePort(end.other, farFace, farEnd);
         if (!at) continue;
         for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity), { at, face: farFace })) {
-          if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && way.length < best.length - EPS)))) best = way;
+          if (!best || way.crossings < best.crossings || (way.crossings === best.crossings && (way.bends < best.bends || (way.bends === best.bends && closer(way, best))))) best = way;
         }
       }
     }
@@ -369,7 +388,7 @@ export function settleVertices(edges: LayoutEdge[], nodes: LayoutNode[], ruler: 
  */
 export function settleMixedSides(edges: LayoutEdge[], nodes: LayoutNode[], ruler: Ruler, step: number): Settled {
   if (ruler.uniform) return { moved: 0, diagnostics: [] };
-  const { endsOf, apply, bestWay, bestWayBoth, moved } = kit(edges, nodes, ruler, step);
+  const { endsOf, apply, bestWay, bestWayBoth, moved } = kit(edges, nodes, ruler, step, true);
   const crossing = (edge: LayoutEdge): number => {
     const mine = segs(edge.points);
     return edges.reduce((sum, e) => (e === edge ? sum : sum + segs(e.points).reduce((k, t) => k + mine.filter((s) => properCross(s, t)).length, 0)), 0);
@@ -383,7 +402,9 @@ export function settleMixedSides(edges: LayoutEdge[], nodes: LayoutNode[], ruler
         const bends = Math.max(0, end.edge.points.length - 2);
         const way = bestWay(end, had);
         if (way && way.crossings <= had && way.bends <= bends + 2) {
-          apply(end, way.path);
+          // A way that passes a box too near may move its other end too, on any face of its box, when that passes fewer.
+          const roomier = way.tight() > 0 ? bestWayBoth(end, way.crossings, true) : undefined;
+          apply(end, roomier && roomier.crossings <= way.crossings && roomier.bends <= way.bends && roomier.tight() < way.tight() ? roomier.path : way.path);
           continue;
         }
         // No face of this box alone serves: the line may leave the other box by another face, as long as it bends no more than it did.
