@@ -161,7 +161,6 @@ export function parseGantt(src: string, opts: { heading?: string; config?: unkno
   }
 
   if (!headerSeen) fail('A Gantt chart starts with "gantt".', 1, 'header');
-  if (raws.length === 0) fail('A Gantt chart needs at least one task.', rows.length, 'empty');
 
   const format = compileDateFormat(dateFormat);
   const excludes = readExcludes(excludeTokens, weekend, format);

@@ -65,6 +65,7 @@ function trimEnd(row: Row): Row {
 export function layoutGanttText(model: Gantt, maxWidth: number | undefined): Row[] {
   const width = maxWidth ?? DEFAULT_WIDTH;
   if (width < MIN_WIDTH) throw new UrsulaError(`A Gantt drawing needs at least ${MIN_WIDTH} columns of width; the limit is ${width}.`, 'gantt-width');
+  if (model.tasks.length === 0) return [...(model.title === undefined ? [] : [[span(cut(model.title, width), 'bold')]]), [span('(no tasks)', 'dim')]];
   const rowsOf = model.tasks.flatMap((t, i) => (t.vert ? [] : [i]));
   const tasks = model.tasks;
   const task = (i: number): GanttTask => tasks[i] as GanttTask;
