@@ -1,6 +1,6 @@
 # Releasing
 
-Every change reaches `main` through a pull request, and every release is a tag on `main`.
+Every change reaches `main` through a pull request. A release is a pull request that raises the version; merging it publishes.
 
 ## Changes
 
@@ -22,20 +22,13 @@ Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a
 3. Rebuild the bundled skill command, which carries the version: `bun scripts/build.ts`.
    Check that `skills/ursula/scripts/ursula.mjs` changed.
 4. Commit the three files as `chore: release <version>`, push, and open a pull request with that name.
-5. Merge it after `CI` passes.
-6. Tag the merge commit on `main` and push the tag:
+5. Merge it after `CI` passes. That is the whole release.
+6. On the push to `main`, the `Release` workflow sees that the version in `package.json` is not on npm yet. It runs the
+   tests and the build, publishes to npm through trusted publishing (with provenance, no token), tags the commit
+   `v<version>` and creates the GitHub release with generated notes. Pushes that do not change the version stop after
+   that check.
+7. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
 
-   ```bash
-   git switch main && git pull
-   git tag v<version>
-   git push origin v<version>
-   ```
-
-7. The `Release` workflow checks that the tag matches `package.json` and sits on `main`, runs the tests and the build,
-   publishes to npm through trusted publishing (with provenance, no token), and creates the GitHub release with
-   generated notes.
-8. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
-
-If the workflow fails before publishing, fix it in a pull request, delete the tag (`git push origin :refs/tags/v<version>`
-and `git tag -d v<version>`) and tag again. A version that reached npm cannot be published again; release the next
-patch instead.
+If the workflow fails before publishing, fix the cause in a pull request; the next push to `main` (or running the
+`Release` workflow by hand from the Actions tab) tries again. A version that reached npm cannot be published again;
+release the next patch instead.
