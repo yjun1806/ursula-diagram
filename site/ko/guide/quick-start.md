@@ -1,6 +1,6 @@
 # 빠른 시작
 
-쓰는 패키지 매니저로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 깔립니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
+사용하는 패키지 매니저로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
 
 ::: code-group
 
@@ -40,5 +40,5 @@ ursula-diagram order.mmd --format svg > order.svg   # 첫 화면의 그림
 ## Mermaid 판
 
 문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날 기준 Mermaid의 최신
-정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 더해진 문법은 아직 읽지 못할 수 있습니다.
-유형마다 짧은 예시는 `ursula-diagram syntax <유형>`으로 볼 수 있습니다.
+정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 추가된 문법은 아직 읽지 못할 수 있습니다.
+유형별 짧은 예시는 `ursula-diagram syntax <유형>`으로 볼 수 있습니다.

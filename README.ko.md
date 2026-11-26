@@ -24,7 +24,7 @@ SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. 같은 글은 언제�
 DOM이 필요 없으며, 실행할 때 설치할 것도 없습니다.
 
 **Mermaid 판.** 문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날
-기준 Mermaid의 최신 정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 더해진 문법은 아직 읽지
+기준 Mermaid의 최신 정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 추가된 문법은 아직 읽지
 못할 수 있습니다.
 
 ```
@@ -57,33 +57,34 @@ flowchart LR
 
 ## 왜 ursula인가
 
-에이전트가 그림을 보여 주려 할 때는 대개 두 길 가운데 하나를 갑니다.
+에이전트가 그림을 보여 주려 할 때는 대개 두 방법 중 하나를 씁니다.
 
 - **그림 그리기 스킬.** 모델이 배치를 직접 짜고, 좌표나 좌표를 계산하는 스크립트를 쓰고, 결과를 검사한 뒤 다시
-  짭니다. 그림마다 구역·범례·강조를 골라 손으로 다듬은 듯한 그림이 나올 수 있습니다. 하지만 짜고 검사하는 한 번 한
-  번이 모델의 차례 하나입니다. 그래서 그림 한 장에 차례와 토큰이 많이 들고, 같은 요청도 다음에는 다른 그림이 될 수
+  짭니다. 그림마다 구역·범례·강조를 골라 손으로 다듬은 듯한 그림이 나올 수 있습니다. 하지만 짜고 검사할 때마다
+  모델의 차례를 하나씩 씁니다. 그래서 그림 한 장에 차례와 토큰이 많이 들고, 같은 요청도 다음에는 다른 그림이 될 수
   있습니다.
 - **Mermaid를 그대로 쓰기.** 모델이 Mermaid 글을 쓰고 Mermaid가 그립니다. 모델에게는 빠르고 싸지만, Mermaid는
-  브라우저에서 그립니다(명령줄에서는 헤드리스 Chromium에서). 모델은 배치가 어떻게 나왔는지 알 수 없고, 터미널에서는 독자가 원문
-  글만 봅니다.
+  브라우저에서 그립니다(명령줄에서는 헤드리스 Chromium에서). 모델은 배치가 어떻게 나왔는지 알 수 없고, 독자는 터미널에서
+  원문만 봅니다.
 
-ursula는 이 둘 사이를 메웁니다. 모델은 Mermaid 글만 쓰고 좌표는 쓰지 않습니다. 공식 예시의 글 크기는 중앙값
-154바이트이고, 위의 주문 흐름도는 315바이트입니다. 배치는 모델 없이 엔진이 계산하므로 같은 글은 같은 그림이 됩니다.
-엔진 하나가 SVG와 터미널 칸 단위 글자 그림을 함께 그립니다. 그래서 에이전트가 실제로 답하는 곳인 터미널에서도 그림이
+ursula는 이 둘 사이를 메웁니다. 모델은 Mermaid 글만 쓰고 좌표는 쓰지 않습니다. 공식 예시의 글 크기는 중앙값이
+154바이트이고, 위의 주문 flowchart는 315바이트입니다. 배치는 모델 없이 엔진이 계산하므로 같은 글은 같은 그림이 됩니다.
+엔진 하나가 SVG와 터미널 칸 단위 글자 그림을 함께 그립니다. 그래서 에이전트가 실제로 답하는 터미널에서도 그림이
 보입니다.
 
-Apple M2 Max, Node 26에서 Mermaid 문서의 예시 531장을 다섯 번씩 그려 잰 값입니다(아래 두 줄은 흐름도 한 장을 명령으로 여섯 번씩 돌린 값).
+아래 표는 Apple M2 Max, Node 26에서 Mermaid 문서의 예시 531장을 다섯 번씩 그려 잰 값입니다. 마지막 두 줄만
+flowchart 한 장을 명령으로 여섯 번씩 실행해 잰 값입니다.
 
 | | 중앙값 | 가장 느린 장 |
 | --- | --- | --- |
 | SVG, 라이브러리에서 | 0.36ms | 79.6ms |
 | 터미널 글자 그림(폭 100), 라이브러리에서 | 0.29ms | 46.3ms |
-| 명령 한 번, 주문 흐름도, `--format text` | 0.15초 | |
-| 명령 한 번, 주문 흐름도, `--format svg` | 0.35초 | |
+| 명령 한 번, 주문 flowchart, `--format text` | 0.15초 | |
+| 명령 한 번, 주문 flowchart, `--format svg` | 0.35초 | |
 
-명령 한 번에 드는 시간은 대부분 Node를 띄우고 한 파일로 묶은 명령(1.56MB)을 읽는 시간입니다. 모델이 자기 그림을 보고
-판단하는 대신 `--format check`가 꺾임·교차 수와, 때로 글에 대한 물음을 출력합니다. 에이전트 스킬은 물음에 한 번만
-답하고 그립니다. 되풀이하지 않습니다.
+명령 한 번에 드는 시간은 대부분 Node를 띄우고 한 파일로 묶은 명령(1.56MB)을 읽는 데 씁니다. 모델이 자기 그림을
+보고 판단하는 대신, `--format check`가 꺾임·교차 수를 출력하고 때로 글에 대한 질문도 함께 냅니다. 에이전트 스킬은
+질문에 한 번만 답한 뒤 그리고, 이 과정을 되풀이하지 않습니다.
 
 ## 다른 도구와 비교
 
@@ -135,7 +136,7 @@ SVG를 쓰는 도구는 SVG로 잰 값입니다.
 
 ## 빠른 시작
 
-npm으로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 깔립니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
+npm으로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
 
 ```bash
 npm install -g ursula-diagram
@@ -302,22 +303,22 @@ Swimlanes, Timeline, TreeView, Treemap, Use Case, User Journey, Venn, Wardley Ma
 
 ## 큰 그림
 
-Mermaid 문서에 있는 C4 예시 두 장을 고치지 않고 그린 것입니다. 컨테이너 그림은 요소 10개, 관계 13개, 경계 하나로
-이루어지고, 경계 밖의 사람·시스템이 경계 안의 앱들과 이어집니다. 배포 그림은 노드가 3단까지 겹치고(데이터센터, 서버,
+아래는 Mermaid 문서에 있는 C4 예시 두 장을 고치지 않고 그린 그림입니다. container 그림은 요소 10개, 관계 13개, 경계 하나로
+이루어지며, 경계 밖의 사람·시스템이 경계 안의 앱들과 이어집니다. deployment 그림은 노드가 3단까지 겹치고(데이터센터, 서버,
 Tomcat, 앱) 복제되는 데이터베이스로 끝납니다. 두 장 모두 교차가 없습니다(`--format check`: 꺾임 7개, 4개).
 
-<p align="center"><img src="assets/c4-container.svg" alt="인터넷 뱅킹 시스템의 C4 컨테이너 그림" width="100%"></p>
-<p align="center"><img src="assets/c4-deployment.svg" alt="인터넷 뱅킹 시스템의 C4 배포 그림" width="80%"></p>
+<p align="center"><img src="assets/c4-container.svg" alt="인터넷 뱅킹 시스템의 C4 container 그림" width="100%"></p>
+<p align="center"><img src="assets/c4-deployment.svg" alt="인터넷 뱅킹 시스템의 C4 deployment 그림" width="80%"></p>
 
 글은 [examples/c4-container.mmd](examples/c4-container.mmd)와 [examples/c4-deployment.mmd](examples/c4-deployment.mmd)에
-있습니다. 터미널에서도 그려지지만, 이 크기에서는 긴 관계 라벨을 줄이고 경계를 띠로 그리므로 이런 그림은 SVG가 더
-잘 읽힙니다.
+있습니다. 터미널에서도 그릴 수 있지만, 이 크기에서는 긴 관계 라벨을 줄이고 경계를 띠로 그립니다. 그래서 이런 그림은 SVG가
+더 잘 읽힙니다.
 
 ## 터미널에서
 
-`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. 맨 위의 주문 흐름도는
+`--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. 맨 위의 주문 flowchart는
 `--width 80`에서 왼쪽에서 오른쪽으로 놓이고, `--width 40`에서는 같은 글이 위에서 아래로 쌓입니다. 그림을 잘라 내지는
-않습니다. 아래는 위 그림 모음의 시퀀스·간트·마인드맵을 영문 라벨로 바꿔 쓴 글을
+않습니다. 아래는 위 그림 모음의 sequence·Gantt·mindmap을 영문 라벨로 바꿔 쓴 글을
 `ursula-diagram <파일> --format text --width 80`으로 그린 결과입니다.
 
 ```
@@ -361,7 +362,7 @@ Diagrams
 ```
 
 몇몇 유형(pie, quadrant, radar, sankey, XY chart, timeline, user journey, railroad, Venn, Cynefin, Wardley)은
-터미널에서 표나 목록으로 나옵니다. 터미널에서는 그림보다 그쪽이 더 정확하기 때문입니다.
+터미널에서 표나 목록으로 나옵니다. 터미널에서는 그림보다 표나 목록이 더 정확하기 때문입니다.
 
 ```
 pie title Pets
@@ -377,11 +378,11 @@ Cats   85  17.5%
 Rats   15   3.1%
 ```
 
-그림이 `--width`에 들지 않으면 명령은 그림을 내지 않고 종료 코드 3으로 끝나며, 들어가는 폭을 알려 줍니다. 그리는
+그림이 `--width`에 들어가지 않으면 명령은 그림을 내지 않고 종료 코드 3으로 끝나며, 들어가는 폭을 알려 줍니다. 그리는
 형식에 `--check`를 더하면 엔진의 점검 결과가 표준 오류로 함께 나옵니다. 점검 결과에는 개수, 교차하는 선과 그 선을 적은
 줄 번호, 질문이 들어 있습니다. 점검은 svg 배치를 셉니다. 터미널 그림은 선을 자기 격자에 따로 그리므로 교차가 다를 수
 있습니다. `ursula-diagram syntax`는 유형 목록을, `ursula-diagram syntax <유형>`은 작은 예시와
-규칙을 보여 줍니다. 오류는 줄과 열을 짚고, 할 수 있으면 의도했을 낱말과 맞게 쓴 줄 하나를 붙입니다.
+규칙을 보여 줍니다. 오류 메시지는 줄과 열을 가리키고, 가능하면 의도했을 낱말과 바르게 쓴 예시 한 줄을 붙입니다.
 
 ```
 error: line 1: expected a 'flowchart' or 'graph' header
@@ -391,24 +392,24 @@ did you mean: flowchart
 example: flowchart LR
 ```
 
-종료 코드는 0 그림, 1 글의 오류, 2 옵션 오류, 3 폭 부족, 4 엔진 안의 오류입니다. 옵션 전부는
-`ursula-diagram --help`로 봅니다.
+종료 코드는 0(그림을 그림), 1(글의 오류), 2(옵션 오류), 3(폭 부족), 4(엔진 안의 오류)입니다. 모든 옵션은
+`ursula-diagram --help`로 확인합니다.
 
 ### 줄이 맞지 않을 때
 
 글자 그림은 모든 글자가 엔진이 센 폭대로 그려질 때만 줄이 맞습니다. 엔진은 선과 화살촉을 한 칸으로, 한글·한자·가나를
-두 칸으로 셉니다. 진짜 터미널은 이렇게 그립니다. 채팅 창, 웹 페이지, 문서의 코드 블록은 그렇지 않은 경우가 많아 상자가
-어긋납니다. 예를 들어 맥의 크롬에서 GitHub 코드 블록은 한글 한 글자를 영문 1.44칸 폭으로 그립니다(재 본 값, 운영체제와 글꼴에 따라 다릅니다). 이 문서의 글자 그림을 영문으로만
-적은 까닭입니다.
+두 칸으로 셉니다. 실제 터미널은 이렇게 그립니다. 채팅 창, 웹 페이지, 문서의 코드 블록은 그렇지 않은 경우가 많아 상자가
+어긋납니다. 예를 들어 맥의 크롬에서 GitHub 코드 블록은 한글 한 글자를 영문 1.44칸 폭으로 그립니다(직접 잰 값이며 운영체제와 글꼴에 따라 다릅니다). 그래서 이 문서의 글자 그림은
+영문으로만 적었습니다.
 
-이럴 때 쓰는 방법이 두 가지 있습니다.
+이럴 때는 두 가지 방법을 씁니다.
 
 - **`--format text-svg`** 는 같은 글자 그림을 SVG 한 장으로 그립니다. 선을 도형으로 그리고 모든 낱말을 칸 자리에 고정하므로,
   어떤 글꼴로 보여도 줄이 어긋나지 않습니다. 아래는 한글 라벨이 든 그림입니다.
 
   <img src="assets/ko-hero-text.svg" alt="한글 라벨이 든 글자 그림을 SVG로 그린 것" width="608">
 
-- **`--charset ascii`** 는 ASCII 글자만으로 그립니다. 상자 선 글자를 두 칸으로 그리는 터미널에 씁니다.
+- **`--charset ascii`** 는 ASCII 글자만으로 그립니다. 상자 선 글자를 두 칸으로 그리는 터미널에서 씁니다.
 
   ```
                                            +------------+   +------------+
@@ -434,8 +435,8 @@ example: flowchart LR
 | 채운·빈 마름모, 점, 막대 | `◆ ◇` `● ◉` `█` | `@ o` `* @` `#` |
 | 잘린 글 | `…` | `~` |
 
-그림 안의 글은 적은 그대로 둡니다. 엔진은 표의 글자를 어디에 있든 바꾸고, 일부 터미널이 두 칸으로 그리는 기호 몇 개(`·`
-`×` `—` `∩` `⊕`)도 바꿉니다.
+그림 안의 글은 적은 그대로 둡니다. 다만 엔진은 위 표의 글자가 글 안에 있어도 바꾸고, 일부 터미널이 두 칸으로 그리는
+기호 몇 개(`·` `×` `—` `∩` `⊕`)도 바꿉니다.
 
 </details>
 
@@ -443,12 +444,12 @@ example: flowchart LR
 
 | `--format` | 받는 것 |
 | --- | --- |
-| `svg`(기본) | 글 안에 바로 넣는 SVG 한 장. 색은 CSS 변수이고, 밝은·어두운 모드는 보는 쪽 설정을 따릅니다. |
+| `svg`(기본) | 문서에 바로 넣는 SVG 한 장. 색은 CSS 변수이고, 밝은·어두운 모드는 보는 사람의 설정을 따릅니다. |
 | `text` | `--width`에 맞춰 배치한 상자 그리기 글자 그림. `--color`를 주지 않으면 색 코드를 넣지 않습니다. |
-| `text-svg` | 터미널 글자 그림과 똑같이 생긴 SVG 한 장. 글자 그림의 줄이 어긋나는 자리에 씁니다. |
-| `html` | 그림, 밝은·어두운 전환, PNG·SVG 저장이 든 파일 하나. |
+| `text-svg` | 터미널 글자 그림과 똑같이 생긴 SVG 한 장. 글자 그림의 줄이 어긋나는 곳에서 씁니다. |
+| `html` | 그림과 밝은·어두운 전환, PNG·SVG 저장 기능을 담은 파일 하나. |
 | `json` | 상자·선·라벨과 그 좌표. |
-| `check` | 꺾임·교차 수를 적은 한 줄과, 때로 글을 어떻게 고치면 나아지는지 묻는 물음. |
+| `check` | 꺾임·교차 수를 적은 한 줄. 때로 글을 어떻게 고치면 나아지는지 묻는 질문이 붙습니다. |
 
 ```bash
 ursula-diagram flow.mmd --format svg > flow.svg
@@ -461,7 +462,7 @@ cat flow.mmd | ursula --format json
 ```
 
 파일을 주지 않으면 명령은 표준 입력에서 글을 읽습니다. `--theme auto|light|dark`는 `html` 페이지의 밝은·어두운
-모드를 정하고, `auto`는 시스템 설정을 따릅니다. 모든 옵션은 `ursula-diagram --help`로 봅니다.
+모드를 정하고, `auto`는 시스템 설정을 따릅니다. 모든 옵션은 `ursula-diagram --help`로 확인합니다.
 
 ## 라이브러리
 
@@ -482,15 +483,15 @@ const page = renderHtml(src, { title: 'Flow' });
 ```
 
 글을 그릴 수 없으면 `render`는 고칠 곳을 알려 주는 `UrsulaError`를 던집니다. `renderText`는 같은 내용을 `{ error }`로
-돌려줍니다. 그림이 폭을 넘을 때도 그렇습니다. 그림을 잘라 내지 않습니다.
+돌려줍니다. 그림이 폭을 넘을 때도 그림을 잘라 내지 않고 `{ error }`를 돌려줍니다.
 
-`renderTextSpans`는 같은 줄을 톤(`normal`, `dim`, `bold`, `accent`)이 붙은 조각으로 돌려줍니다. 터미널 글에 직접 색을
-입히는 쪽에서 씁니다. `spansToSvg`는 그 조각을 `renderTextSvg`와 같은 그림으로 그리고, `toAscii`는 이미 그린 줄의 그리기
-글자를 ASCII로 바꿉니다. ER 그림의 줄에는 `{ countBars: true }`를 주면 세로 선 위의 개수 막대가 `-`가 됩니다.
+`renderTextSpans`는 같은 줄을 톤(`normal`, `dim`, `bold`, `accent`)이 붙은 조각으로 돌려줍니다. 터미널 출력에 직접 색을
+입히는 프로그램에서 씁니다. `spansToSvg`는 그 조각을 `renderTextSvg`와 같은 그림으로 그리고, `toAscii`는 이미 그린 줄의 상자 그리기
+글자를 ASCII로 바꿉니다. ER 그림의 줄에 `{ countBars: true }`를 주면 세로 선 위의 개수 막대가 `-`로 바뀝니다.
 
 ## 색 바꾸기
 
-SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습니다. 그래서 그림만 놓아도 제 색으로 보이고, 페이지가 변수를
+SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습니다. 그래서 그림만 넣어도 제 색으로 보이고, 페이지가 변수를
 정하면 그 색을 따릅니다. 변수마다 밝은 값과 어두운 값이 있고, 어두운 값은 `prefers-color-scheme: dark`에서 씁니다.
 
 ```css
@@ -507,7 +508,7 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습�
 | --- | --- | --- | --- |
 | `--ursula-fg` | 이름과 본문 글자 | `#201f1e` | `#efeeec` |
 | `--ursula-muted` | 둘째 줄과 라벨 | `#5b5b59` | `#b2b1af` |
-| `--ursula-faint` | 뒤로 물러나는 글자와 표시 | `#878685` | `#757472` |
+| `--ursula-faint` | 흐리게 보이는 글자와 표시 | `#878685` | `#757472` |
 | `--ursula-line` | 상자 사이의 선 | `#565554` | `#a5a4a2` |
 | `--ursula-border` | 상자 테두리 | `#484846` | `#bebdbb` |
 | `--ursula-hair` | 구역 테두리, 구분선, 격자선 | `#e2e1e0` | `#2c2b2a` |
@@ -518,24 +519,24 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값을 함께 싣습�
 | `--ursula-start-fill` | 시작 상자와 가장 높은 막대의 면 | `#e5c37a` | `#dab975` |
 | `--ursula-accent-tint` | 옅은 강조 면 | `#f6ecd7` | `#372c15` |
 | `--ursula-on-accent` | 시작 상자 위의 글자 | `#201f1e` | `#171614` |
-| `--ursula-bg` | 흐름도, 클래스, 상태, ER, 요구사항, C4, 유스케이스 그림의 배경 | `transparent` | `transparent` |
+| `--ursula-bg` | flowchart, class, state, ER, requirement, C4, use case 그림의 배경 | `transparent` | `transparent` |
 | `--ursula-panel` | 차트 뒤의 판 | `none` | `none` |
 | `--ursula-bar` | 차트의 중립 막대 | `#c8c7c6` | `#434241` |
 | `--ursula-tint-outer` | C4 그림의 가장 바깥 경계 | `#f4f3f1` | `#1e1d1b` |
 | `--ursula-tint-inner` | C4 그림의 가장 안쪽 경계 | `#f6f5f3` | `#1c1b19` |
 | `--ursula-tint-chip` | 경계 면 위의 라벨 칩 | `#ebeae8` | `#262523` |
-| `--ursula-s1` … `--ursula-s8` | 차트의 계열 여덟 | | |
-| `--ursula-s1-tint` … `--ursula-s8-tint` | 계열마다의 옅은 면 | | |
+| `--ursula-s1` … `--ursula-s8` | 차트의 계열 8개 | | |
+| `--ursula-s1-tint` … `--ursula-s8-tint` | 계열별 옅은 면 | | |
 
 </details>
 
 ## 에이전트 스킬
 
-`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--check`로
-그림을 그리면서 엔진에 물어보는 법, 읽는 사람에게 어떤 출력을 줄지를 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
-것이라, 스킬은 Node 22 이상만 있으면 돌고 아무것도 설치하지 않습니다.
+`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--check`를
+붙여 그리면서 엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
+것이어서, 스킬은 Node 22 이상만 있으면 아무것도 설치하지 않고 돌아갑니다.
 
-[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에 함께 쓰입니다.
+[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다.
 
 ```bash
 npx skills add yjun1806/ursula-diagram            # 이 프로젝트에
@@ -543,7 +544,7 @@ npx skills add yjun1806/ursula-diagram -g         # 모든 프로젝트에
 npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
 ```
 
-`skills/ursula` 폴더를 에이전트의 스킬 폴더에 직접 복사해도 됩니다. npm 패키지에도 들어 있습니다.
+`skills/ursula` 폴더를 에이전트의 스킬 폴더에 직접 복사해도 됩니다. 이 폴더는 npm 패키지에도 들어 있습니다.
 
 ```bash
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
@@ -554,7 +555,7 @@ cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 
 ### MCP로
 
-셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 냅니다. 도구는 셋입니다.
+셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 띄웁니다. 도구는 셋입니다.
 `render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`), `check`, `syntax`.
 
 ```bash
@@ -565,12 +566,12 @@ claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code
 { "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
 ```
 
-두 번째는 Claude Desktop의 `claude_desktop_config.json`에 넣습니다. 같은 형식을 받는 다른 클라이언트에도 씁니다.
+두 번째 설정은 Claude Desktop의 `claude_desktop_config.json`에 넣습니다. 같은 형식을 받는 다른 클라이언트에도 그대로 쓸 수 있습니다.
 
 ### 에이전트 터미널에서
 
-에이전트의 답을 보여 주는 호스트는 스킬 없이, 모델 차례를 더 쓰지 않고 직접 그림을 그릴 수도 있습니다. 답 안의
-` ```mermaid ` 블록을 찾아 그 자리에 그림을 넣으면 됩니다. 터미널에서 답을 다시 그리는 Claude Code mod가 이런 호스트의
+에이전트의 답을 화면에 보여 주는 호스트는 스킬 없이도 직접 그림을 그릴 수 있고, 이때 모델의 차례를 더 쓰지 않습니다.
+답 안의 ` ```mermaid ` 블록을 찾아 그 자리에 그림을 넣으면 됩니다. 터미널에서 답을 다시 그리는 Claude Code mod가 이런 호스트의
 예입니다. `renderTextSpans`는 줄마다 톤이 붙은 조각을 돌려주고, 톤마다 어떤 색을 쓸지는 호스트가 정합니다.
 
 ````ts
@@ -589,7 +590,7 @@ function drawMermaidBlocks(reply: string, width: number): string {
 }
 ````
 
-그림은 `width`를 넘지 않습니다. 폭 안에 들어가지 않으면 `renderTextSpans`가 `{ error }`를 돌려주고, 블록은 글로 남습니다.
+그림은 `width`를 넘지 않습니다. 폭 안에 들어가지 않으면 `renderTextSpans`가 `{ error }`를 돌려주고, 블록은 Mermaid 글 그대로 남습니다.
 
 ## 개발
 
