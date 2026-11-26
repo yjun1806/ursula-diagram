@@ -47,9 +47,12 @@ sequenceDiagram
   },
 ];
 
-// Seconds and total tokens per drawing: the least and the most of 6 runs (3 texts, 2 runs each) per skill.
+// Seconds and total tokens per drawing: the least and the most of 6 runs (3 texts, 2 runs each) per skill. split is
+// where those seconds went, the least and the most per run, from the stream of each run (bench/agent-skill/breakdown.py):
+// waiting for the model, inside the skill's own command (ursula, or diagram-design's scripts), inside other commands.
+// ursula: the skill at commit 8c8222c; diagram-design: the runs of bench/agent-skill/results.json.
 export const MEASURE = [
-  { seconds: [12, 18], tokens: '38k–64k', ours: true },
-  { seconds: [65, 174], tokens: '330k–672k', ours: false },
+  { seconds: [12, 22], tokens: '39k–57k', ours: true, split: { model: '10–18', command: '1.4–3.8', other: '0–0.3' } },
+  { seconds: [65, 174], tokens: '330k–672k', ours: false, split: { model: '63–170', command: '0.4–1.9', other: '1.3–2.9' } },
 ];
 export const MEASURE_SCALE = 180;

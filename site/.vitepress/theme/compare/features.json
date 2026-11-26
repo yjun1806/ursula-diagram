@@ -31,9 +31,9 @@
           },
           "values": [
             71,
-            15,
+            13,
             "387k",
-            "63k"
+            "51k"
           ]
         },
         {
@@ -43,9 +43,9 @@
           },
           "values": [
             164,
-            18,
+            20,
             "525k",
-            "55k"
+            "57k"
           ]
         },
         {
@@ -55,15 +55,70 @@
           },
           "values": [
             152,
-            12,
+            14,
             "529k",
-            "38k"
+            "46k"
           ]
         }
       ],
       "note": {
-        "en": "Mean of two runs per skill. Tokens are the total of input, output and cache, which Claude Code resends every turn; the output tokens alone were 7.6k–18.4k for diagram-design and 0.9k–1.7k for ursula. diagram-design took 11–12.5 turns per drawing, ursula 4–6.",
-        "ko": "스킬마다 두 번의 평균입니다. 토큰은 입력·출력·캐시를 더한 값이고, 캐시는 Claude Code가 턴마다 다시 보냅니다. 출력 토큰만 보면 diagram-design이 7.6k~18.4k, ursula가 0.9k~1.7k입니다. 턴 수는 그림 한 장에 diagram-design이 11~12.5, ursula가 4~6입니다."
+        "en": "Mean of two runs per skill. Tokens are the total of input, output and cache, which Claude Code resends every turn; the output tokens alone were 6.7k–18.8k per run for diagram-design and 0.8k–1.8k for ursula. diagram-design took 11–12.5 turns per drawing, ursula 4.5–5. ursula: the skill at commit 8c8222c, measured later the same day as diagram-design.",
+        "ko": "스킬마다 두 번의 평균입니다. 토큰은 입력·출력·캐시를 더한 값이고, 캐시는 Claude Code가 턴마다 다시 보냅니다. 출력 토큰만 보면 한 번에 diagram-design이 6.7k~18.8k, ursula가 0.8k~1.8k입니다. 턴 수는 그림 한 장에 diagram-design이 11~12.5, ursula가 4.5~5입니다. ursula는 커밋 8c8222c의 스킬로, diagram-design보다 같은 날 뒤에 쟀습니다."
+      }
+    },
+    "skillTime": {
+      "columns": [
+        {
+          "en": "Skill",
+          "ko": "스킬"
+        },
+        {
+          "en": "Waiting for the model, s",
+          "ko": "모델을 기다린 시간(초)"
+        },
+        {
+          "en": "The skill's own command, s",
+          "ko": "스킬의 명령(초)"
+        },
+        {
+          "en": "Other commands, s",
+          "ko": "다른 명령(초)"
+        },
+        {
+          "en": "Output tokens",
+          "ko": "출력 토큰"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            "10–18",
+            {
+              "en": "1.4–3.8 (ursula)",
+              "ko": "1.4–3.8(ursula)"
+            },
+            "0–0.3",
+            "0.8k–1.8k"
+          ],
+          "highlight": true
+        },
+        {
+          "name": "diagram-design",
+          "values": [
+            "63–170",
+            {
+              "en": "0.4–1.9 (its scripts)",
+              "ko": "0.4–1.9(자체 스크립트)"
+            },
+            "1.3–2.9",
+            "6.7k–18.8k"
+          ]
+        }
+      ],
+      "note": {
+        "en": "Per run, the least and the most of the six runs per skill, split from the timestamps in each run's stream by bench/agent-skill/breakdown.py. The first command of a session took 1.2–3.8 s whatever it ran: diagram-design's first command, a cat, took 1.2–1.9 s. Run alone on these texts, the ursula command takes 0.1–0.4 s.",
+        "ko": "한 번 그릴 때의 값이고, 스킬마다 여섯 번 가운데 가장 작은 값과 큰 값입니다. bench/agent-skill/breakdown.py가 판마다 스트림의 시각으로 나눴습니다. 세션의 첫 명령은 무엇을 실행하든 1.2~3.8초가 걸렸습니다. diagram-design의 첫 명령인 cat도 1.2~1.9초였습니다. 같은 글을 ursula 명령으로 따로 그리면 0.1~0.4초입니다."
       }
     },
     "coverage": {

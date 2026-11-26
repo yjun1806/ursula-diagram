@@ -1,10 +1,11 @@
 """Collects time, turns, tokens and cost of every run under bench/.cache/agent-skill/out/<skill>/<input>/<run>/ into
-bench/agent-skill/results.json, and prints a table.
-usage: python3 -I bench/agent-skill/summarize.py
+bench/agent-skill/results.json (or the file named as the argument), and prints a table.
+usage: python3 -I bench/agent-skill/summarize.py [results file]
 """
 import json
 import os
 import pathlib
+import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 CACHE = pathlib.Path(os.environ.get('BENCH_CACHE', HERE.parent / '.cache'))
@@ -58,7 +59,7 @@ for res in sorted(OUT.glob('*/*/run*/result.json')):
         'files': files,
     })
 
-(HERE / 'results.json').write_text(json.dumps(rows, ensure_ascii=False, indent=2) + '\n')
+pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else HERE / 'results.json').write_text(json.dumps(rows, ensure_ascii=False, indent=2) + '\n')
 
 print('| Skill | Input | Run | Seconds | API seconds | Turns | Tool calls | Total tokens | Output tokens | Cost (USD) |')
 print('| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |')

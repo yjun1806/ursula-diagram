@@ -16,8 +16,9 @@ ursula is a diagram engine for coding agents: the agent writes a few lines of Me
 every box, line and label goes, as an SVG or as a drawing for the agent's terminal. It is built for the case where an
 agent writes the diagram, nobody fixes it by hand, there may be no browser, and the same answer is read in a terminal,
 a chat window and on the web. It draws all 531 examples in the Mermaid documentation (35 types) both as SVG and as
-terminal text, on Node alone with 0 runtime dependencies. With the ursula skill an agent took 12–18 s per drawing;
-with a skill that has the model lay out the drawing, 65–174 s.
+terminal text, on Node alone with 0 runtime dependencies. With the ursula skill an agent took 12–22 s per drawing;
+with a skill that has the model lay out the drawing, 65–174 s. The engine's part of that is 0.1–0.4 s; the rest is
+the model reading the skill, writing the Mermaid text and answering.
 
 ```
 flowchart LR
