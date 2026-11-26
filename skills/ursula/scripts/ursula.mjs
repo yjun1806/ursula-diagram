@@ -18898,7 +18898,7 @@ registerFrontEnd({
 });
 
 // src/render/scene-svg.ts
-var FONT2 = "'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif";
+var FONT2 = FONT_STACK;
 var FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 var SERIES = [1, 2, 3, 4, 5, 6, 7, 8];
 function sceneRules() {
