@@ -38,7 +38,7 @@ two runs, then what we checked in the picture. Click a picture to enlarge it; th
 <PicGrid name="skill" named />
 
 diagram-design chose a layout, a title and legend wording for each picture, and they change from run to run; ursula
-has one look and changes only its colours.
+has one look and changes only its colours. For each text, the two ursula runs gave byte-identical SVGs.
 
 ## What each tool draws
 
