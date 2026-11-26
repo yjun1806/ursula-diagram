@@ -36,3 +36,9 @@ ursula-diagram order.mmd --format svg > order.svg   # 첫 화면의 그림
 ```
 
 설치하지 않고 글을 그려 보려면 [플레이그라운드](/ko/playground)를 엽니다.
+
+## Mermaid 판
+
+문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날 기준 Mermaid의 최신
+정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 더해진 문법은 아직 읽지 못할 수 있습니다.
+유형마다 짧은 예시는 `ursula-diagram syntax <유형>`으로 볼 수 있습니다.

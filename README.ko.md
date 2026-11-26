@@ -23,6 +23,10 @@ ursula는 Mermaid 문서에 있는 유형 35가지의 글을 읽고, 상자·선
 SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. 같은 글은 언제나 같은 그림이 됩니다. Node만 있으면 돌고, 브라우저나
 DOM이 필요 없으며, 실행할 때 설치할 것도 없습니다.
 
+**Mermaid 판.** 문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날
+기준 Mermaid의 최신 정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 더해진 문법은 아직 읽지
+못할 수 있습니다.
+
 ```
 flowchart LR
   order([Order placed]) --> pay{Paid?}

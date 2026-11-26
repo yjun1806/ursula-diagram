@@ -23,6 +23,10 @@ box, line and label goes. It is made for coding agents: the agent writes a few l
 them out, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. The same text always gives the
 same drawing. It runs on Node alone: no browser, no DOM, nothing to install at run time.
 
+**Mermaid version.** The syntax follows the Mermaid documentation as published on 12 November 2026 (the `develop`
+branch, commit `ddb4c118`). On that date the latest Mermaid release was 12.3.0 and the latest preview 13.0.0-alpha.3.
+Syntax that Mermaid adds after that date may not be read yet.
+
 ```
 flowchart LR
   order([Order placed]) --> pay{Paid?}
