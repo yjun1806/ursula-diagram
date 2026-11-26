@@ -15,7 +15,7 @@ export interface ToolResult {
 /** A wrong argument: the server answers with a JSON-RPC error, not with a result. */
 export class ArgumentError extends Error {}
 
-const plain: DrawRequest = { format: 'text', legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+const plain: DrawRequest = { format: 'text', legend: true, color: false, check: false, fix: false };
 
 const FIX = {
   type: 'boolean',

@@ -11,8 +11,6 @@ export interface DrawRequest {
   legend: boolean;
   color: boolean;
   charset?: 'unicode' | 'ascii';
-  questions: boolean;
-  elbows: boolean;
   composition?: 'auto' | 'lanes' | 'stages';
   detail?: 'auto' | 'full' | 'narrow' | 'title';
   quality?: 'fast' | 'best';
@@ -62,8 +60,6 @@ export const OPTIONS: readonly OptionSpec[] = [
   { name: '--quality', value: 'Q', choices: ['fast', 'best'], help: 'layout effort, fast or best; pictures draw best and text fast unless told', apply: choice('quality', ['fast', 'best']) },
   { name: '--composition', value: 'C', choices: ['auto', 'lanes', 'stages'], help: 'swimlanes along the flow (lanes), across it (stages), or auto', apply: choice('composition', ['auto', 'lanes', 'stages']) },
   { name: '--no-legend', help: 'no legend of line styles', apply: (req) => ({ ...req, legend: false }) },
-  { name: '--no-questions', help: 'no questions in the check report', apply: (req) => ({ ...req, questions: false }) },
-  { name: '--no-elbows', help: 'no one-bend lines out of the side of a box', apply: (req) => ({ ...req, elbows: false }) },
 ];
 
 export const USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? '' : ` ${o.choices ? o.choices.join('|') : o.value}`}]`).join(' ')}`;
@@ -71,7 +67,7 @@ export const USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${
 export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'version' } | { kind: 'usage' };
 
 export function parseDrawArgs(args: readonly string[]): Parsed {
-  let req: DrawRequest = { format: 'svg', legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+  let req: DrawRequest = { format: 'svg', legend: true, color: false, check: false, fix: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i] as string;
     if (a === '--help' || a === '-h') return { kind: 'help' };

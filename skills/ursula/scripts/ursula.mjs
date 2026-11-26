@@ -10399,13 +10399,11 @@ var OPTIONS = [
   { name: "--detail", value: "D", choices: ["auto", "full", "narrow", "title"], help: "how much of each box text keeps: auto (the fullest that fits), full, narrow, title", apply: choice("detail", ["auto", "full", "narrow", "title"]) },
   { name: "--quality", value: "Q", choices: ["fast", "best"], help: "layout effort, fast or best; pictures draw best and text fast unless told", apply: choice("quality", ["fast", "best"]) },
   { name: "--composition", value: "C", choices: ["auto", "lanes", "stages"], help: "swimlanes along the flow (lanes), across it (stages), or auto", apply: choice("composition", ["auto", "lanes", "stages"]) },
-  { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) },
-  { name: "--no-questions", help: "no questions in the check report", apply: (req) => ({ ...req, questions: false }) },
-  { name: "--no-elbows", help: "no one-bend lines out of the side of a box", apply: (req) => ({ ...req, elbows: false }) }
+  { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) }
 ];
 var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
 function parseDrawArgs(args) {
-  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+  let req = { format: "svg", legend: true, color: false, check: false, fix: false };
   for (let i = 0;i < args.length; i++) {
     const a = args[i];
     if (a === "--help" || a === "-h")
@@ -15843,10 +15841,13 @@ function layoutMirrored(graph, how, ruler, opts) {
     const note = { kind: "direction-mirrored-in-text", nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
-  const bare = layout(plain, ruler, { ...opts, legend: false });
+  const bare = layoutWith(plain, ruler, { ...opts, legend: false });
   return withLegend(mirrorLayout(bare, how, { width: bare.width, height: bare.height }), ruler, opts.legend);
 }
 function layout(graph, given, opts = {}) {
+  return layoutWith(graph, given, opts);
+}
+function layoutWith(graph, given, opts = {}) {
   const picked = layoutPicked(graph, given, opts);
   if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined)
     return picked;
@@ -16093,7 +16094,7 @@ function arrange(graph, ruler, opts) {
     return c4GridWithin(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true)
-      return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
+      return layoutClusters(graph, ruler, opts, (g, r, o) => layoutWith(g, r, { ...o, nested: true }));
     const banded = bandClusters(graph);
     const home = banded.lanes.find((lane) => lane.label === "") ?? { id: "", label: "" };
     const { zones: _zones, ...unzoned } = banded;
@@ -16113,8 +16114,8 @@ function arrange(graph, ruler, opts) {
   }
   if (graph.mirror !== undefined)
     return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, bare: _bare, ...rest } = opts;
-  return layoutLayered(graph, ruler, { ...rest, ...legend === undefined ? {} : { legend }, ...composition === undefined ? {} : { composition }, ...refine === undefined ? {} : { refine }, ...questions === undefined ? {} : { questions }, ...elbows === undefined ? {} : { elbows }, ...fold === undefined ? {} : { fold }, ...quick === undefined ? {} : { quick }, ...quality === undefined ? {} : { quality }, ...nested === undefined ? {} : { nested }, ...nestedSpread === undefined ? {} : { nestedSpread }, ...spreadProbe === undefined ? {} : { spreadProbe } });
+  const { legend, composition, refine, questions, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, bare: _bare, ...rest } = opts;
+  return layoutLayered(graph, ruler, { ...rest, ...legend === undefined ? {} : { legend }, ...composition === undefined ? {} : { composition }, ...refine === undefined ? {} : { refine }, ...questions === undefined ? {} : { questions }, ...fold === undefined ? {} : { fold }, ...quick === undefined ? {} : { quick }, ...quality === undefined ? {} : { quality }, ...nested === undefined ? {} : { nested }, ...nestedSpread === undefined ? {} : { nestedSpread }, ...spreadProbe === undefined ? {} : { spreadProbe } });
 }
 
 // src/types.ts
@@ -18048,17 +18049,18 @@ function titlesOnly(graph) {
   return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, lines: [] })) };
 }
 
-// src/flowchart-frontend.ts
-function layoutOptions(opts) {
+// src/layout/options.ts
+function layoutOptionsOf(opts) {
   return {
-    ...opts.quality === undefined ? {} : { quality: opts.quality },
-    ...opts.composition === undefined ? {} : { composition: opts.composition },
-    ...opts.questions === undefined ? {} : { questions: opts.questions },
-    ...opts.elbows === undefined ? {} : { elbows: opts.elbows },
     ...opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth },
-    ...opts.legend === undefined ? {} : { legend: opts.legend }
+    ...opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight },
+    ...opts.legend === undefined ? {} : { legend: opts.legend },
+    ...opts.composition === undefined ? {} : { composition: opts.composition },
+    ...opts.quality === undefined ? {} : { quality: opts.quality }
   };
 }
+
+// src/flowchart-frontend.ts
 function drawText(src, maxWidth, opts) {
   const { legend, maxHeight, composition, quality, detail = "auto", bare = false } = opts;
   const full = parse(src);
@@ -18081,7 +18083,7 @@ function drawText(src, maxWidth, opts) {
   const widest = (lines) => Math.max(0, ...lines.map(cellWidth));
   const draw = (a, fold, quick, as = composition, room = true, tidied = false) => {
     const laid = layout(a.graph, cellRuler(), {
-      ...layoutOptions({ legend, composition: as, ...quality === undefined ? {} : { quality } }),
+      ...layoutOptionsOf({ legend, composition: as, ...quality === undefined ? {} : { quality } }),
       ...maxHeight === undefined ? {} : { maxHeight },
       ...maxWidth === undefined ? {} : { maxWidth },
       fold,
@@ -18193,7 +18195,7 @@ registerFrontEnd({
   headers: ["flowchart", "graph", "swimlane-beta"],
   svg(src, opts) {
     const { maxWidth, legend, composition, quality, ...svgOpts } = opts;
-    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, composition, ...quality === undefined ? {} : { quality } })), { ...svgOpts, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
+    return renderSvg(layout(parse(src), pixelRuler(), layoutOptionsOf({ maxWidth, legend, composition, ...quality === undefined ? {} : { quality } })), { ...svgOpts, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
@@ -18203,7 +18205,7 @@ registerFrontEnd({
     return titledSpans(layoutSpans(drawn.layout, drawn.lines), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
-    return layout(parse(src), mode === "text" ? cellRuler() : pixelRuler(), layoutOptions(opts));
+    return layout(parse(src), mode === "text" ? cellRuler() : pixelRuler(), layoutOptionsOf(opts));
   }
 });
 
@@ -18576,13 +18578,8 @@ registerFrontEnd({
   svg(src, opts) {
     const graph = read(src, opts.config);
     const title = opts.title ?? accessibleTitle(src) ?? opts.heading ?? `Class diagram: ${graph.nodes.filter((n) => n.shape === "rect").length} classes, ${graph.edges.length} relations`;
-    const { maxWidth, legend: _legend, composition, quality, ...svgOpts } = opts;
-    const laid = layout(graph, pixelRuler(), {
-      legend: false,
-      ...maxWidth === undefined ? {} : { maxWidth },
-      ...composition === undefined ? {} : { composition },
-      ...quality === undefined ? {} : { quality }
-    });
+    const { maxWidth: _maxWidth, legend: _legend, composition: _composition, quality: _quality, ...svgOpts } = opts;
+    const laid = layout(graph, pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
     return renderSvg(laid, { ...svgOpts, title, legend: false, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
@@ -18592,7 +18589,7 @@ registerFrontEnd({
     return titledSpans(renderTextLayoutSpans(terminal(src, maxWidth, opts.config).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
-    return layout(read(src, opts.config), mode === "text" ? cellRuler() : pixelRuler(), { legend: false });
+    return layout(read(src, opts.config), mode === "text" ? cellRuler() : pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
   }
 });
 
@@ -18857,11 +18854,7 @@ function parseEr(src, heading) {
 var summary = (g) => `Entity relationship diagram: ${g.nodes.length} entities, ${g.edges.length} relationships`;
 function pixels(src, opts) {
   const model = parseEr(src, opts.heading);
-  const laid = layout({ ...model.graph, placer: "c4-grid" }, pixelRuler(), {
-    legend: false,
-    ...opts.quality === undefined ? {} : { quality: opts.quality },
-    ...opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }
-  });
+  const laid = layout({ ...model.graph, placer: "c4-grid" }, pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
   return { ...laid, title: opts.title ?? model.title ?? summary(model.graph) };
 }
 var headsOnly = (g) => ({ ...g, nodes: g.nodes.map((n) => ({ ...n, compartments: (n.compartments ?? []).slice(0, 1) })) });
@@ -28495,22 +28488,22 @@ var requirementFrontEnd = {
     const requirements = model.nodes.filter((n) => n.kind === "requirement").length;
     const summary = `Requirement diagram: ${requirements} requirements, ${model.nodes.length - requirements} elements, ${model.relations.length} relations`;
     const title = svgOpts.title ?? model.accTitle ?? opts.heading ?? summary;
-    const laid = layout(requirementGraph(model, ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...quality === undefined ? {} : { quality } });
+    const laid = layout(requirementGraph(model, ruler), ruler, layoutOptionsOf({ maxWidth, quality }));
     return renderSvg(laid, { title, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
     const ruler = cellRuler();
-    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth, quality: opts.quality }));
     return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
   },
   textSpans(src, maxWidth, opts) {
     const ruler = cellRuler();
-    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth, quality: opts.quality }));
     return titledSpans(renderTextLayoutSpans(laid), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const ruler = mode === "text" ? cellRuler() : pixelRuler();
-    return layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth } });
+    return layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth: opts.maxWidth, quality: opts.quality }));
   }
 };
 registerFrontEnd(requirementFrontEnd);
@@ -31843,14 +31836,14 @@ function titleOf(src, heading) {
   }
   return heading;
 }
-function layoutOptions2(maxWidth, legend) {
+function layoutOptions(maxWidth, legend) {
   return { ...maxWidth === undefined ? {} : { maxWidth }, ...legend === undefined ? {} : { legend } };
 }
 registerFrontEnd({
   name: "sequence",
   headers: ["sequenceDiagram"],
   svg(src, opts) {
-    const layout = layoutSequence(parseSequence(src), pixelRuler(), layoutOptions2(opts.maxWidth, opts.legend));
+    const layout = layoutSequence(parseSequence(src), pixelRuler(), layoutOptions(opts.maxWidth, opts.legend));
     const title = opts.title ?? opts.heading;
     const drawTitle = titleOf(src, opts.heading);
     return renderThemedScene(layout.scene, {
@@ -31866,7 +31859,7 @@ registerFrontEnd({
   },
   json(src, mode, opts) {
     const ruler = mode === "text" ? cellRuler() : pixelRuler();
-    return layoutSequence(parseSequence(src), ruler, layoutOptions2(opts.maxWidth, opts.legend));
+    return layoutSequence(parseSequence(src), ruler, layoutOptions(opts.maxWidth, opts.legend));
   }
 });
 
@@ -32156,14 +32149,7 @@ function parseState(src) {
 // src/state/frontend.ts
 function drawn3(src, ruler, opts) {
   const { graph, accTitle } = parseState(src);
-  const laid = layout(graph, ruler, {
-    legend: false,
-    ...opts.composition === undefined ? {} : { composition: opts.composition },
-    ...opts.questions === undefined ? {} : { questions: opts.questions },
-    ...opts.elbows === undefined ? {} : { elbows: opts.elbows },
-    ...opts.quality === undefined ? {} : { quality: opts.quality },
-    ...opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }
-  });
+  const laid = layout(graph, ruler, { ...layoutOptionsOf(opts), legend: false });
   return { layout: laid, title: accTitle };
 }
 registerFrontEnd({
@@ -32580,12 +32566,12 @@ function layoutTimelineText(model, maxWidth) {
 }
 
 // src/timeline/frontend.ts
-var layoutOptions3 = (opts) => opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth };
+var layoutOptions2 = (opts) => opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth };
 registerFrontEnd({
   name: "timeline",
   headers: ["timeline"],
   svg(src, opts) {
-    const layout = layoutTimeline(parseTimeline(src, opts.heading), pixelRuler(), layoutOptions3(opts));
+    const layout = layoutTimeline(parseTimeline(src, opts.heading), pixelRuler(), layoutOptions2(opts));
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
@@ -32598,7 +32584,7 @@ registerFrontEnd({
     const model = parseTimeline(src, opts.heading);
     if (mode === "text")
       return { model, lines: layoutTimelineText(model, opts.maxWidth) };
-    return layoutTimeline(model, pixelRuler(), layoutOptions3(opts));
+    return layoutTimeline(model, pixelRuler(), layoutOptions2(opts));
   }
 });
 
@@ -37259,7 +37245,7 @@ function parseZenuml(src, heading) {
 }
 
 // src/zenuml/frontend.ts
-function layoutOptions4(maxWidth, legend) {
+function layoutOptions3(maxWidth, legend) {
   return { ...maxWidth === undefined ? {} : { maxWidth }, ...legend === undefined ? {} : { legend } };
 }
 function textSpans(src, maxWidth, heading, legend) {
@@ -37272,7 +37258,7 @@ registerFrontEnd({
   headers: ["zenuml"],
   svg(src, opts) {
     const model = parseZenuml(src, opts.heading);
-    const layout = layoutZenuml(model, pixelRuler(), layoutOptions4(opts.maxWidth, opts.legend));
+    const layout = layoutZenuml(model, pixelRuler(), layoutOptions3(opts.maxWidth, opts.legend));
     const title = opts.title ?? model.accTitle ?? model.title;
     return renderThemedScene(layout.scene, {
       ...title === undefined ? {} : { title }
@@ -37287,7 +37273,7 @@ registerFrontEnd({
   json(src, mode, opts) {
     const model = parseZenuml(src, opts.heading);
     const ruler = mode === "text" ? cellRuler() : pixelRuler();
-    return { ...model, tags: [...model.tags], layout: layoutZenuml(model, ruler, layoutOptions4(opts.maxWidth, opts.legend)) };
+    return { ...model, tags: [...model.tags], layout: layoutZenuml(model, ruler, layoutOptions3(opts.maxWidth, opts.legend)) };
   }
 });
 
@@ -37856,13 +37842,11 @@ function neededWidth(limit, first, attempt) {
 var widthHint = (width) => `hint: run again with --width ${width}, or shorten the names, or split the diagram`;
 
 // src/command/draw.ts
-function layoutOptions5(req) {
+function layoutOptions4(req) {
   return {
     ...req.width === undefined ? {} : { maxWidth: req.width },
     ...req.legend ? {} : { legend: false },
     ...req.composition === undefined ? {} : { composition: req.composition },
-    ...req.questions ? {} : { questions: false },
-    ...req.elbows ? {} : { elbows: false },
     ...req.detail === undefined ? {} : { detail: req.detail },
     ...req.quality === undefined ? {} : { quality: req.quality },
     ...req.charset === undefined ? {} : { charset: req.charset }
@@ -37874,7 +37858,7 @@ function graphReport(laid, src, terminal) {
   return [...checkLines(laid), ...details, ...terminal && details.length > 0 ? [TERMINAL_NOTE] : []];
 }
 function checkReport(src, req, terminal = false) {
-  const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
+  const laid = selectFrontEnd(src).json(src, "svg", layoutOptions4(req));
   const lines = "edges" in laid && "diagnostics" in laid ? graphReport(laid, src, terminal) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
   const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.filter((n) => typeof n === "string").map((n) => `note: ${n}`) : [];
   return `${[...lines, ...notes].join(`
@@ -37883,7 +37867,7 @@ function checkReport(src, req, terminal = false) {
 }
 function terminal3(src, req, width) {
   const frontEnd = selectFrontEnd(src);
-  const opts = layoutOptions5(req);
+  const opts = layoutOptions4(req);
   if (req.format === "text-svg" || req.color && frontEnd.textSpans) {
     const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
     const rows = spans.map((line) => line.map((s) => s.text).join(""));
@@ -37923,7 +37907,7 @@ function sideReport(src, req) {
 }
 function drawing(src, req) {
   const frontEnd = selectFrontEnd(src);
-  const opts = layoutOptions5(req);
+  const opts = layoutOptions4(req);
   const width = req.width;
   switch (req.format) {
     case "html":
@@ -37959,7 +37943,7 @@ function png(src, req, host) {
   if (resvg === undefined)
     return { stdout: "", stderr: `error: ${PNG_HINT}
 `, code: 2 };
-  const svg = selectFrontEnd(src).svg(src, layoutOptions5(req));
+  const svg = selectFrontEnd(src).svg(src, layoutOptions4(req));
   const chosen = host.pngFonts?.(svg);
   const bytes = svgToPng(svg, resvg, {
     theme: req.theme === "dark" ? "dark" : "light",
@@ -38116,7 +38100,7 @@ var messageLine = (message) => `${JSON.stringify(message).replace(/\u2028/g, "\\
 // src/mcp/tools.ts
 class ArgumentError extends Error {
 }
-var plain3 = { format: "text", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+var plain3 = { format: "text", legend: true, color: false, check: false, fix: false };
 var FIX = {
   type: "boolean",
   description: "Fix what has one reading (a misspelt header or keyword, a flowchart ->) before drawing. The last text of the result then names each fix and gives the fixed source; keep that source in place of yours."

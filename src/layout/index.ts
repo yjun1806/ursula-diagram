@@ -31,10 +31,6 @@ export interface LayoutOptions {
   legend?: LegendOption;
   /** bands alongside the reading direction ('lanes') or crossing it ('stages'); chosen from the graph when 'auto'. */
   composition?: 'auto' | 'lanes' | 'stages';
-  /** add questions about the structure to the diagnostics (default true). */
-  questions?: boolean;
-  /** let edges between layers leave or enter through the side of a box (default true). */
-  elbows?: boolean;
   /** 'fast' or 'best' (pixels: best, terminal: fast); see `LayeredOptions.quality`. */
   quality?: 'fast' | 'best';
   /** draw the first candidate only and refine nothing. */
@@ -76,6 +72,15 @@ export interface LayoutOptions {
   spreadProbe?: { wins: boolean };
 }
 
+/**
+ * The options inside the engine: a caller's, and `questions: false`, which the levels of a drawing with clusters are
+ * drawn with; the drawing as a whole asks its questions.
+ */
+export interface EngineOptions extends LayoutOptions {
+  /** Add questions about the structure to the diagnostics (default true). */
+  questions?: boolean;
+}
+
 export type { LegendOption } from './legend.ts';
 export { withLegend } from './legend.ts';
 
@@ -83,7 +88,7 @@ export { withLegend } from './legend.ts';
  * A graph that reads right to left or bottom to top is laid out in the opposite direction and its drawing is flipped.
  * A terminal drawing is not flipped; it says so in its diagnostics.
  */
-function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: LayoutOptions): Layout {
+function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: EngineOptions): Layout {
   const { mirror: _mirror, ...plain } = graph;
   if (ruler.terminal === true) {
     // The caller closes and opens the rows of what comes back.
@@ -91,12 +96,17 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
     const note: Diagnostic = { kind: 'direction-mirrored-in-text', nodes: [], message: `The direction ${how} is drawn as ${plain.direction} in text.` };
     return { ...drawn, diagnostics: [...drawn.diagnostics, note] };
   }
-  const bare = layout(plain, ruler, { ...opts, legend: false });
+  const bare = layoutWith(plain, ruler, { ...opts, legend: false });
   return withLegend(mirrorLayout(bare, how, { width: bare.width, height: bare.height }), ruler, opts.legend);
 }
 
 /** Lays the graph out with the layered engine of `src/layered`. */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
+  return layoutWith(graph, given, opts);
+}
+
+/** `layout` with the options inside the engine. */
+export function layoutWith(graph: Graph, given: Ruler, opts: EngineOptions = {}): Layout {
   const picked = layoutPicked(graph, given, opts);
   // A caller that names whether lines share ports compares drawings made each way: it gets the one it names.
   if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined) return picked;
@@ -121,7 +131,7 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   return picked;
 }
 
-function layoutPicked(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
+function layoutPicked(graph: Graph, given: Ruler, opts: EngineOptions): Layout {
   const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
   // A quick drawing is what a caller chooses a setting on: it is the usual drawing, so that the setting chosen is the one the usual drawing would choose.
   if (given.terminal !== true || opts.nested === true || opts.quick === true || opts.bare === true) return out(layoutShared(graph, given, opts));
@@ -205,7 +215,7 @@ function writtenOut(l: Layout, limit: number | undefined): string[] {
 }
 
 /** The usual terminal drawing, with shared ports where they cost nothing. */
-function layoutShared(graph: Graph, given: Ruler, opts: LayoutOptions): Drawn {
+function layoutShared(graph: Graph, given: Ruler, opts: EngineOptions): Drawn {
   // A quick drawing is what a caller chooses a setting on: it never shares ports, so that the choice does not turn on them.
   if (given.terminal !== true || opts.nested === true || opts.sharePorts !== undefined || opts.quick === true) return layoutOnce(graph, given, opts);
   // Lines that share a port on the side of a box leave the box shorter, and may cost elsewhere: the drawing is made
@@ -242,7 +252,7 @@ interface Drawn {
  * made otherwise differ only in how they are finished, so a graph is arranged once for both.
  */
 const arrangements = new WeakMap<Ruler, WeakMap<Graph, Map<string, { layout: Layout; shared: number }>>>();
-function arranged(key: Graph, graph: Graph, how: string, given: Ruler, opts: LayoutOptions): Layout {
+function arranged(key: Graph, graph: Graph, how: string, given: Ruler, opts: EngineOptions): Layout {
   // A flow drawn the other way round is finished as it is arranged: it is arranged for each way of finishing.
   const { bare, ...terms } = opts;
   const id = `${how}|${graph.mirror === undefined ? '' : String(bare ?? opts.quick === true)}|${JSON.stringify(terms)}`;
@@ -265,7 +275,7 @@ function arranged(key: Graph, graph: Graph, how: string, given: Ruler, opts: Lay
  * `turned` is the graph of a flow drawn the other way round, when `graph` is that flow turned: the drawing without room is the one given out then, and it is finished again
  * by the caller.
  */
-function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, turned?: Graph): Drawn {
+function layoutOnce(graph: Graph, given: Ruler, opts: EngineOptions, turned?: Graph): Drawn {
   const out = turned !== undefined;
   if (given.terminal !== true || opts.nested === true) {
     const drawn = layoutAny(graph, given, opts);
@@ -377,7 +387,7 @@ function withoutEmptyCompartments(graph: Graph): Graph {
   return { ...graph, nodes: graph.nodes.map((n) => (n.compartments === undefined ? n : { ...n, compartments: n.compartments.filter((c, i) => i === 0 || !empty(c.lines)) })) };
 }
 
-function layoutAny(source: Graph, given: Ruler, opts: LayoutOptions): Layout {
+function layoutAny(source: Graph, given: Ruler, opts: EngineOptions): Layout {
   const graph = given.terminal === true ? withoutEmptyCompartments(source) : source;
   const ruler: Ruler = graph.gaps === undefined || given.terminal === true ? given : { ...given, ...(graph.gaps.flow === undefined ? {} : { rankGap: graph.gaps.flow }), ...(graph.gaps.join === undefined ? {} : { joinGap: graph.gaps.join }) };
   const attached = splitAttached(graph);
@@ -391,7 +401,7 @@ function layoutAny(source: Graph, given: Ruler, opts: LayoutOptions): Layout {
  * A grid that reads from left to right and passes the width (`maxWidth`, else the width of the medium) is set down the
  * page instead when that is narrower: a chain of wide boxes in one row is shown so small that its text cannot be read.
  */
-function c4GridWithin(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+function c4GridWithin(graph: Graph, ruler: Ruler, opts: EngineOptions): Layout {
   const across = layoutC4Grid(graph, ruler, opts);
   const limit = opts.maxWidth ?? ruler.defaultWidth;
   if (graph.direction !== 'LR' || graph.mirror !== undefined || graph.grid?.cells !== undefined || limit === undefined || across.width <= limit) return across;
@@ -399,10 +409,10 @@ function c4GridWithin(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
   return down.width < across.width ? down : across;
 }
 
-function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+function arrange(graph: Graph, ruler: Ruler, opts: EngineOptions): Layout {
   if (graph.placer === 'c4-grid' && ruler.terminal !== true) return c4GridWithin(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
-    if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
+    if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layoutWith(g, r, { ...o, nested: true }));
     // Bands side by side cannot fold: when they are too wide the bands are stacked, and when that is too wide as well no band is drawn.
     const banded = bandClusters(graph);
     const home = banded.lanes.find((lane) => lane.label === '') ?? { id: '', label: '' };
@@ -420,6 +430,6 @@ function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
     return { ...kept, diagnostics: [...kept.diagnostics, flattenedNote()] };
   }
   if (graph.mirror !== undefined) return layoutMirrored(graph, graph.mirror, ruler, opts);
-  const { legend, composition, refine, questions, elbows, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, bare: _bare, ...rest } = opts;
-  return layoutLayered(graph, ruler, { ...rest, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(elbows === undefined ? {} : { elbows }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
+  const { legend, composition, refine, questions, fold, quick, quality, nested, nestedSpread, spreadProbe, squeeze: _squeeze, clip: _clip, ranked: _ranked, bare: _bare, ...rest } = opts;
+  return layoutLayered(graph, ruler, { ...rest, ...(legend === undefined ? {} : { legend }), ...(composition === undefined ? {} : { composition }), ...(refine === undefined ? {} : { refine }), ...(questions === undefined ? {} : { questions }), ...(fold === undefined ? {} : { fold }), ...(quick === undefined ? {} : { quick }), ...(quality === undefined ? {} : { quality }), ...(nested === undefined ? {} : { nested }), ...(nestedSpread === undefined ? {} : { nestedSpread }), ...(spreadProbe === undefined ? {} : { spreadProbe }) });
 }
