@@ -17,6 +17,10 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 - The second flowchart layout engine: the `--engine` option and the `engine` option of the library (`LayoutOptions`, `RenderOptions`, `TextOptions`, `renderText`, `renderTextSpans`, `renderTextSvg`), and the `laneAxis` option of `LayoutOptions` that only it read. Every drawing stays the same. [#70](https://github.com/yjun1806/ursula-diagram/pull/70)
 - The `--no-questions` and `--no-elbows` options, and the `questions` and `elbows` options of the library (`RenderOptions`, `TextOptions`, `LayoutOptions`, the renderText family). [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
 
+### Fixed
+
+- Block terminal drawings keep their columns when two labels with wide characters (Korean, for one) overlap: writing over half of a wide character clears its other half. [#74](https://github.com/yjun1806/ursula-diagram/pull/74)
+
 ## 0.2.1 (2026-11-26)
 
 ### Fixed
