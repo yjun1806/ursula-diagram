@@ -6,54 +6,45 @@ compatibility: Requires Node.js 22 or later. Needs no network and installs nothi
 
 # ursula
 
-Write the diagram as Mermaid text and let the bundled command draw it. The command is the file
-`scripts/ursula.mjs` in the folder of this file; it needs Node 22 or later and nothing else. In the commands below,
-`URSULA` stands for `node <the folder of this file>/scripts/ursula.mjs`.
+Write the diagram as Mermaid text and let the bundled command draw it. `URSULA` below stands for
+`node <the folder of this file>/scripts/ursula.mjs`; it needs Node 22 or later and nothing else.
 
 ## Steps
 
-1. **Write the Mermaid text** to a file. Pick the type by what the content is, not by habit (table below). When
-   unsure how a type is written, run `URSULA syntax <type>` for a small example and the rules; `URSULA syntax` lists
-   the types.
-2. **Draw it and ask the engine in one call**: add `--check` to the command of the next section, for example
-   `URSULA d.mmd --format text --width 100 --check`. The drawing goes to standard output; the report goes to
-   standard error: one line of counts (bends, crossings), the lines that cross with their source line numbers, and
-   sometimes lines that begin with `question 1:`. A question names what the engine found, what a change would gain,
-   and what to do in the text. The counts are for the svg layout; a terminal drawing routes its lines on its own
-   grid, so do not chase a crossing the terminal drawing does not show. Add `--fix` as well: the engine then fixes a
-   misspelt header or keyword and a flowchart `->` itself and names each as `fixed: line N: old → new` on standard
-   error; make the same change in your file.
-3. **Answer the questions once.** When there are any, apply a suggestion only when it keeps the meaning of the
-   diagram, then draw again. Do not loop: one round of edits.
+1. **Write the Mermaid text** to a file, picking the type by the content (table below). Only when unsure how a type
+   is written, run `URSULA syntax <type>`.
+2. **Draw it with one command**, with `--check --fix` and the output the reader needs (next section):
+   `URSULA d.mmd --format svg --check --fix > d.svg`. The drawing goes to standard output. Standard error starts
+   with a line of counts (bends, crossings) that needs nothing from you. Act only on these lines:
+   - `fixed: line N: old → new`: the engine corrected the text and drew the corrected version; make the same change
+     in your file.
+   - `question N: …`: a change that would draw better. Apply it only when it keeps the meaning, then draw once more.
+     One round, no loop. A terminal drawing routes on its own grid; ignore a crossing it does not show.
+3. **Stop when the command exits with 0.** The output then holds every node, line and label of the text (a label too
+   long for a terminal drawing or a small chart tile ends in `…`). Do not open, grep or re-read the output to check
+   it; give the file or print the drawing and report.
 
-If the command prints `error: …`, the text could not be drawn. The error names the line and marks the column; follow
-its `did you mean:`, `hint:` and `example:` lines, fix the text and run it again. Do not fall back to drawing by hand. Exit
-codes: 1 an error in the text, 2 wrong options, 3 too narrow (below), 4 a failure inside the engine.
+If the command prints `error: …` (exit 1), the text could not be drawn. Follow its `did you mean:`, `hint:` and
+`example:` lines, fix the text and run it again; never draw by hand. Exit code 2 is a wrong option, 3 too narrow
+(below), 4 a failure inside the engine.
 
 ## Which output
 
-| The reader is | Command | Then |
+| The reader is | Options | Then |
 | --- | --- | --- |
-| In a real terminal: a fixed-width font where a Korean, Chinese or Japanese character takes two cells | `URSULA d.mmd --format text --width 100` | Print the lines as they are. Use `--width 80` when the terminal is narrow. |
-| In a terminal that draws box lines and arrowheads two cells wide | `URSULA d.mmd --format text --width 100 --charset ascii` | The same drawing with `+ - \| > < ^ v` and other ASCII characters only. |
-| In a chat window, a web page or a document, and wants the terminal drawing | `URSULA d.mmd --format text-svg --width 100 > d.svg` | Reference or inline the SVG. The columns hold in any font. |
-| Reading a document, a pull request or a page | `URSULA d.mmd --format svg > d.svg` | Reference or inline the SVG. It follows light and dark by itself. |
-| Opening one file to look, switch light and dark, and save a PNG | `URSULA d.mmd --format html --title "Name" > d.html` | Give them the file. |
-| A program | `URSULA d.mmd --format json` | Boxes, lines and labels with coordinates. |
+| In a real terminal, where a Korean, Chinese or Japanese character takes two cells | `--format text --width 100` | Print the lines as they are. `--width 80` for a narrow terminal. |
+| In a terminal that draws box lines two cells wide | `--format text --width 100 --charset ascii` | The same drawing in ASCII characters only. |
+| In a chat window, a web page or a document, and wants the terminal drawing | `--format text-svg --width 100 > d.svg` | Reference or inline the SVG; the columns hold in any font. |
+| Reading a document, a pull request or a page | `--format svg > d.svg` | Reference or inline the SVG; it follows light and dark by itself. |
+| Opening one file to look, switch light and dark, and save a PNG | `--format html --title "Name" > d.html` | Give them the file. |
+| A program | `--format json` | Boxes, lines and labels with coordinates. |
 
-The text reads from standard input when no file is given: `cat d.mmd | URSULA --format text --width 100`.
+With no file named, the command reads standard input. Paste a `text` drawing only where wide characters take exactly
+two cells; elsewhere give `svg` or `text-svg`, or the sides of boxes holding such characters no longer line up.
 
-Paste a `text` drawing only where the font is fixed-width and wide characters take exactly two cells. A chat
-window, a web page and a code block in a document often draw Korean, Chinese or Japanese characters at some other
-width, and then the sides of the boxes no longer line up. When the drawing holds such characters and the reader is
-not in a terminal, give `svg` or `text-svg` instead. With `--charset ascii` a line is `-` and `|`, a heavy line `=`
-and `#`, a dashed line `.` and `:`, a corner `+`, and a hollow arrowhead `--|>`; the legend uses the same
-characters.
-
-A terminal drawing never runs past `--width`. When the drawing cannot fit, the command prints no drawing, ends with
-code 3 and names a width that fits: give that width, shorten the names, or split the diagram in two. A few types (pie, quadrant, radar, sankey, xychart, timeline, user
-journey, railroad, venn, cynefin, wardley) come out as a table or a list in a terminal, because that is more exact
-there than a picture.
+A terminal drawing never runs past `--width`. When it cannot fit, the command prints no drawing, exits with 3 and
+names a width that fits: use it, shorten the names, or split the diagram. Charts (pie, quadrant, radar, sankey,
+xychart, timeline, journey, railroad, venn, cynefin, wardley) come out as a table or a list in a terminal.
 
 ## Which type
 
@@ -83,20 +74,14 @@ Every other header of the Mermaid documentation is read as well (`journey`, `zen
 
 ## Writing text that draws well
 
-The engine places everything; the text decides what it has to work with.
-
-- **Order is meaning.** The node the first line leaves from is the start. Write the main path first, from start to
-  end, then the branches and the ways back.
-- **Short names.** Two or three words in a box; put the detail in a second line with `<br>`. Long names widen
-  every box of that kind.
-- **Label the lines that need it**: the answers of a decision (`-->|yes|`), the reason for a way back. Leave the
-  obvious ones bare.
-- **Decisions are diamonds** (`B{Valid?}`), starts and ends are rounded (`A([Start])`). The shape is how a reader
-  tells them apart.
+- **Order is meaning.** The first line leaves from the start. Write the main path first, then the branches and the
+  ways back.
+- **Short names.** Two or three words in a box; put detail on a second line with `<br>`.
+- **Label the lines that need it**: the answers of a decision (`-->|yes|`), the reason for a way back.
+- **Decisions are diamonds** (`B{Valid?}`), starts and ends are rounded (`A([Start])`).
 - **One diagram, one question.** Past about twenty boxes, split it: an overview, then one diagram per part.
 - **Group only what is owned.** A `subgraph` is for an owner or a boundary, not for decoration.
-- Never write coordinates, sizes or colours into the text. Colours come from the page (`--ursula-*` CSS
-  variables).
+- Never write coordinates, sizes or colours; colours come from the page (`--ursula-*` CSS variables).
 
 ## Example
 
@@ -114,5 +99,5 @@ swimlane-beta LR
 ```
 
 ```bash
-URSULA order.mmd --format text --width 100 --check
+URSULA order.mmd --format text --width 100 --check --fix
 ```
