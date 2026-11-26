@@ -1,9 +1,10 @@
 <script setup>
-// The install command with one tab per package manager and a copy button.
+// The install command with one tab per package manager, the agent skill and the MCP server, and a copy button.
 import { ref } from 'vue';
 import { useData } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { langOf } from '../playground/strings.js';
+import CopyButton from './CopyButton.vue';
 
 const { lang } = useData();
 const t = HOME_STRINGS[langOf(lang.value)];
@@ -13,24 +14,14 @@ const MANAGERS = [
   { id: 'pnpm', command: 'pnpm add -g ursula-diagram' },
   { id: 'bun', command: 'bun add -g ursula-diagram' },
   { id: 'npx', command: 'npx ursula-diagram order.mmd --format text' },
+  { id: 'skill', command: 'npx skills add yjun1806/ursula-diagram' },
+  { id: 'mcp', command: 'claude mcp add ursula -- npx -y ursula-diagram mcp' },
 ];
 
 const picked = ref(MANAGERS[0].id);
-const copied = ref(false);
-let timer = 0;
 
 const commandOf = (id) => MANAGERS.find((m) => m.id === id).command;
-
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(commandOf(picked.value));
-    copied.value = true;
-    clearTimeout(timer);
-    timer = setTimeout(() => (copied.value = false), 1500);
-  } catch {
-    // Clipboard refused: the command stays selectable on the page.
-  }
-}
+const noteOf = (id) => (id === 'skill' ? t.skillNote : id === 'mcp' ? t.mcpNote : t.needsNode);
 </script>
 
 <template>
@@ -50,9 +41,9 @@ async function copy() {
     </div>
     <div class="it-line" role="tabpanel">
       <code><span class="it-prompt" aria-hidden="true">$ </span>{{ commandOf(picked) }}</code>
-      <button type="button" class="it-copy" :aria-label="t.copy" @click="copy">{{ copied ? t.copied : t.copy }}</button>
+      <CopyButton :text="commandOf(picked)" />
     </div>
-    <p class="it-note">{{ t.needsNode }}</p>
+    <p class="it-note">{{ noteOf(picked) }}</p>
   </div>
 </template>
 
@@ -63,10 +54,11 @@ async function copy() {
 }
 .it-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
 }
 .it-tabs button {
-  padding: 6px 14px;
+  padding: 6px 12px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
@@ -105,18 +97,6 @@ async function copy() {
 .it-prompt {
   color: var(--vp-c-text-3);
   user-select: none;
-}
-.it-copy {
-  flex: none;
-  padding: 4px 12px;
-  border: 1px solid var(--vp-c-border);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--vp-c-text-1);
-  background: var(--vp-c-bg);
-}
-.it-copy:hover {
-  border-color: var(--vp-c-text-2);
 }
 .it-note {
   margin: 8px 0 0;

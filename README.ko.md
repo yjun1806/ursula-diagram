@@ -2,11 +2,12 @@
 
 <p align="center"><a href="README.md">English</a> · <b>한국어</b></p>
 
-<p align="center"><b>Mermaid 글을 SVG와 터미널 글자 그림으로 그립니다. 브라우저도, 실행 의존성도 필요 없습니다.</b></p>
+<p align="center"><b>코딩 에이전트가 그리는 다이어그램. Mermaid 글을 SVG와 터미널 글자 그림으로 그립니다. 브라우저도, 실행 의존성도 필요 없습니다.</b></p>
 
 <p align="center"><a href="https://yjun1806.github.io/ursula-diagram/ko/">문서와 플레이그라운드</a> · <a href="https://yjun1806.github.io/ursula-diagram/ko/playground">브라우저에서 해 보기</a></p>
 
 <p align="center">
+  <a href="#에이전트를-위해">에이전트를 위해</a> ·
   <a href="#왜-ursula인가">왜 ursula인가</a> ·
   <a href="#다른-도구와-비교">비교</a> ·
   <a href="#빠른-시작">빠른 시작</a> ·
@@ -18,10 +19,10 @@
   <a href="#에이전트-스킬">에이전트 스킬</a>
 </p>
 
-ursula는 Mermaid 문서에 있는 유형 35가지의 글을 읽고, 상자·선·라벨의 자리를 직접 계산합니다. 코딩 에이전트를 위해
-만들었습니다. 에이전트가 Mermaid 글 몇 줄을 쓰면 엔진이 배치를 계산해 SVG나 에이전트 터미널용 글자 그림으로 그립니다.
-SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. 같은 글은 언제나 같은 그림이 됩니다. Node만 있으면 돌고, 브라우저나
-DOM이 필요 없으며, 실행할 때 설치할 것도 없습니다.
+ursula는 코딩 에이전트를 위한 다이어그램 도구입니다. 에이전트가 Mermaid 글 몇 줄을 쓰면 엔진이 상자·선·라벨의 자리를
+계산해 SVG나 에이전트 터미널용 글자 그림으로 그립니다. SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. Mermaid 문서에 있는
+유형 35가지를 모두 읽습니다. 같은 글은 언제나 같은 그림이 됩니다. Node만 있으면 돌고, 브라우저나 DOM이 필요 없으며,
+실행할 때 설치할 것도 없습니다.
 
 **Mermaid 판.** 문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날
 기준 Mermaid의 최신 정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 추가된 문법은 아직 읽지
@@ -49,11 +50,27 @@ flowchart LR
                         └───────────────────────┘
 ```
 
-<p align="center"><img src="assets/hero.svg" alt="같은 흐름도를 ursula가 SVG로 그린 그림" width="760"></p>
+<p align="center"><img src="assets/hero.svg" alt="같은 flowchart를 ursula가 SVG로 그린 그림" width="760"></p>
 
 첫 블록이 입력입니다. 그 아래 글자 그림과 그림은 ursula가 같은 글에서 그린 결과로, 각각 `--format text --width 80`과
 `--format svg`로 그렸습니다. 이 문서의 글자 그림은 모두 영문입니다. 까닭은 [줄이 맞지 않을 때](#줄이-맞지-않을-때)에
 적었습니다.
+
+## 에이전트를 위해
+
+에이전트는 Mermaid를 쓰고, 그리고 점검하고, 고칠 곳을 읽고, 다시 씁니다. 그려질 때까지 이 루프를 돕니다. 루프의
+단계마다 에이전트를 위해 만들었습니다.
+
+- **에이전트가 스스로 고칠 수 있게 알려 주는 오류.** 오류는 줄과 칸을 `^`로 짚고, 의도했을 낱말과 맞는 예시 줄을
+  함께 보여 줍니다. 에이전트는 그걸 읽고 고쳐 다시 그립니다. 일부러 틀린 글 93개에서 오류가 준 예시 줄로 바꾸면
+  93개 모두 그려졌습니다.
+- **호출 한 번에 그리고 점검합니다.** `--check`를 주면 그림은 표준 출력으로, 점검 결과는 표준 오류로 나옵니다. 겹치는
+  선은 원본 줄 번호로 알려 줍니다([터미널에서](#터미널에서)).
+- **문법은 필요할 때 묻습니다.** `ursula-diagram syntax <유형>`은 그 유형의 짧은 예시와 규칙을 출력합니다. `--width`에
+  들어가지 않는 그림은 종료 코드 3으로 끝나고 들어가는 폭을 알려 줍니다.
+- **MCP 서버.** 셸이 없는 에이전트에게는 `ursula-diagram mcp`가 `render`, `check`, `syntax`를 제공합니다
+  ([MCP로](#mcp로)).
+- **스킬은 한 줄로 설치합니다.** `npx skills add yjun1806/ursula-diagram`([에이전트 스킬](#에이전트-스킬)).
 
 ## 왜 ursula인가
 
@@ -164,22 +181,22 @@ ursula-diagram order.mmd --format svg > order.svg   # 위의 그림
 
 <table>
   <tr>
-    <td align="center"><b>흐름도</b><br><img src="assets/ko-flowchart.svg" alt="흐름도" width="400"></td>
-    <td align="center"><b>시퀀스</b><br><img src="assets/ko-sequence.svg" alt="시퀀스 다이어그램" width="400"></td>
+    <td align="center"><b>Flowchart</b><br><img src="assets/ko-flowchart.svg" alt="Flowchart" width="400"></td>
+    <td align="center"><b>Sequence</b><br><img src="assets/ko-sequence.svg" alt="Sequence diagram" width="400"></td>
   </tr>
   <tr>
-    <td align="center"><b>클래스</b><br><img src="assets/ko-class.svg" alt="클래스 다이어그램" width="150"></td>
-    <td align="center"><b>상태</b><br><img src="assets/ko-state.svg" alt="상태 다이어그램" width="140"></td>
+    <td align="center"><b>Class</b><br><img src="assets/ko-class.svg" alt="Class diagram" width="150"></td>
+    <td align="center"><b>State</b><br><img src="assets/ko-state.svg" alt="State diagram" width="140"></td>
   </tr>
   <tr>
-    <td align="center"><b>ER</b><br><img src="assets/ko-er.svg" alt="ER 다이어그램" width="400"></td>
-    <td align="center"><b>C4 컨텍스트</b><br><img src="assets/ko-c4.svg" alt="C4 컨텍스트 다이어그램" width="260"></td>
+    <td align="center"><b>ER</b><br><img src="assets/ko-er.svg" alt="ER diagram" width="400"></td>
+    <td align="center"><b>C4 context</b><br><img src="assets/ko-c4.svg" alt="C4 context diagram" width="260"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><b>마인드맵</b><br><img src="assets/ko-mindmap.svg" alt="마인드맵" width="400"></td>
+    <td align="center" colspan="2"><b>Mindmap</b><br><img src="assets/ko-mindmap.svg" alt="Mindmap" width="400"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><b>간트</b><br><img src="assets/ko-gantt.svg" alt="간트 차트" width="820"></td>
+    <td align="center" colspan="2"><b>Gantt</b><br><img src="assets/ko-gantt.svg" alt="Gantt chart" width="820"></td>
   </tr>
 </table>
 

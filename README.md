@@ -2,11 +2,12 @@
 
 <p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
 
-<p align="center"><b>Draws Mermaid text as SVG and as terminal text. No browser, no runtime dependencies.</b></p>
+<p align="center"><b>Diagrams your coding agent can draw: Mermaid in, SVG and terminal text out. No browser, no runtime dependencies.</b></p>
 
 <p align="center"><a href="https://yjun1806.github.io/ursula-diagram/">Docs and playground</a> · <a href="https://yjun1806.github.io/ursula-diagram/playground">Try it in the browser</a></p>
 
 <p align="center">
+  <a href="#for-agents">For agents</a> ·
   <a href="#why-ursula">Why ursula</a> ·
   <a href="#compared-with-other-tools">Compared</a> ·
   <a href="#quick-start">Quick start</a> ·
@@ -18,10 +19,10 @@
   <a href="#agent-skill">Agent skill</a>
 </p>
 
-ursula reads the Mermaid text of any of the 35 diagram types in the Mermaid documentation and computes where every
-box, line and label goes. It is made for coding agents: the agent writes a few lines of Mermaid, and the engine lays
-them out, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. The same text always gives the
-same drawing. It runs on Node alone: no browser, no DOM, nothing to install at run time.
+ursula is a diagram tool for coding agents. The agent writes a few lines of Mermaid, and the engine computes where
+every box, line and label goes, as an SVG or as a drawing for the agent's terminal, in a median of 0.36 ms. It reads
+any of the 35 diagram types in the Mermaid documentation. The same text always gives the same drawing. It runs on
+Node alone: no browser, no DOM, nothing to install at run time.
 
 **Mermaid version.** The syntax follows the Mermaid documentation as published on 12 November 2026 (the `develop`
 branch, commit `ddb4c118`). On that date the latest Mermaid release was 12.3.0 and the latest preview 13.0.0-alpha.3.
@@ -53,6 +54,22 @@ flowchart LR
 
 The first block is the input. The text drawing and the picture under it are what ursula draws from it, with
 `--format text --width 80` and with `--format svg`.
+
+## For agents
+
+An agent's loop is to write Mermaid, draw and check, read what to fix and write again, until it draws. Every step of
+that loop is built for an agent:
+
+- **Errors that tell your agent how to fix them.** An error names the line and the column with `^`, the word that was
+  likely meant and a correct example line, so the agent fixes the text and draws again. In 93 deliberately broken
+  texts, replacing the line with the error's example drew all 93.
+- **One call draws and checks.** With `--check`, the drawing goes to standard output and the check to standard error,
+  with crossing lines named by their source line ([In a terminal](#in-a-terminal)).
+- **Syntax on demand.** `ursula-diagram syntax <type>` prints a short example and the rules of a type. A drawing too
+  wide for `--width` fails with exit code 3 and names a width that fits.
+- **An MCP server** for agents without a shell: `ursula-diagram mcp` serves `render`, `check` and `syntax`
+  ([Over MCP](#over-mcp)).
+- **The skill in one line:** `npx skills add yjun1806/ursula-diagram` ([Agent skill](#agent-skill)).
 
 ## Why ursula
 

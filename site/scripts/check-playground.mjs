@@ -146,13 +146,8 @@ if (existsSync(built)) {
       }
     }
   }
-  // The home page's showcase (theme/home/HomeShowcase.vue) is being changed in another pull request; until it has
-  // copy buttons and a mermaid block, its pages warn instead of failing. Delete an entry once its page passes.
-  const PENDING = new Set(['index.html', 'ko/index.html']);
-  const report = (page, message) => (PENDING.has(page) ? console.log(`WARN ${page}: ${message} (pending)`) : fail(`${page}: ${message}`));
-  for (const [page, n] of noCopy) report(page, `${n} code blocks without a copy button`);
-  for (const [page, n] of noWrap) report(page, `${n} Mermaid blocks not marked as mermaid, so they do not wrap`);
-  for (const page of PENDING) if (!noCopy.has(page) && !noWrap.has(page)) fail(`${page} passes now; delete it from PENDING`);
+  for (const [page, n] of noCopy) fail(`${page}: ${n} code blocks without a copy button`);
+  for (const [page, n] of noWrap) fail(`${page}: ${n} Mermaid blocks not marked as mermaid, so they do not wrap`);
   const count = (m) => [...m.values()].reduce((a, b) => a + b, 0);
   console.log(`ok   ${pres - count(noCopy)} of ${pres} code blocks on the built pages have a copy button`);
   console.log(`ok   ${mermaid - count(noWrap)} of ${mermaid} Mermaid blocks on the built pages are mermaid blocks`);

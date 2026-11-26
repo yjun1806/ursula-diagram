@@ -1,5 +1,5 @@
 // Copies the engine build and the README pictures into public/, so the site always shows the engine of this checkout,
-// then draws the official examples with it (scripts/render-examples.mjs).
+// then draws the home page's loop (scripts/render-loop.mjs) and the official examples (scripts/render-examples.mjs) with it.
 // Run `bun scripts/build.ts` in the repository root first.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -25,6 +25,10 @@ for (const name of readdirSync(join(root, 'assets'))) {
   if (/\.(svg|png)$/.test(name)) copyFileSync(join(root, 'assets', name), join(assets, name));
 }
 console.log('copied dist/ursula.global.js and assets/ into site/public/');
+
+// The home page's loop, drawn with this engine.
+const { renderLoop } = await import('./render-loop.mjs');
+renderLoop();
 
 // The Examples pages: every official example drawn with this engine.
 const { renderExamples } = await import('./render-examples.mjs');
