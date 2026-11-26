@@ -38,6 +38,15 @@ const png = await renderPng(src, { theme: 'dark', scale: 2 }); // Uint8Array
 
 패키지가 없으면 프로미스가 `PngRendererMissing`으로 거부되고, 그 메시지가 설치 명령입니다.
 
+글꼴이 없어도 프로미스는 거부되지 않습니다. 컴퓨터에 글꼴이 하나도 없거나, 그림의 한글·중국어·일본어 글자를 가진 글꼴이
+없으면 그 글자 없이 PNG를 그리고 `onWarning`을 그 사실을 적은 한 줄로 부릅니다.
+
+```ts
+const png = await renderPng(src, { onWarning: (message) => console.warn(message) });
+```
+
+`fontDirs`로 시스템 글꼴 폴더 밖의 글꼴 폴더를 더 줄 수 있습니다.
+
 ## 옵션
 
 `renderText`, `renderTextSpans`, `renderTextSvg`는 셋째 인자로 명령의 옵션을 받습니다. `charset`(`'unicode'` 또는

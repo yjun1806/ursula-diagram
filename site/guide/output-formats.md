@@ -59,8 +59,10 @@ page colour; `auto` is light there.
 
 `png` draws the SVG with the optional package `@resvg/resvg-js`, which `ursula-diagram` does not install. The text
 is set in the fonts installed on the machine, so Korean, Chinese or Japanese labels need such a font. macOS has
-one; on Linux a package such as `fonts-noto-cjk` adds one, and without any font the PNG has no text. Install the
-renderer once:
+one; on Linux a package such as `fonts-noto-cjk` adds one. The command still writes the PNG when a font is missing,
+and prints one line on standard error: `warning: no font file found, …` when the machine has no font at all (the PNG
+has no text), or `warning: no font has the Korean, Chinese or Japanese characters of this drawing, …` when only those
+characters are missing. Each PNG loads only the font files its text needs. Install the renderer once:
 
 ```bash
 npm i -g @resvg/resvg-js

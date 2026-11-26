@@ -59,8 +59,10 @@ ursula-diagram flow.mmd --format fixed > flow-fixed.mmd
 
 `png`는 선택 설치 패키지 `@resvg/resvg-js`로 SVG를 그립니다. `ursula-diagram`을 설치해도 이 패키지는 따라오지 않습니다.
 글자는 그 컴퓨터에 설치된 글꼴로 그리므로, 한글·중국어·일본어 라벨에는 그런 글꼴이 있어야 합니다. macOS에는 있고,
-Linux에서는 `fonts-noto-cjk` 같은 패키지로 더합니다. 글꼴이 하나도 없으면 글자 없는 PNG가 나옵니다. 렌더러는 한 번만
-설치합니다.
+Linux에서는 `fonts-noto-cjk` 같은 패키지로 더합니다. 글꼴이 없어도 명령은 PNG를 쓰고, 표준 오류에 한 줄을 남깁니다.
+글꼴이 하나도 없으면 `warning: no font file found, …`(PNG에 글자가 없습니다), 한글·중국어·일본어 글자만 그릴 글꼴이
+없으면 `warning: no font has the Korean, Chinese or Japanese characters of this drawing, …`입니다. PNG마다 그 글자에 필요한
+글꼴 파일만 읽습니다. 렌더러는 한 번만 설치합니다.
 
 ```bash
 npm i -g @resvg/resvg-js
