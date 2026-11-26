@@ -54,6 +54,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude 'test/*-rewrite.test.ts' --exclude 'test/rewrite.test.ts'",
     "dev": "bun src/cli.ts",
+    "compare": "node scripts/compare-outputs.ts",
     "test:rewrite": "vitest run test/rewrite.test.ts test/route-rewrite.test.ts test/choose-rewrite.test.ts test/rows-rewrite.test.ts"
   },
   "devDependencies": {
