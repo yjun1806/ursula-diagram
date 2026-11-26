@@ -284,7 +284,8 @@ function readNode(c: Cursor, line: number, st: State): NodeRead {
     }
   }
   if (c.s.startsWith(':::', c.i)) {
-    const cls = /:::([\w-]+)/y;
+    // A single hyphen joins words of a class name; two start an arrow, as in `A:::hot-->B`.
+    const cls = /:::(\w+(?:-\w+)*)/y;
     cls.lastIndex = c.i;
     const cm = cls.exec(c.s);
     if (!cm) throw new UrsulaError("expected a class name after ':::'", 'syntax', line);
