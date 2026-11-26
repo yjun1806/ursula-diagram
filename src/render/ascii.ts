@@ -53,6 +53,9 @@ function asciiOf(ch: string): string {
   return OTHERS[cp] ?? ch;
 }
 
+/** Rounded corners. */
+const ROUND: ReadonlySet<string> = new Set(['╭', '╮', '╰', '╯']);
+
 /** Whether a character is a piece of a line: straight, a corner, a tee or a crossing. */
 function isLine(ch: string | undefined): boolean {
   const cp = ch?.codePointAt(0) ?? 0;
@@ -83,8 +86,8 @@ function indexAt(row: readonly string[] | undefined, column: number): number {
  * goes on unbroken. With `countBars`, a crossing that no line reaches from either side and that stands at a box is the
  * bar of a count on an upright line and becomes `-`.
  */
-function asciiRows(rows: readonly (readonly string[])[], countBars: boolean): string[][] {
-  const out = rows.map((row) => row.map(asciiOf));
+function asciiRows(rows: readonly (readonly string[])[], countBars: boolean, roundAsPlus: boolean): string[][] {
+  const out = rows.map((row) => row.map((ch) => (roundAsPlus && ROUND.has(ch) ? '+' : asciiOf(ch))));
   const bar = (r: number, i: number, ch: string): void => {
     const target = out[r];
     if (target !== undefined && i >= 0 && isLine(rows[r]?.[i])) target[i] = ch;
@@ -119,16 +122,18 @@ function asciiRows(rows: readonly (readonly string[])[], countBars: boolean): st
 export interface AsciiOptions {
   /** Whether the rows mark counts with bars on upright lines, as an entity-relationship drawing does. Off by default: every crossing stays a crossing. */
   countBars?: boolean;
+  /** Whether a rounded corner (`╭╮╰╯`) becomes `+`, as the corner of a box does. Off by default: it becomes `/` or `\`, as a bend does. */
+  roundAsPlus?: boolean;
 }
 
 /** Terminal rows drawn with ASCII characters only; the text of the diagram itself is left as it is. */
 export function toAscii(lines: readonly string[], opts: AsciiOptions = {}): string[] {
-  return asciiRows(lines.map((line) => [...line]), opts.countBars === true).map((row) => row.join(''));
+  return asciiRows(lines.map((line) => [...line]), opts.countBars === true, opts.roundAsPlus === true).map((row) => row.join(''));
 }
 
 /** `toAscii` for rows of spans; every span keeps its tone and its length. */
 export function spansToAscii(lines: readonly (readonly TextSpan[])[], opts: AsciiOptions = {}): TextSpan[][] {
-  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true);
+  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true, opts.roundAsPlus === true);
   return lines.map((line, r) => {
     let at = 0;
     return line.map((span) => {

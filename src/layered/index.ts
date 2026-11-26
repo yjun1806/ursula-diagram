@@ -147,7 +147,10 @@ export function layeredRuler(r: Ruler, gap?: number, share = true): Ruler {
  * between neighbouring boxes is three cells (an arrow and a cell either side), and bands take only the lines they use.
  */
 function terminalRuler(r: Ruler, gap = 3): Ruler {
-  return { ...r, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: 1, rankGap: gap, rankGapMin: gap, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: 1 };
+  // A spaced drawing keeps a blank cell between two ports of a side and between two tracks of a gap.
+  const pitch = r.spaced === undefined ? 1 : 2;
+  const between = r.spaced === 'wide' ? gap + 1 : gap;
+  return { ...r, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: pitch, rankGap: between, rankGapMin: between, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: pitch };
 }
 
 

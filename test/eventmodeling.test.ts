@@ -189,7 +189,7 @@ describe('eventmodeling text', () => {
     for (const name of Object.keys(examples)) {
       for (const width of [80, 100, 120]) {
         const lines = text(name, width);
-        expect(lines.join('\n'), `${name} at ${width}`).toContain('┌');
+        expect(lines.join('\n'), `${name} at ${width}`).toContain('╭');
         for (const line of lines) expect(cellWidth(line), `${name} at ${width}`).toBeLessThanOrEqual(width);
       }
     }
@@ -291,24 +291,24 @@ describe('eventmodeling text', () => {
     expect(linesOf(chain(3), 80)).toEqual([
       '── UI/Automation ───────────',
       '',
-      '┌────────┐',
+      '╭────────╮',
       '│ Frame1 │',
       '│ 01 ui  │',
-      '└────────┘',
+      '╰────────╯',
       '      │',
       '──────┼ Command/Read Model ─',
       '      ▼',
-      '    ┌────────┐',
+      '    ╭────────╮',
       '    │ Frame2 │',
       '    │ 02 cmd │',
-      '    └────────┘',
+      '    ╰────────╯',
       '          │',
       '── Events ┼─────────────────',
       '          ▼',
-      '        ┌────────┐',
+      '        ╭────────╮',
       '        │ Frame3 │',
       '        │ 03 evt │',
-      '        └────────┘',
+      '        ╰────────╯',
     ]);
     const none = { headless: [], underName: [], onRule: [], tight: [], close: [] };
     for (const [src, width] of [[chain(16), 80], [dense(30), 120], [mixed, 120], ...Object.values(examples).flatMap((example) => [80, 100, 120].map((w) => [example, w] as const))] as const) {
@@ -325,7 +325,7 @@ describe('eventmodeling text', () => {
   it('writes a band name whole where one way of setting the frames out has room for it', () => {
     for (const [src, width] of [[chain(5), 40], [chain(13), 100], [chain(14), 80], [chain(5, '주문'), 40]] as const) {
       const lines = linesOf(src, width);
-      expect(lines.some((line) => line.includes('┌')), `${width}`).toBe(true);
+      expect(lines.some((line) => line.includes('╭')), `${width}`).toBe(true);
       expect(lines.join('\n'), `${width}`).not.toContain('…');
       expect(lines.filter((line) => line.includes('Command/Read Model')).length, `${width}`).toBeGreaterThan(0);
       expect(lines.every((line) => cellWidth(line) <= width)).toBe(true);
@@ -357,7 +357,7 @@ describe('eventmodeling text', () => {
       }
     }
     const drawn = linesOf(fanOut, 80).join('\n');
-    expect(drawn).toContain('┌');
+    expect(drawn).toContain('╭');
     expect(drawn).not.toMatch(/[┼┴┬├┤]{2}/);
     // Four lines into one box end in one arrowhead.
     expect(text('09-multiple-relations', 100).join('').split('▲').length - 1).toBe(1);
@@ -366,7 +366,7 @@ describe('eventmodeling text', () => {
   it('writes the list, not an error, for a model too large to draw', () => {
     for (const width of [80, 100, 120, 400]) {
       const lines = linesOf(dense(200), width);
-      expect(lines.some((line) => line.includes('┌')), `${width}`).toBe(false);
+      expect(lines.some((line) => line.includes('╭')), `${width}`).toBe(false);
       expect(lines.join('\n')).toContain('Relations');
     }
   });
@@ -468,7 +468,7 @@ describe('eventmodeling text', () => {
   it('draws a model of some thirty frames and as many relations or more, each way of setting it out searched once', () => {
     for (const [src, width] of [[dense(30), 120], [crowded, 100]] as const) {
       const lines = linesOf(src, width);
-      expect(lines.some((line) => line.includes('┌')), `${width}`).toBe(true);
+      expect(lines.some((line) => line.includes('╭')), `${width}`).toBe(true);
       expect(lines.every((line) => cellWidth(line) <= width), `${width}`).toBe(true);
     }
   });
@@ -479,7 +479,7 @@ describe('eventmodeling text', () => {
       const rows = linesOf(src, width).map(cellsOf);
       rows.forEach((row, y) => {
         // A band rule: a level line with no corner on it and no arrowhead between two boxes.
-        if (!row.join('').includes('──') || row.some((ch) => '┌┐└┘├┤┬┴┼▶◀'.includes(ch) && ch !== '')) return;
+        if (!row.join('').includes('──') || row.some((ch) => '┌┐└┘╭╮╰╯├┤┬┴┼▶◀'.includes(ch) && ch !== '')) return;
         row.forEach((ch, x) => {
           if (ch !== '' && '─│▲▼'.includes(ch)) return;
           const above = rows[y - 1]?.[x] ?? ' ';
@@ -494,7 +494,7 @@ describe('eventmodeling text', () => {
 
   it('wraps the frames the way that takes the fewest rows of boxes', () => {
     const lines = linesOf(mixed, 120);
-    expect(lines.some((line) => line.includes('┌'))).toBe(true);
+    expect(lines.some((line) => line.includes('╭'))).toBe(true);
     expect(lines.length).toBeLessThanOrEqual(49);
   });
 

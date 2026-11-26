@@ -342,10 +342,10 @@ function render(c: Ctx, gaps: number[]): Rendered {
         const bottom = y === rows - 1;
         const edgeX = x === left || x === right;
         let ch = ' ';
-        if (top && x === left) ch = '┌';
-        else if (top && x === right) ch = '┐';
-        else if (bottom && x === left) ch = '└';
-        else if (bottom && x === right) ch = '┘';
+        if (top && x === left) ch = '╭';
+        else if (top && x === right) ch = '╮';
+        else if (bottom && x === left) ch = '╰';
+        else if (bottom && x === right) ch = '╯';
         else if (top || bottom) ch = '─';
         else if (edgeX) ch = '│';
         g.put(x, y, ch, 'normal');

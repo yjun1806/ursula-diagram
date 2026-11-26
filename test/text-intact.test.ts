@@ -22,7 +22,7 @@ const over = (lines: readonly string[], y: number, x: number, text: string): str
     return [...cells.slice(0, x), ...text, ...cells.slice(x + text.length)].join('');
   });
 
-const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, crowdedLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0, forks: 0, crossMarks: 0, mixedNets: 0, hugging: 0, overwritten: 0 };
+const clean = { brokenLines: 0, brokenBoxes: 0, tangled: 0, strayLabels: 0, crowdedLabels: 0, coveredLabels: 0, labelsAtHeads: 0, room: 0, unseen: 0, forks: 0, crossMarks: 0, mixedNets: 0, hugging: 0, overwritten: 0, adjacentHeads: 0, adjacentLines: 0 };
 
 describe('the breaks of a terminal drawing', () => {
   it('are none in a drawing that keeps every line, box and label whole', () => {
@@ -37,8 +37,8 @@ describe('the breaks of a terminal drawing', () => {
     const stem = lines.findIndex((line) => line.trim() === '│');
     const x = (lines[stem] ?? '').indexOf('│');
     expect(breaksOf(laid, over(lines, stem, x, ' '), labels)).toMatchObject({ brokenLines: 1, brokenBoxes: 0, tangled: 0, strayLabels: 0, coveredLabels: 0 });
-    const top = lines.findIndex((line) => line.includes('┌──────┐'));
-    const corner = (lines[top] ?? '').indexOf('┌');
+    const top = lines.findIndex((line) => line.includes('╭──────╮'));
+    const corner = (lines[top] ?? '').indexOf('╭');
     expect(breaksOf(laid, over(lines, top, corner + 2, 'x'), labels)).toEqual({ ...clean, brokenBoxes: 1 });
   });
 

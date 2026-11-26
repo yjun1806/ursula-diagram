@@ -1,5 +1,6 @@
 import { cellWidth } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode } from '../types.ts';
+import { cornersOf } from '../text/corners.ts';
 import { cellsOf, labelsMissing, roomViolations } from './text-read.ts';
 
 const N = 1;
@@ -30,13 +31,6 @@ const LEVEL_HEADS: ReadonlySet<string> = new Set(['▶', '◀', '▷', '◁']);
 
 /** What may stand at an end of a line: an arrowhead, or a glyph of a relation mark. */
 const MARKS: ReadonlySet<string> = new Set([...HEADS, '◆', '◇', '⊕', '○', '<', '>', '^', 'v', '|', 'o', '┼']);
-
-/** The corners of a box as the drawing writes them, for its shape. */
-const CORNERS: Record<string, readonly [string, string, string, string]> = {
-  square: ['┌', '┐', '└', '┘'],
-  round: ['╭', '╮', '╰', '╯'],
-  note: ['┌', '┒', '└', '┘'],
-};
 
 /**
  * What breaks in a terminal drawing of boxes and lines, counted on the rows it is written in. The layout says only
@@ -71,8 +65,13 @@ export interface Breaks {
   hugging: number;
   /** Cells a line runs through with a text written in them that is not the label of a line running there: another label written over a line reads as its label. */
   overwritten: number;
+  /** Two arrowheads that point the same way in neighbouring cells across that way (`▲▲`): a reader sees one wide head, or cannot tell which line ends where. */
+  adjacentHeads: number;
+  /** Two lines of one box, or of one net, that run straight in neighbouring cells side by side (`││`) without sharing a cell there: they read as one line. Counted once for every pair. */
+  adjacentLines: number;
 }
 
+/** The breaks every other drawing of a graph is held to: it may not have more of any of them than the drawing it replaces. */
 export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenBoxes', 'tangled', 'strayLabels', 'crowdedLabels', 'coveredLabels', 'labelsAtHeads', 'room', 'unseen', 'forks', 'crossMarks', 'mixedNets', 'hugging', 'overwritten'];
 
 /** The cells of a line and the ways it runs on in each, as the drawing draws it; undefined for a line with a slanted stretch. */
@@ -199,7 +198,7 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     if (n.shape === 'bar') {
       whole = [at(x0, y0), at(x1, y0), at(x0, y1), at(x1, y1)].every((c) => c === '█');
     } else {
-      const [tl, tr, bl, br] = CORNERS[n.shape === 'ellipse' || n.shape === 'actor' ? 'round' : n.shape === 'note' ? 'note' : 'square'] as readonly [string, string, string, string];
+      const [tl, tr, bl, br] = cornersOf(n.shape);
       whole = at(x0, y0) === tl && at(x1, y0) === tr && at(x0, y1) === bl && at(x1, y1) === br;
       for (let x = x0 + 1; whole && x < x1; x++) whole = at(x, y0) === '─' && at(x, y1) === '─';
       for (let y = y0 + 1; whole && y < y1; y++) whole = (at(x0, y) === '│' || at(x0, y) === '├') && (at(x1, y) === '│' || at(x1, y) === '┤');
@@ -442,6 +441,41 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     }
   });
 
+  // Lines that `hugging` leaves out, as they leave or reach one box or join elsewhere, side by side in neighbouring cells.
+  let adjacentLines = 0;
+  const beside = new Set<string>();
+  runs.forEach((run, i) => {
+    for (const [x, y] of run?.cells ?? []) {
+      const b = run?.bits.get(`${x},${y}`) ?? 0;
+      if ((b !== LEVEL && b !== UPRIGHT) || RUNS[at(x, y)] !== b) continue;
+      const [dx, dy] = b === LEVEL ? [0, 1] : [1, 0];
+      const [ax, ay] = b === LEVEL ? [1, 0] : [0, 1];
+      for (const j of byCell.get(`${x + dx},${y + dy}`) ?? []) {
+        const pair = i < j ? `${i}|${j}` : `${j}|${i}`;
+        if (j === i || beside.has(pair) || hugged.has(pair)) continue;
+        const other = runs[j];
+        // Drawn straight in both cells, running straight on into the next ones along, and neither line in the cell of the other.
+        const straight = (r: typeof run, cx: number, cy: number): boolean => r?.bits.get(`${cx},${cy}`) === b;
+        if (!straight(other, x + dx, y + dy) || RUNS[at(x + dx, y + dy)] !== b || !straight(run, x + ax, y + ay) || !straight(other, x + dx + ax, y + dy + ay)) continue;
+        if (other?.bits.has(`${x},${y}`) === true || run?.bits.has(`${x + dx},${y + dy}`) === true) continue;
+        beside.add(pair);
+        adjacentLines++;
+        note(`lines ${drawn[i]?.from}->${drawn[i]?.to} and ${drawn[j]?.from}->${drawn[j]?.to} run in neighbouring cells`);
+      }
+    }
+  });
+
+  // Arrowheads that point one way in neighbouring cells across it.
+  let adjacentHeads = 0;
+  grid.forEach((row, y) =>
+    row.forEach((ch, x) => {
+      if ((UPRIGHT_HEADS.has(ch) && at(x + 1, y) === ch) || (LEVEL_HEADS.has(ch) && at(x, y + 1) === ch)) {
+        adjacentHeads++;
+        note(`arrowheads ${ch} side by side at ${x},${y}`);
+      }
+    }),
+  );
+
   // Cells of a line with a text in them that is not the label of a line running there, each cell once.
   let overwritten = 0;
   const textAt = new Set<string>();
@@ -479,8 +513,13 @@ export function breaksOf(layout: Layout, lines: readonly string[], labels?: read
     mixedNets,
     hugging,
     overwritten,
+    adjacentHeads,
+    adjacentLines,
   };
 }
+
+/** How many lines and arrowheads of a drawing stand side by side. `breaksMore` leaves them out: `layout` draws a spaced drawing for them. */
+export const adjacentOf = (b: Breaks): number => b.adjacentHeads + b.adjacentLines;
 
 /** Whether drawing `a` breaks more than drawing `b` in some respect. */
 export const breaksMore = (a: Breaks, b: Breaks): boolean => BREAK_KINDS.some((k) => a[k] > b[k]);

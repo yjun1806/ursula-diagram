@@ -29,7 +29,7 @@ import { sharing } from '../layered/ports.ts';
 import type { TextCost } from './text-cost.ts';
 import { costsMore, textCost, writtenOf } from './text-cost.ts';
 import type { Breaks } from './text-intact.ts';
-import { breaksMore, breaksOf } from './text-intact.ts';
+import { adjacentOf, breaksMore, breaksOf } from './text-intact.ts';
 import { renderTextLayout } from '../render/text.ts';
 import type { LayoutOptions as SolveOptions } from './solve.ts';
 import { solve } from './solve.ts';
@@ -282,6 +282,28 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
   const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
+  const picked = layoutPicked(graph, given, opts);
+  // A caller that names whether lines share ports compares drawings made each way: it gets the one it names.
+  if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined) return picked;
+  // Two arrowheads into one side of a box in neighbouring cells, or two lines of one box in neighbouring columns, read
+  // as one. The drawing is made again with a blank cell between ports and between tracks, and kept when it has fewer
+  // of them, fits the width, crosses no more lines and breaks nothing more (see `breaksOf`). It may be wider and longer.
+  // When it does not, the gap between neighbouring boxes is opened by a cell too, for a label that lost its room.
+  const labels = labelsOf(graph);
+  const limit = opts.maxWidth ?? given.defaultWidth;
+  const crowded = adjacentOf(breaksIn(picked, labels, limit));
+  if (crowded === 0) return picked;
+  for (const how of ['ports', 'wide'] as const) {
+    // Drawn once, with no other way of drawing it to choose from: the choice is the one against the drawing it replaces.
+    const spaced = out(layoutShared(graph, { ...given, spaced: how }, opts));
+    const fits = limit === undefined || !Number.isFinite(limit) || Math.max(spaced.width, textCost(spaced).width) <= limit;
+    if (fits && adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit)) return spaced;
+  }
+  return picked;
+}
+
+function layoutPicked(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
+  const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
   // A quick drawing is what a caller chooses a setting on: it is the usual drawing, so that the setting chosen is the one the usual drawing would choose.
   if (given.terminal !== true || opts.nested === true || opts.quick === true || opts.bare === true) return out(layoutShared(graph, given, opts));
   // A drawing without room is one to compare, and a caller that names the engine, the composition or the ports gets what it names: none is drawn another way.
@@ -303,6 +325,9 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, textCost(alongside).width) <= limit;
   return fits && onward(alongside) > onward(flow) && worthIt(alongside, flow, labels, limit) ? alongside : flow;
 }
+
+/** The labels of the lines of a graph. */
+const labelsOf = (graph: Graph): string[] => graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
 
 /** How many lines of a drawing lead to a box that stands wholly further on in the direction the drawing is written in. */
 function onward(l: Layout): number {

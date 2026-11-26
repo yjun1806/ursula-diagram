@@ -140,7 +140,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     const { shared, own, taken } = both('flowchart TD\n  a[Alpha]\n  b[Beta]\n  c[Gamma]\n  d[Delta]\n  c --> d\n  a --> d\n  b --> d');
     expect(textCost(shared).bends).toBeGreaterThan(textCost(own).bends);
     expect(textCost(shared).blank).toBeLessThan(textCost(own).blank);
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
     expect(shares(taken)).toBe(false);
   });
 
@@ -148,7 +150,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     const { shared, own, taken } = both('flowchart TD\n  a[Alpha]\n  b[Beta]\n  c[Gamma]\n  d[Delta]\n  e[Eps]\n  f[Zeta]\n  g[Eta]\n  b --> g\n  g --> e\n  b --> f\n  d --> g\n  c --> g\n  b --> e');
     expect(shares(shared)).toBe(true);
     expect(textCost(shared).width).toBeGreaterThan(textCost(own).width);
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
   });
 
   it('is not taken when the two cost the same', () => {
@@ -156,7 +160,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     const { shared, own, taken } = both(src);
     expect(shares(shared)).toBe(true);
     expect(textCost(shared)).toEqual(textCost(own));
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
   });
 
   it('is not taken for a drawing that is too wide without shared ports, whatever it costs', () => {
@@ -164,7 +170,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     expect(own.width).toBeGreaterThan(20);
     expect(costsMore(textCost(shared), textCost(own))).toBe(false);
     expect(costsMore(textCost(own), textCost(shared))).toBe(true);
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
   });
 
   it('is not taken for a quick drawing, on which a caller chooses a setting', () => {
@@ -204,7 +212,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     expect(arrangement(shared)).not.toEqual(arrangement(own));
     expect(costsMore(compared(shared), compared(own))).toBe(false);
     expect(costsMore(compared(own), compared(shared))).toBe(true);
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
     expect(own.composition).toBe('stages');
   });
 
@@ -213,7 +223,9 @@ describe('a terminal drawing with shared ports against the one without', () => {
     const [shared, own, taken] = [bounded(body, 60, true), bounded(body, 60, false), bounded(body, 60)];
     expect(shares(shared)).toBe(true);
     expect(arrangement(shared)).not.toEqual(arrangement(own));
-    expect(taken).toEqual(own);
+    // The drawing taken may be spaced for arrowheads side by side (see `layout`); its lines share no port, as in the one without.
+    expect(shares(taken)).toBe(false);
+    expect(arrangement(taken)).toEqual(arrangement(own));
   });
 });
 

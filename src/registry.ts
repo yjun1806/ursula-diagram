@@ -42,6 +42,9 @@ export interface TextOptions {
   charset?: 'unicode' | 'ascii';
 }
 
+/** The front-ends whose rounded corners are bends of their own (`git`) or shapes of their own (`block`, `kanban`), drawn as `/` and `\` in ASCII. */
+const ROUND_BENDS: ReadonlySet<string> = new Set(['block', 'git', 'kanban']);
+
 /** One diagram syntax with the pipeline that turns its source into output. */
 export interface FrontEnd {
   name: string;
@@ -111,7 +114,8 @@ export function selectFrontEnd(src: string): FrontEnd {
     }
   };
   const spans = found.textSpans;
-  const ascii = { countBars: found.name === 'er' };
+  // Rounded corners are the corners of boxes, except where a drawing bends its own lines with them.
+  const ascii = { countBars: found.name === 'er', roundAsPlus: !ROUND_BENDS.has(found.name) };
   const head = <T extends { heading?: string; config?: Record<string, FrontValue>; frontMatter?: Record<string, FrontValue> }>(s: string, o: T): T => {
     const front = readFrontMatter(s);
     const title = front['title'];

@@ -181,9 +181,9 @@ describe('sequence svg stays as committed', () => {
 describe('sequence text', () => {
   it('draws a small exchange', () => {
     expect(text(upload)).toMatchInlineSnapshot(`
-      "┌───────┐       ┌─────────┐
+      "╭───────╮       ╭─────────╮
       │ User  │       │ Storage │
-      └───────┘       └─────────┘
+      ╰───────╯       ╰─────────╯
           ├─ Upload file ─▶┆
           ┆◀┄┄┄┄ 완료 ┄┄┄┄┄┤
 
@@ -193,9 +193,9 @@ describe('sequence text', () => {
 
   it('draws activations, a frame with a divider, a note and a self message', () => {
     expect(text(withFrame)).toMatchInlineSnapshot(`
-      "┌───────┐    ┌─────────┐
+      "╭───────╮    ╭─────────╮
       │ User  │    │ Server  │
-      └───────┘    └─────────┘
+      ╰───────╯    ╰─────────╯
           ├── Login ───▶┃
           ┆             ┃
          ┌┼ ALT [Valid] ┼┐
@@ -290,7 +290,7 @@ describe('sequence text', () => {
     expect(one.some((l) => l.includes('┌') && l.includes('Cached'))).toBe(false);
     const wrapped = lines('sequenceDiagram\nA->>B: x\nNote right of A: Cached for sixty seconds and then looked up again', 40);
     expect(wrapped.some((l) => l.includes('▏'))).toBe(false);
-    expect(wrapped.filter((l) => /^\s*[│┌└].*[│┐┘]$/.test(l) && !l.includes('LOOP')).length).toBeGreaterThan(2);
+    expect(wrapped.some((l) => /┌─+┐$/.test(l)) && wrapped.some((l) => /└─+┘$/.test(l))).toBe(true);
   });
 
   it('marks the active interval of a lifeline with a heavy bar', () => {
@@ -337,13 +337,13 @@ describe('sequence text', () => {
       const top = out[0] ?? '';
       const middle = out[1] ?? '';
       const bottom = out[2] ?? '';
-      for (let at = top.indexOf('┌'); at >= 0; at = top.indexOf('┌', at + 1)) {
+      for (let at = top.indexOf('╭'); at >= 0; at = top.indexOf('╭', at + 1)) {
         const col = cellWidth(top.slice(0, at));
-        const close = cellWidth(top.slice(0, top.indexOf('┐', at)));
-        expect(columnOf(bottom.slice(top.slice(0, at).length), '└') + col).toBe(col);
-        expect(cellWidth(bottom.slice(0, bottom.indexOf('┘', top.slice(0, at).length)))).toBe(close);
+        const close = cellWidth(top.slice(0, top.indexOf('╮', at)));
+        expect(columnOf(bottom.slice(top.slice(0, at).length), '╰') + col).toBe(col);
+        expect(cellWidth(bottom.slice(0, bottom.indexOf('╯', top.slice(0, at).length)))).toBe(close);
       }
-      expect(cellWidth(middle.slice(0, middle.indexOf('│')))).toBe(columnOf(top, '┌'));
+      expect(cellWidth(middle.slice(0, middle.indexOf('│')))).toBe(columnOf(top, '╭'));
       expect(out.filter((l) => l.includes('ALT'))).toHaveLength(1);
       const alt = out.findIndex((l) => l.includes('ALT'));
       const end = out.findIndex((l, i) => i > alt && l.includes('└─'));
