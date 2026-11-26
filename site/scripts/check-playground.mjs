@@ -382,7 +382,7 @@ if (roadmap.skipped) console.log(`skip the roadmap against GitHub: ${roadmap.ski
 else {
   const closed = [...listedEn].filter((n) => !roadmap.open.has(n));
   const missing = [...roadmap.open].filter((n) => !listedEn.has(n));
-  if (closed.length) fail(`the roadmap pages list ${sorted(closed)} under Planned or In progress, but GitHub has no open roadmap issue with that number: move the line to Done, struck through, or remove it`);
+  if (closed.length) fail(`the roadmap pages list ${sorted(closed)} under Planned or In progress, but GitHub has no open roadmap issue with that number: move the line to Done, or remove it`);
   if (missing.length) fail(`the open roadmap issues ${sorted(missing)} are not on the roadmap pages: add a line to Planned`);
   if (!closed.length && !missing.length) console.log(`ok   the roadmap pages list the ${roadmap.open.size} open roadmap issues`);
 }
