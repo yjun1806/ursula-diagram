@@ -33,7 +33,14 @@ npm run test:rewrite
 bun scripts/build.ts
 ```
 
-방금 만든 `dist/`로 문서 사이트와 플레이그라운드를 띄웁니다.
+그림을 바꾸는 빌드를 했으면 README와 `assets/`에 파일로 둔 출력을 다시 그립니다. 이 출력이 빌드한 명령의 출력과 다르면
+`npm test`가 실패합니다.
+
+```bash
+npm run docs:sync
+```
+
+사이트는 빌드할 때 출력을 직접 그립니다. 방금 만든 `dist/`로 문서 사이트와 플레이그라운드를 띄웁니다.
 
 ```bash
 cd site && npm install && npm run dev

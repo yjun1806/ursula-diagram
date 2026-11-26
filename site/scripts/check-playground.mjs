@@ -12,6 +12,7 @@ import { isMermaid } from '../.vitepress/mermaid-fence.mjs';
 import { CARDS } from '../.vitepress/theme/home/agents.js';
 import { INSTALL } from '../.vitepress/theme/home/install.js';
 import { colourRows } from '../.vitepress/theme/colours/colours.mjs';
+import { checkCommands, documents } from '../../scripts/docs/commands.mjs';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -311,6 +312,31 @@ const narrow = draw(engine, text, 'text', 20);
 if (!bad.error) fail('a broken text gave no error');
 if (!narrow.error) fail('a too narrow width gave no error');
 console.log(`ok   errors: "${bad.error}" / "${narrow.error}"`);
+
+// Every command the docs and the home page name: run against the built command, or on the allow-list with a reason
+// (ALLOWED in scripts/docs/commands.mjs).
+const commands = await checkCommands();
+for (const p of commands.problems) fail(p);
+const reasons = [...new Set(commands.allowed.map((a) => a.why))];
+console.log(`ok   ${commands.ran.length - commands.problems.length} of ${commands.ran.length} commands in the docs ran with their exit code; ${commands.allowed.length} not run:`);
+for (const why of reasons) {
+  const which = [...new Set(commands.allowed.filter((a) => a.why === why).map((a) => a.command))];
+  console.log(`     ${why}: ${which.join(' | ')}`);
+}
+
+// The number of official examples the docs claim is the number on the Examples pages, and every one of them draws.
+const root = join(site, '..');
+const CLAIM = /\b(\d+) examples (?:in|of) the Mermaid documentation|\ball (\d+) examples\b|Mermaid 문서의 예(?:시|제) (\d+)개/g;
+let claims = 0;
+for (const doc of documents()) {
+  for (const m of readFileSync(join(root, doc), 'utf8').matchAll(CLAIM)) {
+    claims++;
+    const n = Number(m[1] ?? m[2] ?? m[3]);
+    if (n !== items.length) fail(`${doc} claims ${n} examples; the Examples pages have ${items.length}`);
+  }
+}
+if (refused.length || termRefused.length) fail(`the docs claim every example draws, but ${refused.length} SVG and ${termRefused.length} terminal drawings failed`);
+console.log(`ok   ${claims} claims of the number of examples in the docs say ${items.length}`);
 
 if (failed) process.exit(1);
 console.log('all playground checks passed');

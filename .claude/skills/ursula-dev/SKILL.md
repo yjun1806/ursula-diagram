@@ -27,6 +27,7 @@ Read this before changing anything in this repository. To draw a diagram, use th
 | `src/mcp/` | The MCP server and its tools. |
 | `skills/ursula/` | The product skill. `scripts/ursula.mjs` is built from `src/`; never edit it by hand. |
 | `site/` | VitePress docs and playground, English and Korean. `site/examples/official/<type>/*.mmd` are the official examples. |
+| `scripts/docs/` | What the docs show: running the built command, the texts and pictures they draw, the README outputs, the commands they name. `scripts/docs-sync.mjs` is `npm run docs:sync`. |
 | `test/` | Vitest suites; `test/golden.json` holds output hashes. |
 
 ## Setup
@@ -54,7 +55,11 @@ Bun runs the build; it need not be installed, `npx` fetches it (see "The bundled
 URSULA_UPDATE_GOLDEN=1 npx vitest run test/golden.test.ts
 ```
 
-`examples/order-flow.txt` is the terminal drawing of `examples/order-flow.mmd` at 100 columns; the site check compares them. Regenerate it with the command when that drawing changes on purpose.
+The pictures in `assets/` and `examples/` (`.svg`, `.txt`) and the terminal drawings in the READMEs are files the command draws. When a drawing changes on purpose, rebuild and redraw them; `test/docs.test.ts` fails until they match:
+
+```bash
+npm run docs:sync
+```
 
 ## Compare outputs before every engine pull request
 
@@ -80,7 +85,16 @@ cd site && npm ci && npm run build && npm run check
 
 - a code block has no copy button, or Mermaid text is not in a `mermaid` block (those wrap instead of scrolling);
 - a shell block holds more than one command or a trailing `# comment`. Say what a command is for in the sentence before it. Mark a block whose lines must run together in order with `<!-- sequence -->` in a README, or wrap it in `<div class="cmd-sequence">` on the site;
-- an English page has no Korean page, or an example fails to draw.
+- an English page has no Korean page, or an example fails to draw;
+- a command the docs name fails (the same check as `npm test`), or a page claims another number of Mermaid documentation examples than the Examples pages show.
+
+Docs never paste what the command prints; they show what it prints now:
+
+- On a site page, a fence ```` ```ursula-output <options> ```` becomes what `ursula-diagram <options>` prints at build time, for the fence's body as input or the text named by `input=` (`home`, `gallery:<id>`, `gallery-ko:<id>`, `file:<path>`; see `scripts/docs/sources.mjs`). Give `exit=N` when the output is an error. A fence ```` ```ursula-input <name> ```` shows that text. The plugin is `site/.vitepress/ursula-output.mjs`.
+- The home page's drawings and card outputs come from `site/scripts/render-home.mjs`; each card in `home/agents.js` names its commands and, for an error, its `exit`.
+- In a README, a line `<!-- ursula-output <options> -->` above a fence marks it as the output for the Mermaid fence above it. `npm run docs:sync` rewrites it.
+- Every command a page, a README or a skill names is run by `npm test` (`test/docs.test.ts`) and by the site check against the built command, and must end with 0, or with N given by an `<!-- exit N -->` line above its fence. A command that installs, needs the network or works on the checkout itself is listed in `ALLOWED` of `scripts/docs/commands.mjs` with the reason; a command that neither runs ursula nor is listed fails.
+- The same test fails when Output formats misses a `--format`, Agent skill misses an MCP tool or argument, or a page imports a name the package does not export.
 
 The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest.
 

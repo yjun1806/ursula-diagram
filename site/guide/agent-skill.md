@@ -37,7 +37,8 @@ terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.
 
 Where an agent has no shell, `ursula-diagram mcp` serves the command over MCP on standard input and output. It has
 three tools: `render` (with `format`, `width`, `charset`, `check` for the report, and `fix`), `check` (with `fix`) and
-`syntax`. With `fix: true` the result ends with the fixes and the fixed source.
+`syntax`. `render` draws `text` at a `width` of 100 unless told otherwise; its `format` is one of `text`, `text-svg`,
+`svg` and `html`. With `fix: true` the result ends with the fixes and the fixed source.
 
 In Claude Code:
 

@@ -1,5 +1,6 @@
-// The drawing on the home page: one Mermaid text and what the engine draws from it. The text drawings are the output
-// of `ursula-diagram order.mmd --format text --width <n>`, pasted unedited; the SVG is public/assets/hero.svg.
+// The drawing on the home page: one Mermaid text. scripts/render-home.mjs draws it with this checkout's command at
+// build time (the terminal drawings the page shows, and public/assets/hero.svg); SOURCE_KO is the same text with
+// Korean labels, drawn as public/assets/ko-hero-text.svg for the In a terminal page.
 
 export const SOURCE = `flowchart LR
   order([Order placed]) --> pay{Paid?}
@@ -8,35 +9,12 @@ export const SOURCE = `flowchart LR
   remind --> pay
   pick --> ship([Ship])`;
 
-export const TEXT_WIDE = { width: 80, text: `                                         ╭────────────╮   ╭────────────╮
-                                ┌─ yes ─▶│ Pick items │──▶│    Ship    │
-╭────────────╮   ╭────────────╮ │        ╰────────────╯   ╰────────────╯
-│   Order    │──▶│   Paid?    │─┤
-│   placed   │   ╰────────────╯ │        ╭────────────╮
-╰────────────╯          ▲       └─ no ──▶│    Send    │
-                        │                │  reminder  │
-                        │                ╰────────────╯
-                        │                       │
-                        └───────────────────────┘` };
+export const SOURCE_KO = `flowchart LR
+  order([주문 접수]) --> pay{결제됨?}
+  pay -->|예| pick[상품 꺼내기]
+  pay -->|아니오| remind[알림 보내기]
+  remind --> pay
+  pick --> ship([배송])`;
 
-export const TEXT_NARROW = { width: 40, text: `           ╭───────────────╮
-           │ Order placed  │
-           ╰───────────────╯
-                   │
-                   ▼
-           ╭───────────────╮
-           │     Paid?     │
-           ╰───────────────╯
-       ┌─── no ──┘▲│  yes
-       │ ┌────────┘▼
-       │ │ ╭───────────────╮
-       │ │ │  Pick items   │
-       │ │ ╰───────────────╯
-       ▼ │         │
-╭───────────────╮  │
-│ Send reminder │  │
-╰───────────────╯  │
-                   ▼
-           ╭───────────────╮
-           │     Ship      │
-           ╰───────────────╯` };
+/** The widths of the home page's terminal drawings: a wide screen and a narrow one. */
+export const WIDTHS = { wide: 80, narrow: 40 };

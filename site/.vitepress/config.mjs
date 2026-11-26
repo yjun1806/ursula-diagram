@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import { TYPES } from './examples/types.mjs';
 import { mermaidFences } from './mermaid-fence.mjs';
+import { ursulaOutputs } from './ursula-output.mjs';
 
 const repo = 'https://github.com/yjun1806/ursula-diagram';
 const base = '/ursula-diagram/';
@@ -100,7 +101,7 @@ export default defineConfig({
   base,
   cleanUrls: true,
   lastUpdated: false,
-  markdown: { config: (md) => md.use(mermaidFences) },
+  markdown: { config: (md) => md.use(mermaidFences).use(ursulaOutputs) },
   head: [
     ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}icon-32.png` }],
     ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}icon-16.png` }],

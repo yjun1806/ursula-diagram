@@ -31,6 +31,7 @@ flowchart LR
 
 <p align="center"><img src="https://raw.githubusercontent.com/yjun1806/ursula-diagram/main/assets/hero.svg" alt="The same flowchart drawn by ursula as SVG" width="640"></p>
 
+<!-- ursula-output --format text --width 80 -->
 ```
                                          ╭────────────╮   ╭────────────╮
                                 ┌─ yes ─▶│ Pick items │──▶│    Ship    │
@@ -80,7 +81,7 @@ claude mcp add ursula -- npx -y ursula-diagram mcp
 - [Examples](https://yjun1806.github.io/ursula-diagram/examples/): all 531 examples of the Mermaid documentation, as SVG and in the terminal
 - [Playground](https://yjun1806.github.io/ursula-diagram/playground): draw a text in the browser
 - [In a terminal](https://yjun1806.github.io/ursula-diagram/guide/terminal): text drawings, errors, exit codes, ASCII output
-- [Output formats](https://yjun1806.github.io/ursula-diagram/guide/output-formats): `svg`, `text`, `text-svg`, `html`, `json`, `check`
+- [Output formats](https://yjun1806.github.io/ursula-diagram/guide/output-formats): `svg`, `text`, `text-svg`, `html`, `json`, `check`, `fixed`, and every option
 - [Library](https://yjun1806.github.io/ursula-diagram/guide/library): `render`, `renderText` and the rest of the API
 - [Agent skill and MCP](https://yjun1806.github.io/ursula-diagram/guide/agent-skill): installing the skill, the MCP server and its configuration
 - [Colours](https://yjun1806.github.io/ursula-diagram/guide/colours): the CSS variables of a drawing

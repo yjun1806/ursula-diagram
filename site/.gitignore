@@ -12,3 +12,6 @@ public/example-term/
 # Drawn by scripts/render-compare.mjs
 public/compare-term/
 .vitepress/theme/compare/sizes.json
+
+# Drawn by scripts/render-home.mjs
+.vitepress/theme/home/outputs.json

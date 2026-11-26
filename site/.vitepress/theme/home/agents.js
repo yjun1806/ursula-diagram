@@ -1,50 +1,15 @@
-// The steps of the agent's loop on the home page: the commands and what they print, pasted from the command run on the
-// hero's text (order.mmd) or on the broken text shown. Only the syntax output is shortened, where '...' stands.
+// The steps of the agent's loop on the home page and their commands. scripts/render-home.mjs runs each command at build
+// time on the hero's text (order.mmd) into outputs.json, which the cards show: `exit` is the code it must end with (0
+// unless given), `run: false` marks commands that only install, and `head` and `rule` shorten a long output to its
+// first lines, '  ...', and the rule that contains `rule`, cut after its first clause.
 
 export const CARDS = [
-  {
-    id: 'check',
-    commands: ['ursula-diagram order.mmd --format svg --check > order.svg'],
-    output: 'composition lanes · bends 5 · crossings 1',
-  },
-  {
-    id: 'errors',
-    commands: ["printf 'flowchrt LR\\n A-->B\\n' | ursula-diagram --format text"],
-    output: `error: line 1: expected a 'flowchart' or 'graph' header
-  1 | flowchrt LR
-    | ^^^^^^^^
-did you mean: flowchart
-example: flowchart LR`,
-  },
-  {
-    id: 'lines',
-    commands: ['ursula-diagram order.mmd --format check'],
-    output: `composition lanes · bends 5 · crossings 1
-crossing: pay --> remind (line 4) crosses remind --> pay (line 5)
-bends: remind --> pay (line 5) 3, pay --> pick (line 3) 2`,
-  },
-  {
-    id: 'syntax',
-    commands: ['ursula-diagram syntax sequence'],
-    output: `sequenceDiagram: messages between participants over time.
-
-sequenceDiagram
-  actor U as User
-  participant A as App
-  U->>A: Tap pay
-  ...
-- A->>B: text is a call, A-->>B: text a reply; ...`,
-  },
-  {
-    id: 'everywhere',
-    commands: ['npx skills add yjun1806/ursula-diagram', 'claude mcp add ursula -- npx -y ursula-diagram mcp'],
-    output: '',
-  },
-  {
-    id: 'same',
-    commands: ['ursula-diagram order.mmd > a.svg; ursula-diagram order.mmd > b.svg; cmp a.svg b.svg && echo same'],
-    output: 'same',
-  },
+  { id: 'check', commands: ['ursula-diagram order.mmd --format svg --check > order.svg'] },
+  { id: 'errors', commands: ["printf 'flowchrt LR\\n A-->B\\n' | ursula-diagram --format text"], exit: 1 },
+  { id: 'lines', commands: ['ursula-diagram order.mmd --format check'] },
+  { id: 'syntax', commands: ['ursula-diagram syntax sequence'], head: 6, rule: 'A->>B' },
+  { id: 'everywhere', commands: ['npx skills add yjun1806/ursula-diagram', 'claude mcp add ursula -- npx -y ursula-diagram mcp'], run: false },
+  { id: 'same', commands: ['ursula-diagram order.mmd > a.svg; ursula-diagram order.mmd > b.svg; cmp a.svg b.svg && echo same'] },
 ];
 
 // Seconds and total tokens per drawing: the least and the most of 6 runs (3 texts, 2 runs each) per skill. split is
