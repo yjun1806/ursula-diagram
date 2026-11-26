@@ -1,8 +1,9 @@
 <script setup>
 // One benchmark as horizontal bars, with its conditions in one line under it.
 //
-// Usage in Markdown: <BenchmarkBars />  (reads ./benchmark.json)
-// Data: { placeholder, title: {en, ko}, conditions: {en, ko}, unit, lowerIsBetter, bars: [{ name, value, highlight }] }
+// Usage in Markdown: <BenchmarkBars name="speed" />  (reads charts.speed from ./benchmark.json)
+// Data: { charts: { [name]: { placeholder, title: {en, ko}, conditions: {en, ko}, unit, decimals, lowerIsBetter,
+//         bars: [{ name: string | {en, ko}, value, highlight }] } } }
 // While "placeholder" is true the chart renders only in the dev server, marked as placeholder, and nothing in a build,
 // so no made-up number reaches the published site.
 import { computed } from 'vue';
@@ -10,11 +11,11 @@ import { useData } from 'vitepress';
 import DATA from './benchmark.json';
 import { langOf } from '../playground/strings.js';
 
-const props = defineProps({ data: { type: Object, default: null } });
+const props = defineProps({ name: { type: String, required: true }, data: { type: Object, default: null } });
 
 const { lang } = useData();
 const code = langOf(lang.value);
-const data = computed(() => props.data ?? DATA);
+const data = computed(() => props.data ?? DATA.charts[props.name]);
 const shown = computed(() => !data.value.placeholder || import.meta.env.DEV);
 const pick = (v) => (v && typeof v === 'object' ? v[code] ?? v.en : v);
 
@@ -22,8 +23,12 @@ const max = computed(() => Math.max(1, ...data.value.bars.map((b) => b.value ?? 
 const rows = computed(() =>
   data.value.bars.map((b) => ({
     ...b,
+    name: pick(b.name),
     pct: b.value == null ? 100 : Math.max(0.5, (b.value / max.value) * 100),
-    label: b.value == null ? '—' : `${b.value.toLocaleString('en-US')} ${data.value.unit}`,
+    label:
+      b.value == null
+        ? '—'
+        : `${b.value.toLocaleString('en-US', { minimumFractionDigits: data.value.decimals ?? 0, maximumFractionDigits: data.value.decimals ?? 3 })} ${data.value.unit}`,
   })),
 );
 </script>
@@ -76,10 +81,23 @@ const rows = computed(() =>
 }
 .bb-row {
   display: grid;
-  grid-template-columns: minmax(80px, 9rem) minmax(0, 1fr) minmax(64px, auto);
+  grid-template-columns: minmax(80px, 14rem) minmax(0, 1fr) minmax(64px, auto);
   gap: 12px;
   align-items: center;
   font-size: 14px;
+}
+/* On a phone the name goes above its bar, so the bar keeps the width. */
+@media (max-width: 639px) {
+  .bb {
+    padding: 16px;
+  }
+  .bb-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+  }
+  .bb-name {
+    grid-column: 1 / -1;
+  }
 }
 .bb-name {
   color: var(--vp-c-text-1);

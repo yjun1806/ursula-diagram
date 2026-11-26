@@ -1,15 +1,151 @@
 {
-  "placeholder": true,
-  "title": { "en": "PLACEHOLDER: time to draw one diagram", "ko": "PLACEHOLDER: 그림 한 장을 그리는 시간" },
-  "conditions": {
-    "en": "PLACEHOLDER: one line naming the input, the machine, the versions and how many runs the median is taken over.",
-    "ko": "PLACEHOLDER: 입력, 기계, 버전, 중앙값을 낸 실행 횟수를 한 줄로 적는다."
-  },
-  "unit": "ms",
-  "lowerIsBetter": true,
-  "bars": [
-    { "name": "ursula", "value": null, "highlight": true },
-    { "name": "Tool B", "value": null },
-    { "name": "Tool C", "value": null }
-  ]
+  "charts": {
+    "skill": {
+      "title": {
+        "en": "Seconds per drawing, from the request to the saved file",
+        "ko": "그림 한 장에 걸린 초, 요청부터 파일 저장까지"
+      },
+      "conditions": {
+        "en": "Three drawings, each made twice per skill by a fresh headless Claude Code session: Claude Opus 5.5, the same prompt, only the named skill installed, no MCP servers, the same five tools. Mean of the two runs. 2026-11-26.",
+        "ko": "그림 세 장을 스킬마다 두 번씩, 매번 새로 띄운 headless Claude Code 세션이 그렸습니다. Claude Opus 5.5, 같은 지시문, 시험하는 스킬 하나만 설치, MCP 서버 없음, 같은 도구 다섯 개. 두 번의 평균입니다. 2026-11-26."
+      },
+      "unit": "s",
+      "lowerIsBetter": true,
+      "bars": [
+        {
+          "name": {
+            "en": "Flowchart · diagram-design",
+            "ko": "flowchart · diagram-design"
+          },
+          "value": 71
+        },
+        {
+          "name": {
+            "en": "Flowchart · ursula",
+            "ko": "flowchart · ursula"
+          },
+          "value": 15,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "C4 · diagram-design",
+            "ko": "C4 · diagram-design"
+          },
+          "value": 164
+        },
+        {
+          "name": {
+            "en": "C4 · ursula",
+            "ko": "C4 · ursula"
+          },
+          "value": 18,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "Sequence · diagram-design",
+            "ko": "sequence · diagram-design"
+          },
+          "value": 152
+        },
+        {
+          "name": {
+            "en": "Sequence · ursula",
+            "ko": "sequence · ursula"
+          },
+          "value": 12,
+          "highlight": true
+        }
+      ],
+      "decimals": 0
+    },
+    "speed": {
+      "title": {
+        "en": "Milliseconds per flowchart, one command per drawing",
+        "ko": "flowchart 한 장에 걸린 ms, 그림마다 명령 한 번"
+      },
+      "conditions": {
+        "en": "The 103 flowchart examples from the Mermaid documentation that every tool draws. A new process per drawing, median of 3 runs per file, then the median over files. Apple M2 Max, macOS 26.6, Node 26.12.1, 2026-11-26. An empty Node script takes 59 ms on the same machine. * No command of its own: timed through a ten-line Node script that calls the library.",
+        "ko": "모든 도구가 그리는 Mermaid 문서의 flowchart 예시 103개입니다. 그림마다 프로세스를 새로 띄워 파일마다 3번 잰 중앙값을 구하고, 다시 파일 전체의 중앙값을 냈습니다. Apple M2 Max, macOS 26.6, Node 26.12.1, 2026-11-26. 같은 기계에서 빈 Node 스크립트가 59ms 걸립니다. * 자체 명령이 없어 라이브러리를 부르는 열 줄짜리 Node 스크립트로 쟀습니다."
+      },
+      "unit": "ms",
+      "lowerIsBetter": true,
+      "bars": [
+        {
+          "name": {
+            "en": "mmdflux (SVG)",
+            "ko": "mmdflux (SVG)"
+          },
+          "value": 9.0
+        },
+        {
+          "name": {
+            "en": "mermaid-ascii (text)",
+            "ko": "mermaid-ascii (글자)"
+          },
+          "value": 9.2
+        },
+        {
+          "name": {
+            "en": "mmdflux (text)",
+            "ko": "mmdflux (글자)"
+          },
+          "value": 10.9
+        },
+        {
+          "name": {
+            "en": "termaid (text)",
+            "ko": "termaid (글자)"
+          },
+          "value": 69.0
+        },
+        {
+          "name": {
+            "en": "Pele* (SVG)",
+            "ko": "Pele* (SVG)"
+          },
+          "value": 84.7
+        },
+        {
+          "name": {
+            "en": "ursula (SVG)",
+            "ko": "ursula (SVG)"
+          },
+          "value": 102.9,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "ursula (text)",
+            "ko": "ursula (글자)"
+          },
+          "value": 103.9,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "beautiful-mermaid* (text)",
+            "ko": "beautiful-mermaid* (글자)"
+          },
+          "value": 108.0
+        },
+        {
+          "name": {
+            "en": "beautiful-mermaid* (SVG)",
+            "ko": "beautiful-mermaid* (SVG)"
+          },
+          "value": 163.4
+        },
+        {
+          "name": {
+            "en": "mermaid-cli (SVG)",
+            "ko": "mermaid-cli (SVG)"
+          },
+          "value": 629.9
+        }
+      ],
+      "decimals": 1
+    }
+  }
 }

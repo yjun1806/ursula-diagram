@@ -1,12 +1,478 @@
 {
-  "placeholder": true,
-  "tools": ["ursula", "Tool B", "Tool C"],
-  "rows": [
-    { "feature": { "en": "PLACEHOLDER feature A", "ko": "PLACEHOLDER 기능 A" }, "values": [null, null, null] },
-    { "feature": { "en": "PLACEHOLDER feature B", "ko": "PLACEHOLDER 기능 B" }, "values": [null, null, null] }
-  ],
-  "note": {
-    "en": "PLACEHOLDER: what was checked and with which versions.",
-    "ko": "PLACEHOLDER: 무엇을 어떤 버전으로 확인했는지."
+  "tables": {
+    "skill": {
+      "columns": [
+        {
+          "en": "Drawing",
+          "ko": "그림"
+        },
+        {
+          "en": "diagram-design, s",
+          "ko": "diagram-design 초"
+        },
+        {
+          "en": "ursula, s",
+          "ko": "ursula 초"
+        },
+        {
+          "en": "diagram-design, tokens",
+          "ko": "diagram-design 토큰"
+        },
+        {
+          "en": "ursula, tokens",
+          "ko": "ursula 토큰"
+        }
+      ],
+      "rows": [
+        {
+          "name": {
+            "en": "Flowchart, 9 nodes",
+            "ko": "flowchart, 노드 9"
+          },
+          "values": [
+            71,
+            15,
+            "387k",
+            "63k"
+          ]
+        },
+        {
+          "name": {
+            "en": "C4, 7 elements",
+            "ko": "C4, 요소 7"
+          },
+          "values": [
+            164,
+            18,
+            "525k",
+            "55k"
+          ]
+        },
+        {
+          "name": {
+            "en": "Sequence, 10 messages",
+            "ko": "sequence, 메시지 10"
+          },
+          "values": [
+            152,
+            12,
+            "529k",
+            "38k"
+          ]
+        }
+      ],
+      "note": {
+        "en": "Mean of two runs per skill. Tokens are the total of input, output and cache, which Claude Code resends every turn; the output tokens alone were 7.6k–18.4k for diagram-design and 0.9k–1.7k for ursula. diagram-design took 11–12.5 turns per drawing, ursula 4–6.",
+        "ko": "스킬마다 두 번의 평균입니다. 토큰은 입력·출력·캐시를 더한 값이고, 캐시는 Claude Code가 턴마다 다시 보냅니다. 출력 토큰만 보면 diagram-design이 7.6k~18.4k, ursula가 0.9k~1.7k입니다. 턴은 diagram-design이 그림 한 장에 11~12.5, ursula가 4~6입니다."
+      }
+    },
+    "coverage": {
+      "columns": [
+        {
+          "en": "Tool",
+          "ko": "도구"
+        },
+        {
+          "en": "As SVG",
+          "ko": "SVG"
+        },
+        {
+          "en": "In a terminal",
+          "ko": "터미널"
+        },
+        {
+          "en": "Types of 35",
+          "ko": "유형(35개 중)"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            531,
+            531,
+            35
+          ],
+          "highlight": true
+        },
+        {
+          "name": "mermaid-cli",
+          "values": [
+            531,
+            false,
+            35
+          ]
+        },
+        {
+          "name": {
+            "en": "Mermaid in a browser¹",
+            "ko": "브라우저의 Mermaid¹"
+          },
+          "values": [
+            515,
+            false,
+            34
+          ]
+        },
+        {
+          "name": "Pele",
+          "values": [
+            515,
+            false,
+            34
+          ]
+        },
+        {
+          "name": "termaid",
+          "values": [
+            false,
+            366,
+            18
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            226,
+            225,
+            6
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            206,
+            205,
+            4
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            false,
+            160,
+            3
+          ]
+        }
+      ],
+      "note": {
+        "en": "Out of the 531 examples in the Mermaid documentation. An example counts as drawn when the command exits 0 and writes something; whether the picture is right is not judged. Terminal text at 100 columns where the tool has a width option. ¹ Mermaid 12.3.0 in headless Chrome without the ZenUML plugin that mermaid-cli bundles, on 2026-11-12; Pele also skips the 16 ZenUML examples.",
+        "ko": "Mermaid 문서의 예시 531개 가운데 그린 수입니다. 명령이 0으로 끝나고 무언가를 출력하면 그린 것으로 셉니다. 그림이 맞는지는 판정하지 않았습니다. 터미널 글은 폭 옵션이 있는 도구에 모두 100칸을 줬습니다. ¹ 2026-11-12에 헤드리스 Chrome에서 Mermaid 12.3.0으로 그렸고, mermaid-cli에 들어 있는 ZenUML 플러그인은 없습니다. Pele도 ZenUML 예시 16개를 그리지 않습니다."
+      }
+    },
+    "inProcess": {
+      "columns": [
+        {
+          "en": "Library",
+          "ko": "라이브러리"
+        },
+        {
+          "en": "SVG, ms",
+          "ko": "SVG ms"
+        },
+        {
+          "en": "Text, ms",
+          "ko": "글자 ms"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            0.615,
+            0.596
+          ],
+          "highlight": true
+        },
+        {
+          "name": "Pele",
+          "values": [
+            0.015,
+            false
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            0.34,
+            0.009
+          ]
+        }
+      ],
+      "note": {
+        "en": "The same 103 flowcharts inside one Node process after a warm-up pass: median of 10 calls per file, then the median over files. — means the library has no such output.",
+        "ko": "같은 flowchart 103개를 Node 프로세스 하나 안에서 한 번 예열한 뒤 쟀습니다. 파일마다 10번 부른 중앙값을 구하고, 다시 파일 전체의 중앙값을 냈습니다. —는 그 출력이 없다는 뜻입니다."
+      }
+    },
+    "wide": {
+      "columns": [
+        {
+          "en": "Tool",
+          "ko": "도구"
+        },
+        {
+          "en": "Korean drawn",
+          "ko": "그린 한글 그림"
+        },
+        {
+          "en": "Korean that break",
+          "ko": "어긋난 한글 그림"
+        },
+        {
+          "en": "Emoji: extra breaks",
+          "ko": "이모지: 늘어난 끊김"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            13,
+            0,
+            18
+          ],
+          "highlight": true
+        },
+        {
+          "name": "termaid",
+          "values": [
+            13,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            10,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            11,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            13,
+            13,
+            16
+          ]
+        }
+      ],
+      "note": {
+        "en": "13 Korean drawings in the terminal, each against the same drawing in English. A break is a vertical stroke, corner or arrowhead with nothing to meet above or below, counted in terminal cells; a Korean drawing breaks when it has more of them than its English twin. mermaid-ascii refused 3 of the Korean drawings and mmdflux 2. mmdflux’s one break is a label written over a line. The emoji column counts the extra breaks in one drawing with emoji labels.",
+        "ko": "터미널에 그린 한글 그림 13장을 같은 내용의 영문 그림과 견줬습니다. 끊김은 위나 아래에 이어질 칸이 없는 세로선·모서리·화살촉이고, 터미널 칸으로 셉니다. 한글 그림의 끊김이 영문 그림보다 많으면 어긋난 것으로 셉니다. mermaid-ascii는 한글 그림 3장, mmdflux는 2장을 거절했습니다. mmdflux의 1장은 라벨이 선 위에 쓰인 경우입니다. 이모지 열은 라벨에 이모지가 든 그림 한 장에서 늘어난 끊김 수입니다."
+      }
+    },
+    "outputs": {
+      "columns": [
+        {
+          "en": "Tool",
+          "ko": "도구"
+        },
+        "SVG",
+        {
+          "en": "Terminal text",
+          "ko": "터미널 글"
+        },
+        "PNG",
+        {
+          "en": "No browser",
+          "ko": "브라우저 없이"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            true,
+            true,
+            {
+              "en": "page only¹",
+              "ko": "페이지에서만¹"
+            },
+            true
+          ],
+          "highlight": true
+        },
+        {
+          "name": "mermaid-cli",
+          "values": [
+            true,
+            false,
+            true,
+            false
+          ]
+        },
+        {
+          "name": {
+            "en": "Mermaid in a browser",
+            "ko": "브라우저의 Mermaid"
+          },
+          "values": [
+            true,
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "name": "Pele",
+          "values": [
+            true,
+            false,
+            false,
+            true
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            true,
+            true,
+            false,
+            true
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            true,
+            true,
+            false,
+            true
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        },
+        {
+          "name": "termaid",
+          "values": [
+            false,
+            true,
+            false,
+            true
+          ]
+        }
+      ],
+      "note": {
+        "en": "¹ The command does not write PNG; the one-file page from --format html has a button that saves one.",
+        "ko": "¹ 명령은 PNG를 쓰지 않습니다. --format html로 만든 한 파일 페이지의 버튼으로 PNG를 저장합니다."
+      }
+    },
+    "runtime": {
+      "columns": [
+        {
+          "en": "Tool",
+          "ko": "도구"
+        },
+        {
+          "en": "Runs on",
+          "ko": "실행 환경"
+        },
+        {
+          "en": "Runtime dependencies",
+          "ko": "실행 의존성"
+        }
+      ],
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            "Node 22+",
+            0
+          ],
+          "highlight": true
+        },
+        {
+          "name": "mermaid-cli",
+          "values": [
+            {
+              "en": "Node 22.13+ and Chromium",
+              "ko": "Node 22.13+와 Chromium"
+            },
+            {
+              "en": "10 + Puppeteer",
+              "ko": "10 + Puppeteer"
+            }
+          ]
+        },
+        {
+          "name": {
+            "en": "Mermaid in a browser",
+            "ko": "브라우저의 Mermaid"
+          },
+          "values": [
+            {
+              "en": "A browser",
+              "ko": "브라우저"
+            },
+            22
+          ]
+        },
+        {
+          "name": "Pele",
+          "values": [
+            {
+              "en": "Node 20+ or a browser",
+              "ko": "Node 20+ 또는 브라우저"
+            },
+            0
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            "Node",
+            2
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            {
+              "en": "One binary (Rust)",
+              "ko": "실행 파일 하나(Rust)"
+            },
+            0
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            {
+              "en": "One binary (Go)",
+              "ko": "실행 파일 하나(Go)"
+            },
+            0
+          ]
+        },
+        {
+          "name": "termaid",
+          "values": [
+            "Python",
+            0
+          ]
+        }
+      ],
+      "note": {
+        "en": "Direct dependencies from npm view <package> dependencies (pip show for termaid). Installing mermaid-cli brings 192 packages.",
+        "ko": "직접 의존성은 npm view <패키지> dependencies로 셌습니다(termaid는 pip show). mermaid-cli를 설치하면 패키지 192개가 들어옵니다."
+      }
+    }
   }
 }
