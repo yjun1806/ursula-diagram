@@ -1,6 +1,7 @@
 import { cellRuler, cellWidth } from '../metrics.ts';
 import { E, HEAVY, N, S, W } from '../text/lines.ts';
 import { joinSpans, sliceSpans, spansOf, trimEndSpans } from '../text/terminal.ts';
+import { Canvas } from '../text/canvas.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, TextSpan, TextTone } from '../types.ts';
 import { layoutBlock } from './layout.ts';
@@ -12,39 +13,15 @@ const LIGHT: Record<number, string> = {
   [N | S | E]: '├', [N | S | W]: '┤', [E | W | S]: '┬', [E | W | N]: '┴', [N | E | S | W]: '┼',
 };
 
-/** A grid of terminal cells, each with a tone; a wide character takes two and leaves an empty string in the second. */
-class Canvas {
-  readonly rows: string[][];
-  readonly tones: TextTone[][];
-  readonly width: number;
-
+/** The renderer's canvas with a tone in every cell, and the rows as block drawings give them out. */
+class BlockCanvas extends Canvas {
   constructor(width: number, height: number) {
-    this.width = width;
-    this.rows = Array.from({ length: height }, () => new Array<string>(width).fill(' '));
-    this.tones = Array.from({ length: height }, () => new Array<TextTone>(width).fill('normal'));
-  }
-
-  put(x: number, y: number, ch: string, tone: TextTone = 'normal'): void {
-    const row = this.rows[y];
-    const tones = this.tones[y];
-    if (row === undefined || tones === undefined || x < 0 || x >= this.width) return;
-    row[x] = ch;
-    tones[x] = tone;
-  }
-
-  text(x: number, y: number, s: string, tone: TextTone = 'normal'): void {
-    let at = x;
-    for (const ch of s) {
-      const w = cellWidth(ch);
-      this.put(at, y, ch, tone);
-      if (w === 2) this.put(at + 1, y, '', tone);
-      at += w;
-    }
+    super(width, height, true);
   }
 
   /** The rows without trailing blanks, and without the blank rows above and the blank columns left of the drawing. */
-  lines(): TextSpan[][] {
-    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones[y]?.[x] ?? 'normal'] as const))));
+  trimmed(): TextSpan[][] {
+    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones?.[y]?.[x] ?? 'normal'] as const))));
     while (out.length > 0 && out[out.length - 1]?.length === 0) out.pop();
     while (out.length > 0 && out[0]?.length === 0) out.shift();
     const texts = out.map(joinSpans);
@@ -231,13 +208,13 @@ function drawChips(c: Canvas, links: readonly PlacedLink[]): void {
 }
 
 function render(layout: BlockLayout): TextSpan[][] {
-  const c = new Canvas(layout.width, layout.height);
+  const c = new BlockCanvas(layout.width, layout.height);
   const byId = new Map(layout.blocks.map((b) => [b.id, b] as const));
   for (const g of layout.blocks.filter((b) => b.kind === 'group')) drawFrame(c, g, glyphsOf(g), true);
   drawLinks(c, layout.links, byId);
   for (const b of layout.blocks.filter((n) => n.kind === 'node')) drawBlock(c, b);
   drawChips(c, layout.links);
-  return c.lines();
+  return c.trimmed();
 }
 
 /**

@@ -13895,6 +13895,101 @@ function closeSpareRows(given, keeps = () => true) {
   return l;
 }
 
+// src/text/canvas.ts
+class Canvas {
+  rows;
+  tones;
+  width;
+  height;
+  tone = "normal";
+  constructor(width, height, toned = false) {
+    this.width = width;
+    this.height = height;
+    this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
+    this.tones = toned ? Array.from({ length: height }, () => new Array(width).fill("normal")) : undefined;
+  }
+  widen(width) {
+    if (width <= this.width)
+      return;
+    for (const row of this.rows)
+      while (row.length < width)
+        row.push(" ");
+    for (const row of this.tones ?? [])
+      while (row.length < width)
+        row.push("normal");
+    this.width = width;
+  }
+  put(x, y, ch, tone = this.tone) {
+    const row = this.rows[y];
+    if (!row || x < 0 || x >= this.width)
+      return;
+    const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
+    if (wide && x + 1 >= this.width)
+      return;
+    if (row[x] === "" && x > 0)
+      row[x - 1] = " ";
+    if (row[x + 1] === "" && !wide)
+      row[x + 1] = " ";
+    if (wide) {
+      if (row[x + 1] === "" && x + 2 < this.width)
+        row[x + 2] = row[x + 2] === "" ? " " : row[x + 2] ?? " ";
+      if (row[x + 2] === "")
+        row[x + 2] = " ";
+      row[x + 1] = "";
+    }
+    row[x] = ch;
+    const tones = this.tones?.[y];
+    if (tones !== undefined)
+      tones[x] = tone;
+  }
+  get(x, y) {
+    return this.rows[y]?.[x] ?? " ";
+  }
+  text(x, y, s, tone = this.tone) {
+    let cx = x;
+    for (const ch of s) {
+      this.put(cx, y, ch, tone);
+      cx += cellWidthOf(ch.codePointAt(0) ?? 0);
+    }
+  }
+  lines() {
+    return this.rows.map((r) => r.join("").trimEnd());
+  }
+  spans() {
+    return this.rows.map((row, y) => {
+      const text = row.join("").trimEnd();
+      const tones = this.tones?.[y] ?? [];
+      const out = [];
+      let at = 0;
+      const toneAt = (x) => {
+        if (row[x] !== " ")
+          return tones[x] ?? "normal";
+        let l = x - 1;
+        while (l >= 0 && (row[l] === " " || row[l] === ""))
+          l--;
+        let r = x + 1;
+        while (r < row.length && (row[r] === " " || row[r] === ""))
+          r++;
+        const left = l >= 0 ? tones[l] : undefined;
+        return left !== undefined && left === tones[r] && r < row.length ? left : "normal";
+      };
+      for (let x = 0;x < row.length && at < text.length; x++) {
+        const ch = row[x] ?? "";
+        if (ch === "")
+          continue;
+        at += ch.length;
+        const tone = toneAt(x);
+        const last = out[out.length - 1];
+        if (last !== undefined && last.tone === tone)
+          out[out.length - 1] = { text: last.text + ch, tone };
+        else
+          out.push({ text: ch, tone });
+      }
+      return out;
+    });
+  }
+}
+
 // src/text/corners.ts
 var ROUND2 = ["╭", "╮", "╰", "╯"];
 var NOTE = ["┌", "┒", "└", "┘"];
@@ -14014,100 +14109,6 @@ var LIGHT = {
   [N | E | S | W]: "┼"
 };
 var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
-
-class Canvas {
-  rows;
-  tones;
-  width;
-  height;
-  tone = "normal";
-  constructor(width, height, toned = false) {
-    this.width = width;
-    this.height = height;
-    this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
-    this.tones = toned ? Array.from({ length: height }, () => new Array(width).fill("normal")) : undefined;
-  }
-  widen(width) {
-    if (width <= this.width)
-      return;
-    for (const row of this.rows)
-      while (row.length < width)
-        row.push(" ");
-    for (const row of this.tones ?? [])
-      while (row.length < width)
-        row.push("normal");
-    this.width = width;
-  }
-  put(x, y, ch, tone = this.tone) {
-    const row = this.rows[y];
-    if (!row || x < 0 || x >= this.width)
-      return;
-    const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
-    if (wide && x + 1 >= this.width)
-      return;
-    if (row[x] === "" && x > 0)
-      row[x - 1] = " ";
-    if (row[x + 1] === "" && !wide)
-      row[x + 1] = " ";
-    if (wide) {
-      if (row[x + 1] === "" && x + 2 < this.width)
-        row[x + 2] = row[x + 2] === "" ? " " : row[x + 2] ?? " ";
-      if (row[x + 2] === "")
-        row[x + 2] = " ";
-      row[x + 1] = "";
-    }
-    row[x] = ch;
-    const tones = this.tones?.[y];
-    if (tones !== undefined)
-      tones[x] = tone;
-  }
-  get(x, y) {
-    return this.rows[y]?.[x] ?? " ";
-  }
-  text(x, y, s, tone = this.tone) {
-    let cx = x;
-    for (const ch of s) {
-      this.put(cx, y, ch, tone);
-      cx += cellWidthOf(ch.codePointAt(0) ?? 0);
-    }
-  }
-  lines() {
-    return this.rows.map((r) => r.join("").trimEnd());
-  }
-  spans() {
-    return this.rows.map((row, y) => {
-      const text = row.join("").trimEnd();
-      const tones = this.tones?.[y] ?? [];
-      const out = [];
-      let at = 0;
-      const toneAt = (x) => {
-        if (row[x] !== " ")
-          return tones[x] ?? "normal";
-        let l = x - 1;
-        while (l >= 0 && (row[l] === " " || row[l] === ""))
-          l--;
-        let r = x + 1;
-        while (r < row.length && (row[r] === " " || row[r] === ""))
-          r++;
-        const left = l >= 0 ? tones[l] : undefined;
-        return left !== undefined && left === tones[r] && r < row.length ? left : "normal";
-      };
-      for (let x = 0;x < row.length && at < text.length; x++) {
-        const ch = row[x] ?? "";
-        if (ch === "")
-          continue;
-        at += ch.length;
-        const tone = toneAt(x);
-        const last = out[out.length - 1];
-        if (last !== undefined && last.tone === tone)
-          out[out.length - 1] = { text: last.text + ch, tone };
-        else
-          out.push({ text: ch, tone });
-      }
-      return out;
-    });
-  }
-}
 function drawLanes2(c, layout) {
   const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
   for (const lane of layout.lanes) {
@@ -26667,35 +26668,12 @@ var LIGHT2 = {
   [N | E | S | W]: "┼"
 };
 
-class Canvas2 {
-  rows;
-  tones;
-  width;
+class BlockCanvas extends Canvas {
   constructor(width, height) {
-    this.width = width;
-    this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
-    this.tones = Array.from({ length: height }, () => new Array(width).fill("normal"));
+    super(width, height, true);
   }
-  put(x, y, ch, tone = "normal") {
-    const row = this.rows[y];
-    const tones = this.tones[y];
-    if (row === undefined || tones === undefined || x < 0 || x >= this.width)
-      return;
-    row[x] = ch;
-    tones[x] = tone;
-  }
-  text(x, y, s, tone = "normal") {
-    let at = x;
-    for (const ch of s) {
-      const w = cellWidth(ch);
-      this.put(at, y, ch, tone);
-      if (w === 2)
-        this.put(at + 1, y, "", tone);
-      at += w;
-    }
-  }
-  lines() {
-    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones[y]?.[x] ?? "normal"]))));
+  trimmed() {
+    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones?.[y]?.[x] ?? "normal"]))));
     while (out.length > 0 && out[out.length - 1]?.length === 0)
       out.pop();
     while (out.length > 0 && out[0]?.length === 0)
@@ -26875,7 +26853,7 @@ function drawChips(c, links) {
   }
 }
 function render(layout) {
-  const c = new Canvas2(layout.width, layout.height);
+  const c = new BlockCanvas(layout.width, layout.height);
   const byId = new Map(layout.blocks.map((b) => [b.id, b]));
   for (const g of layout.blocks.filter((b) => b.kind === "group"))
     drawFrame(c, g, glyphsOf(g), true);
@@ -26883,7 +26861,7 @@ function render(layout) {
   for (const b of layout.blocks.filter((n) => n.kind === "node"))
     drawBlock(c, b);
   drawChips(c, layout.links);
-  return c.lines();
+  return c.trimmed();
 }
 function tonesAlong(whole) {
   const blank = (ch) => /\s/u.test(ch);

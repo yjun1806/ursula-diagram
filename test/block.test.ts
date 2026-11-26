@@ -4,7 +4,7 @@ import { render, renderText, selectFrontEnd, UrsulaError } from '../src/index.ts
 import { layoutBlock } from '../src/block/layout.ts';
 import { parseBlock } from '../src/block/parse.ts';
 import type { BlockGroup, BlockNode } from '../src/block/model.ts';
-import { cellRuler, pixelRuler } from '../src/metrics.ts';
+import { cellRuler, cellWidth, pixelRuler } from '../src/metrics.ts';
 import type { Scene, SceneBox, SceneLine, SceneText } from '../src/types.ts';
 
 const EXAMPLES: Array<[string, string]> = [
@@ -558,5 +558,28 @@ describe('block cylinder front arc', () => {
   it('draws the arc as a hairline, since a rule has the colour of the box fill', () => {
     const arc = arcOf(layoutBlock(parseBlock('block-beta\n  db[("Database")]'), ruler).scene);
     expect(arc?.kind === 'path' ? arc.role : undefined).toEqual(['rule', 'rule--in-zone']);
+  });
+});
+
+describe('block terminal drawing with wide characters', () => {
+  // Two Korean labels on one line overlap; writing the second over half of a wide character of the first must clear the
+  // other half, or every cell after it shifts one column to the right.
+  const src = [
+    'block-beta',
+    '  columns 4',
+    '  a["가"] b["나"] c["다"] d["라"]',
+    '  a -- "한글라벨하나" --> d',
+    '  b -- "한글라벨둘" --> d',
+    '  c -- "셋" --> a',
+  ].join('\n');
+  const columnOf = (line: string, ch: string): number => cellWidth(line.slice(0, line.indexOf(ch)));
+
+  it('keeps the corner above the arrowhead it leads to when labels overlap', () => {
+    const drawn = renderText(src, 80);
+    if (!('lines' in drawn)) throw new Error(drawn.error);
+    const [top = '', below = ''] = drawn.lines;
+    expect(top).toContain('╮');
+    expect(below).toContain('▼');
+    expect(columnOf(top, '╮')).toBe(columnOf(below, '▼'));
   });
 });
