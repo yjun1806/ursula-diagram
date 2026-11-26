@@ -9,7 +9,7 @@ import { join as join3 } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // src/version.ts
-var VERSION = "0.2.1";
+var VERSION = "0.2.2";
 
 // src/render/colors.ts
 var COLORS = {
