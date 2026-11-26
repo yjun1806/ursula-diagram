@@ -1,30 +1,133 @@
 # Why ursula
 
-An agent that wants to show a diagram usually takes one of two roads.
+ursula is built for a situation where the four statements below hold. Check them against your own case first.
 
-- **A drawing skill.** The model plans the layout itself, writes the coordinates or a script that computes them,
-  checks the result and plans again. The pictures can look hand-made, with zones, a legend and emphasis chosen for
-  each one. But every round of planning and checking is another model turn, so one drawing takes many turns and many
-  tokens, and the same request can come out different the next time.
-- **Mermaid as it is.** The model writes Mermaid text and Mermaid draws it. This is fast and cheap for the model,
-  but Mermaid draws in a browser (or, from the command line, in a headless Chromium), the model cannot see what the
-  layout came out like, and in a terminal the reader sees only the source text.
+1. An agent, not a person, writes the diagram: as part of an answer, often several in one session.
+2. Nobody fixes it by hand: if the text is wrong, the agent has to notice and fix it alone.
+3. There may be no browser: a terminal, CI, a sandbox or a server without Chromium.
+4. The same answer is read in more than one place: a terminal, a chat window, a web page, a README.
 
-ursula sits between the two. The model writes Mermaid only, never a coordinate: the official examples have a
-median of 154 bytes of text, and the order flowchart on the [home page](/) is 315. The engine does the layout, with no model in the
-loop, so the same text gives the same drawing. One engine draws both an SVG and a drawing in terminal cells, so the
-picture also shows up where an agent actually answers: in the terminal.
+If these hold for you, the four things in the table matter more than anything else. The numbers were measured under
+the [conditions](#conditions) at the end of the page.
 
-Measured on an Apple M2 Max with Node 26, over the 531 examples in the Mermaid documentation, each drawn five
-times (the last two rows: one flowchart, six runs of the command each):
-
-| | Median | Slowest |
+| Premise | What ursula does | Measured |
 | --- | --- | --- |
-| SVG, from the library | 0.36 ms | 79.6 ms |
-| Terminal text at width 100, from the library | 0.29 ms | 46.3 ms |
-| One run of the command, order flowchart, `--format text` | 0.15 s | |
-| One run of the command, order flowchart, `--format svg` | 0.35 s | |
+| The agent draws several pictures a session | The model writes Mermaid only; the engine computes the layout | 12–18 s a drawing, against 65–174 s for a skill that has the model lay it out. Two runs give byte-identical SVGs |
+| The agent fixes it alone | An error names the place, the word likely meant and a correct example line. The check names crossing lines by their source line | In 93 deliberately broken texts, replacing the line with the error's example drew all 93. `--fix` draws 50 of them with no extra turn |
+| There may be no browser | It runs on Node alone | 0 runtime dependencies. 103 ms per run of the command |
+| It is read in several places | One engine draws an SVG, a terminal drawing and that drawing as an SVG (`text-svg`). Clients without a shell get it over MCP | All 531 examples in the Mermaid documentation, as SVG and as terminal text (35 types) |
 
-A run of the command is mostly the start of Node and the reading of the one-file bundle (1.56 MB).
-In place of the model looking at its own picture, `--format check` prints the count of bends and crossings and,
-sometimes, a question about the text. The agent skill answers the questions once and then draws; it does not loop.
+The other way round: if a person polishes one important picture by hand, or Mermaid in a browser already serves you
+well, you may not need ursula. [When ursula is not the right tool](#when-ursula-is-not-the-right-tool) gives the
+numbers.
+
+## When the model lays out the drawing
+
+Some drawing skills have the model plan the layout itself.
+[diagram-design](https://github.com/cathrynlavery/diagram-design) has the model choose the layout and write the SVG.
+We drew the same three Mermaid texts twice with that skill and twice with the ursula skill. Each cell is first run /
+second run.
+
+| Drawing | Skill | Seconds | Tokens the model wrote | Total tokens | Turns |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Flowchart, 9 nodes | diagram-design | 65 / 78 | 6.7k / 8.5k | 330k / 443k | 10 / 12 |
+| | ursula | 15 / 14 | 1.1k / 0.9k | 64k / 63k | 6 / 6 |
+| C4, 7 elements | diagram-design | 154 / 174 | 15.4k / 17.7k | 379k / 672k | 11 / 14 |
+| | ursula | 18 / 17 | 1.7k / 1.7k | 55k / 55k | 5 / 5 |
+| Sequence, 10 messages | diagram-design | 161 / 144 | 18.8k / 17.9k | 666k / 392k | 14 / 10 |
+| | ursula | 12 / 12 | 0.9k / 1.0k | 38k / 38k | 4 / 4 |
+
+The total includes each skill's own instructions and the conversation that is sent again on every turn. What the
+model actually wrote is the column of output tokens. Most of the time went to the model's turns; one run of the
+ursula command takes about 0.1 s.
+
+diagram-design drew the same text differently from run to run. The flowchart came out as horizontal lanes the first
+time and as zone boxes the second. Its title ("Order fulfilment flow") and legend ("Paid handoff to warehouse") are
+words the model made up; they are not in the input. The ursula skill gave byte-identical SVGs in both runs for all
+three texts.
+
+<div class="compare-pics compare-pics-large">
+  <figure><figcaption>diagram-design, first run</figcaption><div><img src="/skill-compare/order-flow-diagram-design.png" alt="Flowchart drawn by diagram-design" loading="lazy"></div></figure>
+  <figure><figcaption>ursula, first and second run</figcaption><div><img src="/skill-compare/order-flow-ursula.svg" alt="Flowchart drawn by ursula" loading="lazy"></div></figure>
+</div>
+
+diagram-design's picture is the better designed: the model chose a node to emphasise and added a legend. ursula's
+is plainer, but no node, edge or label is missing, and it is the same every time.
+
+This table is the cost of having the model lay out the drawing. If the model writes Mermaid and Mermaid.js draws it,
+we expect the turns to drop about as far as with ursula (not measured). The next section is about that case.
+
+## When Mermaid.js draws it
+
+If the model writes Mermaid and Mermaid.js draws it, the model takes few turns. The differences from ursula are where
+it can draw and what its errors say.
+
+**Where it draws.** Mermaid.js needs a DOM. On the command line, mermaid-cli downloads Chromium when it is installed
+and starts a headless Chromium for every drawing: 630 ms each. ursula runs on Node alone, 103 ms per run of the
+command. Mermaid.js also gives only an SVG, so an agent answering in a terminal can show only the Mermaid source.
+ursula draws the same text as a terminal drawing too.
+
+**Errors.** Mermaid also tells you where it failed. ursula also tells you what to write there. Given a text whose
+first line is `flowchrt LR`, `mermaid.parse` in Mermaid 12.3.0 answers:
+
+```
+No diagram type detected matching given configuration for text: flowchrt LR
+```
+
+ursula answers:
+
+```
+error: line 1: expected a 'flowchart' or 'graph' header
+  1 | flowchrt LR
+    | ^^^^^^^^
+did you mean: flowchart
+example: flowchart LR
+```
+
+An error with only one possible fix, like this one, is fixed by the engine with `--fix`, which then draws and names
+the line it changed. Once the text draws, `--format check` names each pair of crossing lines with their source line
+numbers.
+
+**Speed.** For an agent whose turn takes seconds, this hardly matters. It does for a live preview in a browser or for
+many drawings: a flowchart takes a median of 0.7 ms in ursula and 20.6 ms in Mermaid.js. The browser file is 330 kB
+gzipped for ursula and 1.58 MB for Mermaid.js.
+
+## Text-drawing tools
+
+termaid, mmdflux and mermaid-ascii also draw Mermaid as terminal text. mmdflux and mermaid-ascii are single native
+binaries: 9–11 ms per run, about 10 times faster than ursula. All three keep labels with emoji in line. termaid and
+mermaid-ascii line up wide characters such as Korean as ursula does.
+
+The difference is how many types they draw. Of the 531 examples in the Mermaid documentation, termaid draws 366 (18
+types), mmdflux 206 (4 types) and mermaid-ascii 160 (3 types); ursula draws 531 (35 types). termaid and
+mermaid-ascii do not write SVG.
+
+## When ursula is not the right tool
+
+- **A person designs one picture with care.** ursula's drawings have one look, and only the colours can change. A
+  drawing skill or a designer does better.
+- **You need a PNG from the command line.** The ursula command does not write PNG; only the button on a
+  `--format html` page saves one. mermaid-cli writes a PNG directly, at 630 ms and a Chromium per drawing.
+- **You start a new process for every drawing.** mmdflux and mermaid-ascii take 9–11 ms, ursula 103 ms, of which
+  59 ms is what an empty Node script takes.
+- **Labels in a terminal drawing contain emoji.** ursula counts an emoji as one cell, so the drawings with emoji had
+  18 more broken line ends. mmdflux, mermaid-ascii and termaid had none.
+
+## Try it
+
+Draw your own Mermaid text in the [playground](/playground). Install the agent skill with:
+
+```bash
+npx skills add yjun1806/ursula-diagram
+```
+
+[Agent skill](/guide/agent-skill) sets up the skill and the MCP server, and
+[Compared with other tools](/guide/compared) has the numbers per tool.
+
+## Conditions
+
+Everything was measured on 26 November 2026 on one Apple M2 Max (macOS 26.6, Node 26.12.1). The skills were run in
+Claude Code with claude-opus-5-5, a fresh session and the same prompt for each run, on three public Mermaid texts, two
+runs each. One run of the command is the median over 103 flowchart examples of the Mermaid documentation. Browser
+speed is the median over 116 flowchart examples drawn as SVG by both in one page of headless Chrome 158. Tool
+versions: mermaid-cli 12.2.0, Mermaid 12.3.0, mmdflux 2.6.1, mermaid-ascii 1.6.2, termaid 0.14.0.
