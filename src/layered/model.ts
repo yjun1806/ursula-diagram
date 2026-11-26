@@ -48,8 +48,6 @@ import type { Ruler } from '../metrics.ts';
 import type { Bundles, FlatPlan } from './ports.ts';
 import type { Rows } from './rows.ts';
 
-export const isReal = (l: Ladder, n: number): boolean => n < l.realCount;
-
 /** Unit-span pieces between adjacent layers: [upper node, lower node, chain index]. */
 export function pieces(l: Ladder): Array<[number, number, number]> {
   const out: Array<[number, number, number]> = [];

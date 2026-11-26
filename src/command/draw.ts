@@ -104,14 +104,9 @@ function drawing(src: string, req: DrawRequest): string {
       return renderHtml(src, { ...(req.title === undefined ? {} : { title: req.title }), ...(width === undefined ? {} : { maxWidth: width }), ...(req.theme === undefined ? {} : { theme: req.theme }) });
     case 'check':
       return checkReport(src, req);
-    case 'text': {
-      const rows = req.color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
-      return `${rows.join('\n')}\n`;
-    }
-    case 'text-svg': {
-      const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: 'normal' as const }]);
-      return `${spansToSvg(spans)}\n`;
-    }
+    case 'text':
+    case 'text-svg':
+      return terminal(src, req, width).out;
     case 'json':
       return `${JSON.stringify(frontEnd.json(src, 'svg', opts), null, 2)}\n`;
     default:

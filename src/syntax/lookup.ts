@@ -16,11 +16,6 @@ export function syntaxOf(type: string): SyntaxEntry | undefined {
   return SYNTAX.find((e) => e.name.toLowerCase() === t || allHeaders(e).some((h) => h.toLowerCase() === t));
 }
 
-/** The entry of the front-end with this name. */
-export function syntaxOfFrontEnd(name: string): SyntaxEntry | undefined {
-  return SYNTAX.find((e) => e.name === name);
-}
-
 /** The type name or header closest to `type`, for 'did you mean'. */
 export function closestType(type: string): string | undefined {
   return closest(type, SYNTAX.flatMap((e) => [e.name, ...allHeaders(e)]));

@@ -40,10 +40,9 @@ export const NOTE_FOLD = 8;
 /** Pixels: height of an ellipse, and what it adds around its text width. */
 export const ELLIPSE_H = 48;
 export const ELLIPSE_PAD = 48;
-/** Pixels: size of the figure of an actor, the head diameter, and the distance of the name below it. */
+/** Pixels: size of the figure of an actor, and the distance of the name below it. */
 export const ACTOR_W = 24;
 export const ACTOR_H = 48;
-export const ACTOR_HEAD = 16;
 export const ACTOR_NAME_GAP = 16;
 /** Pixels: height reserved for the name under an actor. */
 export const ACTOR_NAME_H = 14;
