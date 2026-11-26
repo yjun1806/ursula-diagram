@@ -2,11 +2,11 @@ import { layout } from '../layout/index.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
-import { renderTextLayout } from '../render/text.ts';
+import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
 import type { Layout } from '../types.ts';
 import { c4Graph } from './graph.ts';
 import { parseC4 } from './parse.ts';
-import { titledLines } from '../front/title.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 function draw(src: string, mode: 'svg' | 'text', maxWidth: number | undefined): { layout: Layout; title: string | undefined; shown: string | undefined } {
   const model = parseC4(src);
@@ -33,6 +33,10 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const { layout: laid, shown } = draw(src, 'text', maxWidth);
     return titledLines(renderTextLayout(laid), shown === undefined || shown === '' ? opts.heading : shown, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const { layout: laid, shown } = draw(src, 'text', maxWidth);
+    return titledSpans(renderTextLayoutSpans(laid), shown === undefined || shown === '' ? opts.heading : shown, maxWidth);
   },
   json(src, mode, opts) {
     return draw(src, mode, opts.maxWidth).layout;

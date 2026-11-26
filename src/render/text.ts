@@ -26,24 +26,30 @@ const PRIORITY: Record<EdgeStyle, number> = { dotted: 0, normal: 1, thick: 2 };
 
 class Canvas {
   readonly rows: string[][];
+  /** The tone of every cell; kept only for a drawing given out in spans. */
+  readonly tones: TextTone[][] | undefined;
   width: number;
   readonly height: number;
+  /** The tone `put` and `text` write in when they are given none. */
+  tone: TextTone = 'normal';
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, toned = false) {
     this.width = width;
     this.height = height;
     this.rows = Array.from({ length: height }, () => new Array<string>(width).fill(' '));
+    this.tones = toned ? Array.from({ length: height }, () => new Array<TextTone>(width).fill('normal')) : undefined;
   }
 
   /** Makes every row at least `width` cells wide; the new cells are blank. */
   widen(width: number): void {
     if (width <= this.width) return;
     for (const row of this.rows) while (row.length < width) row.push(' ');
+    for (const row of this.tones ?? []) while (row.length < width) row.push('normal');
     this.width = width;
   }
 
   /** Writes one character; wide characters take two cells and never get split. */
-  put(x: number, y: number, ch: string): void {
+  put(x: number, y: number, ch: string, tone: TextTone = this.tone): void {
     const row = this.rows[y];
     if (!row || x < 0 || x >= this.width) return;
     const wide = cellWidthOf(ch.codePointAt(0) ?? 0) === 2;
@@ -56,22 +62,56 @@ class Canvas {
       row[x + 1] = '';
     }
     row[x] = ch;
+    const tones = this.tones?.[y];
+    if (tones !== undefined) tones[x] = tone;
   }
 
   get(x: number, y: number): string {
     return this.rows[y]?.[x] ?? ' ';
   }
 
-  text(x: number, y: number, s: string): void {
+  text(x: number, y: number, s: string, tone: TextTone = this.tone): void {
     let cx = x;
     for (const ch of s) {
-      this.put(cx, y, ch);
+      this.put(cx, y, ch, tone);
       cx += cellWidthOf(ch.codePointAt(0) ?? 0);
     }
   }
 
   lines(): string[] {
     return this.rows.map((r) => r.join('').trimEnd());
+  }
+
+  /**
+   * The rows as spans of one tone, with the same text as `lines`. A blank takes the tone of the text on both sides of it
+   * when they agree, so that a name of several words is one span; other blanks are plain.
+   */
+  spans(): TextSpan[][] {
+    return this.rows.map((row, y) => {
+      const text = row.join('').trimEnd();
+      const tones = this.tones?.[y] ?? [];
+      const out: TextSpan[] = [];
+      let at = 0;
+      const toneAt = (x: number): TextTone => {
+        if (row[x] !== ' ') return tones[x] ?? 'normal';
+        let l = x - 1;
+        while (l >= 0 && (row[l] === ' ' || row[l] === '')) l--;
+        let r = x + 1;
+        while (r < row.length && (row[r] === ' ' || row[r] === '')) r++;
+        const left = l >= 0 ? tones[l] : undefined;
+        return left !== undefined && left === tones[r] && r < row.length ? left : 'normal';
+      };
+      for (let x = 0; x < row.length && at < text.length; x++) {
+        const ch = row[x] ?? '';
+        if (ch === '') continue;
+        at += ch.length;
+        const tone = toneAt(x);
+        const last = out[out.length - 1];
+        if (last !== undefined && last.tone === tone) out[out.length - 1] = { text: last.text + ch, tone };
+        else out.push({ text: ch, tone });
+      }
+      return out;
+    });
   }
 }
 
@@ -85,7 +125,7 @@ function drawLanes(c: Canvas, layout: Layout): void {
     const x1 = x0 + Math.round(lane.w) - 1;
     const y1 = y0 + Math.round(lane.h) - 1;
     if (lane.bare && vertical) {
-      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, 'bold');
       continue;
     }
     if (vertical) {
@@ -97,7 +137,7 @@ function drawLanes(c: Canvas, layout: Layout): void {
       for (let x = x0; x <= x1; x++) c.put(x, y0, '─');
       continue;
     }
-    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, 'bold');
   }
 }
 
@@ -255,7 +295,7 @@ function drawEdges(c: Canvas, layout: Layout): void {
       if (cell.bits === (E | W) || cell.bits === E || cell.bits === W) ch = '┄';
       else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S) ch = '┆';
     }
-    c.put(Number(xs), Number(ys), ch);
+    c.put(Number(xs), Number(ys), ch, cell.style === 'dotted' ? 'dim' : 'normal');
   }
   for (const a of arrows) c.put(a.x, a.y, a.ch);
 }
@@ -274,13 +314,20 @@ function drawLabels(c: Canvas, layout: Layout): void {
 
 function drawEndLabels(c: Canvas, layout: Layout): void {
   const put = (label: EndLabel | undefined): void => {
-    if (label) c.text(Math.round(label.x), Math.round(label.y), label.text);
+    if (label) c.text(Math.round(label.x), Math.round(label.y), label.text, 'dim');
   };
   for (const edge of layout.edges) {
     if (edge.invisible) continue;
     put(edge.startLabel);
     put(edge.endLabel);
   }
+}
+
+/** A name stands out and a tag steps back; without emphasis the first compartment holds the name of the box. */
+function compartmentTone(emphasis: string | undefined, index: number): TextTone {
+  if (emphasis === 'title') return 'bold';
+  if (emphasis === 'tag') return 'dim';
+  return emphasis === undefined && index === 0 ? 'bold' : 'normal';
 }
 
 /** The rules between the compartments, and the lines of each, of a box divided into compartments. */
@@ -299,8 +346,9 @@ function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: n
     const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
     cell.lines.forEach((line, k) => {
       const row = cell.columns?.[k];
-      if (row === undefined) c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
-      else row.forEach((text, col) => text !== '' && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
+      const tone = compartmentTone(cell.lineEmphasis?.[k], i);
+      if (row === undefined) c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line, tone);
+      else row.forEach((text, col) => text !== '' && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text, tone));
     });
     y += heights[i] ?? 0;
   });
@@ -345,7 +393,7 @@ function drawNode(c: Canvas, n: LayoutNode): void {
   const texts = [n.shape === 'actor' ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== '' || n.lines.length === 0);
   const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
   texts.forEach((t, i) => {
-    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
+    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t, i === 0 && n.title !== '' ? 'bold' : 'normal');
   });
 }
 
@@ -353,8 +401,8 @@ const SAMPLE_GLYPH: Record<EdgeStyle, string> = { normal: '──', thick: '━�
 
 function drawLegend(c: Canvas, layout: Layout): void {
   for (const item of layout.legend?.items ?? []) {
-    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
-    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
+    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style], item.style === 'dotted' ? 'dim' : 'normal');
+    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption, 'dim');
   }
 }
 
@@ -373,7 +421,7 @@ function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
     const w = cellWidth(placed.text);
     c.widen(placed.at + w);
     c.put(placed.at - 1, y, ' ');
-    c.text(placed.at, y, placed.text);
+    c.text(placed.at, y, placed.text, 'bold');
     c.put(placed.at + w, y, ' ');
   }
 }
@@ -383,7 +431,31 @@ function drawLaneNames(c: Canvas, layout: Layout, limit: number): void {
  * for a lane name that has no room on its rule; without it no row is wider than the layout.
  */
 export function renderTextLayout(layout: Layout, maxWidth?: number): string[] {
-  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
+  const lines = drawLayout(layout, maxWidth, false).lines();
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+/** The same drawing as `renderTextLayout`, in spans: names bold; dotted lines, end labels and legend captions dim. */
+export function renderTextLayoutSpans(layout: Layout, maxWidth?: number): TextSpan[][] {
+  const rows = drawLayout(layout, maxWidth, true).spans();
+  while (rows.length > 0 && (rows[rows.length - 1] ?? []).length === 0) rows.pop();
+  return rows;
+}
+
+/**
+ * `lines`, a terminal drawing whose first rows were drawn from `layout`, as spans: those rows take the tones of the
+ * layout, the rows after them (a list below the drawing) are plain. Rows that are not the layout's are all plain.
+ */
+export function layoutSpans(layout: Layout, lines: readonly string[], maxWidth?: number): TextSpan[][] {
+  const plain = (text: string): TextSpan[] => (text === '' ? [] : [{ text, tone: 'normal' }]);
+  const drawn = renderTextLayoutSpans(layout, maxWidth);
+  const same = drawn.length <= lines.length && drawn.every((row, i) => row.map((s) => s.text).join('') === lines[i]);
+  return same ? [...drawn, ...lines.slice(drawn.length).map(plain)] : lines.map(plain);
+}
+
+function drawLayout(layout: Layout, maxWidth: number | undefined, toned: boolean): Canvas {
+  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height), toned);
   drawLanes(c, layout);
   drawEdges(c, layout);
   drawLabels(c, layout);
@@ -391,9 +463,7 @@ export function renderTextLayout(layout: Layout, maxWidth?: number): string[] {
   for (const n of layout.nodes) drawNode(c, n);
   drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
-  const lines = c.lines();
-  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-  return lines;
+  return c;
 }
 
 const ANSI: Record<TextTone, string> = { normal: '', dim: '\u001b[2m', bold: '\u001b[1m', accent: '\u001b[36m' };

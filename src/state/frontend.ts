@@ -3,10 +3,10 @@ import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { RenderOptions } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
-import { renderTextLayout } from '../render/text.ts';
+import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
 import type { Layout } from '../types.ts';
 import { parseState } from './parse.ts';
-import { titledLines } from '../front/title.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'engine' | 'composition' | 'questions' | 'elbows' | 'quality'>;
 
@@ -34,6 +34,9 @@ registerFrontEnd({
   },
   textLines(src, maxWidth, opts) {
     return titledLines(renderTextLayout(drawn(src, cellRuler(), { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }).layout), opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(renderTextLayoutSpans(drawn(src, cellRuler(), { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return drawn(src, mode === 'text' ? cellRuler() : pixelRuler(), opts).layout;
