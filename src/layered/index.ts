@@ -239,7 +239,7 @@ function placeOnce(graph: Graph, ruler: Ruler, units: number[], capacity: number
   const shapes = graph.nodes.map((n) => n.shape);
   const bodies = bodyLengths(graph, ruler, td);
   const across = stadiumThickness(graph, ruler, td);
-  const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
+  const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold, variant.written === true);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
   const rows = given ?? (stage ? assignByStage(graph, first, stage) : first);
   const finish = (ladder: Ladder, layers: number[][]): Placed => {
@@ -331,9 +331,9 @@ function solve(graph: Graph, ruler: Ruler, limit: number | undefined, bounded: b
   const run = (squeeze = false): Placed => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
   let placed = run();
   // A plain placement counts only when no lane needed more rows than it has at unlimited width.
-  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane.length) };
+  if (plain) return { placed, ruler, common, ok: !bounded || (placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold, variant.written === true).layerLane.length) };
   // Rows first: a lane may use its own rows or two, and the main flow is kept whole.
-  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane, graph.lanes.length) : [];
+  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold, variant.written === true).layerLane, graph.lanes.length) : [];
   const allowed = (p: Placed): boolean =>
     !(allow.intact && p.rows.mainCut) && (!allow.rows || rowsPerLane(p.ladder.layerLane, graph.lanes.length).every((n, lane) => n <= Math.max(unlimitedRows[lane] ?? 0, 2)));
   const overLanes = (): Set<number> => {

@@ -63,8 +63,11 @@ function topoOrder(ids: number[], succ: number[][], size: number): number[] {
   return post.reverse();
 }
 
-/** The longest path of a DAG; among equal lengths the one whose nodes have more links elsewhere, then the earliest source order. */
-function longestPath(ids: number[], succ: number[][], size: number, weight: (v: number) => number = () => 0): number[] {
+/**
+ * The longest path of a DAG; among equal lengths the one whose nodes have more links elsewhere, then the earliest source
+ * order. Given `from`, the longest path that starts there.
+ */
+function longestPath(ids: number[], succ: number[][], size: number, weight: (v: number) => number = () => 0, from?: number): number[] {
   const longest = new Float64Array(size);
   const heavy = new Float64Array(size);
   const next = new Int32Array(size).fill(-1);
@@ -87,8 +90,8 @@ function longestPath(ids: number[], succ: number[][], size: number, weight: (v: 
     heavy[v] = weight(v) + bestWeight;
     next[v] = via;
   }
-  let start = -1;
-  for (const v of ids) {
+  let start = from ?? -1;
+  if (from === undefined) for (const v of ids) {
     if (start < 0) start = v;
     else if ((longest[v] as number) > (longest[start] as number) || ((longest[v] as number) === (longest[start] as number) && (heavy[v] as number) > (heavy[start] as number))) start = v;
   }
@@ -305,7 +308,7 @@ function readDownward(shelves: Shelf[], head: number | undefined): Shelf[] {
  * small block (main path on its first row, branches on rows below); blocks stand side by side, anchored toward
  * the lanes they talk to, and only when a row would be too full do they stack or move to another shelf of rows.
  */
-export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0, apart = false, fold: Fold = 'flat'): Rows {
+export function assignLayers(graph: Graph, units: number[], capacity: number | number[], reduction: number | number[] = 0, apart = false, fold: Fold = 'flat', written = false): Rows {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i] as const));
   const laneOf = graph.nodes.map((n) => Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane)));
   const layer = new Array<number>(graph.nodes.length).fill(0);
@@ -439,7 +442,11 @@ export function assignLayers(graph: Graph, units: number[], capacity: number | n
         rowOf.set(v, r);
         taken.add(cell(r, rankOf.get(v)));
       };
-      for (const v of longestPath(nodes, succ, size)) take(v, 0);
+      // With `written`, the first row holds the flow the text starts with: the longest path from the piece's first node
+      // when nothing leads into it, so that a flow written first is not pushed below a longer one written after it.
+      const first = nodes[0] as number;
+      const lead = written && (pred[first] ?? []).length === 0 ? first : undefined;
+      for (const v of longestPath(nodes, succ, size, undefined, lead)) take(v, 0);
       for (const v of topo) {
         if (rowOf.has(v)) continue;
         const free = (r: number): boolean => !taken.has(cell(r, rankOf.get(v)));
