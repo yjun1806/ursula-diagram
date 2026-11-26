@@ -1,5 +1,5 @@
 import { cellWidth } from '../metrics.ts';
-import type { EndLabel, Layout, LayoutEdge, LayoutNode } from '../types.ts';
+import type { EndLabel, Layout, LayoutEdge } from '../types.ts';
 import { renderTextLayout } from '../render/text.ts';
 import { cellsOf } from './text-read.ts';
 import { cellOf } from './text-tidy.ts';

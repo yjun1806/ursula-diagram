@@ -737,7 +737,6 @@ function build(f: Frame, l: Ladder, layers: number[][], start: number[], plan: M
   }
   const totalL = cursor + margin;
 
-  const order = (o: number, c: number): Point => (td ? { x: tidy(c), y: tidy(o) } : { x: tidy(o), y: tidy(c) });
   const trackY = (it: Item): number => {
     if (ruler.uniform) return (bandStart[it.band] ?? 0) + (td ? 1 + 2 * it.track : it.track);
     const n = trackCount[it.band] ?? 1;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layout, parse, pixelRuler } from '../src/index.ts';
+import { layout, pixelRuler } from '../src/index.ts';
 import { c4Graph } from '../src/c4/graph.ts';
 import { parseC4 } from '../src/c4/parse.ts';
 import { crossingCount } from '../src/layout/check.ts';
@@ -102,7 +102,7 @@ describe('C4 container diagram', () => {
     const find = (a: string, b: string) => l.edges.find((e) => e.from === a && e.to === b) ?? l.edges.find((e) => e.from === b && e.to === a);
     const ids = l.nodes.map((n) => n.id);
     const pick = (re: RegExp) => ids.find((id) => re.test(id)) as string;
-    const [customer, spa, api, mail] = [pick(/customer/i), pick(/single|spa/i), pick(/api/i), pick(/mail/i)];
+    const [customer, spa] = [pick(/customer/i), pick(/single|spa/i)];
     expect(bends((find(customer, spa) as { points: Point[] }).points)).toBeLessThanOrEqual(2);
     // No line runs along a cluster border closer than 12 (a line may touch it only to cross).
     for (const c of l.clusters ?? []) {

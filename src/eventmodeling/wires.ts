@@ -35,7 +35,6 @@ const UPRIGHT = N | S;
 const LEVEL = E | W;
 const DX = [0, 1, 0, -1];
 const DY = [-1, 0, 1, 0];
-const BIT = [N, E, S, W];
 const UP = 0;
 const DOWN = 2;
 

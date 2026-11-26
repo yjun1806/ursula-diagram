@@ -36,8 +36,6 @@ const BORDER_NEAR = 12;
 const ROOM = 32;
 const LABEL_CLEAR = 8;
 const ROOM_PRICE = 4;
-/** What a line keeps from the edge of the canvas. */
-const EDGE_ROOM = 8;
 const LOOP = 24;
 
 type Face = 0 | 1 | 2 | 3; // right, down, left, up: the direction out of the face

@@ -5269,7 +5269,6 @@ function build(f, l, layers, start, plan, prep, demand) {
     }
   }
   const totalL = cursor + margin;
-  const order = (o, c) => td ? { x: tidy5(c), y: tidy5(o) } : { x: tidy5(o), y: tidy5(c) };
   const trackY = (it) => {
     if (ruler.uniform)
       return (bandStart[it.band] ?? 0) + (td ? 1 + 2 * it.track : it.track);
@@ -7821,7 +7820,7 @@ function plainDraw(p, placed, elbows = p.opts.elbows !== false) {
   return route(f, placed.ladder, placed.layers, placed.start, placed.plan, placed.bundles);
 }
 function finalize(p, placed = p.placed, elbows = p.opts.elbows !== false) {
-  const { graph, given, opts, apart, base, td, limit, bounded } = p;
+  const { graph, opts, apart, base, td, limit, bounded } = p;
   const ruler = placed.ruler;
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r, spread = 0) => {
@@ -25998,8 +25997,6 @@ function buildGit(graph, ruler, delays) {
   const M = (t, l) => `M${fmt(place([t, l]))}`;
   const H = (t, l) => `L${fmt(place([t, l]))}`;
   const C = (a, b, c) => `C${fmt(place(a))} ${fmt(place(b))} ${fmt(place(c))}`;
-  const forkTo = (t0, l0, l1) => C([t0 + 20, l0 + (l1 - l0) * 0.5], [t0 + 24, l1], [t0 + REACH, l1]);
-  const joinTo = (t1, l0, l1) => C([t1 - 24, l0], [t1 - 20, l0 + (l1 - l0) * 0.5], [t1, l1]);
   const items = [];
   const dot = (name) => colour.get(name) ?? 1;
   const total = graph.commits.length;
@@ -35432,7 +35429,6 @@ function layoutVertical(model, ruler) {
       let x = boxLeft;
       const boxes = r.lines.map((lines, k) => {
         const w = r.ws[k] ?? BOX_MIN2;
-        const h = boxHeight(lines.length);
         const box = { x, y: dotY - r.boxH / 2, w, h: r.boxH, lines };
         x += w + STACK_GAP;
         return box;

@@ -481,7 +481,7 @@ function plainDraw(p: Prep, placed: Placed, elbows = p.opts.elbows !== false): L
 }
 
 function finalize(p: Prep, placed: Placed = p.placed, elbows = p.opts.elbows !== false): Layout {
-  const { graph, given, opts, apart, base, td, limit, bounded } = p;
+  const { graph, opts, apart, base, td, limit, bounded } = p;
   const ruler = placed.ruler;
   const common = frameFor(graph, ruler, undefined).common;
   const draw = (r: Ruler, spread = 0): Layout => {

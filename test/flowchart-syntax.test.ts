@@ -1,19 +1,9 @@
 // Examples adapted from the Mermaid documentation (MIT).
 import { describe, expect, it } from 'vitest';
-import { cellRuler, layout, parse, pixelRuler, render, renderText, UrsulaError } from '../src/index.ts';
+import { cellRuler, layout, parse, pixelRuler, render, renderText } from '../src/index.ts';
 import type { Graph, Layout, NodeShape } from '../src/index.ts';
 import { faceOffsets, faceReach, portShape } from '../src/layered/ports.ts';
 import { trimToOutline } from '../src/render/shapes.ts';
-
-function failure(src: string): UrsulaError {
-  try {
-    parse(src);
-  } catch (e) {
-    if (e instanceof UrsulaError) return e;
-    throw e;
-  }
-  throw new Error('expected parse to fail');
-}
 
 const nodeOf = (g: Graph, id: string): Graph['nodes'][number] => {
   const n = g.nodes.find((v) => v.id === id);

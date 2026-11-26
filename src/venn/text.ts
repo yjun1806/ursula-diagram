@@ -1,5 +1,5 @@
 import { cellWidth } from '../metrics.ts';
-import { cut, cutSpans, padEnd, padEndSpans, padStart, spansOf } from '../text/terminal.ts';
+import { cut, cutSpans, padEndSpans, padStart, spansOf } from '../text/terminal.ts';
 import type { TextSpan } from '../types.ts';
 import type { Venn } from './model.ts';
 

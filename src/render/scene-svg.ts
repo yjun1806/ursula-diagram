@@ -2,7 +2,7 @@ import { TITLE_CENTRE, TITLE_ROW, widthWithTitle } from '../front/title.ts';
 import { fillColors } from './colors.ts';
 import { SCENE_THEME } from './scene-theme.ts';
 import { escapeXml, num, pathData, trimStart } from './svg.ts';
-import type { Point, Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
+import type { Scene, SceneBox, SceneCircle, SceneItem, SceneLine, ScenePath, SceneText, SceneTextSpan } from '../types.ts';
 
 const FONT = "'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif";
 const FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
