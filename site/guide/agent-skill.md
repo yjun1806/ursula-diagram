@@ -8,6 +8,8 @@ description: 'The ursula skill for Claude Code, Codex, Cursor and other AI codin
 draw it and ask the engine about it in one call with `--check`, and which output to give the reader. `scripts/ursula.mjs` is the
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
+For an agent that reads the documentation itself, [llms.txt](https://yjun1806.github.io/ursula-diagram/llms.txt) lists every page as Markdown, and [llms-full.txt](https://yjun1806.github.io/ursula-diagram/llms-full.txt) holds them all in one file.
+
 Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
 agents. Pick where the skill goes: into this project, for every project (`-g`), or for one agent only (`-a`):
 

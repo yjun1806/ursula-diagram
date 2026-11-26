@@ -88,6 +88,7 @@ claude mcp add ursula -- npx -y ursula-diagram mcp
 - [Compared with other tools](https://yjun1806.github.io/ursula-diagram/guide/compared): mermaid-cli, Pele, termaid, beautiful-mermaid, mmdflux, mermaid-ascii
 - [Roadmap](https://yjun1806.github.io/ursula-diagram/roadmap): what is planned next, backed by GitHub issues
 - [Changelog](https://yjun1806.github.io/ursula-diagram/changelog): what changed in each version
+- [llms.txt](https://yjun1806.github.io/ursula-diagram/llms.txt): every page as Markdown for AI agents, all in one file as [llms-full.txt](https://yjun1806.github.io/ursula-diagram/llms-full.txt)
 
 ## Contributing
 

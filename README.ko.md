@@ -87,6 +87,7 @@ claude mcp add ursula -- npx -y ursula-diagram mcp
 - [다른 도구와 비교](https://yjun1806.github.io/ursula-diagram/ko/guide/compared): mermaid-cli, Pele, termaid, beautiful-mermaid, mmdflux, mermaid-ascii
 - [로드맵](https://yjun1806.github.io/ursula-diagram/ko/roadmap): 다음에 할 일과 그 GitHub 이슈
 - [변경 내역](https://yjun1806.github.io/ursula-diagram/ko/changelog): 버전마다 바뀐 것
+- [llms.txt](https://yjun1806.github.io/ursula-diagram/llms.txt): AI 에이전트가 읽을 영어 문서 전체의 Markdown, 한 파일로는 [llms-full.txt](https://yjun1806.github.io/ursula-diagram/llms-full.txt)
 
 ## 기여하기
 

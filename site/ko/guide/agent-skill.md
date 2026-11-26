@@ -8,6 +8,8 @@ description: 'Claude Code, Codex, Cursor 같은 AI 코딩 에이전트용 ursula
 붙여 그리면서 엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이어서, 스킬은 Node 22 이상만 있으면 아무것도 설치하지 않고 돌아갑니다.
 
+에이전트가 직접 읽을 수 있게 영어 문서의 모든 페이지를 Markdown으로 [llms.txt](https://yjun1806.github.io/ursula-diagram/llms.txt)와 [llms-full.txt](https://yjun1806.github.io/ursula-diagram/llms-full.txt)에 담았습니다.
+
 [skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다. 스킬을 둘 곳을 고릅니다. 이 프로젝트, 모든 프로젝트(`-g`), 한 에이전트(`-a`) 가운데 하나입니다.
 
 ::: code-group
