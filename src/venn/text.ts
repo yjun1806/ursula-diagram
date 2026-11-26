@@ -1,26 +1,34 @@
 import { cellWidth } from '../metrics.ts';
-import { cut, padEnd, padStart } from '../text/terminal.ts';
+import { cut, cutSpans, padEnd, padEndSpans, padStart, spansOf } from '../text/terminal.ts';
+import type { TextSpan } from '../types.ts';
 import type { Venn } from './model.ts';
 
 
-/** The sets and unions as a table: a title line, then `name  size` rows; the size column is left out when no size is written. */
-export function vennTextLines(venn: Venn, maxWidth: number | undefined): string[] {
+/**
+ * The sets and unions as a table: a title line, then `name  size` rows; the size column is left out when no size is
+ * written. The title and the set names are bold; the texts inside a set or union are dim.
+ */
+export function vennTextSpans(venn: Venn, maxWidth: number | undefined): TextSpan[][] {
   const nameOf = (id: string): string => venn.sets.find((s) => s.id === id)?.label ?? id;
-  const rows: Array<[string, string]> = [];
+  const rows: Array<[TextSpan[], string]> = [];
+  const texts = (list: ReadonlyArray<{ label: string }>): void => {
+    for (const t of list) rows.push([spansOf(['  ' + t.label, 'dim']), '']);
+  };
   for (const set of venn.sets) {
-    rows.push([set.label, set.sizeText ?? '']);
-    for (const t of set.texts) rows.push([`  ${t.label}`, '']);
+    rows.push([spansOf([set.label, 'bold']), set.sizeText ?? '']);
+    texts(set.texts);
   }
   for (const u of venn.unions) {
     const sets = u.ids.map(nameOf).join(' ∩ ');
-    rows.push([u.label === undefined ? sets : `${sets} : ${u.label}`, u.sizeText ?? '']);
-    for (const t of u.texts) rows.push([`  ${t.label}`, '']);
+    rows.push([spansOf(sets, u.label === undefined ? '' : ` : ${u.label}`), u.sizeText ?? '']);
+    texts(u.texts);
   }
+  const text = (row: readonly TextSpan[]): string => row.map((s) => s.text).join('');
   const valueW = Math.max(...rows.map(([, v]) => cellWidth(v)));
-  const labelW = Math.max(...rows.map(([l]) => cellWidth(l)));
+  const labelW = Math.max(...rows.map(([l]) => cellWidth(text(l))));
   const fixed = valueW === 0 ? 0 : 2 + valueW;
   const cap = maxWidth === undefined ? labelW : Math.max(1, Math.min(labelW, maxWidth - fixed));
-  const body = rows.map(([label, value]) => (valueW === 0 ? cut(label, cap) : `${padEnd(cut(label, cap), cap)}  ${padStart(value, valueW)}`));
-  const head = venn.title === undefined ? [] : [maxWidth === undefined ? venn.title : cut(venn.title, maxWidth)];
+  const body = rows.map(([label, value]) => (valueW === 0 ? cutSpans(label, cap) : spansOf(padEndSpans(cutSpans(label, cap), cap), `  ${padStart(value, valueW)}`)));
+  const head = venn.title === undefined ? [] : [spansOf([maxWidth === undefined ? venn.title : cut(venn.title, maxWidth), 'bold'])];
   return [...head, ...body];
 }

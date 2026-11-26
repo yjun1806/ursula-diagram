@@ -3,7 +3,8 @@ import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutRailroad } from './layout.ts';
 import { parseRailroad } from './parse.ts';
-import { railroadTextLines } from './text.ts';
+import { railroadTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 registerFrontEnd({
   name: 'railroad',
@@ -13,7 +14,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return railroadTextLines(parseRailroad(src, opts.heading), maxWidth);
+    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseRailroad(src, opts.heading);

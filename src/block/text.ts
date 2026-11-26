@@ -1,6 +1,7 @@
 import { cellRuler, cellWidth } from '../metrics.ts';
+import { joinSpans, sliceSpans, spansOf, trimEndSpans } from '../text/terminal.ts';
 import { wrapWords } from '../text/wrap.ts';
-import type { Point } from '../types.ts';
+import type { Point, TextSpan, TextTone } from '../types.ts';
 import { layoutBlock } from './layout.ts';
 import type { BlockDiagram, BlockGroup, BlockItem, BlockLayout, PlacedBlock, PlacedLink } from './model.ts';
 
@@ -20,39 +21,44 @@ const HEAVY: Record<number, string> = {
   [N | S | E]: '┣', [N | S | W]: '┫', [E | W | S]: '┳', [E | W | N]: '┻', [N | E | S | W]: '╋',
 };
 
-/** A grid of terminal cells; a wide character takes two and leaves an empty string in the second. */
+/** A grid of terminal cells, each with a tone; a wide character takes two and leaves an empty string in the second. */
 class Canvas {
   readonly rows: string[][];
+  readonly tones: TextTone[][];
   readonly width: number;
 
   constructor(width: number, height: number) {
     this.width = width;
     this.rows = Array.from({ length: height }, () => new Array<string>(width).fill(' '));
+    this.tones = Array.from({ length: height }, () => new Array<TextTone>(width).fill('normal'));
   }
 
-  put(x: number, y: number, ch: string): void {
+  put(x: number, y: number, ch: string, tone: TextTone = 'normal'): void {
     const row = this.rows[y];
-    if (row === undefined || x < 0 || x >= this.width) return;
+    const tones = this.tones[y];
+    if (row === undefined || tones === undefined || x < 0 || x >= this.width) return;
     row[x] = ch;
+    tones[x] = tone;
   }
 
-  text(x: number, y: number, s: string): void {
+  text(x: number, y: number, s: string, tone: TextTone = 'normal'): void {
     let at = x;
     for (const ch of s) {
       const w = cellWidth(ch);
-      this.put(at, y, ch);
-      if (w === 2) this.put(at + 1, y, '');
+      this.put(at, y, ch, tone);
+      if (w === 2) this.put(at + 1, y, '', tone);
       at += w;
     }
   }
 
   /** The rows without trailing blanks, and without the blank rows above and the blank columns left of the drawing. */
-  lines(): string[] {
-    const out = this.rows.map((r) => r.join('').trimEnd());
-    while (out.length > 0 && out[out.length - 1] === '') out.pop();
-    while (out.length > 0 && out[0] === '') out.shift();
-    const indent = Math.min(...out.filter((l) => l !== '').map((l) => l.length - l.trimStart().length));
-    return Number.isFinite(indent) ? out.map((l) => l.slice(indent)) : out;
+  lines(): TextSpan[][] {
+    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones[y]?.[x] ?? 'normal'] as const))));
+    while (out.length > 0 && out[out.length - 1]?.length === 0) out.pop();
+    while (out.length > 0 && out[0]?.length === 0) out.shift();
+    const texts = out.map(joinSpans);
+    const indent = Math.min(...texts.filter((l) => l !== '').map((l) => l.length - l.trimStart().length));
+    return Number.isFinite(indent) ? out.map((l) => sliceSpans(l, indent)) : out;
   }
 }
 
@@ -94,22 +100,24 @@ function glyphsOf(b: PlacedBlock): Glyphs {
   }
 }
 
+/** The outline of a block; a group's is dashed and dim. */
 function drawFrame(c: Canvas, b: PlacedBlock, g: Glyphs, dashed: boolean): void {
   const { x, y, w, h } = b;
   const mid = y + Math.floor(h / 2);
+  const tone: TextTone = dashed ? 'dim' : 'normal';
   for (let i = 1; i < w - 1; i++) {
-    c.put(x + i, y, dashed ? '╌' : g.top);
-    c.put(x + i, y + h - 1, dashed ? '╌' : g.top);
+    c.put(x + i, y, dashed ? '╌' : g.top, tone);
+    c.put(x + i, y + h - 1, dashed ? '╌' : g.top, tone);
   }
   for (let j = 1; j < h - 1; j++) {
     const row = y + j;
-    c.put(x, row, dashed ? '╎' : row === mid && g.mid !== undefined ? g.mid[0] : g.side);
-    c.put(x + w - 1, row, dashed ? '╎' : row === mid && g.mid !== undefined ? g.mid[1] : g.side);
+    c.put(x, row, dashed ? '╎' : row === mid && g.mid !== undefined ? g.mid[0] : g.side, tone);
+    c.put(x + w - 1, row, dashed ? '╎' : row === mid && g.mid !== undefined ? g.mid[1] : g.side, tone);
   }
-  c.put(x, y, g.corners[0]);
-  c.put(x + w - 1, y, g.corners[1]);
-  c.put(x, y + h - 1, g.corners[2]);
-  c.put(x + w - 1, y + h - 1, g.corners[3]);
+  c.put(x, y, g.corners[0], tone);
+  c.put(x + w - 1, y, g.corners[1], tone);
+  c.put(x, y + h - 1, g.corners[2], tone);
+  c.put(x + w - 1, y + h - 1, g.corners[3], tone);
 }
 
 /** Marks that tell a block's kind beyond its outline. */
@@ -159,7 +167,7 @@ function drawBlock(c: Canvas, b: PlacedBlock): void {
   b.lines.forEach((line, i) => {
     if (line === '') return;
     const w = cellWidth(line);
-    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line);
+    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line, 'bold');
   });
 }
 
@@ -218,7 +226,7 @@ function drawLinks(c: Canvas, links: readonly PlacedLink[], byId: ReadonlyMap<st
     const horizontal = (cell.bits & (E | W)) !== 0 && (cell.bits & (N | S)) === 0;
     const vertical = (cell.bits & (N | S)) !== 0 && (cell.bits & (E | W)) === 0;
     const glyph = cell.style === 'dotted' && horizontal ? '┄' : cell.style === 'dotted' && vertical ? '┆' : (cell.style === 'thick' ? HEAVY : LIGHT)[cell.bits] ?? '┼';
-    c.put(x, y, glyph);
+    c.put(x, y, glyph, cell.style === 'dotted' ? 'dim' : 'normal');
   }
   for (const h of heads) c.put(h.x, h.y, h.ch);
 }
@@ -231,7 +239,7 @@ function drawChips(c: Canvas, links: readonly PlacedLink[]): void {
   }
 }
 
-function render(layout: BlockLayout): string[] {
+function render(layout: BlockLayout): TextSpan[][] {
   const c = new Canvas(layout.width, layout.height);
   const byId = new Map(layout.blocks.map((b) => [b.id, b] as const));
   for (const g of layout.blocks.filter((b) => b.kind === 'group')) drawFrame(c, g, glyphsOf(g), true);
@@ -241,11 +249,40 @@ function render(layout: BlockLayout): string[] {
   return c.lines();
 }
 
-/** The blocks as an outline when the grid does not fit the width: one line per row, then one per link. */
-function outline(model: BlockDiagram, maxWidth: number): string[] {
-  const lines: string[] = [];
-  if (model.title !== undefined) lines.push(model.title, '');
-  const label = (item: BlockItem): string => (item.kind === 'space' ? '·'.repeat(Math.min(item.span, 3)) : item.kind === 'group' ? `[${item.id}]` : `${item.lines.join(' ')}${item.span > 1 ? ` x${item.span}` : ''}`);
+/**
+ * Gives the lines that `wrapWords` makes of `whole`, one after another, the tones of `whole`: wrapping keeps every
+ * character but white space in order, so the n-th of those takes the tone of the n-th in `whole`. A space takes the
+ * tone of the characters on both sides when they have one tone.
+ */
+function tonesAlong(whole: readonly TextSpan[]): (line: string) => TextSpan[] {
+  const blank = (ch: string): boolean => /\s/u.test(ch);
+  const tones = whole.flatMap((s) => [...s.text].filter((ch) => !blank(ch)).map(() => s.tone));
+  let at = 0;
+  return (line) => {
+    const chars = [...line];
+    const own = chars.map((ch) => (blank(ch) ? undefined : (tones[at++] ?? 'normal')));
+    return spansOf(
+      ...chars.map((ch, i): readonly [string, TextTone] => {
+        const tone = own[i];
+        if (tone !== undefined) return [ch, tone];
+        const before = own.slice(0, i).reverse().find((t) => t !== undefined);
+        const after = own.slice(i + 1).find((t) => t !== undefined);
+        return [ch, before !== undefined && before === after ? before : 'normal'];
+      }),
+    );
+  };
+}
+
+/** The blocks as an outline when the grid does not fit the width: one line per row, then one per link (the ends bold, a label and a dotted line dim). */
+function outline(model: BlockDiagram, maxWidth: number): TextSpan[][] {
+  const lines: TextSpan[][] = [];
+  if (model.title !== undefined) lines.push(spansOf([model.title, 'bold']), []);
+  const label = (item: BlockItem): TextSpan[] =>
+    item.kind === 'space'
+      ? spansOf(['·'.repeat(Math.min(item.span, 3)), 'dim'])
+      : item.kind === 'group'
+        ? spansOf(['[', 'dim'], [item.id, 'bold'], [']', 'dim'])
+        : spansOf([item.lines.join(' '), 'bold'], [item.span > 1 ? ` x${item.span}` : '', 'dim']);
   const walk = (children: readonly BlockItem[], columns: number | undefined, depth: number): void => {
     const perRow: BlockItem[][] = [[]];
     let used = 0;
@@ -259,28 +296,39 @@ function outline(model: BlockDiagram, maxWidth: number): string[] {
       used += span;
     }
     for (const row of perRow) {
-      for (const text of wrapWords(row.map(label).join(' | '), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true })) lines.push(`${'  '.repeat(depth)}${text}`);
+      const whole = spansOf(...row.flatMap((item, i) => [i === 0 ? '' : ([' | ', 'dim'] as const), label(item)]));
+      const along = tonesAlong(whole);
+      for (const text of wrapWords(joinSpans(whole), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true })) lines.push(spansOf('  '.repeat(depth), along(text)));
       for (const item of row) if (item.kind === 'group') walk((item as BlockGroup).children, (item as BlockGroup).columns, depth + 1);
     }
   };
   walk(model.children, model.columns, 0);
-  if (model.links.length > 0) lines.push('');
-  for (const link of model.links) lines.push(`${link.from} ${link.style === 'dotted' ? '┄' : link.style === 'thick' ? '━' : '─'}${link.arrow ? '▶' : '─'} ${link.to}${link.label === undefined ? '' : `  ${link.label}`}`);
-  return lines.map((l) => (cellWidth(l) > maxWidth ? [...l].slice(0, maxWidth - 1).join('') + '…' : l));
+  if (model.links.length > 0) lines.push([]);
+  for (const link of model.links) {
+    const line = `${link.style === 'dotted' ? '┄' : link.style === 'thick' ? '━' : '─'}${link.arrow ? '▶' : '─'}`;
+    lines.push(spansOf([link.from, 'bold'], ' ', [line, link.style === 'dotted' ? 'dim' : 'normal'], ' ', [link.to, 'bold'], [link.label === undefined ? '' : `  ${link.label}`, 'dim']));
+  }
+  return lines.map((l) => {
+    const text = joinSpans(l);
+    if (cellWidth(text) <= maxWidth) return l;
+    const kept = [...text].slice(0, maxWidth - 1).join('').length;
+    return spansOf(sliceSpans(l, 0, kept), ['…', sliceSpans(l, kept, kept + 1)[0]?.tone ?? 'normal']);
+  });
 }
 
 /**
  * The diagram in terminal cells: blocks drawn with box characters, a mark on each kind of block, links as lines with
  * arrowheads. A drawing wider than `maxWidth` is drawn tighter, and when that is still too wide, written as an outline.
+ * The title and the block names are bold; group outlines and dotted links are dim.
  */
-export function blockTextLines(model: BlockDiagram, maxWidth: number | undefined): string[] {
+export function blockTextSpans(model: BlockDiagram, maxWidth: number | undefined): TextSpan[][] {
   const ruler = cellRuler();
-  const titleRows = model.title === undefined ? [] : [model.title, ''];
+  const titleRows = model.title === undefined ? [] : [spansOf([model.title, 'bold']), []];
   const { title, ...untitled } = model;
   void title;
   for (const compact of [false, true]) {
     const body = render(layoutBlock(untitled, ruler, compact));
-    const widest = Math.max(0, ...body.map(cellWidth));
+    const widest = Math.max(0, ...body.map((l) => cellWidth(joinSpans(l))));
     if (maxWidth === undefined || widest <= maxWidth) return [...titleRows, ...body];
   }
   return outline(model, maxWidth ?? 80);

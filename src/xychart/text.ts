@@ -1,14 +1,18 @@
 import { trimmedNumber } from '../chart/format.ts';
 import { cellWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
-import { cut, padEnd, padStart } from '../text/terminal.ts';
+import { cut, padEnd, padStart, spansOf } from '../text/terminal.ts';
+import type { TextSpan, TextTone } from '../types.ts';
 import type { XyChart } from './model.ts';
 
 const GAP = 2;
 
 
-/** The values as a table: a title line, then one row per category with a column per series. */
-export function xychartTable(chart: XyChart, _ruler: Ruler, maxWidth: number | undefined): string[] {
+/**
+ * The values as a table: a title line, then one row per category with a column per series. The title is bold, the
+ * header and the category names dim, and the highest bar of each bar series is an accent.
+ */
+export function xychartTable(chart: XyChart, _ruler: Ruler, maxWidth: number | undefined): TextSpan[][] {
   const n = chart.categories?.length ?? Math.max(...chart.series.map((s) => s.points.length));
   const labels = Array.from({ length: n }, (_, i) => {
     if (chart.categories) return chart.categories[i] ?? '';
@@ -38,9 +42,16 @@ export function xychartTable(chart: XyChart, _ruler: Ruler, maxWidth: number | u
   const labelHead = header ? (chart.xTitle ?? '') : '';
   let labelW = Math.max(...labels.map(cellWidth), cellWidth(labelHead));
   if (maxWidth !== undefined) labelW = Math.max(4, Math.min(labelW, maxWidth - valuesW));
-  const line = (label: string, cells: string[]): string => padEnd(cut(label, labelW), labelW) + cells.map((c, i) => ' '.repeat(GAP) + padStart(c, widths[i] ?? 0)).join('');
-  const out = [maxWidth === undefined ? (chart.title ?? 'xychart') : cut(chart.title ?? 'xychart', maxWidth)];
-  if (header) out.push(line(labelHead, heads));
-  labels.forEach((l, i) => out.push(line(l, cols.map((c) => c[i] ?? ''))));
+  // The row of the highest bar of each bar series, the first when several are as high.
+  const highest = chart.series.map((s) => {
+    if (s.kind !== 'bar') return -1;
+    const values = labels.map((_, i) => s.points[i]?.value ?? -Infinity);
+    return values.indexOf(Math.max(...values));
+  });
+  const line = (label: string, cells: string[], tone: (i: number) => TextTone): TextSpan[] =>
+    spansOf([padEnd(cut(label, labelW), labelW), 'dim'], ...cells.flatMap((c, i) => [padEnd('', GAP + (widths[i] ?? 0) - cellWidth(c)), [c, tone(i)] as const]));
+  const out = [spansOf([maxWidth === undefined ? (chart.title ?? 'xychart') : cut(chart.title ?? 'xychart', maxWidth), 'bold'])];
+  if (header) out.push(line(labelHead, heads, () => 'dim'));
+  labels.forEach((l, r) => out.push(line(l, cols.map((c) => c[r] ?? ''), (i) => (highest[i] === r ? 'accent' : 'normal'))));
   return out;
 }

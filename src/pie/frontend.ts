@@ -5,7 +5,8 @@ import type { FrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutPie } from './layout.ts';
 import { parsePie } from './parse.ts';
-import { pieTextLines } from './text.ts';
+import { pieTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 export const pieFrontEnd: FrontEnd = {
   name: 'pie',
@@ -15,7 +16,10 @@ export const pieFrontEnd: FrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return pieTextLines(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
+    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
   },
   json(src, mode, opts) {
     const pie = parsePie(src, frontOf(opts).heading, frontOf(opts).config);

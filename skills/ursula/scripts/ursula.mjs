@@ -22365,12 +22365,61 @@ var padEnd = (text, width) => text + " ".repeat(Math.max(0, width - cellWidth(te
 var padStart = (text, width) => " ".repeat(Math.max(0, width - cellWidth(text))) + text;
 var span2 = (text, tone = "normal") => ({ text, tone });
 var joinSpans = (row) => row.map((s) => s.text).join("");
+function spansOf(...pieces) {
+  const flat = pieces.flatMap((p) => {
+    if (typeof p === "string")
+      return [[p, "normal"]];
+    if ("text" in p)
+      return [[p.text, p.tone]];
+    if (p.length === 2 && typeof p[0] === "string")
+      return [p];
+    return p.map((s) => [s.text, s.tone]);
+  });
+  const out = [];
+  for (const [text, tone] of flat) {
+    if (text === "")
+      continue;
+    const last = out[out.length - 1];
+    if (last !== undefined && last.tone === tone)
+      out[out.length - 1] = { text: last.text + text, tone };
+    else
+      out.push({ text, tone });
+  }
+  return out;
+}
+function sliceSpans(row, start, end = Infinity) {
+  const out = [];
+  let at = 0;
+  for (const s of row) {
+    const from = Math.max(start, at);
+    const to = Math.min(end, at + s.text.length);
+    if (from < to)
+      out.push({ text: s.text.slice(from - at, to - at), tone: s.tone });
+    at += s.text.length;
+  }
+  return spansOf(out);
+}
+var trimEndSpans = (row) => sliceSpans(row, 0, joinSpans(row).trimEnd().length);
+function cutSpans(row, limit) {
+  const text = joinSpans(row);
+  const kept = cut2(text, limit);
+  if (kept === text)
+    return spansOf(row);
+  const at = kept.length - 1;
+  const tone = sliceSpans(row, at, at + 1)[0]?.tone ?? "normal";
+  return spansOf(sliceSpans(row, 0, at), ["…", tone]);
+}
+var padEndSpans = (row, width) => spansOf(row, padEnd("", width - cellWidth(joinSpans(row))));
 
 // src/journey/text.ts
 var GAP2 = 2;
 var MIN = 4;
-function journeyTextLines(journey, maxWidth) {
-  const rows = journey.sections.flatMap((sec) => sec.tasks.map((t, i) => ({ section: i === 0 ? sec.name ?? "" : "", task: t.name, score: t.scoreText, actors: t.actors.join(", ") })));
+function journeyTextSpans(journey, maxWidth) {
+  const tasks = journey.sections.flatMap((sec) => sec.tasks);
+  const scores = tasks.map((t) => t.score);
+  const worst = Math.min(...scores);
+  const marked = scores.some((v) => v !== worst);
+  const rows = journey.sections.flatMap((sec) => sec.tasks.map((t, i) => ({ section: i === 0 ? sec.name ?? "" : "", task: t.name, score: t.scoreText, actors: t.actors.join(", "), low: marked && t.score === worst })));
   const widthOf = (key) => Math.max(0, ...rows.map((r) => cellWidth(r[key])));
   const w = { section: widthOf("section"), task: widthOf("task"), score: widthOf("score"), actors: widthOf("actors") };
   const total = () => w.section + w.task + w.score + w.actors + (w.section > 0 ? GAP2 : 0) + GAP2 + (w.actors > 0 ? GAP2 : 0);
@@ -22382,17 +22431,12 @@ function journeyTextLines(journey, maxWidth) {
       w[key] -= 1;
     }
   }
+  const gap = " ".repeat(GAP2);
   const lines = rows.map((r) => {
-    const parts = [];
-    if (w.section > 0)
-      parts.push(padEnd(cut2(r.section, w.section), w.section));
-    parts.push(padEnd(cut2(r.task, w.task), w.task));
-    parts.push(padStart(r.score, w.score));
-    if (w.actors > 0)
-      parts.push(cut2(r.actors, w.actors));
-    return parts.join(" ".repeat(GAP2)).trimEnd();
+    const section = cut2(r.section, w.section);
+    return trimEndSpans(spansOf(...w.section > 0 ? [[section, "bold"], padEnd("", w.section - cellWidth(section)), gap] : [], padEnd(cut2(r.task, w.task), w.task), gap, [padStart(r.score, w.score), r.low ? "accent" : "normal"], ...w.actors > 0 ? [gap, [cut2(r.actors, w.actors), "dim"]] : []));
   });
-  const head = journey.title === undefined ? [] : [maxWidth === undefined ? journey.title : cut2(journey.title, maxWidth)];
+  const head = journey.title === undefined ? [] : [spansOf([maxWidth === undefined ? journey.title : cut2(journey.title, maxWidth), "bold"])];
   return [...head, ...lines];
 }
 
@@ -22407,7 +22451,10 @@ registerFrontEnd({
     return withDescription(svg, journey.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return journeyTextLines(parseJourney(src, opts.heading), maxWidth);
+    return journeyTextSpans(parseJourney(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return journeyTextSpans(parseJourney(src, opts.heading), maxWidth);
   },
   json(src, _mode, opts) {
     const journey = parseJourney(src, opts.heading);
@@ -23605,7 +23652,7 @@ function toneOf(t) {
     return "bold";
   return t.done ? "dim" : "normal";
 }
-function spansOf(cells) {
+function spansOf2(cells) {
   const out = [];
   for (const cell of cells) {
     const last = out[out.length - 1];
@@ -23683,13 +23730,13 @@ function layoutGanttText(model, maxWidth) {
     for (const tick of plan.ticks)
       if (tick.month !== undefined)
         put(cells, Math.floor(cellOf(tick.t)), tick.month, "dim");
-    rows.push([...lead(""), ...spansOf(cells)]);
+    rows.push([...lead(""), ...spansOf2(cells)]);
   }
   const labelCells = blank(columns + rightW);
   for (const tick of plan.ticks)
     if (tick.label !== "")
       put(labelCells, Math.floor(cellOf(tick.t)), tick.label, "dim");
-  rows.push([...lead(""), ...spansOf(labelCells)]);
+  rows.push([...lead(""), ...spansOf2(labelCells)]);
   const rule = blank(columns);
   for (let i = 0;i < columns; i++)
     rule[i] = { ch: "─", tone: "dim" };
@@ -23698,7 +23745,7 @@ function layoutGanttText(model, maxWidth) {
     if (at >= 0 && at < columns)
       rule[at] = { ch: "┬", tone: "dim" };
   }
-  rows.push([span2("─".repeat(nameW + 1), "dim"), ...spansOf(rule)]);
+  rows.push([span2("─".repeat(nameW + 1), "dim"), ...spansOf2(rule)]);
   const verts = tasks.filter((t) => t.vert).map((t) => ({ col: Math.min(columns - 1, Math.max(0, Math.floor(cellOf(t.start)))), label: t.label }));
   let section = -1;
   for (const ti of rowsOf) {
@@ -23725,7 +23772,7 @@ function layoutGanttText(model, maxWidth) {
     }
     if (showRight)
       put(cells, end + 1, statusOf(t), "dim");
-    rows.push([...lead(`${" ".repeat(indent)}${t.label}`), ...spansOf(cells)]);
+    rows.push([...lead(`${" ".repeat(indent)}${t.label}`), ...spansOf2(cells)]);
   }
   verts.forEach((v, i) => {
     const cells = blank(columns + rightW);
@@ -23736,7 +23783,7 @@ function layoutGanttText(model, maxWidth) {
       put(cells, v.col, `┊ ${v.label}`, "dim");
     else
       put(cells, Math.max(0, v.col - cellWidth(v.label) - 1), `${v.label} ┊`, "dim");
-    rows.push([...lead(""), ...spansOf(cells)]);
+    rows.push([...lead(""), ...spansOf2(cells)]);
   });
   return rows.map(trimEnd);
 }
@@ -24834,6 +24881,12 @@ function nameOverLine(layout, lines) {
 }
 var RESERVES = [0, 2, 4, 8];
 function drawEventModel(model, maxWidth, told) {
+  return bestDrawing(model, maxWidth, told)?.lines;
+}
+function drawEventModelSpans(model, maxWidth) {
+  return bestDrawing(model, maxWidth)?.spans();
+}
+function bestDrawing(model, maxWidth, told) {
   if (model.frames.length === 0)
     return;
   const limit = maxWidth ?? Number.POSITIVE_INFINITY;
@@ -24864,10 +24917,11 @@ function drawEventModel(model, maxWidth, told) {
     const first = renderTextLayout(layout, limit);
     const widest = largest(first.map(cellWidth), 0);
     const reach = Math.min(widest + 2, limit);
-    const lines = widest > layout.width ? renderTextLayout({ ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) }, limit) : first;
+    const drawn = widest > layout.width ? { ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) } : layout;
+    const lines = drawn === layout ? first : renderTextLayout(drawn, limit);
     if (!lines.every((line) => cellWidth(line) <= limit) || nameOverLine(layout, lines))
       return;
-    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length, rows: lines.length - grid.opened };
+    return { lines, spans: () => renderTextLayoutSpans(drawn, limit), cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length, rows: lines.length - grid.opened };
   };
   const firstWhole = (ways) => {
     let fits;
@@ -24885,11 +24939,11 @@ function drawEventModel(model, maxWidth, told) {
   };
   const one = firstWhole(VARIANTS.map((variant) => () => attempt(variant, limit, "one", true) ?? attempt(variant, limit, "one", false)));
   if (one !== undefined || maxWidth === undefined || spent > BUDGET2 || tooLarge)
-    return one?.lines;
+    return one;
   const wide = VARIANTS.filter((v) => v.step === VARIANTS[0]?.step);
   const ways = wide.flatMap((variant) => RESERVES.map((reserve) => ({ variant, wrap: maxWidth - reserve, set: setOut(model, variant, maxWidth - reserve) }))).map(({ variant, wrap, set }) => ({ variant, wrap, least: set === undefined ? Number.POSITIVE_INFINITY : leastRows(set.slots, set.bands.length) })).sort((a, b) => a.least - b.least);
   const wrapped = (tidy) => firstWhole(ways.map((way) => () => attempt(way.variant, way.wrap, "any", tidy)));
-  return (wrapped(true) ?? wrapped(false))?.lines;
+  return wrapped(true) ?? wrapped(false);
 }
 
 // src/eventmodeling/text.ts
@@ -24948,6 +25002,10 @@ function drawn(model, maxWidth) {
   const lines = drawEventModel(model, maxWidth);
   return lines === undefined ? undefined : titledLines(lines, model.title, maxWidth);
 }
+function drawnSpans(model, maxWidth) {
+  const rows = drawEventModelSpans(model, maxWidth);
+  return rows === undefined ? undefined : titledSpans(rows, model.title, maxWidth);
+}
 registerFrontEnd({
   name: "eventmodeling",
   headers: ["eventmodeling"],
@@ -24963,7 +25021,7 @@ registerFrontEnd({
   },
   textSpans(src, maxWidth, opts) {
     const model = parseEventModeling(src, opts.heading);
-    return drawn(model, maxWidth)?.map((text) => [{ text, tone: "normal" }]) ?? layoutEventModelText(model, maxWidth);
+    return drawnSpans(model, maxWidth) ?? layoutEventModelText(model, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseEventModeling(src, opts.heading);
@@ -25551,23 +25609,23 @@ function parseCynefin(src, heading) {
 
 // src/cynefin/text.ts
 var ORDER2 = ["complex", "complicated", "chaotic", "clear", "confusion"];
-function cynefinTextLines(model, maxWidth) {
+function cynefinTextSpans(model, maxWidth) {
   const nameW = Math.max(...ORDER2.map((d) => cellWidth(DOMAIN_NAMES[d])));
   const cap = (fixed) => maxWidth === undefined ? Number.POSITIVE_INFINITY : Math.max(1, maxWidth - fixed);
-  const fit = (s, fixed) => cut2(s, cap(fixed));
+  const fit = (row, fixed) => cutSpans(row, cap(fixed));
   const rows = ORDER2.flatMap((domain) => {
     const items = model.items[domain];
     const name = DOMAIN_NAMES[domain];
     if (items.length === 0)
-      return [name];
-    return items.map((item, i) => `${padEnd(i === 0 ? name : "", nameW)}  ${fit(item, nameW + 2)}`);
+      return [spansOf([name, "bold"])];
+    return items.map((item, i) => spansOf(padEndSpans(spansOf([i === 0 ? name : "", "bold"]), nameW), "  ", fit(spansOf(item), nameW + 2)));
   });
   const moves = model.transitions.map((t) => {
     const head = `${DOMAIN_NAMES[t.from]} → ${DOMAIN_NAMES[t.to]}`;
-    return fit(t.label === undefined ? head : `${head} : ${t.label}`, 0);
+    return fit(spansOf(head, [t.label === undefined ? "" : ` : ${t.label}`, "dim"]), 0);
   });
-  const head = model.title === undefined ? [] : [fit(model.title, 0)];
-  return [...head, ...rows, ...moves.length === 0 ? [] : ["", ...moves]];
+  const head = model.title === undefined ? [] : [fit(spansOf([model.title, "bold"]), 0)];
+  return [...head, ...rows, ...moves.length === 0 ? [] : [[], ...moves]];
 }
 
 // src/cynefin/frontend.ts
@@ -25581,7 +25639,10 @@ registerFrontEnd({
     });
   },
   textLines(src, maxWidth, opts) {
-    return cynefinTextLines(parseCynefin(src, opts.heading), maxWidth);
+    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseCynefin(src, opts.heading);
@@ -26142,7 +26203,8 @@ function parseGit(src, heading, config) {
 
 // src/git/text.ts
 var GLYPH = { NORMAL: "●", HIGHLIGHT: "◉", REVERSE: "⊗" };
-function gitTextLines(graph, maxWidth) {
+var branchList = (names) => spansOf("(", ...names.flatMap((n, i) => [i === 0 ? "" : ", ", [n, "bold"]]), ")");
+function gitTextSpans(graph, maxWidth) {
   const order = displayOrder(graph);
   const col = new Map(order.map((n, i) => [n, i]));
   const cols = order.length;
@@ -26216,26 +26278,26 @@ function gitTextLines(graph, maxWidth) {
   const note = (c) => {
     const parts = [];
     if (graph.config.showCommitLabel)
-      parts.push(c.id);
+      parts.push(spansOf([c.id, "dim"]));
     if (c.tag !== undefined)
-      parts.push(`[${c.tag}]`);
+      parts.push(spansOf([`[${c.tag}]`, "accent"]));
     const names = tips.get(c.seq);
     if (names !== undefined)
-      parts.push(`(${names.join(", ")})`);
-    return parts.join("  ");
+      parts.push(branchList(names));
+    return spansOf(...parts.flatMap((p, i) => i === 0 ? [p] : ["  ", p]));
   };
-  const graphCells = rows.map((row) => row.glyph.map((g, i) => `${g}${row.fill[i] ?? ""}`).join(""));
-  const graphW = Math.max(0, ...graphCells.map(cellWidth));
+  const graphCells = rows.map((row) => spansOf(...row.glyph.flatMap((g, i) => [[g, g === GLYPH.HIGHLIGHT ? "accent" : "normal"], row.fill[i] ?? ""])));
+  const graphW = Math.max(0, ...graphCells.map((r) => cellWidth(r.map((s) => s.text).join(""))));
   const lines = graph.commits.map((c, i) => {
-    const left = (graphCells[i] ?? "").replace(/\s+$/u, "");
-    const pad = " ".repeat(Math.max(0, graphW - cellWidth(left)));
+    const left = trimEndSpans(graphCells[i] ?? []);
+    const pad = " ".repeat(Math.max(0, graphW - cellWidth(left.map((s) => s.text).join(""))));
     const text = note(c);
     const room = maxWidth === undefined ? undefined : Math.max(1, maxWidth - graphW - 2);
-    return `${left}${pad}  ${room === undefined ? text : cut2(text, room)}`.replace(/\s+$/u, "");
+    return trimEndSpans(spansOf(left, `${pad}  `, room === undefined ? text : cutSpans(text, room)));
   });
-  const head = graph.title === undefined ? [] : [maxWidth === undefined ? graph.title : cut2(graph.title, maxWidth)];
+  const head = graph.title === undefined ? [] : [spansOf([maxWidth === undefined ? graph.title : cut2(graph.title, maxWidth), "bold"])];
   const strays = order.filter((n) => !graph.commits.some((c) => c.branch === n) && !(tips.get(graph.branches.find((b) => b.name === n)?.parent ?? -1) ?? []).includes(n));
-  const tail = graph.config.showBranches && strays.length > 0 ? [`(${strays.join(", ")})`] : [];
+  const tail = graph.config.showBranches && strays.length > 0 ? [branchList(strays)] : [];
   return [...head, ...lines, ...tail];
 }
 
@@ -26248,7 +26310,10 @@ var gitFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return gitTextLines(parseGit(src, opts.heading, opts.config), maxWidth);
+    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth);
   },
   json(src, mode, opts) {
     const graph = parseGit(src, opts.heading, opts.config);
@@ -27077,20 +27142,20 @@ ${(rows[m] ?? "").trim()}`;
 
 // src/mindmap/text.ts
 var labelOf3 = (n) => n.paragraphs.join(" ");
-function mindmapTextLines(map, maxWidth, heading) {
+function mindmapTextSpans(map, maxWidth, heading) {
   const rows = [];
   const walk = (children, prefix) => {
     children.forEach((c, i) => {
       const last = i === children.length - 1;
-      rows.push(`${prefix}${last ? "└── " : "├── "}${labelOf3(c)}`);
+      rows.push(spansOf([`${prefix}${last ? "└── " : "├── "}`, "dim"], labelOf3(c)));
       walk(c.children, `${prefix}${last ? "    " : "│   "}`);
     });
   };
-  rows.push(labelOf3(map.root));
+  rows.push(spansOf([labelOf3(map.root), "bold"]));
   walk(map.root.children, "");
-  const head = heading === undefined || heading === "" ? [] : [heading];
+  const head = heading === undefined || heading === "" ? [] : [spansOf([heading, "bold"])];
   const lines = [...head, ...rows];
-  return maxWidth === undefined ? lines : lines.map((l) => cut2(l, maxWidth));
+  return maxWidth === undefined ? lines : lines.map((l) => cutSpans(l, maxWidth));
 }
 
 // src/mindmap/frontend.ts
@@ -27110,7 +27175,10 @@ var mindmapFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return mindmapTextLines(parseMindmap(src), maxWidth, opts.heading);
+    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading);
   },
   json(src, mode, opts) {
     const { map, layout } = layoutOf(src, opts, mode);
@@ -27473,7 +27541,7 @@ function layoutQuadrant(chart, ruler) {
 }
 
 // src/quadrant/text.ts
-function quadrantTextLines(chart, maxWidth) {
+function quadrantTextSpans(chart, maxWidth) {
   const GAP = 2;
   const MIN = 4;
   const rows = chart.points.map((p) => {
@@ -27498,9 +27566,11 @@ function quadrantTextLines(chart, maxWidth) {
   }
   const lines = [];
   const title = chart.title ?? "Quadrant chart";
-  lines.push(maxWidth === undefined ? title : cut2(title, maxWidth));
+  lines.push(spansOf([maxWidth === undefined ? title : cut2(title, maxWidth), "bold"]));
+  const gap = " ".repeat(GAP);
   for (const r of rows) {
-    lines.push([padEnd(cut2(r.name, nameW), nameW), padStart(r.x, xW), padStart(r.y, yW), cut2(r.quadrant, quadW)].join(" ".repeat(GAP)).trimEnd());
+    const name = cut2(r.name, nameW);
+    lines.push(trimEndSpans(spansOf([name, "bold"], padEnd("", nameW - cellWidth(name)), gap, padStart(r.x, xW), gap, padStart(r.y, yW), gap, [cut2(r.quadrant, quadW), "dim"])));
   }
   return lines;
 }
@@ -27516,7 +27586,10 @@ registerFrontEnd({
     return withDescription(svg, chart.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return quadrantTextLines(parseQuadrant(src, opts), maxWidth);
+    return quadrantTextSpans(parseQuadrant(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return quadrantTextSpans(parseQuadrant(src, opts), maxWidth);
   },
   json(src, _mode, opts) {
     return layoutQuadrant(parseQuadrant(src, opts), pixelRuler());
@@ -28309,20 +28382,27 @@ function ebnf(node) {
       return `${wrapped(node.item, ebnf(node.item), 3)} - ${wrapped(node.except, ebnf(node.except), 3)}`;
   }
 }
-function railroadTextLines(model, maxWidth) {
-  const head = model.title === undefined ? [] : [maxWidth === undefined ? model.title : cut2(model.title, maxWidth)];
+function ruleLine(name, prefix, body, closes) {
+  const named = prefix.startsWith(name) ? name : "";
+  const end = closes && body.endsWith(";") ? body.length - 1 : body.length;
+  return spansOf([named, "bold"], [prefix.slice(named.length), "dim"], body.slice(0, end), [body.slice(end), "dim"]);
+}
+function railroadTextSpans(model, maxWidth) {
+  const head = model.title === undefined ? [] : [spansOf([maxWidth === undefined ? model.title : cut2(model.title, maxWidth), "bold"])];
   const rows = model.rules.flatMap((rule) => {
     const first = `${rule.name} = `;
     const whole = `${first}${ebnf(rule.body)} ;`;
     if (maxWidth === undefined || cellWidth(whole) <= maxWidth)
-      return [whole];
+      return [ruleLine(rule.name, first, `${ebnf(rule.body)} ;`, true)];
     const pieces = rule.body.k === "choice" ? rule.body.items.map(ebnf) : [ebnf(rule.body)];
     const lead = " ".repeat(cellWidth(rule.name));
     return pieces.flatMap((piece, i) => {
       const prefix = i === 0 ? first : `${lead} ${rule.body.k === "choice" && rule.body.ordered === true ? "/" : "|"} `;
       const room = Math.max(1, maxWidth - cellWidth(prefix));
-      const body = i === pieces.length - 1 ? `${piece} ;` : piece;
-      return wrapWords(body, room, cellWidth, { blank: true }).map((l, j) => (j === 0 ? prefix : " ".repeat(cellWidth(prefix))) + l);
+      const last = i === pieces.length - 1;
+      const body = last ? `${piece} ;` : piece;
+      const wrapped = wrapWords(body, room, cellWidth, { blank: true });
+      return wrapped.map((l, j) => ruleLine(rule.name, j === 0 ? prefix : " ".repeat(cellWidth(prefix)), l, last && j === wrapped.length - 1));
     });
   });
   return [...head, ...rows];
@@ -28337,7 +28417,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return railroadTextLines(parseRailroad(src, opts.heading), maxWidth);
+    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseRailroad(src, opts.heading);
@@ -29464,35 +29547,40 @@ var HEAVY2 = {
 
 class Canvas2 {
   rows;
+  tones;
   width;
   constructor(width, height) {
     this.width = width;
     this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
+    this.tones = Array.from({ length: height }, () => new Array(width).fill("normal"));
   }
-  put(x, y, ch) {
+  put(x, y, ch, tone = "normal") {
     const row = this.rows[y];
-    if (row === undefined || x < 0 || x >= this.width)
+    const tones = this.tones[y];
+    if (row === undefined || tones === undefined || x < 0 || x >= this.width)
       return;
     row[x] = ch;
+    tones[x] = tone;
   }
-  text(x, y, s) {
+  text(x, y, s, tone = "normal") {
     let at = x;
     for (const ch of s) {
       const w = cellWidth(ch);
-      this.put(at, y, ch);
+      this.put(at, y, ch, tone);
       if (w === 2)
-        this.put(at + 1, y, "");
+        this.put(at + 1, y, "", tone);
       at += w;
     }
   }
   lines() {
-    const out = this.rows.map((r) => r.join("").trimEnd());
-    while (out.length > 0 && out[out.length - 1] === "")
+    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones[y]?.[x] ?? "normal"]))));
+    while (out.length > 0 && out[out.length - 1]?.length === 0)
       out.pop();
-    while (out.length > 0 && out[0] === "")
+    while (out.length > 0 && out[0]?.length === 0)
       out.shift();
-    const indent = Math.min(...out.filter((l) => l !== "").map((l) => l.length - l.trimStart().length));
-    return Number.isFinite(indent) ? out.map((l) => l.slice(indent)) : out;
+    const texts = out.map(joinSpans);
+    const indent = Math.min(...texts.filter((l) => l !== "").map((l) => l.length - l.trimStart().length));
+    return Number.isFinite(indent) ? out.map((l) => sliceSpans(l, indent)) : out;
   }
 }
 function glyphsOf(b) {
@@ -29526,19 +29614,20 @@ function glyphsOf(b) {
 function drawFrame(c, b, g, dashed) {
   const { x, y, w, h } = b;
   const mid = y + Math.floor(h / 2);
+  const tone = dashed ? "dim" : "normal";
   for (let i = 1;i < w - 1; i++) {
-    c.put(x + i, y, dashed ? "╌" : g.top);
-    c.put(x + i, y + h - 1, dashed ? "╌" : g.top);
+    c.put(x + i, y, dashed ? "╌" : g.top, tone);
+    c.put(x + i, y + h - 1, dashed ? "╌" : g.top, tone);
   }
   for (let j = 1;j < h - 1; j++) {
     const row = y + j;
-    c.put(x, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[0] : g.side);
-    c.put(x + w - 1, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[1] : g.side);
+    c.put(x, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[0] : g.side, tone);
+    c.put(x + w - 1, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[1] : g.side, tone);
   }
-  c.put(x, y, g.corners[0]);
-  c.put(x + w - 1, y, g.corners[1]);
-  c.put(x, y + h - 1, g.corners[2]);
-  c.put(x + w - 1, y + h - 1, g.corners[3]);
+  c.put(x, y, g.corners[0], tone);
+  c.put(x + w - 1, y, g.corners[1], tone);
+  c.put(x, y + h - 1, g.corners[2], tone);
+  c.put(x + w - 1, y + h - 1, g.corners[3], tone);
 }
 function drawMarks(c, b) {
   const { x, y, w, h } = b;
@@ -29591,7 +29680,7 @@ function drawBlock(c, b) {
     if (line === "")
       return;
     const w = cellWidth(line);
-    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line);
+    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line, "bold");
   });
 }
 function cellOf3(p, block, isEnd) {
@@ -29650,7 +29739,7 @@ function drawLinks(c, links, byId) {
     const horizontal = (cell.bits & (E5 | W6)) !== 0 && (cell.bits & (N5 | S5)) === 0;
     const vertical = (cell.bits & (N5 | S5)) !== 0 && (cell.bits & (E5 | W6)) === 0;
     const glyph = cell.style === "dotted" && horizontal ? "┄" : cell.style === "dotted" && vertical ? "┆" : (cell.style === "thick" ? HEAVY2 : LIGHT2)[cell.bits] ?? "┼";
-    c.put(x, y, glyph);
+    c.put(x, y, glyph, cell.style === "dotted" ? "dim" : "normal");
   }
   for (const h of heads)
     c.put(h.x, h.y, h.ch);
@@ -29674,11 +29763,28 @@ function render(layout) {
   drawChips(c, layout.links);
   return c.lines();
 }
+function tonesAlong(whole) {
+  const blank = (ch) => /\s/u.test(ch);
+  const tones = whole.flatMap((s) => [...s.text].filter((ch) => !blank(ch)).map(() => s.tone));
+  let at = 0;
+  return (line) => {
+    const chars = [...line];
+    const own = chars.map((ch) => blank(ch) ? undefined : tones[at++] ?? "normal");
+    return spansOf(...chars.map((ch, i) => {
+      const tone = own[i];
+      if (tone !== undefined)
+        return [ch, tone];
+      const before = own.slice(0, i).reverse().find((t) => t !== undefined);
+      const after = own.slice(i + 1).find((t) => t !== undefined);
+      return [ch, before !== undefined && before === after ? before : "normal"];
+    }));
+  };
+}
 function outline2(model, maxWidth) {
   const lines = [];
   if (model.title !== undefined)
-    lines.push(model.title, "");
-  const label = (item) => item.kind === "space" ? "·".repeat(Math.min(item.span, 3)) : item.kind === "group" ? `[${item.id}]` : `${item.lines.join(" ")}${item.span > 1 ? ` x${item.span}` : ""}`;
+    lines.push(spansOf([model.title, "bold"]), []);
+  const label = (item) => item.kind === "space" ? spansOf(["·".repeat(Math.min(item.span, 3)), "dim"]) : item.kind === "group" ? spansOf(["[", "dim"], [item.id, "bold"], ["]", "dim"]) : spansOf([item.lines.join(" "), "bold"], [item.span > 1 ? ` x${item.span}` : "", "dim"]);
   const walk = (children, columns, depth) => {
     const perRow = [[]];
     let used = 0;
@@ -29692,8 +29798,10 @@ function outline2(model, maxWidth) {
       used += span;
     }
     for (const row of perRow) {
-      for (const text of wrapWords(row.map(label).join(" | "), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true }))
-        lines.push(`${"  ".repeat(depth)}${text}`);
+      const whole = spansOf(...row.flatMap((item, i) => [i === 0 ? "" : [" | ", "dim"], label(item)]));
+      const along = tonesAlong(whole);
+      for (const text of wrapWords(joinSpans(whole), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true }))
+        lines.push(spansOf("  ".repeat(depth), along(text)));
       for (const item of row)
         if (item.kind === "group")
           walk(item.children, item.columns, depth + 1);
@@ -29701,18 +29809,26 @@ function outline2(model, maxWidth) {
   };
   walk(model.children, model.columns, 0);
   if (model.links.length > 0)
-    lines.push("");
-  for (const link of model.links)
-    lines.push(`${link.from} ${link.style === "dotted" ? "┄" : link.style === "thick" ? "━" : "─"}${link.arrow ? "▶" : "─"} ${link.to}${link.label === undefined ? "" : `  ${link.label}`}`);
-  return lines.map((l) => cellWidth(l) > maxWidth ? [...l].slice(0, maxWidth - 1).join("") + "…" : l);
+    lines.push([]);
+  for (const link of model.links) {
+    const line = `${link.style === "dotted" ? "┄" : link.style === "thick" ? "━" : "─"}${link.arrow ? "▶" : "─"}`;
+    lines.push(spansOf([link.from, "bold"], " ", [line, link.style === "dotted" ? "dim" : "normal"], " ", [link.to, "bold"], [link.label === undefined ? "" : `  ${link.label}`, "dim"]));
+  }
+  return lines.map((l) => {
+    const text = joinSpans(l);
+    if (cellWidth(text) <= maxWidth)
+      return l;
+    const kept = [...text].slice(0, maxWidth - 1).join("").length;
+    return spansOf(sliceSpans(l, 0, kept), ["…", sliceSpans(l, kept, kept + 1)[0]?.tone ?? "normal"]);
+  });
 }
-function blockTextLines(model, maxWidth) {
+function blockTextSpans(model, maxWidth) {
   const ruler = cellRuler();
-  const titleRows = model.title === undefined ? [] : [model.title, ""];
+  const titleRows = model.title === undefined ? [] : [spansOf([model.title, "bold"]), []];
   const { title, ...untitled } = model;
   for (const compact of [false, true]) {
     const body = render(layoutBlock(untitled, ruler, compact));
-    const widest = Math.max(0, ...body.map(cellWidth));
+    const widest = Math.max(0, ...body.map((l) => cellWidth(joinSpans(l))));
     if (maxWidth === undefined || widest <= maxWidth)
       return [...titleRows, ...body];
   }
@@ -29729,7 +29845,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return blockTextLines(parseBlock(src, opts.heading), maxWidth);
+    return blockTextSpans(parseBlock(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return blockTextSpans(parseBlock(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseBlock(src, opts.heading);
@@ -30053,7 +30172,7 @@ function parsePie(src, heading, config) {
 function percent(value, total) {
   return `${(value / total * 100).toFixed(1)}%`;
 }
-function pieTextLines(pie, maxWidth) {
+function pieTextSpans(pie, maxWidth) {
   const total = pie.slices.reduce((sum, s) => sum + s.value, 0);
   const values = pie.slices.map((s) => s.valueText);
   const shares = pie.slices.map((s) => percent(s.value, total));
@@ -30062,11 +30181,12 @@ function pieTextLines(pie, maxWidth) {
   const fixed = 2 + valueW + 2 + shareW;
   const labelW = Math.max(...pie.slices.map((s) => cellWidth(s.label)));
   const cap = maxWidth === undefined ? labelW : Math.max(1, Math.min(labelW, maxWidth - fixed));
+  const largest = pie.slices.findIndex((s) => s.value === Math.max(...pie.slices.map((t) => t.value)));
   const rows = pie.slices.map((s, i) => {
     const label = cut2(s.label, cap);
-    return `${padEnd(label, cap)}  ${padStart(values[i] ?? "", valueW)}  ${padStart(shares[i] ?? "", shareW)}`;
+    return spansOf(`${padEnd(label, cap)}  ${padStart(values[i] ?? "", valueW)}  `, [padStart(shares[i] ?? "", shareW), i === largest ? "accent" : "dim"]);
   });
-  const head = pie.title === undefined ? [] : [maxWidth === undefined ? pie.title : cut2(pie.title, maxWidth)];
+  const head = pie.title === undefined ? [] : [spansOf([maxWidth === undefined ? pie.title : cut2(pie.title, maxWidth), "bold"])];
   return [...head, ...rows];
 }
 
@@ -30079,7 +30199,10 @@ var pieFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return pieTextLines(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
+    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
   },
   json(src, mode, opts) {
     const pie = parsePie(src, frontOf(opts).heading, frontOf(opts).config);
@@ -30360,6 +30483,7 @@ function put2(row, at, text) {
       row[at + i] = ch;
   });
 }
+var rowOf2 = (cells, tone) => trimEndSpans(spansOf([cells.join(""), tone]));
 function layoutPacketText(packet, maxWidth) {
   const { cells: k, bits } = plan(packet.bitsPerRow, maxWidth);
   const pieces = splitFields({ ...packet, bitsPerRow: bits });
@@ -30367,12 +30491,13 @@ function layoutPacketText(packet, maxWidth) {
   const total = bits * k + 1;
   const out = [];
   if (packet.title !== undefined)
-    out.push(packet.title, "");
+    out.push(spansOf([packet.title, "bold"]), []);
   for (let r = 0;r < rows; r++) {
     const mine = pieces.filter((p) => p.row === r).sort((a, b) => a.c0 - b.c0);
     const numbers = new Array(total).fill(" ");
     const top = new Array(total).fill(" ");
     const mid = new Array(total).fill(" ");
+    const named = new Array(total).fill(false);
     const bottom = new Array(total).fill(" ");
     mine.forEach((p, i) => {
       const x0 = p.c0 * k;
@@ -30391,15 +30516,21 @@ function layoutPacketText(packet, maxWidth) {
       mid[x1] = "│";
       const room = x1 - x0 - 1;
       const name = shrinkToFit(p.label, room, cellWidth) ?? "…";
-      put2(mid, x0 + 1 + Math.floor((room - cellWidth(name)) / 2), name);
+      const at = x0 + 1 + Math.floor((room - cellWidth(name)) / 2);
+      put2(mid, at, name);
+      [...name].forEach((_, j) => {
+        if (at + j < total)
+          named[at + j] = true;
+      });
       const num = String(p.left);
       const nextAt = mine[i + 1] === undefined ? total : (mine[i + 1]?.c0 ?? 0) * k;
       if (x0 + num.length < nextAt)
         put2(numbers, x0, num);
     });
     if (packet.showBits)
-      out.push(numbers.join("").trimEnd());
-    out.push(top.join("").trimEnd(), mid.join("").trimEnd(), bottom.join("").trimEnd());
+      out.push(rowOf2(numbers, "dim"));
+    const middle = spansOf(...mid.map((ch, x) => [ch, named[x] === true ? "bold" : "normal"]));
+    out.push(rowOf2(top, "normal"), trimEndSpans(middle), rowOf2(bottom, "normal"));
   }
   return out;
 }
@@ -30416,6 +30547,9 @@ registerFrontEnd({
     return renderThemedScene(scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
+    return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
     return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth);
   },
   json(src, mode, opts) {
@@ -30983,7 +31117,7 @@ function parseRadar(src, heading, config) {
 }
 
 // src/radar/text.ts
-function radarTextLines(model, maxWidth) {
+function radarTextSpans(model, maxWidth) {
   const cols = model.curves.map((c, k) => ({ head: c.label, cells: model.axes.map((_, i) => String(c.values[i] ?? "")), k }));
   const labels = model.axes.map((a) => a.label);
   let labelW = Math.max(0, ...labels.map(cellWidth));
@@ -31006,13 +31140,13 @@ function radarTextLines(model, maxWidth) {
   }
   const lines = [];
   if (model.title !== undefined)
-    lines.push(maxWidth === undefined ? model.title : cut2(model.title, maxWidth));
+    lines.push(spansOf([maxWidth === undefined ? model.title : cut2(model.title, maxWidth), "bold"]));
   if (cols.length > 0)
-    lines.push(padEnd("", labelW) + cols.map((c, j) => `  ${padStart(cut2(c.head, colW[j] ?? 0), colW[j] ?? 0)}`).join(""));
+    lines.push(spansOf(padEnd("", labelW), ...cols.map((c, j) => ["  " + padStart(cut2(c.head, colW[j] ?? 0), colW[j] ?? 0), "dim"])));
   labels.forEach((l, i) => {
-    lines.push(padEnd(cut2(l, labelW), labelW) + cols.map((c, j) => `  ${padStart(c.cells[i] ?? "", colW[j] ?? 0)}`).join(""));
+    lines.push(spansOf([padEnd(cut2(l, labelW), labelW), "dim"], cols.map((c, j) => `  ${padStart(c.cells[i] ?? "", colW[j] ?? 0)}`).join("")));
   });
-  return lines.map((l) => l.trimEnd());
+  return lines.map(trimEndSpans);
 }
 
 // src/radar/frontend.ts
@@ -31024,7 +31158,10 @@ var radarFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return radarTextLines(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
+    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
   },
   json(src, _mode, opts) {
     return layoutRadar(parseRadar(src, opts.heading, frontOf(opts).config), pixelRuler());
@@ -31782,7 +31919,7 @@ function assertAcyclic(nodes, links) {
 }
 
 // src/sankey/text.ts
-function sankeyTextLines(map, maxWidth) {
+function sankeyTextSpans(map, maxWidth) {
   const rows = map.links.map((l) => ({ from: map.nodes[l.source]?.name ?? "", to: map.nodes[l.target]?.name ?? "", value: valueText(l.value) }));
   const valueW = Math.max(...rows.map((r) => cellWidth(r.value)));
   let fromW = Math.max(...rows.map((r) => cellWidth(r.from)));
@@ -31796,8 +31933,13 @@ function sankeyTextLines(map, maxWidth) {
         toW--;
     }
   }
-  const lines = rows.map((r) => `${padEnd(cut2(r.from, fromW), fromW)}  ${padEnd(cut2(r.to, toW), toW)}  ${padStart(r.value, valueW)}`);
-  const head = map.title === undefined ? [] : [maxWidth === undefined ? map.title : cut2(map.title, maxWidth)];
+  const largest = map.links.findIndex((l) => l.value === Math.max(...map.links.map((m) => m.value)));
+  const named = (text, width) => {
+    const name = cut2(text, width);
+    return spansOf([name, "bold"], padEnd("", width - cellWidth(name)));
+  };
+  const lines = rows.map((r, i) => spansOf(named(r.from, fromW), "  ", named(r.to, toW), "  ", [padStart(r.value, valueW), i === largest ? "accent" : "normal"]));
+  const head = map.title === undefined ? [] : [spansOf([maxWidth === undefined ? map.title : cut2(map.title, maxWidth), "bold"])];
   return [...head, ...lines];
 }
 
@@ -31814,7 +31956,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return sankeyTextLines(read2(src, opts), maxWidth);
+    return sankeyTextSpans(read2(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return sankeyTextSpans(read2(src, opts), maxWidth);
   },
   json(src, mode, opts) {
     const sankey = read2(src, opts);
@@ -32531,9 +32676,9 @@ function layoutArchitectureText(model, maxWidth) {
 
 // src/architecture/frontend.ts
 function drawn2(model, maxWidth) {
-  return drawnSpans(model, maxWidth)?.map((row) => row.map((s) => s.text).join(""));
+  return drawnSpans2(model, maxWidth)?.map((row) => row.map((s) => s.text).join(""));
 }
-function drawnSpans(model, maxWidth) {
+function drawnSpans2(model, maxWidth) {
   if (model.nodes.length === 0)
     return;
   try {
@@ -32560,7 +32705,7 @@ registerFrontEnd({
   },
   textSpans(src, maxWidth, opts) {
     const model = parseArchitecture(src, opts.heading);
-    return drawnSpans(model, maxWidth) ?? layoutArchitectureText(model, maxWidth);
+    return drawnSpans2(model, maxWidth) ?? layoutArchitectureText(model, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseArchitecture(src, opts.heading);
@@ -33647,7 +33792,7 @@ class Grid {
     return cx - x;
   }
 }
-function spansOf2(row) {
+function spansOf3(row) {
   let last = -1;
   row.forEach((cell, i) => {
     if (cell !== undefined && cell.ch !== " ")
@@ -34191,7 +34336,7 @@ function render2(c, gaps) {
         title(d.row, [[`[${d.text}]`, "normal"]]);
     }
   }
-  const lines = g.rows.map(spansOf2);
+  const lines = g.rows.map(spansOf3);
   let width = 0;
   for (const row of g.rows) {
     let last = -1;
@@ -37094,14 +37239,14 @@ function parseTreemap(src, heading, config) {
 }
 
 // src/treemap/text.ts
-function treemapTextLines(map, maxWidth) {
+function treemapTextSpans(map, maxWidth) {
   const fmt = makeFormatter(map.valueFormat);
   const rows = [];
   const walk = (nodes, lead, top) => {
     nodes.forEach((n, i) => {
       const last = i === nodes.length - 1;
       const prefix = top ? "" : `${lead}${last ? "└── " : "├── "}`;
-      rows.push({ prefix, label: n.label, value: fmt(total2(n)) });
+      rows.push({ prefix, label: n.label, value: fmt(total2(n)), group: n.children.length > 0 });
       walk(n.children, top ? "" : `${lead}${last ? "    " : "│   "}`, false);
     });
   };
@@ -37111,9 +37256,9 @@ function treemapTextLines(map, maxWidth) {
   const cap = maxWidth === undefined ? natural : Math.max(1, Math.min(natural, maxWidth - 2 - valueW));
   const lines = rows.map((r) => {
     const label = cut2(r.label, Math.max(1, cap - cellWidth(r.prefix)));
-    return `${padEnd(`${r.prefix}${label}`, cap)}  ${padStart(r.value, valueW)}`;
+    return spansOf([r.prefix, "dim"], [label, r.group ? "bold" : "normal"], `${padEnd("", cap - cellWidth(r.prefix + label))}  ${padStart(r.value, valueW)}`);
   });
-  const head = map.title === undefined ? [] : [maxWidth === undefined ? map.title : cut2(map.title, maxWidth)];
+  const head = map.title === undefined ? [] : [spansOf([maxWidth === undefined ? map.title : cut2(map.title, maxWidth), "bold"])];
   return [...head, ...lines];
 }
 
@@ -37130,7 +37275,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return treemapTextLines(read4(src, opts), maxWidth);
+    return treemapTextSpans(read4(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return treemapTextSpans(read4(src, opts), maxWidth);
   },
   json(src, mode, opts) {
     const treemap = read4(src, opts);
@@ -37650,26 +37798,29 @@ function parseVenn(src, heading) {
 }
 
 // src/venn/text.ts
-function vennTextLines(venn, maxWidth) {
+function vennTextSpans(venn, maxWidth) {
   const nameOf = (id) => venn.sets.find((s) => s.id === id)?.label ?? id;
   const rows = [];
+  const texts = (list) => {
+    for (const t of list)
+      rows.push([spansOf(["  " + t.label, "dim"]), ""]);
+  };
   for (const set of venn.sets) {
-    rows.push([set.label, set.sizeText ?? ""]);
-    for (const t of set.texts)
-      rows.push([`  ${t.label}`, ""]);
+    rows.push([spansOf([set.label, "bold"]), set.sizeText ?? ""]);
+    texts(set.texts);
   }
   for (const u of venn.unions) {
     const sets = u.ids.map(nameOf).join(" ∩ ");
-    rows.push([u.label === undefined ? sets : `${sets} : ${u.label}`, u.sizeText ?? ""]);
-    for (const t of u.texts)
-      rows.push([`  ${t.label}`, ""]);
+    rows.push([spansOf(sets, u.label === undefined ? "" : ` : ${u.label}`), u.sizeText ?? ""]);
+    texts(u.texts);
   }
+  const text = (row) => row.map((s) => s.text).join("");
   const valueW = Math.max(...rows.map(([, v]) => cellWidth(v)));
-  const labelW = Math.max(...rows.map(([l]) => cellWidth(l)));
+  const labelW = Math.max(...rows.map(([l]) => cellWidth(text(l))));
   const fixed = valueW === 0 ? 0 : 2 + valueW;
   const cap = maxWidth === undefined ? labelW : Math.max(1, Math.min(labelW, maxWidth - fixed));
-  const body = rows.map(([label, value]) => valueW === 0 ? cut2(label, cap) : `${padEnd(cut2(label, cap), cap)}  ${padStart(value, valueW)}`);
-  const head = venn.title === undefined ? [] : [maxWidth === undefined ? venn.title : cut2(venn.title, maxWidth)];
+  const body = rows.map(([label, value]) => valueW === 0 ? cutSpans(label, cap) : spansOf(padEndSpans(cutSpans(label, cap), cap), `  ${padStart(value, valueW)}`));
+  const head = venn.title === undefined ? [] : [spansOf([maxWidth === undefined ? venn.title : cut2(venn.title, maxWidth), "bold"])];
   return [...head, ...body];
 }
 
@@ -37682,7 +37833,10 @@ var vennFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return vennTextLines(parseVenn(src, opts.heading), maxWidth);
+    return vennTextSpans(parseVenn(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return vennTextSpans(parseVenn(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const venn = parseVenn(src, opts.heading);
@@ -38746,14 +38900,15 @@ function parseWardley(src, opts = {}) {
 // src/wardley/text.ts
 var GAP9 = 2;
 var MIN2 = 4;
-function wardleyTextLines(map, maxWidth) {
+function wardleyTextSpans(map, maxWidth) {
   const evolves = new Map(map.evolves.map((e) => [e.name, e.targetText]));
   const rows = map.nodes.map((n) => ({
     name: n.name,
     vis: n.visibilityText,
-    evo: evolves.has(n.name) ? `${n.evolutionText} -> ${evolves.get(n.name)}` : n.evolutionText
+    evo: evolves.has(n.name) ? `${n.evolutionText} -> ${evolves.get(n.name)}` : n.evolutionText,
+    from: evolves.has(n.name) ? n.evolutionText : undefined
   }));
-  const head = { name: "component", vis: "visibility", evo: "evolution" };
+  const head = { name: "component", vis: "visibility", evo: "evolution", from: undefined };
   const all = [head, ...rows];
   const visW = Math.max(...all.map((r) => cellWidth(r.vis)));
   const evoW = Math.max(...all.map((r) => cellWidth(r.evo)));
@@ -38762,9 +38917,15 @@ function wardleyTextLines(map, maxWidth) {
     nameW = Math.max(MIN2, Math.min(nameW, maxWidth - visW - evoW - 2 * GAP9));
   const lines = [];
   const title = map.title ?? "Wardley map";
-  lines.push(maxWidth === undefined ? title : cut2(title, maxWidth));
-  for (const r of all)
-    lines.push([padEnd(cut2(r.name, nameW), nameW), padStart(r.vis, visW), padStart(r.evo, evoW)].join(" ".repeat(GAP9)).trimEnd());
+  lines.push(spansOf([maxWidth === undefined ? title : cut2(title, maxWidth), "bold"]));
+  const gap = " ".repeat(GAP9);
+  for (const r of all) {
+    const name = cut2(r.name, nameW);
+    const evo = padStart(r.evo, evoW);
+    const split = r.from === undefined ? evo.length : evo.length - (r.evo.length - r.from.length);
+    const row = r === head ? spansOf([[padEnd(name, nameW), padStart(r.vis, visW), evo].join(gap), "dim"]) : spansOf([name, "bold"], padEnd("", nameW - cellWidth(name)), gap, padStart(r.vis, visW), gap, evo.slice(0, split), [evo.slice(split), "accent"]);
+    lines.push(trimEndSpans(row));
+  }
   return lines;
 }
 
@@ -38779,7 +38940,10 @@ registerFrontEnd({
     return withDescription(svg, map.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return wardleyTextLines(parseWardley(src, opts), maxWidth);
+    return wardleyTextSpans(parseWardley(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return wardleyTextSpans(parseWardley(src, opts), maxWidth);
   },
   json(src, _mode, opts) {
     const map = parseWardley(src, opts);
@@ -39528,11 +39692,17 @@ function xychartTable(chart, _ruler, maxWidth) {
   let labelW = Math.max(...labels.map(cellWidth), cellWidth(labelHead));
   if (maxWidth !== undefined)
     labelW = Math.max(4, Math.min(labelW, maxWidth - valuesW));
-  const line = (label, cells) => padEnd(cut2(label, labelW), labelW) + cells.map((c, i) => " ".repeat(GAP10) + padStart(c, widths[i] ?? 0)).join("");
-  const out = [maxWidth === undefined ? chart.title ?? "xychart" : cut2(chart.title ?? "xychart", maxWidth)];
+  const highest = chart.series.map((s) => {
+    if (s.kind !== "bar")
+      return -1;
+    const values = labels.map((_, i) => s.points[i]?.value ?? -Infinity);
+    return values.indexOf(Math.max(...values));
+  });
+  const line = (label, cells, tone) => spansOf([padEnd(cut2(label, labelW), labelW), "dim"], ...cells.flatMap((c, i) => [padEnd("", GAP10 + (widths[i] ?? 0) - cellWidth(c)), [c, tone(i)]]));
+  const out = [spansOf([maxWidth === undefined ? chart.title ?? "xychart" : cut2(chart.title ?? "xychart", maxWidth), "bold"])];
   if (header)
-    out.push(line(labelHead, heads));
-  labels.forEach((l, i) => out.push(line(l, cols.map((c) => c[i] ?? ""))));
+    out.push(line(labelHead, heads, () => "dim"));
+  labels.forEach((l, r) => out.push(line(l, cols.map((c) => c[r] ?? ""), (i) => highest[i] === r ? "accent" : "normal")));
   return out;
 }
 
@@ -39549,6 +39719,9 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
+    return xychartTable(read5(src, opts), cellRuler(), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
     return xychartTable(read5(src, opts), cellRuler(), maxWidth);
   },
   json(src, mode, opts) {

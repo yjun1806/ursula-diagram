@@ -1,11 +1,12 @@
 import { cellWidth } from '../metrics.ts';
-import { cut, padEnd, padStart } from '../text/terminal.ts';
+import { cut, padEnd, padStart, spansOf, trimEndSpans } from '../text/terminal.ts';
+import type { TextSpan } from '../types.ts';
 import { quadrantOf } from './parse.ts';
 import type { QuadrantChart } from './parse.ts';
 
 
-/** The values as a table: the title, then one row per point with its name, x, y and quadrant name. */
-export function quadrantTextLines(chart: QuadrantChart, maxWidth: number | undefined): string[] {
+/** The values as a table: the title, then one row per point with its name, x, y and quadrant name. The title and the point names are bold, the quadrant names dim. */
+export function quadrantTextSpans(chart: QuadrantChart, maxWidth: number | undefined): TextSpan[][] {
   const GAP = 2;
   const MIN = 4;
   const rows = chart.points.map((p) => {
@@ -28,11 +29,13 @@ export function quadrantTextLines(chart: QuadrantChart, maxWidth: number | undef
     }
     if (over > 0) quadW = Math.max(MIN, quadW - over);
   }
-  const lines: string[] = [];
+  const lines: TextSpan[][] = [];
   const title = chart.title ?? 'Quadrant chart';
-  lines.push(maxWidth === undefined ? title : cut(title, maxWidth));
+  lines.push(spansOf([maxWidth === undefined ? title : cut(title, maxWidth), 'bold']));
+  const gap = ' '.repeat(GAP);
   for (const r of rows) {
-    lines.push([padEnd(cut(r.name, nameW), nameW), padStart(r.x, xW), padStart(r.y, yW), cut(r.quadrant, quadW)].join(' '.repeat(GAP)).trimEnd());
+    const name = cut(r.name, nameW);
+    lines.push(trimEndSpans(spansOf([name, 'bold'], padEnd('', nameW - cellWidth(name)), gap, padStart(r.x, xW), gap, padStart(r.y, yW), gap, [cut(r.quadrant, quadW), 'dim'])));
   }
   return lines;
 }

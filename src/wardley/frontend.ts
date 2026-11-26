@@ -4,7 +4,8 @@ import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutWardley } from './layout.ts';
 import { parseWardley } from './parse.ts';
-import { wardleyTextLines } from './text.ts';
+import { wardleyTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 registerFrontEnd({
   name: 'wardley',
@@ -16,7 +17,10 @@ registerFrontEnd({
     return withDescription(svg, map.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return wardleyTextLines(parseWardley(src, opts), maxWidth);
+    return wardleyTextSpans(parseWardley(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return wardleyTextSpans(parseWardley(src, opts), maxWidth);
   },
   json(src, _mode, opts) {
     const map = parseWardley(src, opts);
