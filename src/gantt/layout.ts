@@ -391,7 +391,10 @@ function emptyLayout(model: Gantt, titleWidth: (s: string) => number): GanttLayo
 
 /** Whether a line going down or up at `x` between rows `a` and `b` passes over a band or its text in a row between them. */
 function crosses(x: number, a: number, b: number, spansAt: (row: number) => Span[]): boolean {
-  return range(Math.min(a, b) + 1, Math.max(a, b)).some((r) => spansAt(r).some(([x0, x1]) => x >= x0 - 4 && x <= x1 + 4));
+  for (let r = Math.min(a, b) + 1; r < Math.max(a, b); r++) {
+    for (const [x0, x1] of spansAt(r)) if (x >= x0 - 4 && x <= x1 + 4) return true;
+  }
+  return false;
 }
 
 /**
@@ -427,11 +430,6 @@ function orderLines(lineSection: number[], links: Array<{ lf: number; lt: number
 function permutations(items: number[]): number[][] {
   if (items.length <= 1) return [items];
   return items.flatMap((first, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [first, ...rest]));
-}
-
-/** `text` cut to `limit` with an ellipsis when it does not fit. */
-function range(from: number, to: number): number[] {
-  return Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i);
 }
 
 function roundedOutline(x: number, y: number, w: number, h: number, r: number): string {

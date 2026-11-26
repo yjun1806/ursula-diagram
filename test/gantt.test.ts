@@ -5,6 +5,8 @@ import { cellWidth, render, renderText, selectFrontEnd, UrsulaError } from '../s
 import { EMPTY_NOTE } from '../src/gantt/frontend.ts';
 import { layoutGantt } from '../src/gantt/layout.ts';
 import { parseGantt } from '../src/gantt/parse.ts';
+import { aligned } from '../src/gantt/ticks.ts';
+import { within } from './speed.ts';
 import { compileDateFormat, formatTime, fromDate, stretchOverExcluded } from '../src/gantt/time.ts';
 import { pixelRuler } from '../src/metrics.ts';
 import type { SceneBox, SceneItem, SceneText } from '../src/types.ts';
@@ -587,5 +589,44 @@ describe('gantt without tasks', () => {
       expect(selectFrontEnd(settingsOnly).json(settingsOnly, mode, {})).toHaveProperty('notes', [EMPTY_NOTE]);
       expect(selectFrontEnd(examples['note'] ?? '').json(examples['note'] ?? '', mode, {})).not.toHaveProperty('notes');
     }
+  });
+});
+
+describe('gantt: ticks shorter than a day', () => {
+  // Every whole unit in the range whose own field (ms, seconds, minutes or hours) is a multiple of the step.
+  const walk = (t0: number, t1: number, unit: 'ms' | 's' | 'min' | 'h', step: number): number[] => {
+    const u = { ms: 1, s: 1000, min: 60_000, h: 3_600_000 }[unit];
+    const next = { ms: 1000, s: 60, min: 60, h: 24 }[unit];
+    const out: number[] = [];
+    for (let t = Math.ceil(t0 / u) * u; t <= t1; t += u) if ((((Math.floor(t / u) % next) + next) % next) % step === 0) out.push(t);
+    return out;
+  };
+
+  it('fall on the same times as a walk over every unit, for steps that divide the next unit and steps that do not', () => {
+    const cases: Array<['ms' | 's' | 'min' | 'h', number[]]> = [
+      ['ms', [1, 20, 500, 7, 300]],
+      ['s', [1, 15, 30, 7, 45]],
+      ['min', [5, 30, 7, 25]],
+      ['h', [1, 6, 12, 5, 7]],
+    ];
+    for (const [unit, steps] of cases) {
+      const u = { ms: 1, s: 1000, min: 60_000, h: 3_600_000 }[unit];
+      for (const step of steps) {
+        for (const t0 of [0, -0, 3 * u + 1, -5 * u - 7, -12, 1_700_000_000_123]) {
+          const t1 = t0 + 37 * step * u + 11;
+          // toEqual tells -0 from 0, so a start of -0 must match too.
+          expect(aligned(t0, t1, unit, step, 1), `${unit} ${step} from ${t0}`).toEqual(walk(t0, t1, unit, step));
+        }
+      }
+    }
+  });
+
+  it('draw a bar of 990 seconds quickly', () => {
+    const src = 'gantt\n  dateFormat X\n  axisFormat %S\n  section A\n  a : 0, 990';
+    render(src);
+    const t = performance.now();
+    render(src);
+    renderText(src, 80);
+    expect(performance.now() - t).toBeLessThan(within(40));
   });
 });

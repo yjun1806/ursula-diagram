@@ -47,6 +47,9 @@ const LADDER: Array<[TickUnit, number[]]> = [
 
 const MAX_TICKS = 2000;
 
+/** How many of each unit shorter than a day make the next one up. */
+const PER_NEXT = { ms: 1000, s: 60, min: 60, h: 24 } as const;
+
 const DEFAULT_FORMAT: Record<TickUnit, string> = {
   ms: '%H:%M:%S.%L',
   s: '%H:%M:%S',
@@ -63,13 +66,22 @@ function fixedLength(unit: TickUnit): number | undefined {
 }
 
 /** Times in [t0, t1] on the boundaries of `step` units, or undefined when there would be too many to draw. */
-function aligned(t0: number, t1: number, unit: TickUnit, step: number, weekday: number): number[] | undefined {
+export function aligned(t0: number, t1: number, unit: TickUnit, step: number, weekday: number): number[] | undefined {
   const out: number[] = [];
   const length = fixedLength(unit);
   const approx = length ?? (unit === 'M' ? 30.4375 * DAY : 365.2425 * DAY);
   if ((t1 - t0) / (approx * step) > MAX_TICKS) return undefined;
   if (unit === 'ms' || unit === 's' || unit === 'min' || unit === 'h') {
     const u = unitLength(unit);
+    // A step that divides the next unit up (500 ms of a second, 15 min of an hour) falls on the multiples of
+    // `step` units since the epoch, so only those are visited. Any other step walks every unit and tests its field.
+    if (PER_NEXT[unit] % step === 0) {
+      const span = u * step;
+      const first = Math.ceil(t0 / u) * u;
+      const ahead = ((-first % span) + span) % span;
+      for (let t = ahead === 0 ? first : first + ahead; t <= t1; t += span) out.push(t);
+      return out.length > MAX_TICKS ? undefined : out;
+    }
     for (let t = Math.ceil(t0 / u) * u; t <= t1; t += u) {
       const c = toCivil(t);
       const field = unit === 'ms' ? c.ms : unit === 's' ? c.ss : unit === 'min' ? c.mm : c.hh;
