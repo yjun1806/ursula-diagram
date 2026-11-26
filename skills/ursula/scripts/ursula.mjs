@@ -9,7 +9,7 @@ import { join as join4 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // src/version.ts
-var VERSION = "0.2.2";
+var VERSION = "0.2.3";
 
 // src/errors/suggest.ts
 function editDistance(a, b, most = Infinity) {

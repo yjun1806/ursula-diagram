@@ -7,6 +7,8 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 
 ## Unreleased
 
+## 0.2.3 (2026-11-26)
+
 ### Added
 
 - `ursula-diagram update` checks npm for a newer version and prints the command that updates this install (global npm, pnpm or bun, a project, npx or the agent skill); `--yes` runs it for a global install. It is the only command that uses the network, and ends with the new code 5 when npm cannot be reached. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
