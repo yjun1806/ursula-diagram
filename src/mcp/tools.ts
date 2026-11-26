@@ -1,6 +1,8 @@
 import type { DrawRequest } from '../command/args.ts';
 import { drawCommand } from '../command/draw.ts';
+import { fixReport } from '../command/report.ts';
 import { syntaxCommand } from '../command/syntax.ts';
+import { fixSource } from '../index.ts';
 
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
@@ -10,7 +12,13 @@ export interface ToolResult {
 /** A wrong argument: the server answers with a JSON-RPC error, not with a result. */
 export class ArgumentError extends Error {}
 
-const plain: DrawRequest = { format: 'text', legend: true, color: false, questions: true, elbows: true, check: false };
+const plain: DrawRequest = { format: 'text', legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+
+const FIX = {
+  type: 'boolean',
+  description:
+    'Fix what has one reading (a misspelt header or keyword, a flowchart ->) before drawing. The last text of the result then names each fix and gives the fixed source; keep that source in place of yours.',
+} as const;
 
 export const TOOLS = [
   {
@@ -26,6 +34,7 @@ export const TOOLS = [
         width: { type: 'integer', minimum: 1, description: 'Columns for text and text-svg; 100 by default.' },
         charset: { type: 'string', enum: ['unicode', 'ascii'], description: 'Box-drawing characters (unicode, the default) or ascii only.' },
         check: { type: 'boolean', description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." },
+        fix: FIX,
       },
       required: ['source'],
     },
@@ -35,7 +44,7 @@ export const TOOLS = [
     title: 'Check a diagram layout',
     description:
       'Lays out Mermaid text and reports what the engine sees: one line of counts (bends, crossings), the pairs of lines that cross and the most bent lines with their source line numbers, and questions that suggest a change to the text.',
-    inputSchema: { type: 'object', properties: { source: { type: 'string', description: 'The Mermaid text.' } }, required: ['source'] },
+    inputSchema: { type: 'object', properties: { source: { type: 'string', description: 'The Mermaid text.' }, fix: FIX }, required: ['source'] },
   },
   {
     name: 'syntax',
@@ -60,8 +69,19 @@ function oneOf<T extends string>(args: Record<string, unknown>, key: string, cho
   return v as T;
 }
 
-function render(args: Record<string, unknown>): ToolResult {
+/** The source to draw and, with `fix: true`, the text that names the fixes; no text when nothing was fixed. */
+function fixedSource(args: Record<string, unknown>): { src: string; note: Array<{ type: 'text'; text: string }> } {
   const src = source(args);
+  const fix = args['fix'];
+  if (fix !== undefined && typeof fix !== 'boolean') throw new ArgumentError('"fix" must be true or false');
+  if (fix !== true) return { src, note: [] };
+  const fixed = fixSource(src);
+  if (fixed.fixes.length === 0) return { src, note: [] };
+  return { src: fixed.source, note: [text(`${fixReport(fixed.fixes)}\nfixed source:\n${fixed.source}`)] };
+}
+
+function render(args: Record<string, unknown>): ToolResult {
+  const { src, note } = fixedSource(args);
   const format = oneOf(args, 'format', ['text', 'text-svg', 'svg', 'html'] as const) ?? 'text';
   const charset = oneOf(args, 'charset', ['unicode', 'ascii'] as const);
   const width = args['width'];
@@ -77,13 +97,14 @@ function render(args: Record<string, unknown>): ToolResult {
     check: check === true,
   };
   const out = drawCommand(src, req);
-  if (out.code !== 0) return { content: [text(out.stderr)], isError: true };
-  return { content: [text(out.stdout), ...(req.check ? [text(out.stderr)] : [])], isError: false };
+  if (out.code !== 0) return { content: [text(out.stderr), ...note], isError: true };
+  return { content: [text(out.stdout), ...(req.check ? [text(out.stderr)] : []), ...note], isError: false };
 }
 
 function check(args: Record<string, unknown>): ToolResult {
-  const out = drawCommand(source(args), { ...plain, format: 'check' });
-  return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
+  const { src, note } = fixedSource(args);
+  const out = drawCommand(src, { ...plain, format: 'check' });
+  return out.code === 0 ? { content: [text(out.stdout), ...note], isError: false } : { content: [text(out.stderr), ...note], isError: true };
 }
 
 function syntax(args: Record<string, unknown>): ToolResult {

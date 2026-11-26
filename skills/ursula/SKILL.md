@@ -20,7 +20,9 @@ Write the diagram as Mermaid text and let the bundled command draw it. The comma
    standard error: one line of counts (bends, crossings), the lines that cross with their source line numbers, and
    sometimes lines that begin with `question 1:`. A question names what the engine found, what a change would gain,
    and what to do in the text. The counts are for the svg layout; a terminal drawing routes its lines on its own
-   grid, so do not chase a crossing the terminal drawing does not show.
+   grid, so do not chase a crossing the terminal drawing does not show. Add `--fix` as well: the engine then fixes a
+   misspelt header or keyword and a flowchart `->` itself and names each as `fixed: line N: old → new` on standard
+   error; make the same change in your file.
 3. **Answer the questions once.** When there are any, apply a suggestion only when it keeps the meaning of the
    diagram, then draw again. Do not loop: one round of edits.
 

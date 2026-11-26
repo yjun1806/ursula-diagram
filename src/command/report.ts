@@ -1,4 +1,5 @@
 import { cellWidth } from '../metrics.ts';
+import type { SourceFix } from '../errors/fix.ts';
 import { UrsulaError } from '../types.ts';
 
 /** The lines the command writes for a text error: the message, then the line with a mark under the column, then the advice. */
@@ -27,4 +28,9 @@ export const ISSUES = 'https://github.com/yjun1806/ursula-diagram/issues';
 export function internalReport(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return `error: internal: ${message}\nThis is a fault in ursula-diagram, not in the text. Please report it with the diagram text: ${ISSUES}\n`;
+}
+
+/** One line for each fix `fixSource` made: `fixed: line 1: flowchrt → flowchart`. */
+export function fixReport(fixes: readonly SourceFix[]): string {
+  return fixes.map((f) => `fixed: line ${f.line}: ${f.from} → ${f.to}\n`).join('');
 }

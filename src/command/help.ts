@@ -26,6 +26,7 @@ Which format
   json      boxes, lines and labels with coordinates, for a program
   check     the engine's report on the svg layout, without the drawing; a
             terminal drawing routes its lines on its own grid and can differ
+  fixed     the text with the fixes of --fix made, to save in place of it
 
 Options
 ${optionLines.join('\n')}
@@ -34,6 +35,8 @@ ${optionLines.join('\n')}
 Errors
   A text error names the line and column, and often adds 'did you mean' and an
   example line. Fix the text and run again; 'syntax <type>' shows the grammar.
+  --fix makes the fixes that have one reading and names each on stderr, such as
+  'fixed: line 1: flowchrt → flowchart'; make the same change in your text.
 
 Exit codes
   0 drawn   1 the text has an error   2 wrong options   3 too narrow   4 engine failure

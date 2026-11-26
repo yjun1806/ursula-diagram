@@ -1,6 +1,6 @@
 // Reads the options of the drawing command. Every option is in OPTIONS, so the help text and its test see them all.
 
-export const FORMATS = ['svg', 'text', 'text-svg', 'json', 'check', 'html'] as const;
+export const FORMATS = ['svg', 'text', 'text-svg', 'json', 'check', 'html', 'fixed'] as const;
 export type Format = (typeof FORMATS)[number];
 
 export interface DrawRequest {
@@ -20,6 +20,8 @@ export interface DrawRequest {
   theme?: 'auto' | 'light' | 'dark';
   /** With a drawing format: the check report as well, on standard error. */
   check: boolean;
+  /** Fix what has one reading (see `fixSource`) and draw the fixed text; each fix is named on standard error. */
+  fix?: boolean;
 }
 
 export interface OptionSpec {
@@ -35,13 +37,14 @@ const choice = <K extends keyof DrawRequest>(key: K, choices: readonly string[])
   choices.includes(v) ? { ...req, [key]: v } : undefined;
 
 export const OPTIONS: readonly OptionSpec[] = [
-  { name: '--format', value: 'F', choices: FORMATS, help: 'svg (the default), text, text-svg, html, json or check', apply: choice('format', FORMATS) },
+  { name: '--format', value: 'F', choices: FORMATS, help: 'svg (the default), text, text-svg, html, json, check or fixed', apply: choice('format', FORMATS) },
   {
     name: '--width',
     value: 'N',
     help: 'columns for text and text-svg; fails with code 3 when the drawing cannot fit',
     apply: (req, v) => (v.trim() !== '' && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined),
   },
+  { name: '--fix', help: 'fix a misspelt header or keyword and a flowchart ->, draw, and name each fix on stderr', apply: (req) => ({ ...req, fix: true }) },
   { name: '--check', help: 'with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)', apply: (req) => ({ ...req, check: true }) },
   { name: '--charset', value: 'C', choices: ['unicode', 'ascii'], help: 'text in box-drawing characters (unicode, the default) or ascii only', apply: choice('charset', ['unicode', 'ascii']) },
   { name: '--color', help: 'text with ANSI colours', apply: (req) => ({ ...req, color: true }) },
@@ -61,7 +64,7 @@ export const USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${
 export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'usage' };
 
 export function parseDrawArgs(args: readonly string[]): Parsed {
-  let req: DrawRequest = { format: 'svg', legend: true, color: false, questions: true, elbows: true, check: false };
+  let req: DrawRequest = { format: 'svg', legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i] as string;
     if (a === '--help' || a === '-h') return { kind: 'help' };

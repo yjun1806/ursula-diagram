@@ -130,8 +130,10 @@ export function explain(err: UrsulaError, src: string, ctx: ExplainContext): Urs
       if (at >= 0) column = at + 1;
     }
   }
-  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row);
-  const example = advice.example ?? (entry === undefined || hinted?.noExample ? hinted?.example : exampleLine(entry, row ?? '', word, suggestion, hinted?.example));
+  const hinted = entry === undefined ? undefined : hintFor(entry.name, message, row, column);
+  // A line the hint table puts right is a better example than any line of the catalog.
+  const example =
+    advice.example ?? (entry === undefined || hinted?.noExample || hinted?.autofix ? hinted?.example : exampleLine(entry, row ?? '', word, suggestion, hinted?.example));
   return new UrsulaError(message, err.code, err.line, {
     ...advice,
     ...(column === undefined ? {} : { column }),
