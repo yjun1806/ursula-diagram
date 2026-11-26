@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import { TYPES } from './examples/types.mjs';
+import { glanceFences } from './examples/glance.mjs';
 import { mermaidFences } from './mermaid-fence.mjs';
 import { ursulaOutputs } from './ursula-output.mjs';
 
@@ -101,7 +102,7 @@ export default defineConfig({
   base,
   cleanUrls: true,
   lastUpdated: false,
-  markdown: { config: (md) => md.use(mermaidFences).use(ursulaOutputs) },
+  markdown: { config: (md) => md.use(mermaidFences).use(ursulaOutputs).use(glanceFences, { base }) },
   head: [
     ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}icon-32.png` }],
     ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}icon-16.png` }],

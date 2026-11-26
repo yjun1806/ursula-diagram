@@ -1,51 +1,18 @@
+---
+aside: false
+pageClass: examples-index
+---
+
 # 예제
 
-예제 페이지의 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. 이 페이지에는 몇 장만
-골라 모았고, [유형별 페이지](#types)에는 Mermaid 문서의 예시 전부를 글과 그림을 나란히 놓아 실었습니다.
+예제 페이지의 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. 이 페이지에는
+Mermaid 문서의 예시 531개를 유형별로 묶어 작게 실었습니다. 그림을 누르면 크게 보입니다. 이름을 누르면
+[유형별 페이지](#types)에서 그 예시를 Mermaid 글과 나란히 봅니다.
 
 ## 한눈에 보기
 
-SVG는 글자를 정해진 좌표에 놓으므로 한글 라벨도 그대로 들어갑니다.
-
-<div class="gallery">
-  <figure><figcaption>Flowchart</figcaption><div class="ursula-frame"><img src="/assets/ko-flowchart.svg" alt="Flowchart" width="400"></div></figure>
-  <figure><figcaption>Sequence</figcaption><div class="ursula-frame"><img src="/assets/ko-sequence.svg" alt="Sequence 다이어그램" width="400"></div></figure>
-  <figure><figcaption>Class</figcaption><div class="ursula-frame"><img src="/assets/ko-class.svg" alt="Class 다이어그램" width="150"></div></figure>
-  <figure><figcaption>State</figcaption><div class="ursula-frame"><img src="/assets/ko-state.svg" alt="State 다이어그램" width="140"></div></figure>
-  <figure><figcaption>Entity relationship</figcaption><div class="ursula-frame"><img src="/assets/ko-er.svg" alt="Entity relationship 다이어그램" width="400"></div></figure>
-  <figure><figcaption>C4 context</figcaption><div class="ursula-frame"><img src="/assets/ko-c4.svg" alt="C4 context 다이어그램" width="260"></div></figure>
-  <figure class="wide"><figcaption>Mindmap</figcaption><div class="ursula-frame"><img src="/assets/ko-mindmap.svg" alt="Mindmap" width="400"></div></figure>
-  <figure class="wide"><figcaption>Gantt</figcaption><div class="ursula-frame"><img src="/assets/ko-gantt.svg" alt="Gantt 차트" width="820"></div></figure>
-</div>
-
-<details>
-<summary>그림별 Mermaid 글</summary>
-
-```ursula-input gallery-ko:flowchart
+```examples-glance ko
 ```
-
-```ursula-input gallery-ko:sequence
-```
-
-```ursula-input gallery-ko:class
-```
-
-```ursula-input gallery-ko:state
-```
-
-```ursula-input gallery-ko:er
-```
-
-```ursula-input gallery-ko:c4
-```
-
-```ursula-input gallery-ko:gantt
-```
-
-```ursula-input gallery-ko:mindmap
-```
-
-</details>
 
 ## 유형별 예시 {#types}
 

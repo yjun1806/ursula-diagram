@@ -132,6 +132,18 @@ if (existsSync(built)) {
     }
   }
   console.log(`ok   ${rendered.length} type pages in each language show every example as SVG and in the terminal`);
+  // The index page's "At a glance" section: one card per official example, in the order of the type pages, each
+  // picture lazy and sized so the page does not jump while the pictures load.
+  for (const [page, prefix] of [['examples/index.html', '/examples/'], ['ko/examples/index.html', '/ko/examples/']]) {
+    const html = readFileSync(join(built, page), 'utf8');
+    const cards = [...html.matchAll(/<div class="gl-card">([\s\S]*?)<\/a><\/div>/g)].map((m) => m[1]);
+    const expected = items.map((i) => `/ursula-diagram${prefix}${i.type}#${encodeURIComponent(i.name)}`);
+    const links = cards.map((c) => /class="gl-name" href="([^"]*)"/.exec(c)?.[1]);
+    const unsized = cards.filter((c) => /<img\b/.test(c) && !/<img [^>]*width="\d+" height="\d+" loading="lazy" decoding="async"/.test(c));
+    if (links.join('\n') !== expected.join('\n')) fail(`${page} lists ${cards.length} examples at a glance, not the ${items.length} of the type pages in their order`);
+    else if (unsized.length) fail(`${page}: ${unsized.length} pictures at a glance are not lazy with a width and height`);
+    else console.log(`ok   ${page} shows all ${cards.length} examples at a glance, each picture lazy with its size`);
+  }
   for (const [page, target] of [['gallery.html', '/examples/'], ['ko/gallery.html', '/ko/examples/']]) {
     if (!readFileSync(join(built, page), 'utf8').includes(`url=/ursula-diagram${target}`)) fail(`${page} does not send the visitor to ${target}`);
   }
