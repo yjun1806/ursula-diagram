@@ -25,16 +25,34 @@ function wrap(text: string, ruler: Ruler): string[] {
   return text.split('\n').flatMap((paragraph) => wrapWords(paragraph, limit, width));
 }
 
+const ROLE_WORDS: Readonly<Record<C4Element['role'], string>> = { person: 'Person', system: 'System', container: 'Container', component: 'Component' };
+const STORE_WORDS: Readonly<Record<NonNullable<C4Element['store']>, string>> = { db: 'Database', queue: 'Queue' };
+
+/** The kind of an element in words (`SystemDb_Ext` reads `Database · external`): the store if any, else the level. */
+export function kindOf(e: C4Element): string {
+  const word = e.store === undefined ? ROLE_WORDS[e.role] : STORE_WORDS[e.store];
+  return e.external ? `${word} · external` : word;
+}
+
+/** The kind of a boundary in words: `Enterprise_Boundary` reads `Enterprise boundary`; a type given to `Boundary` or a deployment node stays as written. */
+export function boundaryKindOf(kind: string): string {
+  const m = /^(?:(Enterprise|System|Container)_)?Boundary$/.exec(kind);
+  if (m === null) return kind;
+  return m[1] === undefined ? 'Boundary' : `${m[1]} boundary`;
+}
+
 function compartmentsOf(e: C4Element, ruler: Ruler): Compartment[] {
   // A terminal drawing made narrower wraps the name as well: the name is what keeps a box wide once the description is narrow.
   const narrow = ruler.terminal === true && wrapCells < WRAP_CELLS;
   const name = e.label.split('\n').map((l) => l.trim()).flatMap((l) => (narrow ? wrap(l, ruler) : [l]));
   const tech = e.tech === undefined ? [] : wrap(e.tech, ruler);
   const descr = e.descr === undefined ? [] : wrap(e.descr, ruler);
+  // The kind is wrapped with the name: `Database · external` would otherwise keep a narrowed box wide.
+  const kind = narrow ? wrap(kindOf(e), ruler) : [kindOf(e)];
   return [
     {
-      lines: [e.macro, ...name, ...tech, ...descr],
-      lineEmphasis: ['tag', ...name.map((): 'title' => 'title'), ...tech.map((): 'tag' => 'tag'), ...descr.map((): 'body' => 'body')],
+      lines: [...kind, ...name, ...tech, ...descr],
+      lineEmphasis: [...kind.map((): 'tag' => 'tag'), ...name.map((): 'title' => 'title'), ...tech.map((): 'tag' => 'tag'), ...descr.map((): 'body' => 'body')],
       align: 'center',
       emphasis: 'body',
       face: true,
@@ -70,7 +88,7 @@ function sharedBox(nodes: readonly GraphNode[], ruler: Ruler): GraphNode[] {
   return nodes.map((n) => ({ ...n, box }));
 }
 
-/** The name of a boundary with what it is, split into two lines by the layout (`BankBoundary · Enterprise_Boundary`, `Web Browser · Apache Tomcat 8.x`). */
+/** The name of a boundary with what it is, split into two lines by the layout (`BankBoundary · Enterprise boundary`, `Web Browser · Apache Tomcat 8.x`). */
 function clusterLabel(label: string, kind: string, descr: string | undefined): string {
   return [label, kind, descr].filter((p): p is string => p !== undefined && p !== '').map((p) => p.replace(/\s*\n\s*/g, ' ')).join(' · ');
 }
@@ -107,7 +125,7 @@ function graphOf(model: C4Model, ruler: Ruler): Graph {
   for (const e of model.elements) if (e.boundary !== undefined) directCount.set(e.boundary, (directCount.get(e.boundary) ?? 0) + 1);
   const clusters: GraphCluster[] = model.boundaries.map((b) => ({
     id: b.alias,
-    label: clusterLabel(b.label, b.kind, b.descr),
+    label: clusterLabel(b.label, b.deployment ? b.kind : boundaryKindOf(b.kind), b.descr),
     style: 'dashed' as const,
     subtitled: true as const,
     ...(directCount.get(b.alias) !== undefined && (directCount.get(b.alias) ?? 0) <= MAX_ROW ? { direction: 'LR' as const } : {}),

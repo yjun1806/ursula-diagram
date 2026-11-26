@@ -319,3 +319,29 @@ describe('levels with lines inside keep the layered engine', () => {
     expect([box('outer'), box('inner')].map((c) => [c.x, c.y, c.w, c.h])).toEqual([[48, 152, 144, 512], [72, 316, 96, 320]]);
   });
 });
+
+describe('subgraphs side by side in a terminal', () => {
+  const src = 'flowchart TB\n  c1-->a2\n  subgraph one\n  a1-->a2\n  end\n  subgraph two\n  b1-->b2\n  end\n  subgraph three\n  c1-->c2\n  end\n  one --> two\n  three --> two\n  two --> c2';
+
+  it('stand between dashed rules, so each box is seen in its column', async () => {
+    const { renderText } = await import('../src/index.ts');
+    for (const width of [80, 120]) {
+      const drawn = renderText(src, width);
+      if ('error' in drawn) throw new Error(drawn.error);
+      const head = drawn.lines[0] ?? '';
+      const rules = [...head].flatMap((ch, x) => (ch === '╎' ? [x] : []));
+      expect(rules, head).toHaveLength(2);
+      const [left = 0, right = 0] = rules;
+      expect(head.indexOf('one')).toBeLessThan(left);
+      expect(head.indexOf('two')).toBeGreaterThan(left);
+      expect(head.indexOf('two')).toBeLessThan(right);
+      expect(head.indexOf('three')).toBeGreaterThan(right);
+      // Each box of a subgraph lies wholly within its column.
+      const column = (x: number): number => (x < left ? 0 : x < right ? 1 : 2);
+      for (const [name, at] of [['a1', 0], ['b2', 1], ['c1', 2]] as const) {
+        const row = drawn.lines.find((l) => l.includes(`│ ${name} │`)) ?? '';
+        expect(column(row.indexOf(`│ ${name} │`)), name).toBe(at);
+      }
+    }
+  });
+});

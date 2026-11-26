@@ -13294,12 +13294,15 @@ var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
 
 class Canvas {
   rows;
+  tones;
   width;
   height;
-  constructor(width, height) {
+  tone = "normal";
+  constructor(width, height, toned = false) {
     this.width = width;
     this.height = height;
     this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
+    this.tones = toned ? Array.from({ length: height }, () => new Array(width).fill("normal")) : undefined;
   }
   widen(width) {
     if (width <= this.width)
@@ -13307,9 +13310,12 @@ class Canvas {
     for (const row of this.rows)
       while (row.length < width)
         row.push(" ");
+    for (const row of this.tones ?? [])
+      while (row.length < width)
+        row.push("normal");
     this.width = width;
   }
-  put(x, y, ch) {
+  put(x, y, ch, tone = this.tone) {
     const row = this.rows[y];
     if (!row || x < 0 || x >= this.width)
       return;
@@ -13328,19 +13334,55 @@ class Canvas {
       row[x + 1] = "";
     }
     row[x] = ch;
+    const tones = this.tones?.[y];
+    if (tones !== undefined)
+      tones[x] = tone;
   }
   get(x, y) {
     return this.rows[y]?.[x] ?? " ";
   }
-  text(x, y, s) {
+  text(x, y, s, tone = this.tone) {
     let cx = x;
     for (const ch of s) {
-      this.put(cx, y, ch);
+      this.put(cx, y, ch, tone);
       cx += cellWidthOf(ch.codePointAt(0) ?? 0);
     }
   }
   lines() {
     return this.rows.map((r) => r.join("").trimEnd());
+  }
+  spans() {
+    return this.rows.map((row, y) => {
+      const text = row.join("").trimEnd();
+      const tones = this.tones?.[y] ?? [];
+      const out = [];
+      let at = 0;
+      const toneAt = (x) => {
+        if (row[x] !== " ")
+          return tones[x] ?? "normal";
+        let l = x - 1;
+        while (l >= 0 && (row[l] === " " || row[l] === ""))
+          l--;
+        let r = x + 1;
+        while (r < row.length && (row[r] === " " || row[r] === ""))
+          r++;
+        const left = l >= 0 ? tones[l] : undefined;
+        return left !== undefined && left === tones[r] && r < row.length ? left : "normal";
+      };
+      for (let x = 0;x < row.length && at < text.length; x++) {
+        const ch = row[x] ?? "";
+        if (ch === "")
+          continue;
+        at += ch.length;
+        const tone = toneAt(x);
+        const last = out[out.length - 1];
+        if (last !== undefined && last.tone === tone)
+          out[out.length - 1] = { text: last.text + ch, tone };
+        else
+          out.push({ text: ch, tone });
+      }
+      return out;
+    });
   }
 }
 function drawLanes2(c, layout) {
@@ -13353,7 +13395,7 @@ function drawLanes2(c, layout) {
     const x1 = x0 + Math.round(lane.w) - 1;
     const y1 = y0 + Math.round(lane.h) - 1;
     if (lane.bare && vertical) {
-      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, "bold");
       continue;
     }
     if (vertical) {
@@ -13366,7 +13408,28 @@ function drawLanes2(c, layout) {
         c.put(x, y0, "─");
       continue;
     }
-    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
+    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, "bold");
+  }
+}
+var UPRIGHT = new Set([..."│┆┃╎┌┐└┘├┤┬┴┼╭╮╰╯┏┓┗┛┣┫┳┻╋▲▼△▽^v"]);
+function drawColumnRules(c, layout) {
+  if (layout.direction === "TD" === (layout.laneAxis === "along"))
+    return;
+  const columns = layout.lanes.filter((l) => l.label !== "" && l.bare === true).sort((a, b) => a.x - b.x);
+  for (let i = 0;i + 1 < columns.length; i++) {
+    const a = columns[i];
+    const b = columns[i + 1];
+    const end = Math.floor(a.x) + Math.round(a.w);
+    const gap = Math.floor(b.x) - end;
+    if (gap < 3)
+      continue;
+    const x = end + Math.floor(gap / 2);
+    const top = Math.max(Math.floor(a.y), Math.floor(b.y));
+    const bottom = Math.min(Math.floor(a.y) + Math.round(a.h), Math.floor(b.y) + Math.round(b.h)) - 1;
+    const free = (y) => c.get(x, y) === " " && !UPRIGHT.has(c.get(x, y - 1)) && !UPRIGHT.has(c.get(x, y + 1));
+    const rows = Array.from({ length: bottom - top + 1 }, (_, k) => top + k).filter(free);
+    for (const y of rows)
+      c.put(x, y, "╎", "dim");
   }
 }
 function cellOf2(edge, nodes, index) {
@@ -13514,7 +13577,7 @@ function drawEdges(c, layout) {
       else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S)
         ch = "┆";
     }
-    c.put(Number(xs), Number(ys), ch);
+    c.put(Number(xs), Number(ys), ch, cell.style === "dotted" ? "dim" : "normal");
   }
   for (const a of arrows)
     c.put(a.x, a.y, a.ch);
@@ -13536,7 +13599,7 @@ function drawLabels(c, layout) {
 function drawEndLabels(c, layout) {
   const put = (label) => {
     if (label)
-      c.text(Math.round(label.x), Math.round(label.y), label.text);
+      c.text(Math.round(label.x), Math.round(label.y), label.text, "dim");
   };
   for (const edge of layout.edges) {
     if (edge.invisible)
@@ -13544,6 +13607,13 @@ function drawEndLabels(c, layout) {
     put(edge.startLabel);
     put(edge.endLabel);
   }
+}
+function compartmentTone(emphasis, index) {
+  if (emphasis === "title")
+    return "bold";
+  if (emphasis === "tag")
+    return "dim";
+  return emphasis === undefined && index === 0 ? "bold" : "normal";
 }
 function drawCompartments(c, n, x0, y0, w) {
   const cells = n.compartments ?? [];
@@ -13561,10 +13631,11 @@ function drawCompartments(c, n, x0, y0, w) {
     const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
     cell.lines.forEach((line, k) => {
       const row = cell.columns?.[k];
+      const tone = compartmentTone(cell.lineEmphasis?.[k], i);
       if (row === undefined)
-        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
+        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line, tone);
       else
-        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
+        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text, tone));
     });
     y += heights[i] ?? 0;
   });
@@ -13615,14 +13686,14 @@ function drawNode(c, n) {
   const texts = [n.shape === "actor" ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== "" || n.lines.length === 0);
   const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
   texts.forEach((t, i) => {
-    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
+    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t, i === 0 && n.title !== "" ? "bold" : "normal");
   });
 }
 var SAMPLE_GLYPH = { normal: "──", thick: "━━", dotted: "┄┄" };
 function drawLegend(c, layout) {
   for (const item of layout.legend?.items ?? []) {
-    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
-    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
+    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style], item.style === "dotted" ? "dim" : "normal");
+    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption, "dim");
   }
 }
 function drawLaneNames(c, layout, limit) {
@@ -13638,12 +13709,30 @@ function drawLaneNames(c, layout, limit) {
     const w = cellWidth(placed.text);
     c.widen(placed.at + w);
     c.put(placed.at - 1, y, " ");
-    c.text(placed.at, y, placed.text);
+    c.text(placed.at, y, placed.text, "bold");
     c.put(placed.at + w, y, " ");
   }
 }
 function renderTextLayout(layout, maxWidth) {
-  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
+  const lines = drawLayout(layout, maxWidth, false).lines();
+  while (lines.length > 0 && lines[lines.length - 1] === "")
+    lines.pop();
+  return lines;
+}
+function renderTextLayoutSpans(layout, maxWidth) {
+  const rows = drawLayout(layout, maxWidth, true).spans();
+  while (rows.length > 0 && (rows[rows.length - 1] ?? []).length === 0)
+    rows.pop();
+  return rows;
+}
+function layoutSpans(layout, lines, maxWidth) {
+  const plain = (text) => text === "" ? [] : [{ text, tone: "normal" }];
+  const drawn = renderTextLayoutSpans(layout, maxWidth);
+  const same = drawn.length <= lines.length && drawn.every((row, i) => row.map((s) => s.text).join("") === lines[i]);
+  return same ? [...drawn, ...lines.slice(drawn.length).map(plain)] : lines.map(plain);
+}
+function drawLayout(layout, maxWidth, toned) {
+  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height), toned);
   drawLanes2(c, layout);
   drawEdges(c, layout);
   drawLabels(c, layout);
@@ -13652,10 +13741,8 @@ function renderTextLayout(layout, maxWidth) {
     drawNode(c, n);
   drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
-  const lines = c.lines();
-  while (lines.length > 0 && lines[lines.length - 1] === "")
-    lines.pop();
-  return lines;
+  drawColumnRules(c, layout);
+  return c;
 }
 var ANSI = { normal: "", dim: "\x1B[2m", bold: "\x1B[1m", accent: "\x1B[36m" };
 function spansToAnsi(line) {
@@ -13709,7 +13796,7 @@ var TOP_RIGHT = new Set(["┐", "╮", "┒"]);
 var BOTTOM_LEFT = new Set(["└", "╰"]);
 var BOTTOM_RIGHT = new Set(["┘", "╯"]);
 var DOTS = new Set(["●", "◉"]);
-var UPRIGHT = new Set(["│", "┃", "┆", "┼", "╋", "├", "┤", "┣", "┫", "▼", "▲", "▽", "△", "◆", "◇", "⊕", "○", "v", "^"]);
+var UPRIGHT2 = new Set(["│", "┃", "┆", "┼", "╋", "├", "┤", "┣", "┫", "▼", "▲", "▽", "△", "◆", "◇", "⊕", "○", "v", "^"]);
 var LEGEND = /^(──|━━|┄┄) .+ {3}(──|━━|┄┄) /;
 function cellsOf(lines) {
   return lines.map((line) => {
@@ -13814,7 +13901,7 @@ function roomViolations(lines, grid = cellsOf(lines)) {
   for (const a of boxes) {
     for (let x = a.x0;x <= a.x1; x++) {
       let y = a.y1 + 1;
-      while (UPRIGHT.has(at(x, y)))
+      while (UPRIGHT2.has(at(x, y)))
         y++;
       const gap = y - a.y1 - 1;
       if (gap === 0 || gap >= 2)
@@ -15653,7 +15740,7 @@ var E3 = 2;
 var S3 = 4;
 var W4 = 8;
 var LEVEL = E3 | W4;
-var UPRIGHT2 = N3 | S3;
+var UPRIGHT3 = N3 | S3;
 var RUNS2 = {
   "─": E3 | W4,
   "━": E3 | W4,
@@ -15779,7 +15866,7 @@ function breaksOf(layout, lines, labels, notes) {
         return false;
       if ((k < 2 || k >= ends - 2) && MARKS.has(ch))
         return false;
-      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT2 || need === E3 || need === W4))
+      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT3 || need === E3 || need === W4))
         return false;
       return true;
     });
@@ -15826,7 +15913,7 @@ function breaksOf(layout, lines, labels, notes) {
   for (const [key, list] of byCell) {
     list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
+      if (a === LEVEL && b === UPRIGHT3 || a === UPRIGHT3 && b === LEVEL)
         return;
       root[find(i)] = find(j);
     }));
@@ -15839,7 +15926,7 @@ function breaksOf(layout, lines, labels, notes) {
       if (together(drawn[i], drawn[j]))
         return false;
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      return (a & LEVEL) !== 0 && (b & LEVEL) !== 0 || (a & UPRIGHT2) !== 0 && (b & UPRIGHT2) !== 0;
+      return (a & LEVEL) !== 0 && (b & LEVEL) !== 0 || (a & UPRIGHT3) !== 0 && (b & UPRIGHT3) !== 0;
     }));
     if (tangles) {
       tangled++;
@@ -15850,7 +15937,7 @@ function breaksOf(layout, lines, labels, notes) {
   for (const [key, list] of byCell) {
     list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
+      if (a === LEVEL && b === UPRIGHT3 || a === UPRIGHT3 && b === LEVEL)
         crossings.set(`${i}|${j}`, (crossings.get(`${i}|${j}`) ?? 0) + 1);
     }));
   }
@@ -15862,7 +15949,7 @@ function breaksOf(layout, lines, labels, notes) {
   const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
   const inBox = (x, y) => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
   const rule = (x, y) => RUNS2[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
-  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT2) !== 0 || UPRIGHT_HEADS.has(at(x, y));
+  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT3) !== 0 || UPRIGHT_HEADS.has(at(x, y));
   const apart = (p, q) => !p.some((i) => q.some((j) => find(i) === find(j)));
   const spots = drawn.map((e) => e.label === undefined ? undefined : spotOf(e.label));
   let strayLabels = 0;
@@ -15909,7 +15996,7 @@ function breaksOf(layout, lines, labels, notes) {
     let crowded = false;
     for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
       const near = edge + 2 * side;
-      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT2) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT2) !== 0)
+      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT3) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT3) !== 0)
         crowded = true;
     }
     for (const side of [1, -1]) {
@@ -15968,7 +16055,7 @@ function breaksOf(layout, lines, labels, notes) {
       crossMarks++;
     if (list.some((i) => {
       const b = runs[i]?.bits.get(key) ?? 0;
-      return b !== LEVEL && b !== UPRIGHT2;
+      return b !== LEVEL && b !== UPRIGHT3;
     })) {
       forks++;
       note(`fork drawn as a crossing at ${key}`);
@@ -16019,7 +16106,7 @@ function breaksOf(layout, lines, labels, notes) {
       return;
     for (const [x, y] of run.cells) {
       const b = run.bits.get(`${x},${y}`) ?? 0;
-      if (b !== LEVEL && b !== UPRIGHT2)
+      if (b !== LEVEL && b !== UPRIGHT3)
         continue;
       const across = b === LEVEL ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
       const along = b === LEVEL ? [1, 0] : [0, 1];
@@ -16056,7 +16143,7 @@ function breaksOf(layout, lines, labels, notes) {
   runs.forEach((run, i) => {
     for (const [x, y] of run?.cells ?? []) {
       const b = run?.bits.get(`${x},${y}`) ?? 0;
-      if (b !== LEVEL && b !== UPRIGHT2 || RUNS2[at(x, y)] !== b)
+      if (b !== LEVEL && b !== UPRIGHT3 || RUNS2[at(x, y)] !== b)
         continue;
       const [dx, dy] = b === LEVEL ? [0, 1] : [1, 0];
       const [ax, ay] = b === LEVEL ? [1, 0] : [0, 1];
@@ -17719,9 +17806,17 @@ function layoutAny(source, given, opts) {
   const { legend: _drawn, ...bare } = arrange(attached.graph, ruler, opts);
   return withLegend(drawAttached(bare, attached, ruler), ruler, opts.legend);
 }
+function c4GridWithin(graph, ruler, opts) {
+  const across = layoutC4Grid(graph, ruler, opts);
+  const limit = opts.maxWidth ?? ruler.defaultWidth;
+  if (graph.direction !== "LR" || graph.mirror !== undefined || graph.grid?.cells !== undefined || limit === undefined || across.width <= limit)
+    return across;
+  const down = layoutC4Grid({ ...graph, direction: "TD" }, ruler, opts);
+  return down.width < across.width ? down : across;
+}
 function arrange(graph, ruler, opts) {
   if (graph.placer === "c4-grid" && ruler.terminal !== true)
-    return layoutC4Grid(graph, ruler, opts);
+    return c4GridWithin(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true)
       return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
@@ -18038,7 +18133,7 @@ function readNode(c, line, st) {
     }
   }
   if (c.s.startsWith(":::", c.i)) {
-    const cls = /:::([\w-]+)/y;
+    const cls = /:::(\w+(?:-\w+)*)/y;
     cls.lastIndex = c.i;
     const cm = cls.exec(c.s);
     if (!cm)
@@ -19976,6 +20071,7 @@ var SCENE_THEME = {
     "note-w": "1",
     "rule-w": "1",
     "edge-w": "1.5",
+    "edge-thick-w": "3",
     dash: "5 4",
     "dash-msg": "5 4",
     "lifeline-w": "1",
@@ -20256,6 +20352,9 @@ function faceRules(layout) {
     ...faced ? [".ursula-zone-name{fill:$fg;font-size:13px}", ".ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}", ".ursula-cell-body{fill:$muted}"] : [],
     ...layout.edges.some((e) => e.label?.text.includes(" ")) ? [".ursula-edge-label-tech{font-weight:400;opacity:.7}"] : []
   ];
+}
+function thickRules(layout) {
+  return layout.edges.some((e) => e.style === "thick" && !e.invisible) ? [`.ursula-edge--thick{stroke-width:${THEME.lineWidth * 2}}`] : [];
 }
 var TINTS = [
   ["outer", "$tint-outer", "$tint-chip", ""],
@@ -20636,7 +20735,7 @@ function renderSvg(input, opts = {}) {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
     `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...usesRecords(layout) ? recordRules() : [], ...faceRules(layout), ...heading === undefined ? [] : [".ursula-title{fill:$fg;font-size:15px;font-weight:600}"]])}</style>`,
+    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...usesRecords(layout) ? recordRules() : [], ...faceRules(layout), ...thickRules(layout), ...heading === undefined ? [] : [".ursula-title{fill:$fg;font-size:15px;font-weight:600}"]])}</style>`,
     `<defs>${flowMarker("ursula-arrow", "ursula-arrow")}${flowMarker("ursula-arrow-accent", "ursula-arrow ursula-arrow--accent")}${ends.markers.join("")}</defs>`,
     ...heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`],
     ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === "along" && (layout.direction === "LR" || layout.direction === "RL"))),
@@ -20840,6 +20939,10 @@ registerFrontEnd({
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const drawn = drawText(src, maxWidth, opts);
+    return titledSpans(layoutSpans(drawn.layout, drawn.lines), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(parse(src), mode === "text" ? cellRuler() : pixelRuler(), layoutOptions(opts));
@@ -21194,6 +21297,21 @@ function accessibleTitle(src) {
   }
   return reader.title === "" ? undefined : reader.title;
 }
+function terminal(src, maxWidth, config) {
+  const graph = read(src, config);
+  const draw = (g) => {
+    const laid = layout(g, cellRuler(), { legend: false, fold: true, ...maxWidth === undefined ? {} : { maxWidth } });
+    return { lines: renderTextLayout(laid), layout: laid };
+  };
+  let drawn = draw(graph);
+  if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined))
+    return drawn;
+  const widest = (ls) => Math.max(0, ...ls.map(cellWidth));
+  for (let limit = 40;widest(drawn.lines) > maxWidth && limit >= 8; limit -= 4) {
+    drawn = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
+  }
+  return drawn;
+}
 registerFrontEnd({
   name: "class",
   headers: ["classDiagram", "classDiagram-v2"],
@@ -21211,16 +21329,10 @@ registerFrontEnd({
     return renderSvg(laid, { ...svgOpts, title, legend: false, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
-    const graph = read(src, opts.config);
-    const draw = (g) => renderTextLayout(layout(g, cellRuler(), { legend: false, fold: true, ...maxWidth === undefined ? {} : { maxWidth } }));
-    let lines = draw(graph);
-    if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined))
-      return titledLines(lines, opts.heading, maxWidth);
-    const widest = (ls) => Math.max(0, ...ls.map(cellWidth));
-    for (let limit = 40;widest(lines) > maxWidth && limit >= 8; limit -= 4) {
-      lines = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
-    }
-    return titledLines(lines, opts.heading, maxWidth);
+    return titledLines(terminal(src, maxWidth, opts.config).lines, opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(renderTextLayoutSpans(terminal(src, maxWidth, opts.config).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(read(src, opts.config), mode === "text" ? cellRuler() : pixelRuler(), { legend: false });
@@ -21496,17 +21608,20 @@ function pixels(src, opts) {
   return { ...laid, title: opts.title ?? model.title ?? summary(model.graph) };
 }
 var headsOnly = (g) => ({ ...g, nodes: g.nodes.map((n) => ({ ...n, compartments: (n.compartments ?? []).slice(0, 1) })) });
-function terminal(src, maxWidth, opts) {
+function terminal2(src, maxWidth, opts) {
   const model = parseEr(src, opts.heading);
-  const draw = (g, fold, squeeze = true) => renderTextLayout(layout(g, cellRuler(), {
-    legend: false,
-    fold,
-    squeeze,
-    ...opts.quality === undefined ? {} : { quality: opts.quality },
-    ...maxWidth === undefined ? {} : { maxWidth },
-    ...opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight }
-  }));
-  const widest = (lines) => Math.max(0, ...lines.map(cellWidth));
+  const draw = (g, fold, squeeze = true) => {
+    const laid = layout(g, cellRuler(), {
+      legend: false,
+      fold,
+      squeeze,
+      ...opts.quality === undefined ? {} : { quality: opts.quality },
+      ...maxWidth === undefined ? {} : { maxWidth },
+      ...opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight }
+    });
+    return { lines: renderTextLayout(laid), layout: laid };
+  };
+  const widest = (d) => Math.max(0, ...d.lines.map(cellWidth));
   const full = draw(model.graph, true, false);
   if (maxWidth === undefined || widest(full) <= maxWidth)
     return full;
@@ -21521,7 +21636,10 @@ registerFrontEnd({
     return renderSvg(laid, { title, legend: false, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
-    return titledLines(terminal(src, maxWidth, opts), opts.heading, maxWidth);
+    return titledLines(terminal2(src, maxWidth, opts).lines, opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(renderTextLayoutSpans(terminal2(src, maxWidth, opts).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseEr(src, opts.heading);
@@ -21594,6 +21712,7 @@ function sceneRules() {
     ".ursula-head-band{fill:$lane}",
     ".ursula-edge{fill:none;stroke:$line;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}",
     ".ursula-edge--accent{stroke:$accent}",
+    ".ursula-edge--thick{stroke-width:%edge-thick-w}",
     ".ursula-edge--pending{stroke-dasharray:%dash}",
     ".ursula-edge--msg{stroke:$line}",
     ".ursula-edge--msg.ursula-edge--pending{stroke-dasharray:%dash-msg}",
@@ -24069,7 +24188,7 @@ var N4 = 1;
 var E4 = 2;
 var S4 = 4;
 var W5 = 8;
-var UPRIGHT3 = N4 | S4;
+var UPRIGHT4 = N4 | S4;
 var LEVEL2 = E4 | W5;
 var DX3 = [0, 1, 0, -1];
 var DY3 = [-1, 0, 1, 0];
@@ -24318,8 +24437,8 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
         let shut = false;
         for (const u of uses[nkey] ?? NONE) {
           if (related(u.wire, index))
-            shared ||= (u.bits & (level ? LEVEL2 : UPRIGHT3)) !== 0;
-          else if (u.end || u.bits !== (level ? UPRIGHT3 : LEVEL2))
+            shared ||= (u.bits & (level ? LEVEL2 : UPRIGHT4)) !== 0;
+          else if (u.end || u.bits !== (level ? UPRIGHT4 : LEVEL2))
             shut = true;
           else
             crosses = true;
@@ -24336,7 +24455,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
             const skey = ny * width + side;
             if (blocked[skey] === 1)
               step += BESIDE_BOX;
-            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT3) !== 0))
+            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT4) !== 0))
               step += BESIDE_LINE;
           }
         }
@@ -28953,7 +29072,7 @@ function sceneItems(blocks, links, model, u) {
   for (const link of links) {
     if (link.invisible || link.points.length < 2)
       continue;
-    const role = ["edge", ...link.arrow ? ["edge--arrow"] : [], ...link.arrowStart ? ["edge--arrow-start"] : [], ...link.style === "dotted" ? ["edge--pending"] : [], ...link.style === "thick" ? ["edge--accent"] : []];
+    const role = ["edge", ...link.arrow ? ["edge--arrow"] : [], ...link.arrowStart ? ["edge--arrow-start"] : [], ...link.style === "dotted" ? ["edge--pending"] : [], ...link.style === "thick" ? ["edge--accent", "edge--thick"] : []];
     const line = { kind: "line", points: link.points, role, data: { from: link.from, to: link.to } };
     items.push(line);
   }
@@ -31103,6 +31222,11 @@ var requirementFrontEnd = {
     const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
     return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
   },
+  textSpans(src, maxWidth, opts) {
+    const ruler = cellRuler();
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
+    return titledSpans(renderTextLayoutSpans(laid), opts.heading, maxWidth);
+  },
   json(src, mode, opts) {
     const ruler = mode === "text" ? cellRuler() : pixelRuler();
     return layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth } });
@@ -32367,11 +32491,14 @@ function layoutArchitectureText(model, maxWidth) {
 
 // src/architecture/frontend.ts
 function drawn2(model, maxWidth) {
+  return drawnSpans(model, maxWidth)?.map((row) => row.map((s) => s.text).join(""));
+}
+function drawnSpans(model, maxWidth) {
   if (model.nodes.length === 0)
     return;
   try {
-    const lines = renderTextLayout(layout(architectureGraph(model), cellRuler(), { ...maxWidth === undefined ? {} : { maxWidth }, fold: true, legend: false }));
-    return titledLines(lines, model.title, maxWidth);
+    const lines = renderTextLayoutSpans(layout(architectureGraph(model), cellRuler(), { ...maxWidth === undefined ? {} : { maxWidth }, fold: true, legend: false }));
+    return titledSpans(lines, model.title, maxWidth);
   } catch (error) {
     if (error instanceof UrsulaError)
       return;
@@ -32393,7 +32520,7 @@ registerFrontEnd({
   },
   textSpans(src, maxWidth, opts) {
     const model = parseArchitecture(src, opts.heading);
-    return drawn2(model, maxWidth)?.map((text) => [{ text, tone: "normal" }]) ?? layoutArchitectureText(model, maxWidth);
+    return drawnSpans(model, maxWidth) ?? layoutArchitectureText(model, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseArchitecture(src, opts.heading);
@@ -34797,6 +34924,9 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     return titledLines(renderTextLayout(drawn3(src, cellRuler(), { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }).layout), opts.heading, maxWidth);
   },
+  textSpans(src, maxWidth, opts) {
+    return titledSpans(renderTextLayoutSpans(drawn3(src, cellRuler(), { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }).layout), opts.heading, maxWidth);
+  },
   json(src, mode, opts) {
     return drawn3(src, mode === "text" ? cellRuler() : pixelRuler(), opts).layout;
   }
@@ -36438,6 +36568,10 @@ registerFrontEnd({
     const model = parseUsecase(src);
     return titledLines(renderTextLayout(laidOut(model, { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }, true)), opts.heading, maxWidth);
   },
+  textSpans(src, maxWidth, opts) {
+    const model = parseUsecase(src);
+    return titledSpans(renderTextLayoutSpans(laidOut(model, { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }, true)), opts.heading, maxWidth);
+  },
   json(src, mode, opts) {
     const model = parseUsecase(src);
     return { graph: model.graph, layout: laidOut(model, opts, mode === "text") };
@@ -37530,16 +37664,29 @@ function wrap4(text, ruler) {
   return text.split(`
 `).flatMap((paragraph) => wrapWords(paragraph, limit, width));
 }
+var ROLE_WORDS = { person: "Person", system: "System", container: "Container", component: "Component" };
+var STORE_WORDS = { db: "Database", queue: "Queue" };
+function kindOf2(e) {
+  const word = e.store === undefined ? ROLE_WORDS[e.role] : STORE_WORDS[e.store];
+  return e.external ? `${word} · external` : word;
+}
+function boundaryKindOf(kind) {
+  const m = /^(?:(Enterprise|System|Container)_)?Boundary$/.exec(kind);
+  if (m === null)
+    return kind;
+  return m[1] === undefined ? "Boundary" : `${m[1]} boundary`;
+}
 function compartmentsOf2(e, ruler) {
   const narrow = ruler.terminal === true && wrapCells2 < WRAP_CELLS;
   const name = e.label.split(`
 `).map((l) => l.trim()).flatMap((l) => narrow ? wrap4(l, ruler) : [l]);
   const tech = e.tech === undefined ? [] : wrap4(e.tech, ruler);
   const descr = e.descr === undefined ? [] : wrap4(e.descr, ruler);
+  const kind = narrow ? wrap4(kindOf2(e), ruler) : [kindOf2(e)];
   return [
     {
-      lines: [e.macro, ...name, ...tech, ...descr],
-      lineEmphasis: ["tag", ...name.map(() => "title"), ...tech.map(() => "tag"), ...descr.map(() => "body")],
+      lines: [...kind, ...name, ...tech, ...descr],
+      lineEmphasis: [...kind.map(() => "tag"), ...name.map(() => "title"), ...tech.map(() => "tag"), ...descr.map(() => "body")],
       align: "center",
       emphasis: "body",
       face: true
@@ -37593,7 +37740,7 @@ function graphOf(model, ruler) {
       directCount.set(e.boundary, (directCount.get(e.boundary) ?? 0) + 1);
   const clusters = model.boundaries.map((b) => ({
     id: b.alias,
-    label: clusterLabel(b.label, b.kind, b.descr),
+    label: clusterLabel(b.label, b.deployment ? b.kind : boundaryKindOf(b.kind), b.descr),
     style: "dashed",
     subtitled: true,
     ...directCount.get(b.alias) !== undefined && (directCount.get(b.alias) ?? 0) <= MAX_ROW ? { direction: "LR" } : {},
@@ -37865,6 +38012,10 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const { layout: laid, shown } = draw(src, "text", maxWidth);
     return titledLines(renderTextLayout(laid), shown === undefined || shown === "" ? opts.heading : shown, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const { layout: laid, shown } = draw(src, "text", maxWidth);
+    return titledSpans(renderTextLayoutSpans(laid), shown === undefined || shown === "" ? opts.heading : shown, maxWidth);
   },
   json(src, mode, opts) {
     return draw(src, mode, opts.maxWidth).layout;
@@ -40701,7 +40852,7 @@ function checkReport(src, req, terminal = false) {
 `)}
 `;
 }
-function terminal2(src, req, width) {
+function terminal3(src, req, width) {
   const frontEnd = selectFrontEnd(src);
   const opts = layoutOptions5(req);
   if (req.format === "text-svg" || req.color && frontEnd.textSpans) {
@@ -40721,7 +40872,7 @@ function fitted(src, req, limit) {
   let drawn;
   let refused;
   try {
-    drawn = terminal2(src, req, limit);
+    drawn = terminal3(src, req, limit);
     if (widestOf(drawn.rows) <= limit)
       return { stdout: drawn.out, stderr: "", code: 0 };
   } catch (err) {
@@ -40729,7 +40880,7 @@ function fitted(src, req, limit) {
       throw err;
     refused = err;
   }
-  const attempt = attemptWith((w) => terminal2(src, req, w).rows);
+  const attempt = attemptWith((w) => terminal3(src, req, w).rows);
   const first = drawn === undefined ? { fits: false, ...refused?.minWidth === undefined ? {} : { minWidth: refused.minWidth } } : { fits: false, widest: widestOf(drawn.rows) };
   const need = neededWidth(limit, first, attempt);
   const head = refused === undefined ? `error: the drawing needs ${need.sure ? "" : "more than "}${need.sure ? need.width : need.width - 1} columns; the limit is ${limit}` : `error: ${refused.message}`;

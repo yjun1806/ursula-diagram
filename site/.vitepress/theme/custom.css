@@ -95,6 +95,15 @@ html.dark { color-scheme: dark; }
 }
 
 /*
+ * A command in a box breaks only at its spaces: `ursula-diagram` stays whole. Each word is a box of its own that moves
+ * to the next line when it does not fit, and wraps inside only when it is wider than the whole line.
+ */
+.cmd-word {
+  display: inline-block;
+  max-width: 100%;
+}
+
+/*
  * Reading. Korean breaks between words, not inside them (keep-all), and a word longer than the line still wraps
  * (anywhere). Headings balance their lines; paragraphs avoid a lone last word.
  */

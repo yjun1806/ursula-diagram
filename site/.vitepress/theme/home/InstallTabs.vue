@@ -32,7 +32,7 @@ const noteOf = (id) => (id === 'skill' ? t.skillNote : id === 'mcp' ? t.mcpNote 
       </button>
     </div>
     <div class="it-line" role="tabpanel">
-      <code><span class="it-prompt" aria-hidden="true">$ </span>{{ commandOf(picked) }}</code>
+      <code><span class="it-prompt" aria-hidden="true">$ </span><template v-for="(word, i) in commandOf(picked).split(' ')" :key="i">{{ i > 0 ? ' ' : '' }}<span class="cmd-word">{{ word }}</span></template></code>
       <CopyButton :text="commandOf(picked)" />
     </div>
     <p class="it-note">{{ noteOf(picked) }}</p>

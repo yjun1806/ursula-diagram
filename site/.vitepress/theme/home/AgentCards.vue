@@ -32,7 +32,7 @@ const loopSrc = withBase(`/assets/${code === 'ko' ? 'ko-' : ''}loop.svg`);
         <p>{{ c.body }}</p>
         <div class="ag-code">
           <div v-for="cmd in c.commands" :key="cmd" class="ag-cmd">
-            <code><span class="ag-prompt" aria-hidden="true">$ </span>{{ cmd }}</code>
+            <code><span class="ag-prompt" aria-hidden="true">$ </span><template v-for="(word, i) in cmd.split(' ')" :key="i">{{ i > 0 ? ' ' : '' }}<span class="cmd-word">{{ word }}</span></template></code>
             <CopyButton :text="cmd" />
           </div>
           <CodeBlock v-if="c.output" class="ag-out" :text="c.output" />

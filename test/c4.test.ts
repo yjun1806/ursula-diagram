@@ -301,14 +301,14 @@ describe('c4 reading', () => {
     expect(node?.kind).toContain('Google Chrome');
   });
 
-  it('builds one face with no rules for each element: the macro word in a pill, the name, then the description', () => {
+  it('builds one face with no rules for each element: the kind in a pill, the name, then the description', () => {
     const g = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler());
     const node = g.nodes.find((n) => n.id === 'SystemE');
     expect(node?.compartments).toHaveLength(1);
     expect(node?.compartments?.[0]?.face).toBe(true);
-    expect(node?.compartments?.[0]?.lines.slice(0, 2)).toEqual(['SystemDb_Ext', 'Mainframe Banking System']);
+    expect(node?.compartments?.[0]?.lines.slice(0, 2)).toEqual(['Database · external', 'Mainframe Banking System']);
     expect(node?.compartments?.[0]?.lineEmphasis?.slice(0, 3)).toEqual(['tag', 'title', 'body']);
-    expect(g.clusters?.find((c) => c.id === 'b0')?.label).toBe('BankBoundary0 · Enterprise_Boundary');
+    expect(g.clusters?.find((c) => c.id === 'b0')?.label).toBe('BankBoundary0 · Enterprise boundary');
   });
 
   it('writes the technology of a relation after an em space, without brackets, and every boundary as name and subtitle', () => {
@@ -398,9 +398,50 @@ describe('c4 shapes, boundaries and sizes', () => {
     expect(shapeOf(EXAMPLES[3] as string, 'db')).toBe('cylinder');
   });
 
-  it('writes the macro word of a cylinder as its kind', () => {
-    const node = c4Graph(parseC4(EXAMPLES[0] as string), pixelRuler()).nodes.find((n) => n.id === 'SystemE');
-    expect(node?.compartments?.[0]?.lines[0]).toBe('SystemDb_Ext');
+  it('writes the kind of an element in words, not the macro name', () => {
+    const src = [
+      'C4Container',
+      'Person(p, "P")',
+      'Person_Ext(pe, "PE")',
+      'System(s, "S")',
+      'System_Ext(se, "SE")',
+      'SystemDb(sd, "SD")',
+      'SystemQueue(sq, "SQ")',
+      'Container_Boundary(cb, "CB") {',
+      'Container(c, "C")',
+      'ContainerDb_Ext(cde, "CDE")',
+      'ContainerQueue(cq, "CQ")',
+      'Component(k, "K")',
+      'ComponentDb(kd, "KD")',
+      '}',
+      'System_Boundary(sb, "SB") {',
+      '}',
+      'Boundary(b, "B") {',
+      '}',
+      'Boundary(bt, "BT", "Team") {',
+      '}',
+    ].join('\n');
+    const g = c4Graph(parseC4(src), pixelRuler());
+    const tags = Object.fromEntries(g.nodes.map((n) => [n.id, n.compartments?.[0]?.lines[0]]));
+    expect(tags).toEqual({
+      p: 'Person',
+      pe: 'Person · external',
+      s: 'System',
+      se: 'System · external',
+      sd: 'Database',
+      sq: 'Queue',
+      c: 'Container',
+      cde: 'Database · external',
+      cq: 'Queue',
+      k: 'Component',
+      kd: 'Database',
+    });
+    expect(Object.fromEntries((g.clusters ?? []).map((c) => [c.id, c.label]))).toEqual({
+      cb: 'CB · Container boundary',
+      sb: 'SB · System boundary',
+      b: 'B · Boundary',
+      bt: 'BT · Team',
+    });
   });
 
   it('marks every boundary and deployment node as a dashed zone', () => {

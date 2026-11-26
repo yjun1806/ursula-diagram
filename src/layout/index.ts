@@ -571,8 +571,20 @@ function layoutAny(source: Graph, given: Ruler, opts: LayoutOptions): Layout {
   return withLegend(drawAttached(bare, attached, ruler), ruler, opts.legend);
 }
 
+/**
+ * A grid that reads from left to right and passes the width (`maxWidth`, else the width of the medium) is set down the
+ * page instead when that is narrower: a chain of wide boxes in one row is shown so small that its text cannot be read.
+ */
+function c4GridWithin(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
+  const across = layoutC4Grid(graph, ruler, opts);
+  const limit = opts.maxWidth ?? ruler.defaultWidth;
+  if (graph.direction !== 'LR' || graph.mirror !== undefined || graph.grid?.cells !== undefined || limit === undefined || across.width <= limit) return across;
+  const down = layoutC4Grid({ ...graph, direction: 'TD' }, ruler, opts);
+  return down.width < across.width ? down : across;
+}
+
 function arrange(graph: Graph, ruler: Ruler, opts: LayoutOptions): Layout {
-  if (graph.placer === 'c4-grid' && ruler.terminal !== true) return layoutC4Grid(graph, ruler, opts);
+  if (graph.placer === 'c4-grid' && ruler.terminal !== true) return c4GridWithin(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true) return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
     // Bands side by side cannot fold: when they are too wide the bands are stacked, and when that is too wide as well no band is drawn.

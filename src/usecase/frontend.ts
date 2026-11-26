@@ -5,13 +5,13 @@ import { registerFrontEnd } from '../registry.ts';
 import type { RenderOptions } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
 import type { NodeHook } from '../render/svg.ts';
-import { renderTextLayout } from '../render/text.ts';
+import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
 import type { GridSpec, Layout, LayoutNode } from '../types.ts';
 import { emptySpec } from '../c4/grid-rows.ts';
 import { faults, worse } from './faults.ts';
 import type { UsecaseModel } from './model.ts';
 import { parseUsecase } from './parse.ts';
-import { titledLines } from '../front/title.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 const num = (n: number): string => String(Math.round(n * 100) / 100);
 
@@ -101,6 +101,10 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const model = parseUsecase(src);
     return titledLines(renderTextLayout(laidOut(model, { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }, true)), opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const model = parseUsecase(src);
+    return titledSpans(renderTextLayoutSpans(laidOut(model, { ...opts, ...(maxWidth === undefined ? {} : { maxWidth }) }, true)), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseUsecase(src);

@@ -39,7 +39,8 @@ describe('svg', () => {
 
   it('marks thick edges and their labels with a class and a marker of their own, in the colour of every line', () => {
     const svg = render('flowchart LR\nA ==>|go| B\nA -->|plain| C');
-    expect(svg).not.toContain('.ursula-edge--thick{');
+    // A thick line is twice as wide as a normal one.
+    expect(svg).toContain('.ursula-edge--thick{stroke-width:3}');
     expect(svg).not.toContain('.ursula-edge-label--thick{');
     expect(svg).toContain('.ursula-arrow--accent{fill:var(--ursula-line,#565554)}');
     expect(svg).toMatch(/<path class="ursula-edge ursula-edge--thick" data-style="thick"[^>]*marker-end="url\(#ursula-arrow-accent\)"/);

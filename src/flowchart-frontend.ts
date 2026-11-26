@@ -8,11 +8,12 @@ import { cellRuler, pixelRuler } from './metrics.ts';
 import { parse } from './parse.ts';
 import { registerFrontEnd } from './registry.ts';
 import { renderSvg } from './render/svg.ts';
+import { layoutSpans } from './render/text.ts';
 import { cellWidth } from './metrics.ts';
 import type { Detail } from './text-detail.ts';
 import { descriptionList, innerWidth, innerWidths, titlesOnly, wrapGraph } from './text-detail.ts';
 import type { Graph, Layout } from './types.ts';
-import { titledLines } from './front/title.ts';
+import { titledLines, titledSpans } from './front/title.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
@@ -200,6 +201,10 @@ registerFrontEnd({
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const drawn = drawText(src, maxWidth, opts);
+    return titledSpans(layoutSpans(drawn.layout, drawn.lines), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(parse(src), mode === 'text' ? cellRuler() : pixelRuler(), layoutOptions(opts));

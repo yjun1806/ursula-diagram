@@ -18,6 +18,23 @@ describe('parse', () => {
     expect(parse('flowchart\nA').direction).toBe('TD');
   });
 
+  it('reads a ::: class right before an arrow, on either side', () => {
+    for (const src of [
+      'flowchart LR\nA:::hot-->B',
+      'flowchart LR\nA:::hot --> B',
+      'flowchart LR\nA[Label]:::hot-->B',
+      'flowchart LR\nA-->B:::cold',
+      'flowchart LR\nA:::hot-->B:::cold',
+      'flowchart LR\nA:::my-class==>B',
+      'flowchart LR\nA:::hot-.->B',
+    ]) {
+      const g = parse(src);
+      expect(g.nodes.map((n) => n.id), src).toEqual(['A', 'B']);
+      expect(g.edges.map((e) => [e.from, e.to]), src).toEqual([['A', 'B']]);
+    }
+    expect(parse('flowchart LR\nA[Label]:::hot-->B').nodes[0]?.title).toBe('Label');
+  });
+
   it('reads node shapes and labels', () => {
     const g = parse('flowchart LR\nA[square]\nB(round)\nC{choice}\nD((circle))\nE["quoted [text]"]\nF');
     expect(g.nodes.map((n) => [n.id, n.title])).toEqual([

@@ -3,10 +3,10 @@ import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { FrontEnd } from '../registry.ts';
 import { renderSvg } from '../render/svg.ts';
-import { renderTextLayout } from '../render/text.ts';
+import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
 import { requirementGraph } from './graph.ts';
 import { parseRequirement } from './parse.ts';
-import { titledLines } from '../front/title.ts';
+import { titledLines, titledSpans } from '../front/title.ts';
 
 export const requirementFrontEnd: FrontEnd = {
   name: 'requirement',
@@ -25,6 +25,11 @@ export const requirementFrontEnd: FrontEnd = {
     const ruler = cellRuler();
     const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(opts.quality === undefined ? {} : { quality: opts.quality }) });
     return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
+  },
+  textSpans(src, maxWidth, opts) {
+    const ruler = cellRuler();
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(opts.quality === undefined ? {} : { quality: opts.quality }) });
+    return titledSpans(renderTextLayoutSpans(laid), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const ruler = mode === 'text' ? cellRuler() : pixelRuler();
