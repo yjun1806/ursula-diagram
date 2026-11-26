@@ -137,4 +137,4 @@ Treat these as the public interface and update the site pages (en and ko) and te
 
 ## Releases
 
-Follow `RELEASING.md`: a release is a pull request `chore: release <version>` that sets the version in `package.json` and `src/version.ts`, rebuilds the bundled command, and renames `## Unreleased` in both changelogs to `## <version> (<yyyy-mm-dd>)` with a new empty `## Unreleased` above. Merging it publishes to npm, tags `v<version>` and creates the GitHub release with that changelog section as its notes.
+Features and fixes ship as patch releases (`0.2.x`), often; a minor release (`0.3.0`) is only for a batch of breaking changes worth one. Follow `RELEASING.md`: a release is a pull request `chore: release <version>` that sets the version in `package.json` and `src/version.ts`, rebuilds the bundled command, and renames `## Unreleased` in both changelogs to `## <version> (<yyyy-mm-dd>)` with a new empty `## Unreleased` above. Merging it publishes to npm, tags `v<version>` and creates the GitHub release with that changelog section as its notes.

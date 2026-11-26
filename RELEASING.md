@@ -26,7 +26,10 @@ item, remove that part. The roadmap lists only work still to do; what shipped is
 
 ## Releases
 
-Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a patch bump (`0.x.y`) does not.
+Release often, in small steps. New features and fixes ship as patch releases (`0.2.x`), one after another, as soon
+as they are on `main`. Raise the minor version (`0.3.0`) only when a batch of breaking changes is worth a release of
+its own. A small breaking change, such as removing an option nobody uses, may ship in a patch release when the
+maintainer decides so; the changelog lists it under `### Removed` or `### Changed`.
 
 1. Branch from `main`: `git switch -c chore/release-<version>`.
 2. Set the new version in `version` of `package.json` and in `VERSION` of `src/version.ts`. A test fails when the two differ.
