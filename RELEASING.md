@@ -14,7 +14,7 @@ Every change reaches `main` through a pull request. A release is a pull request 
 Pushing to `main` also redeploys the documentation site.
 
 When a pull request ships an item on the roadmap (an issue labelled `roadmap`), move its line on `site/roadmap.md` and
-`site/ko/roadmap.md` to "Done" ("완료" on the Korean page), struck through (`~~…~~` around the text, not the links),
+`site/ko/roadmap.md` to "Done" ("완료" on the Korean page), as a plain line (no strikethrough),
 under `### Unreleased` (`### 출시 예정`) in the same pull request, and close the issue with `Fixes #<n>`. The site's
 `npm run check` (run on every push to `main` before the site deploys) fails when the pages list a closed issue or miss an open one.
 
