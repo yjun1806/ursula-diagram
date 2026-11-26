@@ -5461,7 +5461,7 @@ function topoOrder(ids, succ, size) {
       visit(v);
   return post.reverse();
 }
-function longestPath(ids, succ, size, weight = () => 0) {
+function longestPath(ids, succ, size, weight = () => 0, from) {
   const longest = new Float64Array(size);
   const heavy = new Float64Array(size);
   const next = new Int32Array(size).fill(-1);
@@ -5484,13 +5484,14 @@ function longestPath(ids, succ, size, weight = () => 0) {
     heavy[v] = weight(v) + bestWeight;
     next[v] = via;
   }
-  let start = -1;
-  for (const v of ids) {
-    if (start < 0)
-      start = v;
-    else if (longest[v] > longest[start] || longest[v] === longest[start] && heavy[v] > heavy[start])
-      start = v;
-  }
+  let start = from ?? -1;
+  if (from === undefined)
+    for (const v of ids) {
+      if (start < 0)
+        start = v;
+      else if (longest[v] > longest[start] || longest[v] === longest[start] && heavy[v] > heavy[start])
+        start = v;
+    }
   const path = [];
   for (let v = start;v >= 0; v = next[v])
     path.push(v);
@@ -5676,7 +5677,7 @@ function readDownward(shelves, head) {
   }
   return out;
 }
-function assignLayers(graph, units, capacity, reduction = 0, apart = false, fold = "flat") {
+function assignLayers(graph, units, capacity, reduction = 0, apart = false, fold = "flat", written = false) {
   const index = new Map(graph.nodes.map((n, i) => [n.id, i]));
   const laneOf = graph.nodes.map((n) => Math.max(0, graph.lanes.findIndex((l) => l.id === n.lane)));
   const layer = new Array(graph.nodes.length).fill(0);
@@ -5820,7 +5821,9 @@ function assignLayers(graph, units, capacity, reduction = 0, apart = false, fold
         rowOf.set(v, r);
         taken.add(cell(r, rankOf.get(v)));
       };
-      for (const v of longestPath(nodes, succ, size))
+      const first = nodes[0];
+      const lead = written && (pred[first] ?? []).length === 0 ? first : undefined;
+      for (const v of longestPath(nodes, succ, size, undefined, lead))
         take(v, 0);
       for (const v of topo) {
         if (rowOf.has(v))
@@ -6286,7 +6289,8 @@ var CANDIDATES = [
   { name: "stage", free: false, loose: false, stage: true, start: true, fold: "flat" },
   { name: "loose", free: true, loose: true, stage: false, start: true, fold: "flat" },
   { name: "forced-unheld", free: false, loose: false, stage: false, start: false, fold: "flat" },
-  { name: "free-unheld", free: true, loose: false, stage: false, start: false, fold: "flat" }
+  { name: "free-unheld", free: true, loose: false, stage: false, start: false, fold: "flat" },
+  { name: "written", free: false, loose: false, stage: false, start: true, fold: "flat", written: true }
 ];
 var FOLDED = [
   { name: "forced-head", free: false, loose: false, stage: false, start: true, fold: "head" },
@@ -6424,7 +6428,7 @@ function violationsOf(l, g) {
   }
   return n;
 }
-var WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 };
+var WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1, joining: 1 };
 var crosses = (S, h, v) => S[v * 8] > S[h * 8 + 4] + EPS12 && S[v * 8] < S[h * 8 + 5] - EPS12 && S[h * 8 + 1] > S[v * 8 + 6] + EPS12 && S[h * 8 + 1] < S[v * 8 + 7] - EPS12;
 function crossingsFrom(l, g) {
   const S = g.v;
@@ -6597,6 +6601,10 @@ function scoreOnce(l) {
   const against = [];
   const bendCost = (e) => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
   const mirrored = mirroredEdges(l, bendCost);
+  const order = new Map(l.nodes.map((n, i) => [n.id, i]));
+  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  let joining = 0;
+  const joins = (e) => e.end !== "none" && !fed.has(e.from) && l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane) && l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
   for (const [i, e] of l.edges.entries()) {
     if (!mirrored.has(i))
       bends += bendCost(e);
@@ -6607,8 +6615,10 @@ function scoreOnce(l) {
     const upward = l.composition !== "stages" && l.direction !== "TD" && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8)
       against.push([e.from, e.to]);
-    if (upward)
+    if (upward && !joins(e))
       folded++;
+    else if (upward)
+      joining++;
   }
   for (let s = 0;s < g.at[l.edges.length]; s++)
     length += Math.abs(g.v[s * 8 + 2] - g.v[s * 8]) + Math.abs(g.v[s * 8 + 3] - g.v[s * 8 + 1]);
@@ -6639,7 +6649,7 @@ function scoreOnce(l) {
   const rowCost = pixels && unzoned(l) ? 0 : pixels ? [...rows.values()].reduce((sum, r) => sum + WEIGHTS.secondRow * (r >= 2 ? 1 : 0) + WEIGHTS.extraRow * Math.max(0, r - 2), 0) : WEIGHTS.extraRow * extra;
   const tightCost = pixels ? WEIGHTS.tight * (l.gap !== undefined && l.gap < (l.gapDefault ?? 0) ? 1 : 0) + WEIGHTS.labelTight * l.diagnostics.filter((d) => d.kind === "label-tight").length + WEIGHTS.offCentre * l.diagnostics.filter((d) => d.kind === "off-centre").length : 0;
   const [crossMain, crossOther] = crossingsFrom(l, g);
-  const cost = bends + WEIGHTS.crossingMain * crossMain + WEIGHTS.crossing * crossOther + rowCost + tightCost + WEIGHTS.upward * folded + WEIGHTS.back * against.length + WEIGHTS.heavyBack * heavyAgainst + WEIGHTS.backChain * chained + WEIGHTS.far * farness(l) + WEIGHTS.start * startMissed(l) + WEIGHTS.mixedSide * mixedSideEnds(l, directionsOf(l)).length + WEIGHTS.branch * offCentre2(l).length;
+  const cost = bends + WEIGHTS.crossingMain * crossMain + WEIGHTS.crossing * crossOther + rowCost + tightCost + WEIGHTS.upward * folded + WEIGHTS.joining * joining + WEIGHTS.back * against.length + WEIGHTS.heavyBack * heavyAgainst + WEIGHTS.backChain * chained + WEIGHTS.far * farness(l) + WEIGHTS.start * startMissed(l) + WEIGHTS.mixedSide * mixedSideEnds(l, directionsOf(l)).length + WEIGHTS.branch * offCentre2(l).length;
   return [violationsOf(l, g) + l.diagnostics.filter((d) => d.kind === "overflow").length, cost, Math.round(length)];
 }
 function pickBest(drawings) {
@@ -7455,7 +7465,7 @@ function placeOnce(graph, ruler, units, capacity, reduction, unit, gap, td, limi
   const shapes = graph.nodes.map((n) => n.shape);
   const bodies = bodyLengths(graph, ruler, td);
   const across = stadiumThickness(graph, ruler, td);
-  const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold);
+  const first = given ?? assignLayers(graph, units, capacity, reduction, apart, variant.fold, variant.written === true);
   const stage = variant.stage ? stageOf(graph, first) : undefined;
   const rows = given ?? (stage ? assignByStage(graph, first, stage) : first);
   const finish = (ladder, layers) => {
@@ -7531,8 +7541,8 @@ function solve(graph, ruler, limit, bounded, plain, apart, variant, fold = true,
   const run = (squeeze = false) => place(graph, ruler, baseUnits, caps, reduction, unit, ruler.rankGap, td, capacityUnits, dummyShift, apart, variant, squeeze);
   let placed = run();
   if (plain)
-    return { placed, ruler, common, ok: !bounded || placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane.length };
-  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold).layerLane, graph.lanes.length) : [];
+    return { placed, ruler, common, ok: !bounded || placed.width <= capacityUnits && placed.layers.length <= assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold, variant.written === true).layerLane.length };
+  const unlimitedRows = allow.rows ? rowsPerLane(assignLayers(graph, baseUnits, Infinity, 0, apart, variant.fold, variant.written === true).layerLane, graph.lanes.length) : [];
   const allowed = (p) => !(allow.intact && p.rows.mainCut) && (!allow.rows || rowsPerLane(p.ladder.layerLane, graph.lanes.length).every((n, lane) => n <= Math.max(unlimitedRows[lane] ?? 0, 2)));
   const overLanes = () => {
     const ends = placed.layers.map((row) => Math.max(0, ...row.map((n) => (placed.start[n] ?? 0) + (n < placed.ladder.realCount ? placed.ladder.nodes[n]?.units ?? 2 : 2))));

@@ -45,7 +45,7 @@ describe('main flow', () => {
 
 describe('candidates', () => {
   it('lists the candidates and measures finished drawings in a fixed order of qualities', () => {
-    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage', 'loose', 'forced-unheld', 'free-unheld']);
+    expect(CANDIDATES.map((c) => c.name)).toEqual(['forced', 'free', 'stage', 'loose', 'forced-unheld', 'free-unheld', 'written']);
     const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes' });
     const s = score(l);
     expect(s).toHaveLength(3);
@@ -199,5 +199,30 @@ describe('main flow in the drawing', () => {
     const l = layoutWith(parse('swimlane-beta LR\nsubgraph a[A]\nP\nend\nsubgraph b[B]\nX\nY\nZ\nend\nP --> X\nP --> Y\nP --> Z'), pixelRuler(), { composition: 'lanes', questions: false });
     expect(Array.isArray(offCentre(l))).toBe(true);
     expect(offCentre({ ...l, pitch: undefined } as Layout)).toEqual([]);
+  });
+});
+
+describe('a flow written first', () => {
+  // The first flow ends where a longer flow written after it also sends a line.
+  const src = `flowchart LR
+  A([Order confirmed]) --> B[(Orders)]
+  C[Nightly batch] -->|read| B
+  C --> D[Compute] --> E[(Points)] --> F[Notify]
+  C -.-> C`;
+
+  it('takes the first row in the written candidate, the longer flow written after it the row below', () => {
+    const g = parse(src);
+    const rows = assignLayers(g, g.nodes.map(() => 2), Infinity, 0, false, 'flat', true);
+    const [a, b, c, d] = idOf(g, ['A', 'B', 'C', 'D']) as [number, number, number, number];
+    expect(rows.layer[a]).toBe(rows.layer[b]);
+    expect(rows.layer[c]).toBe(rows.layer[d]);
+    expect(rows.layer[a]).toBeLessThan(rows.layer[c] as number);
+  });
+
+  it('stays above the flow that joins it from below in a pixel drawing', () => {
+    const l = layout(parse(src), pixelRuler());
+    const at = (id: string): number => l.nodes.find((n) => n.id === id)?.y ?? NaN;
+    expect(at('A')).toBeLessThan(at('C'));
+    expect(at('A')).toBe(at('B'));
   });
 });

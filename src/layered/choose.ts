@@ -19,6 +19,8 @@ export interface Variant {
   start: boolean;
   /** How flows inside a lane are laid over rows. */
   fold: Fold;
+  /** The first row of a lane holds the flow the text starts with, not the longest flow. */
+  written?: true;
   /** Terminal: lines without a label that end alike on one side of a box share a port there. */
   sharePorts?: true;
 }
@@ -30,6 +32,7 @@ export const CANDIDATES: readonly Variant[] = [
   { name: 'loose', free: true, loose: true, stage: false, start: true, fold: 'flat' },
   { name: 'forced-unheld', free: false, loose: false, stage: false, start: false, fold: 'flat' },
   { name: 'free-unheld', free: true, loose: false, stage: false, start: false, fold: 'flat' },
+  { name: 'written', free: false, loose: false, stage: false, start: true, fold: 'flat', written: true },
 ];
 
 /** The two candidates drawn again with the flow of a lane folded by its head, and by its head and tail. */
@@ -178,7 +181,7 @@ function violationsOf(l: Layout, g: Segs): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1, joining: 1 } as const;
 
 /** Whether horizontal segment `h` and vertical segment `v` (indices into `S`) cross inside both of them. */
 const crosses = (S: Float64Array, h: number, v: number): boolean =>
@@ -362,6 +365,18 @@ function scoreOnce(l: Layout): number[] {
   const against: Array<[string, string]> = [];
   const bendCost = (e: LayoutEdge): number => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
   const mirrored = mirroredEdges(l, bendCost);
+  // An arrow up from a node that no line leads into and that starts a flow of its own, to a node that also takes a line
+  // from a node written before it, does not fold a flow: a flow written later joins one written earlier from below.
+  // It costs `joining` instead of `upward`.
+  const order = new Map(l.nodes.map((n, i) => [n.id, i] as const));
+  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  let joining = 0;
+  const joins = (e: LayoutEdge): boolean =>
+    e.end !== 'none' &&
+    !fed.has(e.from) &&
+    // The node it leaves goes on along a flow of its own in its lane.
+    l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane) &&
+    l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
   for (const [i, e] of l.edges.entries()) {
     if (!mirrored.has(i)) bends += bendCost(e);
     const first = e.points[0];
@@ -371,7 +386,8 @@ function scoreOnce(l: Layout): number[] {
     const to = byId.get(e.to);
     const upward = l.composition !== 'stages' && l.direction !== 'TD' && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
-    if (upward) folded++;
+    if (upward && !joins(e)) folded++;
+    else if (upward) joining++;
   }
   for (let s = 0; s < (g.at[l.edges.length] as number); s++) length += Math.abs((g.v[s * 8 + 2] as number) - (g.v[s * 8] as number)) + Math.abs((g.v[s * 8 + 3] as number) - (g.v[s * 8 + 1] as number));
   // An edge against the reading direction that leaves a node that sends out two more edges than it takes in, or enters
@@ -409,6 +425,7 @@ function scoreOnce(l: Layout): number[] {
     rowCost +
     tightCost +
     WEIGHTS.upward * folded +
+    WEIGHTS.joining * joining +
     WEIGHTS.back * against.length +
     WEIGHTS.heavyBack * heavyAgainst +
     WEIGHTS.backChain * chained +
