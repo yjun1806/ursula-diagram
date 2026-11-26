@@ -1,7 +1,7 @@
 import { trimmedNumber } from '../chart/format.ts';
 import { cellWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
-import { cut, padEnd, padStart, spansOf } from '../text/terminal.ts';
+import { cut, padEnd, spansOf } from '../text/terminal.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import type { XyChart } from './model.ts';
 

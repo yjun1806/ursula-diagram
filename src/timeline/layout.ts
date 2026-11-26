@@ -330,7 +330,6 @@ function layoutVertical(model: TimelineModel, ruler: Ruler): TimelineLayout {
       let x = boxLeft;
       const boxes: PlacedBox[] = r.lines.map((lines, k) => {
         const w = r.ws[k] ?? BOX_MIN;
-        const h = boxHeight(lines.length);
         const box = { x, y: dotY - r.boxH / 2, w, h: r.boxH, lines };
         x += w + STACK_GAP;
         return box;

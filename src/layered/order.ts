@@ -32,23 +32,6 @@ function adjacency(l: Ladder, keep?: Set<number>): Adjacency {
   return { up, down, preds };
 }
 
-/** Number of pieces between layer i and layer i + 1 that cross. */
-function pairCrossings(order: number[][], pos: number[], adj: Adjacency, i: number): number {
-  const upper = order[i];
-  if (!upper) return 0;
-  const list: Array<[number, number]> = [];
-  for (const a of upper) for (const b of adj.down[a] ?? []) list.push([pos[a] ?? 0, pos[b] ?? 0]);
-  let total = 0;
-  for (let p = 0; p < list.length; p++) {
-    for (let q = p + 1; q < list.length; q++) {
-      const x = list[p] as [number, number];
-      const y = list[q] as [number, number];
-      if ((x[0] - y[0]) * (x[1] - y[1]) < 0) total++;
-    }
-  }
-  return total;
-}
-
 /** The side a flat edge takes and the crossings it causes there, given the order of its layer. */
 export function flatRoute(l: Ladder, order: number[], pos: number[] | Int32Array, adj: { up: number[][]; down: number[][] }, lo: number, hi: number, layer: number): { side: Side; cost: number; between: number } {
   const p = pos[lo] ?? 0;

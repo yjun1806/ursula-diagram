@@ -91,8 +91,6 @@ function readItems(src: string): { items: Item[]; accTitle: string | undefined }
   return { items: root, accTitle: acc.title };
 }
 
-const unquote = (s: string): string => (s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s);
-
 /** Ids that open a block anywhere in the source: they are composite states and stand as cluster boxes. */
 function compositeIds(items: Item[], out: Map<string, string | undefined> = new Map()): Map<string, string | undefined> {
   for (const it of items) {

@@ -39,12 +39,6 @@ const BRANCH = /[├└┣┗┠┖┝┕╠╚]/u;
 const RAIL = /[│┃║]/u;
 const DASHES = /^[─━═-]+/u;
 
-/** Removes a `%%` comment. */
-function stripComment(line: string): string {
-  const at = line.indexOf('%%');
-  return at < 0 ? line : line.slice(0, at);
-}
-
 interface Body {
   /** Source lines after the header, with their one-based numbers. */
   rows: Array<{ no: number; text: string }>;

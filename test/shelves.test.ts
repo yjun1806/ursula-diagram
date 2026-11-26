@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout } from '../src/index.ts';
-import { recordHeight } from '../src/layout/records.ts';
 import { layout, parse, pixelRuler, render, selectFrontEnd } from '../src/index.ts';
 
 const ruler = pixelRuler();

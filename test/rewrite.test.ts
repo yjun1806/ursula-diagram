@@ -526,11 +526,6 @@ function alignOld(l: Ladder, layers: number[][], extra: Extra = () => 0, opts: A
       candidates.push(raw.map((x) => x - low));
     }
   }
-  const main = opts.main ?? new Set<number>();
-  const touchesMain = (ci: number): boolean => {
-    const nodes = l.chains[ci]?.nodes ?? [];
-    return main.has(nodes[0] ?? -1) || main.has(nodes[nodes.length - 1] ?? -1);
-  };
   const score = (st: number[]): number[] => {
     const straight = all.reduce((sum, [a, b]) => (straightAt(a, st[a] ?? 0, b, st[b] ?? 0) ? sum + pieceWeight(a, b) : sum), 0);
     const off = all.reduce((sum, [a, b]) => (straightAt(a, st[a] ?? 0, b, st[b] ?? 0) ? sum : sum + Math.abs(centre(a, st[a] ?? 0) - centre(b, st[b] ?? 0))), 0);

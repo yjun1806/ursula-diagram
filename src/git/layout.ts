@@ -248,10 +248,6 @@ function buildGit(graph: GitGraph, ruler: Ruler, delays: ReadonlyMap<string, num
   const M = (t: number, l: number): string => `M${fmt(place([t, l]))}`;
   const H = (t: number, l: number): string => `L${fmt(place([t, l]))}`;
   const C = (a: Pt, b: Pt, c: Pt): string => `C${fmt(place(a))} ${fmt(place(b))} ${fmt(place(c))}`;
-  /** Branch leaving (t0, l0) for the line at l1, reaching it `REACH` later. */
-  const forkTo = (t0: number, l0: number, l1: number): string => C([t0 + 20, l0 + (l1 - l0) * 0.5], [t0 + 24, l1], [t0 + REACH, l1]);
-  /** Branch joining the line at l1 from the line at l0, starting `REACH` before t1. */
-  const joinTo = (t1: number, l0: number, l1: number): string => C([t1 - 24, l0], [t1 - 20, l0 + (l1 - l0) * 0.5], [t1, l1]);
 
   const items: SceneItem[] = [];
   const dot = (name: string): number => colour.get(name) ?? 1;
