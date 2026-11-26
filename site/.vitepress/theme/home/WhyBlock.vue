@@ -1,8 +1,10 @@
 <script setup>
-// The first thing under the hero: one sentence with the measured numbers, and a short table against Mermaid.js.
+// Under the skill comparison: one sentence with the measured numbers, a short table against Mermaid.js, and three of
+// the timed flowcharts drawn by both.
 import { useData } from 'vitepress';
 import { WHY } from './why.js';
 import { langOf } from '../playground/strings.js';
+import PicGrid from '../compare/PicGrid.vue';
 
 const { lang } = useData();
 const t = WHY[langOf(lang.value)];
@@ -29,6 +31,9 @@ const t = WHY[langOf(lang.value)];
       </tbody>
     </table>
     <p class="why-cap">{{ t.caption }}</p>
+    <h3 class="why-strip">{{ t.strip }}</h3>
+    <p class="why-cap">{{ t.stripNote }}</p>
+    <PicGrid name="mermaid" />
   </section>
 </template>
 
@@ -116,6 +121,13 @@ const t = WHY[langOf(lang.value)];
   font-size: 13px;
   line-height: 1.6;
   color: var(--vp-c-text-3);
+}
+.why-strip {
+  margin-top: 28px;
+  margin-bottom: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
 }
 @media (max-width: 639px) {
   .why-table {

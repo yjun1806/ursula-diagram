@@ -1,9 +1,9 @@
 <script setup>
-// The home page's case for agents: what the command does for an agent, each with the command and what it prints,
-// and the measured time per drawing next to a skill that has the model lay out the drawing.
+// The home page's case for agents: what the command does for an agent, each with the command and what it prints.
+// The measured time per drawing next to another skill is in SkillBlock.vue.
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
-import { CARDS, MEASURE, MEASURE_SCALE } from './agents.js';
+import { CARDS } from './agents.js';
 import { langOf } from '../playground/strings.js';
 import CopyButton from './CopyButton.vue';
 import CodeBlock from './CodeBlock.vue';
@@ -13,16 +13,9 @@ const code = langOf(lang.value);
 const t = HOME_STRINGS[code];
 const prefix = code === 'ko' ? '/ko' : '';
 const skillPage = withBase(`${prefix}/guide/agent-skill`);
-const comparePage = withBase(`${prefix}/guide/compared`);
 
 const cards = CARDS.map((c, i) => ({ ...c, step: i + 1, title: t.cards[c.id][0], body: t.cards[c.id][1] }));
 const loopSrc = withBase(`/assets/${code === 'ko' ? 'ko-' : ''}loop.svg`);
-const rows = MEASURE.map((m, i) => ({
-  ...m,
-  name: t.measureRows[i],
-  low: `${(m.seconds[0] / MEASURE_SCALE) * 100}%`,
-  high: `${(m.seconds[1] / MEASURE_SCALE) * 100}%`,
-}));
 </script>
 
 <template>
@@ -49,22 +42,6 @@ const rows = MEASURE.map((m, i) => ({
     </div>
     <p class="ag-more"><a :href="skillPage">{{ t.agentsMore }} →</a></p>
 
-    <figure class="ag-measure">
-      <figcaption>
-        <h3>{{ t.measureTitle }}</h3>
-        <p>{{ t.measureLead }}</p>
-      </figcaption>
-      <div v-for="r in rows" :key="r.name" class="ag-row" :class="{ ours: r.ours }">
-        <span class="ag-name">{{ r.name }}</span>
-        <span class="ag-track" aria-hidden="true">
-          <span class="ag-span" :style="{ width: r.high }"></span>
-          <span class="ag-low" :style="{ width: r.low }"></span>
-        </span>
-        <span class="ag-value"><b>{{ r.seconds[0] }}–{{ r.seconds[1] }} s</b> · {{ r.tokens }} {{ t.tokens }}</span>
-      </div>
-      <p class="ag-note">{{ t.measureNote }}</p>
-      <p class="ag-more"><a :href="comparePage">{{ t.measureMore }} →</a></p>
-    </figure>
   </section>
 </template>
 
@@ -197,85 +174,5 @@ const rows = MEASURE.map((m, i) => ({
   color: var(--vp-c-brand-1);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-.ag-measure {
-  margin: 40px 0 0;
-  padding: 20px;
-  border: 1px solid var(--vp-c-border);
-  border-radius: 12px;
-  background: var(--vp-c-bg-alt);
-}
-.ag-measure figcaption h3 {
-  margin: 0 0 4px;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--vp-c-text-1);
-}
-.ag-measure figcaption p {
-  margin: 0 0 16px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--vp-c-text-2);
-}
-.ag-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
-  margin-bottom: 14px;
-  font-size: 14px;
-}
-@media (min-width: 768px) {
-  .ag-row {
-    grid-template-columns: 220px minmax(0, 1fr) 220px;
-    align-items: center;
-    gap: 16px;
-  }
-}
-.ag-name {
-  color: var(--vp-c-text-1);
-  font-weight: 600;
-}
-.ag-track {
-  position: relative;
-  height: 14px;
-  border-radius: 7px;
-  background: var(--vp-c-bg);
-}
-.ag-span,
-.ag-low {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  border-radius: 7px;
-}
-/* The light part runs to the slowest run, the solid part to the fastest. */
-.ag-span {
-  background: var(--vp-c-gray-1);
-  opacity: 0.45;
-}
-.ag-low {
-  background: var(--vp-c-gray-1);
-}
-.ours .ag-span {
-  background: var(--vp-c-brand-1);
-  opacity: 0.4;
-}
-.ours .ag-low {
-  background: var(--vp-c-brand-1);
-}
-.ag-value {
-  color: var(--vp-c-text-2);
-  font-variant-numeric: tabular-nums;
-}
-.ag-value b {
-  color: var(--vp-c-text-1);
-}
-.ag-note {
-  max-width: 72ch;
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--vp-c-text-2);
 }
 </style>
