@@ -288,7 +288,7 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   // Two arrowheads into one side of a box in neighbouring cells, or two lines of one box in neighbouring columns, read
   // as one. The drawing is made again with a blank cell between ports and between tracks, and kept when it has fewer
   // of them, fits the width, crosses no more lines and breaks nothing more (see `breaksOf`). It may be wider and longer.
-  // When it does not, the gap between neighbouring boxes is opened by a cell too, for a label that lost its room.
+  // When it does not, every box is made a cell wider on either side too, for a label that lost its room to a port.
   const labels = labelsOf(graph);
   const limit = opts.maxWidth ?? given.defaultWidth;
   const crowded = adjacentOf(breaksIn(picked, labels, limit));

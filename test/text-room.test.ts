@@ -77,15 +77,15 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
   it('turn a line that came along the row under a box, so that its arrowhead points into the box', () => {
     const src = 'flowchart LR\n  n0[Alpha]\n  n1[Beta]\n  n2[Gamma]\n  n3[Delta]\n  n3 --> n1\n  n0 --> n3\n  n1 --> n3\n  n1 --> n3\n  n2 --> n1\n  n0 --> n3';
     expect(text(src)).toEqual([
-      '╭────────╮   ╭────────╮   ╭────────╮',
-      '│ Alpha  │──▶│ Delta  │──▶│  Beta  │',
-      '╰────────╯   ╰────────╯   ╰────────╯',
-      '    │           ▲ ▲▲       │ │ ▲',
-      '    └───────────┘ └┼───────┘ │ │',
-      '                   └─────────┘ │',
-      '                          ╭────────╮',
-      '                          │ Gamma  │',
-      '                          ╰────────╯',
+      '╭─────────╮   ╭─────────╮   ╭─────────╮',
+      '│  Alpha  │──▶│  Delta  │──▶│  Beta   │',
+      '╰─────────╯   ╰─────────╯   ╰─────────╯',
+      '     │           ▲ ▲ ▲        ││ ▲',
+      '     └───────────┘ └─┼────────┘│ │',
+      '                     └─────────┘ │',
+      '                            ╭─────────╮',
+      '                            │  Gamma  │',
+      '                            ╰─────────╯',
     ]);
   });
 

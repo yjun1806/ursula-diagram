@@ -7526,8 +7526,7 @@ function layeredRuler(r, gap, share = true) {
 }
 function terminalRuler(r, gap = 3) {
   const pitch = r.spaced === undefined ? 1 : 2;
-  const between = r.spaced === "wide" ? gap + 1 : gap;
-  return { ...r, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: pitch, rankGap: between, rankGapMin: between, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: pitch };
+  return { ...r, ...r.spaced === "wide" ? { nodePadX: r.nodePadX + 1 } : {}, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: pitch, rankGap: gap, rankGapMin: gap, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: pitch };
 }
 function gapLines(ruler, gap) {
   if (ruler.uniform)

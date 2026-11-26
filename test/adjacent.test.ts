@@ -21,15 +21,27 @@ const labelsOf = (l: Layout): string[] => l.edges.flatMap((e) => (e.label === un
 const over = (lines: readonly string[], y: number, x: number, text: string): string[] =>
   lines.map((line, k) => (k === y ? [...[...line.padEnd(x + text.length)].slice(0, x), ...text, ...[...line].slice(x + text.length)].join('') : line));
 
+/** The same graph in English: the label beside the line that leaves the second box needs boxes a cell wider. */
+const LOOPS_EN = [
+  'flowchart LR',
+  '  write[Write Mermaid] --> draw[Draw and check<br>--check]',
+  '  draw -->|error| err[Where, what, how<br>line, column, did you mean, example]',
+  '  err --> write',
+  '  draw -->|crossing| detail[Which line, which row]',
+  '  detail --> write',
+  '  draw -->|ok| done[Drawing]',
+].join('\n');
+
 describe('arrowheads and lines side by side in a terminal drawing', () => {
-  it('keep a blank cell between two arrowheads into one side of a box, and between two lines out of one box', () => {
-    const { layout, lines } = drawText(LOOPS, 100, {});
+  it.each([LOOPS, LOOPS_EN])('keep a blank cell between two arrowheads into one side of a box, and between two lines out of one box (%#)', (src) => {
+    const { layout, lines } = drawText(src, 100, {});
     const drawing = lines.join('\n');
     expect(drawing).not.toMatch(/▲▲|▼▼/);
     expect(drawing).not.toContain('││');
     const breaks = breaksOf(layout, lines, labelsOf(layout));
     expect(breaks.adjacentHeads).toBe(0);
     expect(breaks.adjacentLines).toBe(0);
+    expect(breaks.crowdedLabels).toBe(0);
   });
 
   it('count two arrowheads of one way in neighbouring cells', () => {

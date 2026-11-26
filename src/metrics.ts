@@ -61,7 +61,7 @@ export interface Ruler {
   uniform?: boolean;
   /**
    * A terminal drawing whose line ends on a side of a box, and lines that pass a gap, stand a blank cell apart (see
-   * `layout`); 'wide' also opens the gap between neighbouring boxes by a cell, for a label beside the lines.
+   * `layout`); 'wide' also pads every box by a cell more on either side, for a label beside the lines.
    */
   spaced?: 'ports' | 'wide';
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
