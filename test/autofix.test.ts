@@ -4,6 +4,9 @@ import { callTool } from '../src/mcp/tools.ts';
 import { fixSource, render, UrsulaError } from '../src/index.ts';
 import { CASES, withLine } from './error-cases.ts';
 
+/** The text of a tool result's content, or undefined for an image. */
+const textOf = (c: ReturnType<typeof callTool>['content'][number] | undefined): string | undefined => (c?.type === 'text' ? c.text : undefined);
+
 const draws = (src: string): boolean => {
   try {
     render(src);
@@ -198,22 +201,22 @@ describe('MCP fix', () => {
   it('render draws the fixed text and returns the fixes and the fixed text', () => {
     const out = callTool('render', { source: 'flowchrt LR\n  A --> B', fix: true });
     expect(out.isError).toBe(false);
-    expect(out.content[0]?.text).toBe(callTool('render', { source: 'flowchart LR\n  A --> B' }).content[0]?.text);
-    expect(out.content.at(-1)?.text).toBe('fixed: line 1: flowchrt → flowchart\n\nfixed source:\nflowchart LR\n  A --> B');
+    expect(textOf(out.content[0])).toBe(textOf(callTool('render', { source: 'flowchart LR\n  A --> B' }).content[0]));
+    expect(textOf(out.content.at(-1))).toBe('fixed: line 1: flowchrt → flowchart\n\nfixed source:\nflowchart LR\n  A --> B');
   });
 
   it('check reports on the fixed text', () => {
     const out = callTool('check', { source: 'flowchrt LR\n  A --> B', fix: true });
     expect(out.isError).toBe(false);
-    expect(out.content[0]?.text).toBe(callTool('check', { source: 'flowchart LR\n  A --> B' }).content[0]?.text);
+    expect(textOf(out.content[0])).toBe(textOf(callTool('check', { source: 'flowchart LR\n  A --> B' }).content[0]));
     expect(out.content).toHaveLength(2);
   });
 
   it('returns the error that is left with the fixes', () => {
     const out = callTool('render', { source: 'flowchrt LR\n  A -->', fix: true });
     expect(out.isError).toBe(true);
-    expect(out.content[0]?.text).toMatch(/^error: line 2: /);
-    expect(out.content.at(-1)?.text).toContain('fixed source:\nflowchart LR\n  A -->');
+    expect(textOf(out.content[0])).toMatch(/^error: line 2: /);
+    expect(textOf(out.content.at(-1))).toContain('fixed source:\nflowchart LR\n  A -->');
   });
 
   it('returns the same as without fix when there is nothing to fix', () => {

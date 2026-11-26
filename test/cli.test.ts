@@ -28,7 +28,7 @@ describe('--help', () => {
 
   it('names the commands, the formats and the exit codes', () => {
     const text = cli(['--help']).stdout;
-    for (const word of ['syntax', 'mcp', 'text-svg', 'html', 'json', 'check', 'Exit codes']) expect(text).toContain(word);
+    for (const word of ['syntax', 'mcp', 'text-svg', 'html', 'png', 'json', 'check', 'Exit codes']) expect(text).toContain(word);
     for (const code of ['0 ', '1 ', '2 ', '3 ', '4 ']) expect(text).toContain(code);
   });
 });
@@ -45,7 +45,7 @@ describe('exit codes', () => {
   it('2 for a width that is not a number, and for a missing value', () => {
     expect(cli(['--width', 'wide']).status).toBe(2);
     expect(cli(['--format']).status).toBe(2);
-    expect(cli(['--format', 'png']).status).toBe(2);
+    expect(cli(['--format', 'gif']).status).toBe(2);
   });
 
   it('2 for a file that cannot be read', () => {

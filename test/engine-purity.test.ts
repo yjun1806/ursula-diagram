@@ -12,9 +12,11 @@ function sources(dir: string): string[] {
 describe('the engine', () => {
   it('uses no Node module, no Bun API and no process object, so it runs in a browser', () => {
     const root = join(import.meta.dirname, '..', 'src');
+    // Node only: the command, the PNG entrance and what they share in node/.
+    const nodeOnly = (file: string): boolean => file === join(root, 'cli.ts') || file === join(root, 'png.ts') || file.startsWith(join(root, 'node'));
     const found: string[] = [];
     for (const file of sources(root)) {
-      if (file === join(root, 'cli.ts')) continue;
+      if (nodeOnly(file)) continue;
       const text = readFileSync(file, 'utf8');
       for (const pattern of ["from 'node:", 'from "node:', 'Bun.', 'process.']) if (text.includes(pattern)) found.push(`${file}: ${pattern}`);
     }

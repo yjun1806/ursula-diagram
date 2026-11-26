@@ -1,6 +1,7 @@
 // Reads the options of the drawing command. Every option is in OPTIONS, so the help text and its test see them all.
+import { MAX_SCALE, validScale } from '../render/png.ts';
 
-export const FORMATS = ['svg', 'text', 'text-svg', 'json', 'check', 'html', 'fixed'] as const;
+export const FORMATS = ['svg', 'text', 'text-svg', 'json', 'check', 'html', 'png', 'fixed'] as const;
 export type Format = (typeof FORMATS)[number];
 
 export interface DrawRequest {
@@ -18,6 +19,8 @@ export interface DrawRequest {
   quality?: 'fast' | 'best';
   title?: string;
   theme?: 'auto' | 'light' | 'dark';
+  /** Pixels per SVG unit of png. */
+  scale?: number;
   /** With a drawing format: the check report as well, on standard error. */
   check: boolean;
   /** Fix what has one reading (see `fixSource`) and draw the fixed text; each fix is named on standard error. */
@@ -37,7 +40,7 @@ const choice = <K extends keyof DrawRequest>(key: K, choices: readonly string[])
   choices.includes(v) ? { ...req, [key]: v } : undefined;
 
 export const OPTIONS: readonly OptionSpec[] = [
-  { name: '--format', value: 'F', choices: FORMATS, help: 'svg (the default), text, text-svg, html, json, check or fixed', apply: choice('format', FORMATS) },
+  { name: '--format', value: 'F', choices: FORMATS, help: 'svg (the default), text, text-svg, html, png, json, check or fixed', apply: choice('format', FORMATS) },
   {
     name: '--width',
     value: 'N',
@@ -49,7 +52,13 @@ export const OPTIONS: readonly OptionSpec[] = [
   { name: '--charset', value: 'C', choices: ['unicode', 'ascii'], help: 'text in box-drawing characters (unicode, the default) or ascii only', apply: choice('charset', ['unicode', 'ascii']) },
   { name: '--color', help: 'text with ANSI colours', apply: (req) => ({ ...req, color: true }) },
   { name: '--title', value: 'TEXT', help: 'the page title of html', apply: (req, v) => ({ ...req, title: v }) },
-  { name: '--theme', value: 'T', choices: ['auto', 'light', 'dark'], help: 'the starting theme of html: auto (the default), light or dark', apply: choice('theme', ['auto', 'light', 'dark']) },
+  { name: '--theme', value: 'T', choices: ['auto', 'light', 'dark'], help: 'the starting theme of html, or the colours of png (auto is light): auto, light, dark', apply: choice('theme', ['auto', 'light', 'dark']) },
+  {
+    name: '--scale',
+    value: 'N',
+    help: `pixels per SVG unit of png: 2 by default, at most ${MAX_SCALE}`,
+    apply: (req, v) => (v.trim() !== '' && validScale(Number(v)) ? { ...req, scale: Number(v) } : undefined),
+  },
   { name: '--detail', value: 'D', choices: ['auto', 'full', 'narrow', 'title'], help: 'how much of each box text keeps: auto (the fullest that fits), full, narrow, title', apply: choice('detail', ['auto', 'full', 'narrow', 'title']) },
   { name: '--quality', value: 'Q', choices: ['fast', 'best'], help: 'layout effort, fast or best; pictures draw best and text fast unless told', apply: choice('quality', ['fast', 'best']) },
   { name: '--engine', value: 'E', choices: ['layered', 'grid'], help: 'the flowchart layout engine: layered (the default) or grid', apply: choice('engine', ['grid', 'layered']) },

@@ -37,6 +37,7 @@ If the command prints `error: …` (exit 1), the text could not be drawn. Follow
 | In a chat window, a web page or a document, and wants the terminal drawing | `--format text-svg --width 100 > d.svg` | Reference or inline the SVG; the columns hold in any font. |
 | Reading a document, a pull request or a page | `--format svg > d.svg` | Reference or inline the SVG; it follows light and dark by itself. |
 | Opening one file to look, switch light and dark, and save a PNG | `--format html --title "Name" > d.html` | Give them the file. |
+| Needs an image file, or the client shows images but not SVG | `--format png > d.png` | Give them the file. Needs `@resvg/resvg-js` in the project or global (`npm i -g @resvg/resvg-js`); this command does not carry it and without it exits 2: give `svg` instead. |
 | A program | `--format json` | Boxes, lines and labels with coordinates. |
 
 With no file named, the command reads standard input. Paste a `text` drawing only where wide characters take exactly

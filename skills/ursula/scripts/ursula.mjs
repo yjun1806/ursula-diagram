@@ -2,13 +2,101 @@
 if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula needs Node 22 or later; this is ' + process.version); process.exit(1); }
 
 // src/cli.ts
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { join as join2 } from "node:path";
+import { pathToFileURL } from "node:url";
+
+// src/render/colors.ts
+var COLORS = {
+  fg: ["#201f1e", "#efeeec"],
+  muted: ["#5b5b59", "#b2b1af"],
+  faint: ["#878685", "#757472"],
+  line: ["#565554", "#a5a4a2"],
+  border: ["#484846", "#bebdbb"],
+  hair: ["#e2e1e0", "#2c2b2a"],
+  surface: ["#fcfcfa", "#171614"],
+  lane: ["#efeeed", "#252422"],
+  "chip-fill": ["#f1f0ef", "#252422"],
+  accent: ["#82641c", "#dab975"],
+  "start-fill": ["#e5c37a", "#dab975"],
+  "accent-tint": ["#f6ecd7", "#372c15"],
+  "on-accent": ["#201f1e", "#171614"],
+  bg: ["transparent", "transparent"],
+  panel: ["none", "none"],
+  bar: ["#c8c7c6", "#434241"],
+  "tint-outer": ["#f4f3f1", "#1e1d1b"],
+  "tint-inner": ["#f6f5f3", "#1c1b19"],
+  "tint-chip": ["#ebeae8", "#262523"],
+  s1: ["#82641c", "#cdad69"],
+  "s1-tint": ["#f1e7d2", "#3f3112"],
+  s2: ["#007883", "#5ec3ce"],
+  "s2-tint": ["#d2eef1", "#093a3f"],
+  s3: ["#98524d", "#e79a93"],
+  "s3-tint": ["#fce1de", "#492826"],
+  s4: ["#437746", "#8bc18c"],
+  "s4-tint": ["#dceedc", "#223a23"],
+  s5: ["#878685", "#757472"],
+  "s5-tint": ["#efeeed", "#252422"],
+  s6: ["#a5a4a3", "#6a6967"],
+  "s6-tint": ["#efeeed", "#252422"],
+  s7: ["#5b5b59", "#b2b1af"],
+  "s7-tint": ["#efeeed", "#252422"],
+  s8: ["#c8c7c6", "#434241"],
+  "s8-tint": ["#efeeed", "#252422"]
+};
+var PAPER = ["#ffffff", "#16181d"];
+function fillColors(rule, mode) {
+  return rule.replace(/\$([a-z][a-z0-9-]*)/g, (_, name) => `var(--ursula-${name},${COLORS[name]?.[mode] ?? "inherit"})`);
+}
+
+// src/render/png.ts
+var PNG_RENDERER = "@resvg/resvg-js";
+var PNG_HINT = `install ${PNG_RENDERER} to write PNG: npm i -g ${PNG_RENDERER}`;
+var DEFAULT_SCALE = 2;
+var MAX_SCALE = 8;
+var DARK_RULES = /\n@media \(prefers-color-scheme: dark\)\{\n[\s\S]*?\n\}(?=<\/style>)/g;
+var VARIABLE = /var\(--ursula-([a-z0-9-]+)\s*(?:,([^)]*))?\)/g;
+var FONT_FAMILY = /font-family:([^;}"]*)/g;
+var REVERSED_MARKER = /<marker id="([^"]+)"([^>]*?) orient="auto-start-reverse"([^>]*)>([\s\S]*?)<\/marker>/g;
+function turnStartMarkers(svg) {
+  const ids = [];
+  const fixed = svg.replace(REVERSED_MARKER, (_, id, before, after, body) => {
+    const attrs = `${before}${after}`;
+    const refX = /refX="([^"]+)"/.exec(attrs)?.[1] ?? "0";
+    const refY = /refY="([^"]+)"/.exec(attrs)?.[1] ?? "0";
+    const twinAttrs = attrs.includes("overflow=") ? attrs : `${attrs} overflow="visible"`;
+    ids.push(id);
+    return `<marker id="${id}"${before} orient="auto"${after}>${body}</marker>` + `<marker id="${id}-start-turned"${twinAttrs} orient="auto"><g transform="rotate(180 ${refX} ${refY})">${body}</g></marker>`;
+  });
+  return ids.reduce((text, id) => text.split(`marker-start="url(#${id})"`).join(`marker-start="url(#${id}-start-turned)"`), fixed);
+}
+function bakeSvg(svg, theme) {
+  const mode = theme === "dark" ? 1 : 0;
+  return turnStartMarkers(svg).replace(DARK_RULES, "").replace(VARIABLE, (whole, name, fallback) => COLORS[name]?.[mode] ?? fallback?.trim() ?? whole).replace(FONT_FAMILY, (_, list) => `font-family:${list.replace(/'/g, "")}`);
+}
+function validScale(scale) {
+  return Number.isFinite(scale) && scale > 0 && scale <= MAX_SCALE;
+}
+function svgToPng(svg, resvg, opts = {}) {
+  const theme = opts.theme ?? "light";
+  const scale = opts.scale ?? DEFAULT_SCALE;
+  if (!validScale(scale))
+    throw new RangeError(`scale must be above 0 and at most ${MAX_SCALE}; got ${scale}`);
+  const drawn = new resvg.Resvg(bakeSvg(svg, theme), {
+    fitTo: { mode: "zoom", value: scale },
+    background: PAPER[theme === "dark" ? 1 : 0],
+    font: { loadSystemFonts: true, ...opts.fontDirs === undefined || opts.fontDirs.length === 0 ? {} : { fontDirs: [...opts.fontDirs] } }
+  });
+  return drawn.render().asPng();
+}
 
 // src/command/args.ts
-var FORMATS = ["svg", "text", "text-svg", "json", "check", "html", "fixed"];
+var FORMATS = ["svg", "text", "text-svg", "json", "check", "html", "png", "fixed"];
 var choice = (key, choices) => (req, v) => choices.includes(v) ? { ...req, [key]: v } : undefined;
 var OPTIONS = [
-  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, json, check or fixed", apply: choice("format", FORMATS) },
+  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, png, json, check or fixed", apply: choice("format", FORMATS) },
   {
     name: "--width",
     value: "N",
@@ -20,7 +108,13 @@ var OPTIONS = [
   { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
   { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
   { name: "--title", value: "TEXT", help: "the page title of html", apply: (req, v) => ({ ...req, title: v }) },
-  { name: "--theme", value: "T", choices: ["auto", "light", "dark"], help: "the starting theme of html: auto (the default), light or dark", apply: choice("theme", ["auto", "light", "dark"]) },
+  { name: "--theme", value: "T", choices: ["auto", "light", "dark"], help: "the starting theme of html, or the colours of png (auto is light): auto, light, dark", apply: choice("theme", ["auto", "light", "dark"]) },
+  {
+    name: "--scale",
+    value: "N",
+    help: `pixels per SVG unit of png: 2 by default, at most ${MAX_SCALE}`,
+    apply: (req, v) => v.trim() !== "" && validScale(Number(v)) ? { ...req, scale: Number(v) } : undefined
+  },
   { name: "--detail", value: "D", choices: ["auto", "full", "narrow", "title"], help: "how much of each box text keeps: auto (the fullest that fits), full, narrow, title", apply: choice("detail", ["auto", "full", "narrow", "title"]) },
   { name: "--quality", value: "Q", choices: ["fast", "best"], help: "layout effort, fast or best; pictures draw best and text fast unless told", apply: choice("quality", ["fast", "best"]) },
   { name: "--engine", value: "E", choices: ["layered", "grid"], help: "the flowchart layout engine: layered (the default) or grid", apply: choice("engine", ["grid", "layered"]) },
@@ -20042,48 +20136,6 @@ function reachRoundedCorner(points, radius, end, next) {
     return end;
   const t = corner.retreat / along;
   return { x: end.x + d.x * t, y: end.y + d.y * t };
-}
-
-// src/render/colors.ts
-var COLORS = {
-  fg: ["#201f1e", "#efeeec"],
-  muted: ["#5b5b59", "#b2b1af"],
-  faint: ["#878685", "#757472"],
-  line: ["#565554", "#a5a4a2"],
-  border: ["#484846", "#bebdbb"],
-  hair: ["#e2e1e0", "#2c2b2a"],
-  surface: ["#fcfcfa", "#171614"],
-  lane: ["#efeeed", "#252422"],
-  "chip-fill": ["#f1f0ef", "#252422"],
-  accent: ["#82641c", "#dab975"],
-  "start-fill": ["#e5c37a", "#dab975"],
-  "accent-tint": ["#f6ecd7", "#372c15"],
-  "on-accent": ["#201f1e", "#171614"],
-  bg: ["transparent", "transparent"],
-  panel: ["none", "none"],
-  bar: ["#c8c7c6", "#434241"],
-  "tint-outer": ["#f4f3f1", "#1e1d1b"],
-  "tint-inner": ["#f6f5f3", "#1c1b19"],
-  "tint-chip": ["#ebeae8", "#262523"],
-  s1: ["#82641c", "#cdad69"],
-  "s1-tint": ["#f1e7d2", "#3f3112"],
-  s2: ["#007883", "#5ec3ce"],
-  "s2-tint": ["#d2eef1", "#093a3f"],
-  s3: ["#98524d", "#e79a93"],
-  "s3-tint": ["#fce1de", "#492826"],
-  s4: ["#437746", "#8bc18c"],
-  "s4-tint": ["#dceedc", "#223a23"],
-  s5: ["#878685", "#757472"],
-  "s5-tint": ["#efeeed", "#252422"],
-  s6: ["#a5a4a3", "#6a6967"],
-  "s6-tint": ["#efeeed", "#252422"],
-  s7: ["#5b5b59", "#b2b1af"],
-  "s7-tint": ["#efeeed", "#252422"],
-  s8: ["#c8c7c6", "#434241"],
-  "s8-tint": ["#efeeed", "#252422"]
-};
-function fillColors(rule, mode) {
-  return rule.replace(/\$([a-z][a-z0-9-]*)/g, (_, name) => `var(--ursula-${name},${COLORS[name]?.[mode] ?? "inherit"})`);
 }
 
 // src/render/scene-theme.ts
@@ -40571,7 +40623,6 @@ function fixSource(src) {
   return { source, fixes };
 }
 // src/render/html.ts
-var PAPER = ["#ffffff", "#16181d"];
 function variables(mode) {
   const colours = Object.entries(COLORS).filter(([name]) => name !== "bg").map(([name, pair]) => `--ursula-${name}:${pair[mode]}`);
   return [...colours, `--ursula-paper:${PAPER[mode]}`].join(";");
@@ -40975,9 +41026,9 @@ function drawing(src, req) {
 `;
   }
 }
-function drawCommand(src, req) {
+function drawCommand(src, req, host = {}) {
   if (!req.fix && req.format !== "fixed")
-    return drawn4(src, req);
+    return drawn4(src, req, host);
   let fixed;
   try {
     fixed = fixSource(src);
@@ -40985,11 +41036,26 @@ function drawCommand(src, req) {
     return { stdout: "", stderr: internalReport(err), code: 4 };
   }
   const named = fixReport(fixed.fixes);
-  const out = drawn4(fixed.source, req.format === "fixed" ? { ...req, format: "check", check: false } : req);
+  const out = drawn4(fixed.source, req.format === "fixed" ? { ...req, format: "check", check: false } : req, host);
   return req.format === "fixed" ? { stdout: fixed.source, stderr: `${named}${out.stderr}`, code: out.code } : { ...out, stderr: `${named}${out.stderr}` };
 }
-function drawn4(src, req) {
+function png(src, req, host) {
+  const resvg = host.loadPng?.();
+  if (resvg === undefined)
+    return { stdout: "", stderr: `error: ${PNG_HINT}
+`, code: 2 };
+  const svg = selectFrontEnd(src).svg(src, layoutOptions5(req));
+  const bytes = svgToPng(svg, resvg, {
+    theme: req.theme === "dark" ? "dark" : "light",
+    ...req.scale === undefined ? {} : { scale: req.scale },
+    ...host.fontDirs === undefined ? {} : { fontDirs: host.fontDirs }
+  });
+  return { stdout: "", bytes, stderr: req.check ? sideReport(src, req) : "", code: 0 };
+}
+function drawn4(src, req, host) {
   try {
+    if (req.format === "png")
+      return png(src, req, host);
     if ((req.format === "text" || req.format === "text-svg") && req.width !== undefined) {
       const out = fitted(src, req, req.width);
       return out.code === 0 && req.check ? { ...out, stderr: sideReport(src, req) } : out;
@@ -41022,6 +41088,7 @@ Examples
   ursula-diagram flow.mmd --format text --width 100
   ursula-diagram flow.mmd --format svg --check > flow.svg
   ursula-diagram flow.mmd --format html --title "Order flow" > flow.html
+  ursula-diagram flow.mmd --format png --theme dark > flow.png
   ursula-diagram syntax wardley
 
 Which format
@@ -41029,6 +41096,8 @@ Which format
   text-svg  the terminal drawing for a chat window, a web page or a document
   svg       a picture for a document or a page; follows light and dark
   html      one file to open, switch light and dark, and save a PNG
+  png       an image file, in the colours of --theme; needs the optional
+            package @resvg/resvg-js (npm i -g @resvg/resvg-js)
   json      boxes, lines and labels with coordinates, for a program
   check     the engine's report on the svg layout, without the drawing; a
             terminal drawing routes its lines on its own grid and can differ
@@ -41072,7 +41141,7 @@ ${near === undefined ? "" : `did you mean: ${near}
 var usageError = () => ({ stdout: "", stderr: `${USAGE}
 Run 'ursula-diagram --help' for more.
 `, code: 2 });
-function runCommand(args, read) {
+function runCommand(args, read, host = {}) {
   if (args[0] === "syntax")
     return syntaxCommand(args.slice(1));
   const parsed = parseDrawArgs(args);
@@ -41081,6 +41150,9 @@ function runCommand(args, read) {
   if (parsed.kind === "usage")
     return usageError();
   const req = parsed.request;
+  if (req.format === "png" && host.stdoutIsTty === true)
+    return { stdout: "", stderr: `error: a PNG is not for the terminal; redirect to a file: > out.png
+`, code: 2 };
   let src;
   try {
     src = read(req.file);
@@ -41089,7 +41161,7 @@ function runCommand(args, read) {
     return { stdout: "", stderr: `error: cannot read ${req.file ?? "standard input"}${why}
 `, code: 2 };
   }
-  return drawCommand(src, req);
+  return drawCommand(src, req, host);
 }
 
 // src/mcp/lines.ts
@@ -41133,12 +41205,13 @@ var TOOLS = [
   {
     name: "render",
     title: "Draw a Mermaid diagram",
-    description: 'Draws Mermaid text. format "text" (the default) is a terminal drawing for a fixed-width font; "text-svg" is that drawing as SVG for a chat or a page; "svg" a picture; "html" one page. A text error comes back marked isError, with the line, a mark under the column, often "did you mean" and an example line; fix the text and call again. A drawing wider than width comes back as an error naming the width it needs.',
+    description: 'Draws Mermaid text. format "text" (the default) is a terminal drawing for a fixed-width font; "text-svg" is that drawing as SVG for a chat or a page; "svg" a picture; "html" one page; "png" an image (in the colours of theme) for a client that shows images, which needs the optional package @resvg/resvg-js. A text error comes back marked isError, with the line, a mark under the column, often "did you mean" and an example line; fix the text and call again. A drawing wider than width comes back as an error naming the width it needs.',
     inputSchema: {
       type: "object",
       properties: {
         source: { type: "string", description: 'The Mermaid text, header first (for example "flowchart LR").' },
-        format: { type: "string", enum: ["text", "text-svg", "svg", "html"], description: "What to draw; text by default." },
+        format: { type: "string", enum: ["text", "text-svg", "svg", "html", "png"], description: "What to draw; text by default." },
+        theme: { type: "string", enum: ["light", "dark"], description: "The colours of png; light by default." },
         width: { type: "integer", minimum: 1, description: "Columns for text and text-svg; 100 by default." },
         charset: { type: "string", enum: ["unicode", "ascii"], description: "Box-drawing characters (unicode, the default) or ascii only." },
         check: { type: "boolean", description: "Also return the engine's check report (counts, crossing lines, questions) as a second text. The report counts the svg layout; a text drawing routes its lines on its own grid, so its crossings can differ." },
@@ -41189,9 +41262,16 @@ function fixedSource(args) {
 fixed source:
 ${fixed.source}`)] };
 }
-function render3(args) {
+function base64(bytes) {
+  let binary = "";
+  for (let i = 0;i < bytes.length; i += 32768)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return btoa(binary);
+}
+function render3(args, host) {
   const { src, note } = fixedSource(args);
-  const format = oneOf(args, "format", ["text", "text-svg", "svg", "html"]) ?? "text";
+  const format = oneOf(args, "format", ["text", "text-svg", "svg", "html", "png"]) ?? "text";
+  const theme = oneOf(args, "theme", ["light", "dark"]);
   const charset = oneOf(args, "charset", ["unicode", "ascii"]);
   const width = args["width"];
   if (width !== undefined && (typeof width !== "number" || !Number.isInteger(width) || width < 1))
@@ -41205,12 +41285,14 @@ function render3(args) {
     format,
     ...terminal ? { width: width ?? 100 } : {},
     ...charset === undefined ? {} : { charset },
+    ...theme === undefined ? {} : { theme },
     check: check === true
   };
-  const out = drawCommand(src, req);
+  const out = drawCommand(src, req, host);
   if (out.code !== 0)
     return { content: [text(out.stderr), ...note], isError: true };
-  return { content: [text(out.stdout), ...req.check ? [text(out.stderr)] : [], ...note], isError: false };
+  const drawn = out.bytes === undefined ? text(out.stdout) : { type: "image", data: base64(out.bytes), mimeType: "image/png" };
+  return { content: [drawn, ...req.check ? [text(out.stderr)] : [], ...note], isError: false };
 }
 function check(args) {
   const { src, note } = fixedSource(args);
@@ -41225,21 +41307,21 @@ function syntax(args) {
   return out.code === 0 ? { content: [text(out.stdout)], isError: false } : { content: [text(out.stderr)], isError: true };
 }
 var CALLS = { render: render3, check, syntax };
-function callTool(name, args) {
+function callTool(name, args, host = {}) {
   const run = typeof name === "string" && Object.hasOwn(CALLS, name) ? CALLS[name] : undefined;
   if (run === undefined)
     throw new ArgumentError(`no tool named ${JSON.stringify(name)}; the tools are render, check and syntax`);
   if (args !== undefined && (typeof args !== "object" || args === null || Array.isArray(args)))
     throw new ArgumentError('"arguments" must be an object');
-  return run(args ?? {});
+  return run(args ?? {}, host);
 }
 
 // src/mcp/server.ts
 var PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-var INSTRUCTIONS = "Draws Mermaid diagrams. Call 'syntax' when unsure how a diagram type is written, then 'render' (format text for a terminal, text-svg for a chat or a page, svg for a document); pass check: true to get the engine's report in the same call.";
+var INSTRUCTIONS = "Draws Mermaid diagrams. Call 'syntax' when unsure how a diagram type is written, then 'render' (format text for a terminal, text-svg for a chat or a page, svg for a document, png for an image the client shows); pass check: true to get the engine's report in the same call.";
 var reply = (id, result) => ({ jsonrpc: "2.0", id, result });
 var fault = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
-function answer(message) {
+function answer(message, host = {}) {
   if (typeof message !== "object" || message === null || Array.isArray(message))
     return fault(null, -32600, "a message is a JSON object");
   const m = message;
@@ -41264,7 +41346,7 @@ function answer(message) {
       return reply(validId, { tools: TOOLS });
     case "tools/call":
       try {
-        return reply(validId, callTool(params["name"], params["arguments"]));
+        return reply(validId, callTool(params["name"], params["arguments"], host));
       } catch (err) {
         if (err instanceof ArgumentError)
           return fault(validId, -32602, err.message);
@@ -41274,7 +41356,7 @@ function answer(message) {
       return fault(validId, -32601, `no method ${method}`);
   }
 }
-function answerLine(line) {
+function answerLine(line, host = {}) {
   let parsed;
   try {
     parsed = JSON.parse(line);
@@ -41284,19 +41366,53 @@ function answerLine(line) {
   if (Array.isArray(parsed)) {
     if (parsed.length === 0)
       return fault(null, -32600, "an empty batch");
-    const answers = parsed.map(answer).filter((a) => a !== undefined);
+    const answers = parsed.map((m) => answer(m, host)).filter((a) => a !== undefined);
     return answers.length === 0 ? undefined : answers;
   }
-  return answer(parsed);
+  return answer(parsed, host);
+}
+
+// src/node/font-dirs.ts
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+function extraFontDirs() {
+  if (process.platform !== "linux" || existsSync("/etc/fonts/fonts.conf"))
+    return [];
+  const home = homedir();
+  return ["/usr/share/fonts", "/usr/local/share/fonts", join(home, ".local/share/fonts"), join(home, ".fonts")].filter((dir) => existsSync(dir));
 }
 
 // src/cli.ts
+function globalPackages() {
+  const windows = process.platform === "win32";
+  const npm = spawnSync(windows ? "npm.cmd" : "npm", ["root", "-g"], { encoding: "utf8", shell: windows });
+  const dir = npm.status === 0 ? npm.stdout.trim() : "";
+  return dir === "" ? undefined : dir;
+}
+var besides = (dir) => pathToFileURL(join2(dir, "package.json")).href;
+function loadPng() {
+  const places = [() => import.meta.url, () => besides(process.cwd()), () => {
+    const dir = globalPackages();
+    return dir === undefined ? undefined : besides(dir);
+  }];
+  for (const place of places) {
+    const from = place();
+    if (from === undefined)
+      continue;
+    try {
+      return createRequire(from)(PNG_RENDERER);
+    } catch {}
+  }
+  return;
+}
 var args = process.argv.slice(2);
 if (args[0] === "mcp" && args.length === 1) {
+  const host = { loadPng, fontDirs: extraFontDirs() };
   const lines = lineSplitter((line) => {
     if (line.trim() === "")
       return;
-    const out = answerLine(line);
+    const out = answerLine(line, host);
     if (out !== undefined)
       process.stdout.write(messageLine(out));
   });
@@ -41304,8 +41420,10 @@ if (args[0] === "mcp" && args.length === 1) {
   process.stdin.on("data", (chunk) => lines.push(chunk));
   process.stdin.on("end", () => lines.end());
 } else {
-  const out = runCommand(args, (file) => readFileSync(file ?? 0, "utf8"));
-  if (out.stdout !== "")
+  const out = runCommand(args, (file) => readFileSync(file ?? 0, "utf8"), { loadPng, fontDirs: extraFontDirs(), stdoutIsTty: process.stdout.isTTY === true });
+  if (out.bytes !== undefined)
+    process.stdout.write(out.bytes);
+  else if (out.stdout !== "")
     process.stdout.write(out.stdout);
   if (out.stderr !== "")
     process.stderr.write(out.stderr);
