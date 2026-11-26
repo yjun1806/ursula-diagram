@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 1356 320" width="1356" height="320" role="img"><title>gantt — 출시</title><style>.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 1356 320" width="1356" height="320" role="img"><title>gantt — 출시</title><style>.ursula{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif}
 .ursula-bg{fill:var(--ursula-surface,#fcfcfa)}
 .ursula-panel{fill:var(--ursula-panel,none)}
-.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e)}
-.ursula-body{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e)}
-.ursula-zone-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e)}
-.ursula-axis-name{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#5b5b59)}
-.ursula-tick{font:400 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#5b5b59);font-variant-numeric:tabular-nums}
-.ursula-tag-text{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#5b5b59);text-anchor:middle}
+.ursula-title{font:600 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#201f1e)}
+.ursula-body{font:400 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#201f1e)}
+.ursula-zone-name{font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#201f1e)}
+.ursula-axis-name{font:500 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#5b5b59)}
+.ursula-tick{font:400 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#5b5b59);font-variant-numeric:tabular-nums}
+.ursula-tag-text{font:500 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#5b5b59);text-anchor:middle}
 .ursula-start{text-anchor:start}
 .ursula-tag{fill:var(--ursula-lane,#efeeed)}
 .ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
@@ -18,15 +18,15 @@
 .ursula-head{stroke-width:1.5;stroke-linejoin:round}
 .ursula-head--edge{fill:var(--ursula-line,#565554);stroke:var(--ursula-line,#565554)}
 @media (prefers-color-scheme: dark){
-.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif}
 .ursula-bg{fill:var(--ursula-surface,#171614)}
 .ursula-panel{fill:var(--ursula-panel,none)}
-.ursula-title{font:600 15px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec)}
-.ursula-body{font:400 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec)}
-.ursula-zone-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec)}
-.ursula-axis-name{font:500 12px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#b2b1af)}
-.ursula-tick{font:400 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#b2b1af);font-variant-numeric:tabular-nums}
-.ursula-tag-text{font:500 11px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-muted,#b2b1af);text-anchor:middle}
+.ursula-title{font:600 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#efeeec)}
+.ursula-body{font:400 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#efeeec)}
+.ursula-zone-name{font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#efeeec)}
+.ursula-axis-name{font:500 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#b2b1af)}
+.ursula-tick{font:400 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#b2b1af);font-variant-numeric:tabular-nums}
+.ursula-tag-text{font:500 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-muted,#b2b1af);text-anchor:middle}
 .ursula-start{text-anchor:start}
 .ursula-tag{fill:var(--ursula-lane,#252422)}
 .ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}

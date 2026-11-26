@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 744 296" width="744" height="296" role="img"><title>mindmap — Diagrams</title><style>.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 744 296" width="744" height="296" role="img"><title>mindmap — Diagrams</title><style>.ursula{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif}
 .ursula-bg{fill:var(--ursula-surface,#fcfcfa)}
-.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#201f1e);text-anchor:middle}
+.ursula-name{font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#201f1e);text-anchor:middle}
 .ursula-middle{text-anchor:middle}
 .ursula-box{fill:var(--ursula-surface,#fcfcfa);stroke:var(--ursula-border,#484846);stroke-width:1.5;stroke-linejoin:round}
 .ursula-edge{fill:none;stroke:var(--ursula-line,#565554);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 @media (prefers-color-scheme: dark){
-.ursula{font-family:'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif}
+.ursula{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif}
 .ursula-bg{fill:var(--ursula-surface,#171614)}
-.ursula-name{font:600 13px 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;fill:var(--ursula-fg,#efeeec);text-anchor:middle}
+.ursula-name{font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;fill:var(--ursula-fg,#efeeec);text-anchor:middle}
 .ursula-middle{text-anchor:middle}
 .ursula-box{fill:var(--ursula-surface,#171614);stroke:var(--ursula-border,#bebdbb);stroke-width:1.5;stroke-linejoin:round}
 .ursula-edge{fill:none;stroke:var(--ursula-line,#a5a4a2);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}

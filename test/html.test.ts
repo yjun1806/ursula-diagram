@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderHtml } from '../src/html.ts';
 import { layout, parse, pixelRuler, renderSvg } from '../src/index.ts';
 import { BAKE_SOURCE, decodeSource, encodeSource, fileBase } from '../src/render/html.ts';
+import { FONT_STACK } from '../src/render/svg.ts';
 import { sceneStyleSheet } from '../src/render/scene-svg.ts';
 
 const SRC = `swimlane-beta LR
@@ -121,5 +122,18 @@ describe('saving with baked colours', () => {
     expect(classes.length).toBeGreaterThan(0);
     const sheet = sceneStyleSheet();
     for (const name of classes) expect(sheet).not.toMatch(new RegExp(`\\.${name}[^a-z-]`));
+  });
+});
+
+describe('one font list', () => {
+  // Every picture and the page around it name the system font stack; only text set in a fixed width keeps its own list.
+  const families = (text: string): string[] =>
+    [...text.matchAll(/font(?:-family)?:(?:\d+ \d+px )?([^;}]*)/g)].map((m) => (m[1] ?? '').trim()).filter((f) => f.endsWith('sans-serif'));
+  it('is the system font stack in the svg of every type and in the html page', () => {
+    for (const src of ['pie\n  "A" : 1\n  "B" : 2', 'gantt\n  section S\n  Task : a1, 2024-01-01, 3d', SRC]) {
+      const page = renderHtml(src);
+      const found = new Set(families(page));
+      expect([...found]).toEqual([FONT_STACK]);
+    }
   });
 });
