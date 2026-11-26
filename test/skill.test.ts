@@ -34,6 +34,13 @@ describe('the agent skill', () => {
     for (const [args, input] of cases) expect(both('skills/ursula/scripts/ursula.mjs', args, input)).toEqual(both('src/cli.ts', args, input));
   });
 
+  // A command kept in a shell variable fails in zsh, which does not split it into words, and costs the agent a retry.
+  it('tells the agent to write the full command, never a shell variable', () => {
+    const text = readFileSync(`${root}skills/ursula/SKILL.md`, 'utf8');
+    expect(text).toContain('`node <the folder of this file>/scripts/ursula.mjs`');
+    expect(text).toMatch(/never put it in a shell variable or alias/);
+  });
+
   it('names itself and says when to use it', () => {
     const text = readFileSync(`${root}skills/ursula/SKILL.md`, 'utf8');
     const head = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
