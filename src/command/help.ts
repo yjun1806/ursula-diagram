@@ -34,6 +34,7 @@ Which format
 Options
 ${optionLines.join('\n')}
   -h, --help        this text
+  -v, --version     the version of ursula-diagram
 
 Errors
   A text error names the line and column, and often adds 'did you mean' and an

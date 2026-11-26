@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { OPTIONS } from '../src/command/args.ts';
 import { runCommand } from '../src/command/run.ts';
 import { registerFrontEnd } from '../src/index.ts';
+import { VERSION } from '../src/version.ts';
 
 const root = new URL('..', import.meta.url).pathname;
 const cli = (args: string[], input = ''): { stdout: string; stderr: string; status: number | null } => {
@@ -30,6 +31,21 @@ describe('--help', () => {
     const text = cli(['--help']).stdout;
     for (const word of ['syntax', 'mcp', 'text-svg', 'html', 'png', 'json', 'check', 'Exit codes']) expect(text).toContain(word);
     for (const code of ['0 ', '1 ', '2 ', '3 ', '4 ']) expect(text).toContain(code);
+  });
+});
+
+describe('--version', () => {
+  it('prints the version to standard output and exits 0', () => {
+    for (const flag of ['--version', '-v']) {
+      const r = cli([flag]);
+      expect(r.status).toBe(0);
+      expect(r.stderr).toBe('');
+      expect(r.stdout).toBe(`${VERSION}\n`);
+    }
+  });
+
+  it('is named in --help', () => {
+    expect(cli(['--help']).stdout).toMatch(/-v, --version\s+\S/);
   });
 });
 

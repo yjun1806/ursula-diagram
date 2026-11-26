@@ -1,3 +1,4 @@
+import { VERSION } from '../version.ts';
 import { parseDrawArgs, USAGE } from './args.ts';
 import type { Host, Outcome } from './draw.ts';
 import { drawCommand } from './draw.ts';
@@ -19,6 +20,7 @@ export function runCommand(args: readonly string[], read: (file?: string) => str
   if (args[0] === 'syntax') return syntaxCommand(args.slice(1));
   const parsed = parseDrawArgs(args);
   if (parsed.kind === 'help') return { stdout: HELP, stderr: '', code: 0 };
+  if (parsed.kind === 'version') return { stdout: `${VERSION}\n`, stderr: '', code: 0 };
   if (parsed.kind === 'usage') return usageError();
   const req = parsed.request;
   // A PNG is bytes; a terminal would show them as noise.
