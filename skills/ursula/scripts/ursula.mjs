@@ -14557,28 +14557,11 @@ function cornersOf(shape) {
   return shape === "note" ? NOTE : ROUND2;
 }
 
-// src/render/text.ts
+// src/text/lines.ts
 var N = 1;
 var E = 2;
 var S = 4;
 var W = 8;
-var LIGHT = {
-  [E | W]: "─",
-  [E]: "─",
-  [W]: "─",
-  [N | S]: "│",
-  [N]: "│",
-  [S]: "│",
-  [S | E]: "┌",
-  [S | W]: "┐",
-  [N | E]: "└",
-  [N | W]: "┘",
-  [N | S | E]: "├",
-  [N | S | W]: "┤",
-  [E | W | S]: "┬",
-  [E | W | N]: "┴",
-  [N | E | S | W]: "┼"
-};
 var HEAVY = {
   [E | W]: "━",
   [E]: "━",
@@ -14595,6 +14578,95 @@ var HEAVY = {
   [E | W | S]: "┳",
   [E | W | N]: "┻",
   [N | E | S | W]: "╋"
+};
+var RUNS = {
+  "─": E | W,
+  "━": E | W,
+  "┄": E | W,
+  "│": N | S,
+  "┃": N | S,
+  "┆": N | S,
+  "┌": S | E,
+  "┐": S | W,
+  "└": N | E,
+  "┘": N | W,
+  "┏": S | E,
+  "┓": S | W,
+  "┗": N | E,
+  "┛": N | W,
+  "├": N | S | E,
+  "┤": N | S | W,
+  "┬": E | W | S,
+  "┴": E | W | N,
+  "┼": N | E | S | W,
+  "┣": N | S | E,
+  "┫": N | S | W,
+  "┳": E | W | S,
+  "┻": E | W | N,
+  "╋": N | E | S | W
+};
+function lineCell(edge, nodes, index) {
+  const p = edge.points[index];
+  if (!p)
+    return [0, 0];
+  let x = Math.floor(p.x + 0.000000001);
+  let y = Math.floor(p.y + 0.000000001);
+  const isEnd = index === 0 || index === edge.points.length - 1;
+  const node = nodes.get(index === 0 ? edge.from : edge.to);
+  if (isEnd && node) {
+    if (Math.abs(p.x - node.x) < 0.000000001)
+      x -= 1;
+    if (Math.abs(p.y - node.y) < 0.000000001)
+      y -= 1;
+  }
+  return [x, y];
+}
+function traceCells(corners, add, slanted) {
+  for (let i = 0;i + 1 < corners.length; i++) {
+    const [x1, y1] = corners[i] ?? [0, 0];
+    const [x2, y2] = corners[i + 1] ?? [0, 0];
+    const dx = Math.sign(x2 - x1);
+    const dy = Math.sign(y2 - y1);
+    if (dx !== 0 && dy !== 0 && slanted === "stop")
+      return false;
+    if (dx === 0 && dy === 0)
+      continue;
+    const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
+    const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
+    for (let x = x1, y = y1;x !== x2 || y !== y2; ) {
+      add(x, y, out);
+      x += dx;
+      y += dy;
+      add(x, y, back);
+    }
+  }
+  return true;
+}
+function towardBox(edge, nodes, index, id) {
+  const n = nodes.get(id);
+  const p = edge.points[index];
+  if (!n || !p)
+    return 0;
+  return Math.abs(p.x - n.x) < 0.000000001 ? E : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W : Math.abs(p.y - n.y) < 0.000000001 ? S : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N : 0;
+}
+
+// src/render/text.ts
+var LIGHT = {
+  [E | W]: "─",
+  [E]: "─",
+  [W]: "─",
+  [N | S]: "│",
+  [N]: "│",
+  [S]: "│",
+  [S | E]: "┌",
+  [S | W]: "┐",
+  [N | E]: "└",
+  [N | W]: "┘",
+  [N | S | E]: "├",
+  [N | S | W]: "┤",
+  [E | W | S]: "┬",
+  [E | W | N]: "┴",
+  [N | E | S | W]: "┼"
 };
 var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
 
@@ -14738,22 +14810,6 @@ function drawColumnRules(c, layout) {
       c.put(x, y, "╎", "dim");
   }
 }
-function cellOf2(edge, nodes, index) {
-  const p = edge.points[index];
-  if (!p)
-    return [0, 0];
-  let x = Math.floor(p.x + 0.000000001);
-  let y = Math.floor(p.y + 0.000000001);
-  const isEnd = index === 0 || index === edge.points.length - 1;
-  const node = nodes.get(index === 0 ? edge.from : edge.to);
-  if (isEnd && node) {
-    if (Math.abs(p.x - node.x) < 0.000000001)
-      x -= 1;
-    if (Math.abs(p.y - node.y) < 0.000000001)
-      y -= 1;
-  }
-  return [x, y];
-}
 function arrowFor(edge) {
   const a = edge.points[edge.points.length - 2];
   const b = edge.points[edge.points.length - 1];
@@ -14825,35 +14881,14 @@ function drawEdges(c, layout) {
   for (const edge of layout.edges) {
     if (edge.invisible)
       continue;
-    const pts = edge.points.map((_, i) => cellOf2(edge, nodes, i));
-    for (let i = 0;i + 1 < pts.length; i++) {
-      const [x1, y1] = pts[i] ?? [0, 0];
-      const [x2, y2] = pts[i + 1] ?? [0, 0];
-      const dx = Math.sign(x2 - x1);
-      const dy = Math.sign(y2 - y1);
-      if (dx === 0 && dy === 0)
-        continue;
-      const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
-      const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
-      let x = x1;
-      let y = y1;
-      while (x !== x2 || y !== y2) {
-        touch(x, y, out, edge.style);
-        x += dx;
-        y += dy;
-        touch(x, y, back, edge.style);
-      }
-    }
+    const pts = edge.points.map((_, i) => lineCell(edge, nodes, i));
+    traceCells(pts, (x, y, bit) => touch(x, y, bit, edge.style), "walk");
     const first = pts[0];
     const last = pts[pts.length - 1];
     const toward = (index, id) => {
-      const n = nodes.get(id);
-      const p = edge.points[index];
       const cell = index === 0 ? first : last;
-      if (!n || !p || !cell)
-        return;
-      const bit = Math.abs(p.x - n.x) < 0.000000001 ? E : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W : Math.abs(p.y - n.y) < 0.000000001 ? S : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N : 0;
-      if (bit !== 0)
+      const bit = towardBox(edge, nodes, index, id);
+      if (cell && bit !== 0)
         touch(cell[0], cell[1], bit, edge.style);
     };
     toward(0, edge.from);
@@ -15054,45 +15089,15 @@ function spansToAnsi(line) {
 }
 
 // src/layout/text-read.ts
-var N2 = 1;
-var E2 = 2;
-var S2 = 4;
-var W2 = 8;
-var RUNS = {
-  "─": E2 | W2,
-  "━": E2 | W2,
-  "┄": E2 | W2,
-  "│": N2 | S2,
-  "┃": N2 | S2,
-  "┆": N2 | S2,
-  "┌": S2 | E2,
-  "┐": S2 | W2,
-  "└": N2 | E2,
-  "┘": N2 | W2,
-  "┏": S2 | E2,
-  "┓": S2 | W2,
-  "┗": N2 | E2,
-  "┛": N2 | W2,
-  "├": N2 | S2 | E2,
-  "┤": N2 | S2 | W2,
-  "┬": E2 | W2 | S2,
-  "┴": E2 | W2 | N2,
-  "┼": N2 | E2 | S2 | W2,
-  "┣": N2 | S2 | E2,
-  "┫": N2 | S2 | W2,
-  "┳": E2 | W2 | S2,
-  "┻": E2 | W2 | N2,
-  "╋": N2 | E2 | S2 | W2
-};
 var HEADS = {
-  "▶": [-1, 0, E2],
-  "▷": [-1, 0, E2],
-  "◀": [1, 0, W2],
-  "◁": [1, 0, W2],
-  "▼": [0, -1, S2],
-  "▽": [0, -1, S2],
-  "▲": [0, 1, N2],
-  "△": [0, 1, N2]
+  "▶": [-1, 0, E],
+  "▷": [-1, 0, E],
+  "◀": [1, 0, W],
+  "◁": [1, 0, W],
+  "▼": [0, -1, S],
+  "▽": [0, -1, S],
+  "▲": [0, 1, N],
+  "△": [0, 1, N]
 };
 var ROUND_MARKS = new Set(["◆", "◇", "⊕", "○"]);
 var TOP_LEFT = new Set(["┌", "╭"]);
@@ -15186,7 +15191,7 @@ function roomViolations(lines, grid = cellsOf(lines)) {
         return;
       if (onRule.has(y))
         found.onRule.push(show(y));
-      const joined = ((RUNS[at(x - 1, y)] ?? 0) & E2) !== 0 || ((RUNS[at(x + 1, y)] ?? 0) & W2) !== 0 || ((RUNS[at(x, y - 1)] ?? 0) & S2) !== 0 || ((RUNS[at(x, y + 1)] ?? 0) & N2) !== 0;
+      const joined = ((RUNS[at(x - 1, y)] ?? 0) & E) !== 0 || ((RUNS[at(x + 1, y)] ?? 0) & W) !== 0 || ((RUNS[at(x, y - 1)] ?? 0) & S) !== 0 || ((RUNS[at(x, y + 1)] ?? 0) & N) !== 0;
       if (!joined)
         (onRule.has(y - 1) || onRule.has(y + 1) ? found.underName : found.headless).push(show(y));
     });
@@ -15927,7 +15932,7 @@ function assignRows(graph, rank) {
 }
 
 // src/layout/slots.ts
-var W3 = {
+var W2 = {
   cross: 100,
   bend: 10,
   half: 4,
@@ -15970,7 +15975,7 @@ class Placement {
   evaluations = 0;
   totals = 0;
   baseTotal;
-  cross = W3.cross;
+  cross = W2.cross;
   constructor(lanes, lane, span, edges, K, col, row, g = 0.5) {
     this.g = g;
     this.n = lane.length;
@@ -16183,7 +16188,7 @@ class Placement {
   }
   edgeTerm(e) {
     const edge = this.edges[e];
-    let cost = W3.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
+    let cost = W2.bend * Math.max(0, (this.segCount[e] ?? 0) - 1);
     if (edge?.sameLane) {
       const p = edge.first;
       const q = edge.second;
@@ -16191,14 +16196,14 @@ class Placement {
       const cq = this.col[q] ?? 0;
       if (cq < cp + (this.span[p] ?? 2)) {
         const aligned = cq === cp && Math.abs((this.row[p] ?? 0) - (this.row[q] ?? 0)) === 1;
-        cost += aligned ? W3.backAligned : W3.back;
+        cost += aligned ? W2.backAligned : W2.back;
       }
     }
     return cost;
   }
   nodeTerm(i) {
     const c = this.col[i] ?? 0;
-    return (c % 2 === 1 ? W3.half : 0) + W3.order * ((this.n - i) / this.n) * (c + (this.row[i] ?? 0));
+    return (c % 2 === 1 ? W2.half : 0) + W2.order * ((this.n - i) / this.n) * (c + (this.row[i] ?? 0));
   }
   local(edges, nodes, hazards = true, before = 0, bound = Infinity) {
     this.evaluations++;
@@ -16261,7 +16266,7 @@ class Placement {
     for (let i = 0;i < this.n; i++)
       cost += this.nodeTerm(i);
     for (const r of this.rows)
-      cost += W3.row * Math.max(0, r - 1) + W3.rowMany * Math.max(0, r - 2);
+      cost += W2.row * Math.max(0, r - 1) + W2.rowMany * Math.max(0, r - 2);
     return cost;
   }
   recordBase() {
@@ -17039,58 +17044,15 @@ function costsMore(a, b) {
 }
 
 // src/layout/text-intact.ts
-var N3 = 1;
-var E3 = 2;
-var S3 = 4;
-var W4 = 8;
-var LEVEL = E3 | W4;
-var UPRIGHT3 = N3 | S3;
-var RUNS2 = {
-  "─": E3 | W4,
-  "━": E3 | W4,
-  "┄": E3 | W4,
-  "│": N3 | S3,
-  "┃": N3 | S3,
-  "┆": N3 | S3,
-  "┌": S3 | E3,
-  "┐": S3 | W4,
-  "└": N3 | E3,
-  "┘": N3 | W4,
-  "┏": S3 | E3,
-  "┓": S3 | W4,
-  "┗": N3 | E3,
-  "┛": N3 | W4,
-  "├": N3 | S3 | E3,
-  "┤": N3 | S3 | W4,
-  "┬": E3 | W4 | S3,
-  "┴": E3 | W4 | N3,
-  "┼": N3 | E3 | S3 | W4,
-  "┣": N3 | S3 | E3,
-  "┫": N3 | S3 | W4,
-  "┳": E3 | W4 | S3,
-  "┻": E3 | W4 | N3,
-  "╋": N3 | E3 | S3 | W4
-};
+var LEVEL = E | W;
+var UPRIGHT3 = N | S;
 var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
 var UPRIGHT_HEADS = new Set(["▼", "▲", "▽", "△"]);
 var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
 var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
 var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging", "overwritten"];
 function runsOf2(edge, nodes) {
-  const cellAt = (index) => {
-    const p = edge.points[index] ?? { x: 0, y: 0 };
-    let x = Math.floor(p.x + 0.000000001);
-    let y = Math.floor(p.y + 0.000000001);
-    const node = index === 0 ? nodes.get(edge.from) : index === edge.points.length - 1 ? nodes.get(edge.to) : undefined;
-    if (node !== undefined) {
-      if (Math.abs(p.x - node.x) < 0.000000001)
-        x -= 1;
-      if (Math.abs(p.y - node.y) < 0.000000001)
-        y -= 1;
-    }
-    return [x, y];
-  };
-  const corners = edge.points.map((_, i) => cellAt(i));
+  const corners = edge.points.map((_, i) => lineCell(edge, nodes, i));
   const bits = new Map;
   const cells = [];
   const add = (x, y, bit) => {
@@ -17103,32 +17065,12 @@ function runsOf2(edge, nodes) {
   if (first === undefined)
     return;
   add(first[0], first[1], 0);
-  for (let i = 0;i + 1 < corners.length; i++) {
-    const [x1, y1] = corners[i];
-    const [x2, y2] = corners[i + 1];
-    const dx = Math.sign(x2 - x1);
-    const dy = Math.sign(y2 - y1);
-    if (dx !== 0 && dy !== 0)
-      return;
-    if (dx === 0 && dy === 0)
-      continue;
-    const out = dx > 0 ? E3 : dx < 0 ? W4 : dy > 0 ? S3 : N3;
-    const back = dx > 0 ? W4 : dx < 0 ? E3 : dy > 0 ? N3 : S3;
-    for (let x = x1, y = y1;x !== x2 || y !== y2; ) {
-      add(x, y, out);
-      x += dx;
-      y += dy;
-      add(x, y, back);
-    }
-  }
+  if (!traceCells(corners, add, "stop"))
+    return;
   const toward = (index, id) => {
-    const n = nodes.get(id);
-    const p = edge.points[index];
     const cell = corners[index];
-    if (n === undefined || p === undefined || cell === undefined)
-      return;
-    const bit = Math.abs(p.x - n.x) < 0.000000001 ? E3 : Math.abs(p.x - n.x - n.w) < 0.000000001 ? W4 : Math.abs(p.y - n.y) < 0.000000001 ? S3 : Math.abs(p.y - n.y - n.h) < 0.000000001 ? N3 : 0;
-    if (bit !== 0)
+    const bit = towardBox(edge, nodes, index, id);
+    if (cell !== undefined && bit !== 0)
       add(cell[0], cell[1], bit);
   };
   toward(0, edge.from);
@@ -17166,11 +17108,11 @@ function breaksOf(layout, lines, labels, notes) {
     const broken = run.cells.find(([x, y], k) => {
       const ch = at(x, y);
       const need = run.bits.get(`${x},${y}`) ?? 0;
-      if (((RUNS2[ch] ?? 0) & need) === need && need !== 0)
+      if (((RUNS[ch] ?? 0) & need) === need && need !== 0)
         return false;
       if ((k < 2 || k >= ends - 2) && MARKS.has(ch))
         return false;
-      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT3 || need === E3 || need === W4))
+      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT3 || need === E || need === W))
         return false;
       return true;
     });
@@ -17250,10 +17192,10 @@ function breaksOf(layout, lines, labels, notes) {
     if (n > 1)
       note(`lines ${pair} cross ${n} times`);
   }
-  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
+  const lineOf = (x, y) => RUNS[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
   const inBox = (x, y) => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
-  const rule = (x, y) => RUNS2[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
-  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT3) !== 0 || UPRIGHT_HEADS.has(at(x, y));
+  const rule = (x, y) => RUNS[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
+  const uprightAt = (x, y) => ((RUNS[at(x, y)] ?? 0) & UPRIGHT3) !== 0 || UPRIGHT_HEADS.has(at(x, y));
   const apart = (p, q) => !p.some((i) => q.some((j) => find(i) === find(j)));
   const spots = drawn.map((e) => e.label === undefined ? undefined : spotOf(e.label));
   let strayLabels = 0;
@@ -17300,7 +17242,7 @@ function breaksOf(layout, lines, labels, notes) {
     let crowded = false;
     for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
       const near = edge + 2 * side;
-      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT3) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT3) !== 0)
+      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS[at(near, spot.y)] ?? 0) & UPRIGHT3) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT3) !== 0)
         crowded = true;
     }
     for (const side of [1, -1]) {
@@ -17447,7 +17389,7 @@ function breaksOf(layout, lines, labels, notes) {
   runs.forEach((run, i) => {
     for (const [x, y] of run?.cells ?? []) {
       const b = run?.bits.get(`${x},${y}`) ?? 0;
-      if (b !== LEVEL && b !== UPRIGHT3 || RUNS2[at(x, y)] !== b)
+      if (b !== LEVEL && b !== UPRIGHT3 || RUNS[at(x, y)] !== b)
         continue;
       const [dx, dy] = b === LEVEL ? [0, 1] : [1, 0];
       const [ax, ay] = b === LEVEL ? [1, 0] : [0, 1];
@@ -17457,7 +17399,7 @@ function breaksOf(layout, lines, labels, notes) {
           continue;
         const other = runs[j];
         const straight = (r, cx, cy) => r?.bits.get(`${cx},${cy}`) === b;
-        if (!straight(other, x + dx, y + dy) || RUNS2[at(x + dx, y + dy)] !== b || !straight(run, x + ax, y + ay) || !straight(other, x + dx + ax, y + dy + ay))
+        if (!straight(other, x + dx, y + dy) || RUNS[at(x + dx, y + dy)] !== b || !straight(run, x + ax, y + ay) || !straight(other, x + dx + ax, y + dy + ay))
           continue;
         if (other?.bits.has(`${x},${y}`) === true || run?.bits.has(`${x + dx},${y + dy}`) === true)
           continue;
@@ -17481,7 +17423,7 @@ function breaksOf(layout, lines, labels, notes) {
     run?.cells.forEach(([x, y], k) => {
       const key = `${x},${y}`;
       const ch = at(x, y);
-      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS.has(ch) || inBox(x, y))
+      if (textAt.has(key) || ch === " " || RUNS[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS.has(ch) || inBox(x, y))
         return;
       if ((byCell.get(key) ?? [i]).some((j) => {
         const s = spots[j];
@@ -24527,12 +24469,12 @@ function parseEventModeling(src, heading) {
 }
 
 // src/eventmodeling/wires.ts
-var N4 = 1;
-var E4 = 2;
-var S4 = 4;
-var W5 = 8;
-var UPRIGHT4 = N4 | S4;
-var LEVEL2 = E4 | W5;
+var N2 = 1;
+var E2 = 2;
+var S2 = 4;
+var W3 = 8;
+var UPRIGHT4 = N2 | S2;
+var LEVEL2 = E2 | W3;
 var DX3 = [0, 1, 0, -1];
 var DY3 = [-1, 0, 1, 0];
 var UP = 0;
@@ -24551,13 +24493,13 @@ var STEM_MOST = 300;
 var NONE = [];
 function toward(cell, rect) {
   if (cell[1] === rect.y - 1)
-    return S4;
+    return S2;
   if (cell[1] === rect.y + rect.h)
-    return N4;
+    return N2;
   if (cell[0] === rect.x - 1)
-    return E4;
+    return E2;
   if (cell[0] === rect.x + rect.w)
-    return W5;
+    return W3;
   return 0;
 }
 function bitsOf(path, from, to) {
@@ -24567,13 +24509,13 @@ function bitsOf(path, from, to) {
       if (other === undefined)
         continue;
       if (other[0] > cell[0])
-        bits |= E4;
+        bits |= E2;
       else if (other[0] < cell[0])
-        bits |= W5;
+        bits |= W3;
       else if (other[1] > cell[1])
-        bits |= S4;
+        bits |= S2;
       else if (other[1] < cell[1])
-        bits |= N4;
+        bits |= N2;
     }
     if (i === 0)
       bits |= toward(cell, from);
@@ -29716,43 +29658,22 @@ function parseBlock(src, heading) {
 }
 
 // src/block/text.ts
-var N5 = 1;
-var E5 = 2;
-var S5 = 4;
-var W6 = 8;
 var LIGHT2 = {
-  [E5 | W6]: "─",
-  [E5]: "─",
-  [W6]: "─",
-  [N5 | S5]: "│",
-  [N5]: "│",
-  [S5]: "│",
-  [S5 | E5]: "╭",
-  [S5 | W6]: "╮",
-  [N5 | E5]: "╰",
-  [N5 | W6]: "╯",
-  [N5 | S5 | E5]: "├",
-  [N5 | S5 | W6]: "┤",
-  [E5 | W6 | S5]: "┬",
-  [E5 | W6 | N5]: "┴",
-  [N5 | E5 | S5 | W6]: "┼"
-};
-var HEAVY2 = {
-  [E5 | W6]: "━",
-  [E5]: "━",
-  [W6]: "━",
-  [N5 | S5]: "┃",
-  [N5]: "┃",
-  [S5]: "┃",
-  [S5 | E5]: "┏",
-  [S5 | W6]: "┓",
-  [N5 | E5]: "┗",
-  [N5 | W6]: "┛",
-  [N5 | S5 | E5]: "┣",
-  [N5 | S5 | W6]: "┫",
-  [E5 | W6 | S5]: "┳",
-  [E5 | W6 | N5]: "┻",
-  [N5 | E5 | S5 | W6]: "╋"
+  [E | W]: "─",
+  [E]: "─",
+  [W]: "─",
+  [N | S]: "│",
+  [N]: "│",
+  [S]: "│",
+  [S | E]: "╭",
+  [S | W]: "╮",
+  [N | E]: "╰",
+  [N | W]: "╯",
+  [N | S | E]: "├",
+  [N | S | W]: "┤",
+  [E | W | S]: "┬",
+  [E | W | N]: "┴",
+  [N | E | S | W]: "┼"
 };
 
 class Canvas2 {
@@ -29893,7 +29814,7 @@ function drawBlock(c, b) {
     c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line, "bold");
   });
 }
-function cellOf3(p, block, isEnd) {
+function cellOf2(p, block, isEnd) {
   let x = Math.round(p.x);
   let y = Math.round(p.y);
   if (isEnd && block !== undefined) {
@@ -29917,14 +29838,14 @@ function drawLinks(c, links, byId) {
   for (const link of links) {
     if (link.invisible || link.points.length < 2)
       continue;
-    const cells = link.points.map((p, i) => cellOf3(p, i === 0 ? byId.get(link.from) : i === link.points.length - 1 ? byId.get(link.to) : undefined, i === 0 || i === link.points.length - 1));
+    const cells = link.points.map((p, i) => cellOf2(p, i === 0 ? byId.get(link.from) : i === link.points.length - 1 ? byId.get(link.to) : undefined, i === 0 || i === link.points.length - 1));
     for (let i = 0;i + 1 < cells.length; i++) {
       const [ax, ay] = cells[i];
       const [bx, by] = cells[i + 1];
       const dx = Math.sign(bx - ax);
       const dy = Math.sign(by - ay);
-      const out = dx > 0 ? E5 : dx < 0 ? W6 : dy > 0 ? S5 : N5;
-      const back = dx > 0 ? W6 : dx < 0 ? E5 : dy > 0 ? N5 : S5;
+      const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
+      const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
       let x = ax;
       let y = ay;
       mark(x, y, out, link.style);
@@ -29946,9 +29867,9 @@ function drawLinks(c, links, byId) {
   }
   for (const [key, cell] of bits) {
     const [x, y] = key.split(",").map(Number);
-    const horizontal = (cell.bits & (E5 | W6)) !== 0 && (cell.bits & (N5 | S5)) === 0;
-    const vertical = (cell.bits & (N5 | S5)) !== 0 && (cell.bits & (E5 | W6)) === 0;
-    const glyph = cell.style === "dotted" && horizontal ? "┄" : cell.style === "dotted" && vertical ? "┆" : (cell.style === "thick" ? HEAVY2 : LIGHT2)[cell.bits] ?? "┼";
+    const horizontal = (cell.bits & (E | W)) !== 0 && (cell.bits & (N | S)) === 0;
+    const vertical = (cell.bits & (N | S)) !== 0 && (cell.bits & (E | W)) === 0;
+    const glyph = cell.style === "dotted" && horizontal ? "┄" : cell.style === "dotted" && vertical ? "┆" : (cell.style === "thick" ? HEAVY : LIGHT2)[cell.bits] ?? "┼";
     c.put(x, y, glyph, cell.style === "dotted" ? "dim" : "normal");
   }
   for (const h of heads)

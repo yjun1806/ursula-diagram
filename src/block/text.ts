@@ -1,24 +1,15 @@
 import { cellRuler, cellWidth } from '../metrics.ts';
+import { E, HEAVY, N, S, W } from '../text/lines.ts';
 import { joinSpans, sliceSpans, spansOf, trimEndSpans } from '../text/terminal.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Point, TextSpan, TextTone } from '../types.ts';
 import { layoutBlock } from './layout.ts';
 import type { BlockDiagram, BlockGroup, BlockItem, BlockLayout, PlacedBlock, PlacedLink } from './model.ts';
 
-const N = 1;
-const E = 2;
-const S = 4;
-const W = 8;
-
 const LIGHT: Record<number, string> = {
   [E | W]: '─', [E]: '─', [W]: '─', [N | S]: '│', [N]: '│', [S]: '│',
   [S | E]: '╭', [S | W]: '╮', [N | E]: '╰', [N | W]: '╯',
   [N | S | E]: '├', [N | S | W]: '┤', [E | W | S]: '┬', [E | W | N]: '┴', [N | E | S | W]: '┼',
-};
-const HEAVY: Record<number, string> = {
-  [E | W]: '━', [E]: '━', [W]: '━', [N | S]: '┃', [N]: '┃', [S]: '┃',
-  [S | E]: '┏', [S | W]: '┓', [N | E]: '┗', [N | W]: '┛',
-  [N | S | E]: '┣', [N | S | W]: '┫', [E | W | S]: '┳', [E | W | N]: '┻', [N | E | S | W]: '╋',
 };
 
 /** A grid of terminal cells, each with a tone; a wide character takes two and leaves an empty string in the second. */

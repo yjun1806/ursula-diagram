@@ -3,21 +3,7 @@
  * and bands ask for, and the labels it shows in full.
  */
 import { cellWidthOf } from '../metrics.ts';
-
-const N = 1;
-const E = 2;
-const S = 4;
-const W = 8;
-
-/** The ways the line glyph of a cell runs on. */
-const RUNS: Record<string, number> = {
-  '─': E | W, '━': E | W, '┄': E | W,
-  '│': N | S, '┃': N | S, '┆': N | S,
-  '┌': S | E, '┐': S | W, '└': N | E, '┘': N | W,
-  '┏': S | E, '┓': S | W, '┗': N | E, '┛': N | W,
-  '├': N | S | E, '┤': N | S | W, '┬': E | W | S, '┴': E | W | N, '┼': N | E | S | W,
-  '┣': N | S | E, '┫': N | S | W, '┳': E | W | S, '┻': E | W | N, '╋': N | E | S | W,
-};
+import { E, N, RUNS, S, W } from '../text/lines.ts';
 
 /** Arrowheads that say which way they point: the step back to the cell behind them, and the way that cell has to run on. */
 const HEADS: Record<string, readonly [number, number, number]> = {
