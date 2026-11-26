@@ -10,6 +10,7 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 ### Fixed
 
 - The agent skill tells the agent to write the full `node …/scripts/ursula.mjs` command in each call instead of a shell variable, which zsh does not split into words, so the first drawing no longer fails. [#84](https://github.com/yjun1806/ursula-diagram/pull/84)
+- Legends write their captions in Korean (흐름, 요청, 대기; 호출, 응답, 비동기, 실패) when more words of the diagram are in Hangul than in Latin letters, instead of always Flow, Pending, Call, Reply. Captions given through the `legend` option still win. [#85](https://github.com/yjun1806/ursula-diagram/pull/85)
 
 ## 0.2.3 (2026-11-26)
 
