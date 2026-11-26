@@ -29,6 +29,15 @@ Or copy the `skills/ursula` folder into the skills folder of your agent by hand.
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
+A skill installed with the skills command is updated by the same command:
+
+```bash
+npx skills update
+```
+
+`ursula-diagram update`, run from the skill's own command, says whether a newer version is out and prints this
+command; it does not change the skill itself.
+
 With the skill, the agent writes the Mermaid text, draws it with `--check` and `--fix` (which fixes a misspelt header
 or keyword and a flowchart `->`, and names each fix), and picks the output by where the reader is: `text` for a
 terminal, `text-svg` for a chat or a web page, `svg` or `html` for a file.

@@ -20,7 +20,8 @@ import { isMermaid } from '../../site/.vitepress/mermaid-fence.mjs';
 /** The commands that are not run, and why. */
 export const ALLOWED = [
   { pattern: /^(npm install|pnpm add|bun add) -g ursula-diagram$/, why: 'installs the published package from the npm registry' },
-  { pattern: /^npx skills add /, why: 'installs the skill from GitHub into an agent' },
+  { pattern: /^npx skills (add|update)\b/, why: 'installs or updates the skill from GitHub into an agent' },
+  { pattern: /^(ursula-diagram|ursula|ud) update\b/, why: 'asks the npm registry, and with --yes installs from it' },
   { pattern: /^claude mcp add /, why: "changes Claude Code's configuration" },
   { pattern: /^cp -R "\$\(npm root -g\)\/ursula-diagram\/skills\/ursula" /, why: 'needs the package installed globally and writes into ~/.claude' },
   { pattern: /^npm view ursula-diagram /, why: 'asks the npm registry' },

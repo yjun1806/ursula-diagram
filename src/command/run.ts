@@ -5,7 +5,7 @@ import { drawCommand } from './draw.ts';
 import { HELP } from './help.ts';
 import { syntaxCommand } from './syntax.ts';
 
-const usageError = (): Outcome => ({ stdout: '', stderr: `${USAGE}\nRun 'ursula-diagram --help' for more.\n`, code: 2 });
+const usageError = (error?: string): Outcome => ({ stdout: '', stderr: `${error === undefined ? '' : `${error}\n`}${USAGE}\nRun 'ursula-diagram --help' for more.\n`, code: 2 });
 
 /** Where the command runs: the PNG renderer, and whether standard output is a terminal. */
 export interface CommandHost extends Host {
@@ -21,7 +21,7 @@ export function runCommand(args: readonly string[], read: (file?: string) => str
   const parsed = parseDrawArgs(args);
   if (parsed.kind === 'help') return { stdout: HELP, stderr: '', code: 0 };
   if (parsed.kind === 'version') return { stdout: `${VERSION}\n`, stderr: '', code: 0 };
-  if (parsed.kind === 'usage') return usageError();
+  if (parsed.kind === 'usage') return usageError(parsed.error);
   const req = parsed.request;
   // A PNG is bytes; a terminal would show them as noise.
   if (req.format === 'png' && host.stdoutIsTty === true) return { stdout: '', stderr: 'error: a PNG is not for the terminal; redirect to a file: > out.png\n', code: 2 };

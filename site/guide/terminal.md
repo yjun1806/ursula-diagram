@@ -58,7 +58,8 @@ the home page's flowchart:
 `ursula-diagram syntax` lists every type, and `ursula-diagram syntax <type>` prints a small example and the rules.
 
 The exit code is 0 when drawn, 1 for an error in the text, 2 for wrong options, 3 when the drawing is too wide and 4
-for a failure inside the engine. Every option is on the [Output formats](/guide/output-formats#options) page.
+for a failure inside the engine. [`update`](/guide/quick-start#updating) adds 1 when a newer version is out and 5
+when the npm registry cannot be reached. Every option is on the [Output formats](/guide/output-formats#options) page.
 
 # When the columns do not line up
 

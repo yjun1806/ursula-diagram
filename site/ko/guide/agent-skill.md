@@ -28,6 +28,14 @@ npx skills add yjun1806/ursula-diagram -a claude-code
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
+skills 명령으로 설치한 스킬은 같은 명령으로 업데이트합니다.
+
+```bash
+npx skills update
+```
+
+스킬에 든 명령으로 `ursula-diagram update`를 실행하면 새 버전이 나와 있는지 알려 주고 이 명령을 출력합니다. 스킬 자체는 바꾸지 않습니다.
+
 스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--check`와 `--fix`(틀린 머리글·키워드와 flowchart의 `->`를 고치고 고친 곳을
 알립니다)를 붙여 그린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
 `text`, 채팅이나 웹 페이지에는 `text-svg`, 파일에는 `svg`나 `html`을 줍니다.

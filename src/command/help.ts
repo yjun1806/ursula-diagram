@@ -11,6 +11,9 @@ Usage
   ursula-diagram [file.mmd] [options]   reads standard input when no file is given
   ursula-diagram syntax [type]          an example and the rules of a diagram type
   ursula-diagram mcp                    serve render, check and syntax over MCP (stdio)
+  ursula-diagram update [--yes]         check npm for a newer version and print how to
+                                        install it; --yes installs it (global installs)
+  ud ...                                the same command under a short name
 
 Examples
   ursula-diagram flow.mmd --format text --width 100
@@ -42,6 +45,11 @@ Errors
   --fix makes the fixes that have one reading and names each on stderr, such as
   'fixed: line 1: flowchrt → flowchart'; make the same change in your text.
 
+Network
+  Only 'update' uses the network. Drawing reads nothing but the text and draws
+  the same picture every time, offline.
+
 Exit codes
   0 drawn   1 the text has an error   2 wrong options   3 too narrow   4 engine failure
+  update: 0 up to date or updated   1 an update is available   5 npm could not be reached
 `;

@@ -2,14 +2,65 @@
 if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula needs Node 22 or later; this is ' + process.version); process.exit(1); }
 
 // src/cli.ts
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFileSync as readFileSync2 } from "node:fs";
 import { createRequire } from "node:module";
-import { join as join3 } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join as join4 } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // src/version.ts
 var VERSION = "0.2.2";
+
+// src/errors/suggest.ts
+function editDistance(a, b, most = Infinity) {
+  const s = a.toLowerCase();
+  const t = b.toLowerCase();
+  if (Math.abs(s.length - t.length) > most)
+    return most + 1;
+  let prev2 = [];
+  let prev = Array.from({ length: t.length + 1 }, (_, j) => j);
+  for (let i = 1;i <= s.length; i++) {
+    const row = [i];
+    let low = i;
+    for (let j = 1;j <= t.length; j++) {
+      const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+      let d = Math.min((prev[j] ?? 0) + 1, (row[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
+      if (i > 1 && j > 1 && s[i - 1] === t[j - 2] && s[i - 2] === t[j - 1])
+        d = Math.min(d, (prev2[j - 2] ?? 0) + 1);
+      row.push(d);
+      low = Math.min(low, d);
+    }
+    if (low > most)
+      return most + 1;
+    prev2 = prev;
+    prev = row;
+  }
+  return prev[t.length] ?? 0;
+}
+function closest(word, candidates, most = 2) {
+  if (word === "")
+    return;
+  let best;
+  let bestDistance = most + 1;
+  let tied = false;
+  const seen = new Set;
+  for (const c of candidates) {
+    if (c === word || seen.has(c.toLowerCase()))
+      continue;
+    seen.add(c.toLowerCase());
+    const limit = Math.min(most, c.length < 4 ? 1 : most);
+    const d = editDistance(word, c, limit);
+    if (d > limit)
+      continue;
+    if (d < bestDistance) {
+      best = c;
+      bestDistance = d;
+      tied = false;
+    } else if (d === bestDistance)
+      tied = true;
+  }
+  return tied ? undefined : best;
+}
 
 // src/render/colors.ts
 var COLORS = {
@@ -10402,6 +10453,20 @@ var OPTIONS = [
   { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) }
 ];
 var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
+var REMOVED = {
+  "--engine": "the default layout is the only one now",
+  "--no-questions": "it never changed the output",
+  "--no-elbows": "the check now always matches the drawing"
+};
+var REMOVED_IN = "0.2.2";
+function unknownOption(a) {
+  const removed = REMOVED[a];
+  if (removed !== undefined)
+    return `error: ${a} was removed in ${REMOVED_IN} (${removed})`;
+  const near = closest(a, [...OPTIONS.map((o) => o.name), "--help", "--version"]);
+  return `error: unknown option ${a}${near === undefined ? "" : `
+did you mean: ${near}`}`;
+}
 function parseDrawArgs(args) {
   let req = { format: "svg", legend: true, color: false, check: false, fix: false };
   for (let i = 0;i < args.length; i++) {
@@ -10426,7 +10491,7 @@ function parseDrawArgs(args) {
     } else if (!a.startsWith("-") && req.file === undefined)
       req = { ...req, file: a };
     else
-      return { kind: "usage" };
+      return a.startsWith("-") && a !== "-" ? { kind: "usage", error: unknownOption(a) } : { kind: "usage" };
   }
   return { kind: "draw", request: req };
 }
@@ -17780,57 +17845,6 @@ function locatePiece(message, row) {
 }
 function leadingWord(row) {
   return /^[\p{L}_@][\p{L}\p{N}_@]*(?:-[\p{L}\p{N}_]+)*/u.exec(row.trim())?.[0] ?? "";
-}
-
-// src/errors/suggest.ts
-function editDistance(a, b, most = Infinity) {
-  const s = a.toLowerCase();
-  const t = b.toLowerCase();
-  if (Math.abs(s.length - t.length) > most)
-    return most + 1;
-  let prev2 = [];
-  let prev = Array.from({ length: t.length + 1 }, (_, j) => j);
-  for (let i = 1;i <= s.length; i++) {
-    const row = [i];
-    let low = i;
-    for (let j = 1;j <= t.length; j++) {
-      const cost = s[i - 1] === t[j - 1] ? 0 : 1;
-      let d = Math.min((prev[j] ?? 0) + 1, (row[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
-      if (i > 1 && j > 1 && s[i - 1] === t[j - 2] && s[i - 2] === t[j - 1])
-        d = Math.min(d, (prev2[j - 2] ?? 0) + 1);
-      row.push(d);
-      low = Math.min(low, d);
-    }
-    if (low > most)
-      return most + 1;
-    prev2 = prev;
-    prev = row;
-  }
-  return prev[t.length] ?? 0;
-}
-function closest(word, candidates, most = 2) {
-  if (word === "")
-    return;
-  let best;
-  let bestDistance = most + 1;
-  let tied = false;
-  const seen = new Set;
-  for (const c of candidates) {
-    if (c === word || seen.has(c.toLowerCase()))
-      continue;
-    seen.add(c.toLowerCase());
-    const limit = Math.min(most, c.length < 4 ? 1 : most);
-    const d = editDistance(word, c, limit);
-    if (d > limit)
-      continue;
-    if (d < bestDistance) {
-      best = c;
-      bestDistance = d;
-      tied = false;
-    } else if (d === bestDistance)
-      tied = true;
-  }
-  return tied ? undefined : best;
 }
 
 // src/errors/explain.ts
@@ -37964,6 +37978,9 @@ Usage
   ursula-diagram [file.mmd] [options]   reads standard input when no file is given
   ursula-diagram syntax [type]          an example and the rules of a diagram type
   ursula-diagram mcp                    serve render, check and syntax over MCP (stdio)
+  ursula-diagram update [--yes]         check npm for a newer version and print how to
+                                        install it; --yes installs it (global installs)
+  ud ...                                the same command under a short name
 
 Examples
   ursula-diagram flow.mmd --format text --width 100
@@ -37996,8 +38013,13 @@ Errors
   --fix makes the fixes that have one reading and names each on stderr, such as
   'fixed: line 1: flowchrt → flowchart'; make the same change in your text.
 
+Network
+  Only 'update' uses the network. Drawing reads nothing but the text and draws
+  the same picture every time, offline.
+
 Exit codes
   0 drawn   1 the text has an error   2 wrong options   3 too narrow   4 engine failure
+  update: 0 up to date or updated   1 an update is available   5 npm could not be reached
 `;
 
 // src/command/syntax.ts
@@ -38020,7 +38042,8 @@ ${near === undefined ? "" : `did you mean: ${near}
 }
 
 // src/command/run.ts
-var usageError = () => ({ stdout: "", stderr: `${USAGE}
+var usageError = (error) => ({ stdout: "", stderr: `${error === undefined ? "" : `${error}
+`}${USAGE}
 Run 'ursula-diagram --help' for more.
 `, code: 2 });
 function runCommand(args, read, host = {}) {
@@ -38033,7 +38056,7 @@ function runCommand(args, read, host = {}) {
     return { stdout: `${VERSION}
 `, stderr: "", code: 0 };
   if (parsed.kind === "usage")
-    return usageError();
+    return usageError(parsed.error);
   const req = parsed.request;
   if (req.format === "png" && host.stdoutIsTty === true)
     return { stdout: "", stderr: `error: a PNG is not for the terminal; redirect to a file: > out.png
@@ -38047,6 +38070,115 @@ function runCommand(args, read, host = {}) {
 `, code: 2 };
   }
   return drawCommand(src, req, host);
+}
+
+// src/command/update.ts
+var LATEST_URL = "https://registry.npmjs.org/ursula-diagram/latest";
+var TIMEOUT_MS = 5000;
+var UPDATE_USAGE = "usage: ursula-diagram update [--yes]";
+var UPDATE_HELP = `ursula-diagram update: check npm for a newer version and print the command that installs it.
+
+  -y, --yes   run that command too, when the package is installed globally with npm, pnpm or bun
+
+Without --yes it changes nothing. It is the only command that uses the network; drawing never does.
+Exit codes: 0 up to date or updated, 1 an update is available, 2 wrong options, 5 npm could not be reached.
+`;
+function compareVersions(a, b) {
+  const parts = (v) => v.split(/[.+-]/).slice(0, 3).map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0;i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0)
+      return Math.sign(d);
+  }
+  return 0;
+}
+var SPEC2 = "ursula-diagram@latest";
+function updateCommandOf(install) {
+  switch (install.kind) {
+    case "global":
+      return install.manager === "npm" ? ["npm", "install", "-g", SPEC2] : [install.manager, "add", "-g", SPEC2];
+    case "project":
+      return install.manager === "npm" ? ["npm", "install", SPEC2] : [install.manager, "add", SPEC2];
+    case "skill":
+      return ["npx", "skills", "update"];
+    case "npx":
+      return ["npx", SPEC2];
+    case "unknown":
+      return;
+  }
+}
+function howTo(install, command) {
+  const line = command?.join(" ");
+  switch (install.kind) {
+    case "global":
+      return `Installed globally with ${install.manager}. Update with:
+  ${line}
+or run 'ursula-diagram update --yes' to do it now.
+`;
+    case "project":
+      return `Installed in the project ${install.root}. Update it there with:
+  ${line}
+`;
+    case "skill":
+      return `Running from the agent skill. Update the skill with:
+  ${line}
+or add it again: npx skills add yjun1806/ursula-diagram
+`;
+    case "npx":
+      return `Running from the npx cache. Run the latest with:
+  ${line}
+`;
+    case "unknown":
+      return `Could not tell how it was installed. Install the latest with:
+  npm install -g ${SPEC2}
+`;
+  }
+}
+async function latestVersion(host) {
+  try {
+    const res = await host.fetch(LATEST_URL, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!res.ok)
+      return new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    const version = typeof body === "object" && body !== null ? body.version : undefined;
+    if (typeof version !== "string" || !/^\d+\.\d+\.\d+/.test(version))
+      return new Error("no version in the answer");
+    return version;
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"))
+      return new Error(`no answer in ${TIMEOUT_MS / 1000} s`);
+    return err instanceof Error ? err : new Error(String(err));
+  }
+}
+async function updateCommand(args, host) {
+  let yes = false;
+  for (const a of args) {
+    if (a === "--help" || a === "-h")
+      return { stdout: UPDATE_HELP, stderr: "", code: 0 };
+    if (a === "--yes" || a === "-y")
+      yes = true;
+    else
+      return { stdout: "", stderr: `error: update takes no '${a}'
+${UPDATE_USAGE}
+`, code: 2 };
+  }
+  const have = host.version ?? VERSION;
+  const latest = await latestVersion(host);
+  if (latest instanceof Error)
+    return { stdout: "", stderr: `error: cannot reach the npm registry (${latest.message})
+`, code: 5 };
+  if (compareVersions(have, latest) >= 0)
+    return { stdout: `ursula-diagram ${have} is up to date
+`, stderr: "", code: 0 };
+  const install = host.install();
+  const command = updateCommandOf(install);
+  const status = `ursula-diagram ${latest} is available (you have ${have})
+`;
+  if (yes && install.kind === "global" && command !== undefined)
+    return { stdout: `${status}running: ${command.join(" ")}
+`, stderr: "", code: 0, run: command };
+  return { stdout: `${status}${howTo(install, command)}`, stderr: "", code: 1 };
 }
 
 // src/mcp/lines.ts
@@ -38266,10 +38398,66 @@ function extraFontDirs() {
   return ["/usr/share/fonts", "/usr/local/share/fonts", join(home, ".local/share/fonts"), join(home, ".fonts")].filter((dir) => existsSync(dir));
 }
 
-// src/node/font-index.ts
-import { existsSync as existsSync2, opendirSync, readFileSync, statSync } from "node:fs";
+// src/node/install.ts
+import { spawnSync } from "node:child_process";
+import { existsSync as existsSync2, realpathSync } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
+import { join as join2, sep } from "node:path";
+function globalRoot(tool) {
+  const windows = process.platform === "win32";
+  const out = spawnSync(windows ? `${tool}.cmd` : tool, ["root", "-g"], { encoding: "utf8", shell: windows, timeout: 5000 });
+  const dir = out.status === 0 ? out.stdout.trim() : "";
+  return dir === "" ? undefined : dir;
+}
+function bunRoot(env = process.env) {
+  return join2(env.BUN_INSTALL ?? join2(homedir2(), ".bun"), "install", "global", "node_modules");
+}
+var within4 = (file, dir) => {
+  if (dir === undefined || dir === "")
+    return false;
+  const d = dir.endsWith(sep) ? dir : `${dir}${sep}`;
+  return file.startsWith(d);
+};
+function detectInstall(file, roots, exists = existsSync2) {
+  const parts = file.split(/[\\/]/);
+  if (parts.includes("_npx"))
+    return { kind: "npx" };
+  const nm = parts.lastIndexOf("node_modules");
+  if (nm !== -1) {
+    const r = roots();
+    for (const manager of ["npm", "pnpm", "bun"])
+      if (within4(file, r[manager]))
+        return { kind: "global", manager };
+    const first = parts.indexOf("node_modules");
+    const root = parts.slice(0, first).join(sep) || sep;
+    const manager = exists(join2(root, "pnpm-lock.yaml")) ? "pnpm" : exists(join2(root, "bun.lock")) || exists(join2(root, "bun.lockb")) ? "bun" : exists(join2(root, "yarn.lock")) ? "yarn" : "npm";
+    return { kind: "project", manager, root };
+  }
+  if (/[\\/]skills[\\/]ursula[\\/]scripts[\\/][^\\/]+$/.test(file))
+    return { kind: "skill" };
+  return { kind: "unknown" };
+}
+function installOf(path) {
+  let file = path;
+  try {
+    file = realpathSync(path);
+  } catch {}
+  const real = (dir) => {
+    if (dir === undefined)
+      return;
+    try {
+      return realpathSync(dir);
+    } catch {
+      return dir;
+    }
+  };
+  return detectInstall(file, () => ({ npm: real(globalRoot("npm")), pnpm: real(globalRoot("pnpm")), bun: real(bunRoot()) }));
+}
+
+// src/node/font-index.ts
+import { existsSync as existsSync3, opendirSync, readFileSync, statSync } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { dirname, isAbsolute, join as join3, resolve as resolve2 } from "node:path";
 
 // src/node/sfnt.ts
 import { closeSync, openSync, readSync } from "node:fs";
@@ -38457,16 +38645,16 @@ function fontCoverage(path) {
 
 // src/node/font-index.ts
 var FONT_FILE = /\.(ttf|otf|ttc|otc)$/i;
-function fontconfigDirs(conf = "/etc/fonts/fonts.conf", home = homedir2(), env = process.env) {
-  if (!existsSync2(conf))
+function fontconfigDirs(conf = "/etc/fonts/fonts.conf", home = homedir3(), env = process.env) {
+  if (!existsSync3(conf))
     return;
   const dirs = [];
   const seen = new Set;
   const expand = (path, prefix, base) => {
     if (path.startsWith("~"))
-      return join2(home, path.slice(1));
+      return join3(home, path.slice(1));
     if (prefix === "xdg")
-      return join2(env["XDG_DATA_HOME"] ?? join2(home, ".local/share"), path);
+      return join3(env["XDG_DATA_HOME"] ?? join3(home, ".local/share"), path);
     if (prefix === "relative" || !isAbsolute(path))
       return resolve2(base, path);
     return path;
@@ -38489,7 +38677,7 @@ function fontconfigDirs(conf = "/etc/fonts/fonts.conf", home = homedir2(), env =
           names.push(entry.name);
       dir.closeSync();
       for (const name of names.sort())
-        read(join2(file, name));
+        read(join3(file, name));
       return;
     }
     const text = readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "");
@@ -38505,25 +38693,25 @@ function fontconfigDirs(conf = "/etc/fonts/fonts.conf", home = homedir2(), env =
   read(conf);
   return dirs;
 }
-function systemFontDirs(platform = process.platform, home = homedir2(), env = process.env) {
+function systemFontDirs(platform = process.platform, home = homedir3(), env = process.env) {
   if (platform === "darwin") {
     let assets = [];
     try {
       const dir = opendirSync("/System/Library/AssetsV2");
       for (let entry = dir.readSync();entry !== null; entry = dir.readSync())
         if (entry.name.startsWith("com_apple_MobileAsset_Font"))
-          assets.push(join2("/System/Library/AssetsV2", entry.name));
+          assets.push(join3("/System/Library/AssetsV2", entry.name));
       dir.closeSync();
     } catch {
       assets = [];
     }
-    return ["/Library/Fonts", "/System/Library/Fonts", ...assets, "/Network/Library/Fonts", join2(home, "Library/Fonts")];
+    return ["/Library/Fonts", "/System/Library/Fonts", ...assets, "/Network/Library/Fonts", join3(home, "Library/Fonts")];
   }
   if (platform === "win32") {
     const root = env["SYSTEMROOT"] ?? env["WINDIR"] ?? "C:\\Windows";
-    return [join2(root, "Fonts"), ...env["USERPROFILE"] === undefined ? [] : [join2(env["USERPROFILE"], "AppData/Local/Microsoft/Windows/Fonts")]];
+    return [join3(root, "Fonts"), ...env["USERPROFILE"] === undefined ? [] : [join3(env["USERPROFILE"], "AppData/Local/Microsoft/Windows/Fonts")]];
   }
-  return fontconfigDirs(undefined, home, env) ?? ["/usr/share/fonts", "/usr/local/share/fonts", join2(home, ".local/share/fonts")];
+  return fontconfigDirs(undefined, home, env) ?? ["/usr/share/fonts", "/usr/local/share/fonts", join3(home, ".local/share/fonts")];
 }
 function filesUnder(dir, out, depth = 0) {
   if (depth > 8)
@@ -38539,7 +38727,7 @@ function filesUnder(dir, out, depth = 0) {
     names.push(entry.name);
   handle.closeSync();
   for (const name of names) {
-    const path = join2(dir, name);
+    const path = join3(dir, name);
     let stat;
     try {
       stat = statSync(path);
@@ -38656,16 +38844,10 @@ function pngFonts(svg, extraDirs = []) {
 }
 
 // src/cli.ts
-function globalPackages() {
-  const windows = process.platform === "win32";
-  const npm = spawnSync(windows ? "npm.cmd" : "npm", ["root", "-g"], { encoding: "utf8", shell: windows });
-  const dir = npm.status === 0 ? npm.stdout.trim() : "";
-  return dir === "" ? undefined : dir;
-}
-var besides = (dir) => pathToFileURL(join3(dir, "package.json")).href;
+var besides = (dir) => pathToFileURL(join4(dir, "package.json")).href;
 function loadPng() {
   const places = [() => import.meta.url, () => besides(process.cwd()), () => {
-    const dir = globalPackages();
+    const dir = globalRoot("npm");
     return dir === undefined ? undefined : besides(dir);
   }];
   for (const place of places) {
@@ -38692,6 +38874,27 @@ if (args[0] === "mcp" && args.length === 1) {
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk) => lines.push(chunk));
   process.stdin.on("end", () => lines.end());
+} else if (args[0] === "update") {
+  const out = await updateCommand(args.slice(1), { fetch: (url, init) => fetch(url, init), install: () => installOf(fileURLToPath(import.meta.url)) });
+  if (out.stdout !== "")
+    process.stdout.write(out.stdout);
+  if (out.stderr !== "")
+    process.stderr.write(out.stderr);
+  const run = out.run;
+  if (run === undefined)
+    process.exitCode = out.code;
+  else {
+    const windows = process.platform === "win32";
+    const child = spawn(windows ? `${run[0]}.cmd` : run[0], run.slice(1), { stdio: "inherit", shell: windows });
+    child.on("error", (err) => {
+      process.stderr.write(`error: cannot run ${run.join(" ")}: ${err.message}
+`);
+      process.exitCode = 2;
+    });
+    child.on("exit", (code) => {
+      process.exitCode = code ?? 1;
+    });
+  }
 } else {
   const out = runCommand(args, (file) => readFileSync2(file ?? 0, "utf8"), { loadPng, pngFonts: fontsFor, stdoutIsTty: process.stdout.isTTY === true });
   if (out.bytes !== undefined)

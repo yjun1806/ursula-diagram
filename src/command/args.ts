@@ -1,4 +1,5 @@
 // Reads the options of the drawing command. Every option is in OPTIONS, so the help text and its test see them all.
+import { closest } from '../errors/suggest.ts';
 import { MAX_SCALE, validScale } from '../render/png.ts';
 
 export const FORMATS = ['svg', 'text', 'text-svg', 'json', 'check', 'html', 'png', 'fixed'] as const;
@@ -64,7 +65,24 @@ export const OPTIONS: readonly OptionSpec[] = [
 
 export const USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? '' : ` ${o.choices ? o.choices.join('|') : o.value}`}]`).join(' ')}`;
 
-export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'version' } | { kind: 'usage' };
+/** Options a release removed, and why the command no longer needs them. */
+export const REMOVED: Readonly<Record<string, string>> = {
+  '--engine': 'the default layout is the only one now',
+  '--no-questions': 'it never changed the output',
+  '--no-elbows': 'the check now always matches the drawing',
+};
+const REMOVED_IN = '0.2.2';
+
+/** Why an option starting with `-` is not taken: removed, or unknown with the nearest option it may mean. */
+function unknownOption(a: string): string {
+  const removed = REMOVED[a];
+  if (removed !== undefined) return `error: ${a} was removed in ${REMOVED_IN} (${removed})`;
+  const near = closest(a, [...OPTIONS.map((o) => o.name), '--help', '--version']);
+  return `error: unknown option ${a}${near === undefined ? '' : `\ndid you mean: ${near}`}`;
+}
+
+/** `error` is the line or lines above the usage line, when there is more to say than the usage. */
+export type Parsed = { kind: 'draw'; request: DrawRequest } | { kind: 'help' } | { kind: 'version' } | { kind: 'usage'; error?: string };
 
 export function parseDrawArgs(args: readonly string[]): Parsed {
   let req: DrawRequest = { format: 'svg', legend: true, color: false, check: false, fix: false };
@@ -84,7 +102,7 @@ export function parseDrawArgs(args: readonly string[]): Parsed {
       if (!applied) return { kind: 'usage' };
       req = applied;
     } else if (!a.startsWith('-') && req.file === undefined) req = { ...req, file: a };
-    else return { kind: 'usage' };
+    else return a.startsWith('-') && a !== '-' ? { kind: 'usage', error: unknownOption(a) } : { kind: 'usage' };
   }
   return { kind: 'draw', request: req };
 }

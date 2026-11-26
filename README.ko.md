@@ -49,7 +49,7 @@ flowchart LR
 
 ## 설치와 사용
 
-명령을 설치합니다(Node 22 이상).
+명령을 설치합니다(Node 22 이상, 짧은 이름 `ud`도 함께 설치됩니다).
 
 ```bash
 npm install -g ursula-diagram
