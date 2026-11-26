@@ -41060,7 +41060,7 @@ function graphReport(laid, src, terminal) {
 function checkReport(src, req, terminal = false) {
   const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
   const lines = "edges" in laid && "diagnostics" in laid ? graphReport(laid, src, terminal) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
-  const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.map((n) => `note: ${String(n)}`) : [];
+  const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.filter((n) => typeof n === "string").map((n) => `note: ${n}`) : [];
   return `${[...lines, ...notes].join(`
 `)}
 `;
