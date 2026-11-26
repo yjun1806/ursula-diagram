@@ -1,7 +1,7 @@
 <script setup>
 // The first thing under the hero: the time per drawing of the ursula skill next to a skill that has the model lay out
-// the drawing, split into where that time went, and the drawings both made from the same three texts, so the speed is
-// never shown without the result. The chart's numbers are charts.skillMean in ../compare/benchmark.json.
+// the drawing and next to the engine alone, and the drawings both skills made from the same three texts, so the speed
+// is never shown without the result. The chart's numbers are charts.skillMean in ../compare/benchmark.json.
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { langOf } from '../playground/strings.js';

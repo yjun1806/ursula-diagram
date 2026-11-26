@@ -1,14 +1,17 @@
 <script setup>
-// Every bar chart on the site: horizontal bars on one shared axis, with the conditions in a caption under them.
+// Every bar chart on the site: thick horizontal bars on one shared axis, the value in bold at the end of each bar, and
+// the conditions in a caption under them.
 //
 // Usage in Markdown: <BenchmarkBars name="speed" />  (reads charts.speed from ./benchmark.json)
-// Data: { charts: { [name]: { placeholder, title: {en, ko}, conditions: {en, ko}, unit, decimals, lowerIsBetter,
-//         ticks: [number], parts: [{ key, name: {en, ko} }],
-//         bars: [{ name: string | {en, ko}, value, highlight, range: [low, high], parts: { [key]: number },
+// Data: { charts: { [name]: { placeholder, title: {en, ko}, conditions: {en, ko}, decimals, lowerIsBetter,
+//         unit: string | {en, ko}, ticks: [number], headline: { slower, faster, text: {en, ko} }, runs: {en, ko},
+//         bars: [{ id, name: string | {en, ko}, value, text, highlight, range: [low, high],
 //                  sub: {en, ko}, detail: {en, ko} }] } } }
-// - value is the bar's length; range, when given, is drawn as a thin line from the fastest to the slowest run.
-// - parts splits the bar into segments in the order of the chart's parts, each with its own colour and a legend entry.
-// - sub is a second, muted line under the value; detail is the hover text and what a screen reader hears.
+// - value is the bar's length; text, when given, is printed at the end of the bar instead of the value.
+// - headline is one big line above the chart: {n} in its text becomes the value of the bar whose id is slower divided
+//   by the value of the bar whose id is faster, rounded.
+// - runs is one plain line under the chart: {0}, {1}, … become the ranges of the bars that have one, in bar order.
+// - sub is a second, muted line under the name; detail is the hover text and what a screen reader hears.
 // - ticks are the labelled axis values; without them the chart picks round ones that reach past every value.
 // While "placeholder" is true the chart renders only in the dev server, marked as placeholder, and nothing in a build,
 // so no made-up number reaches the published site.
@@ -20,8 +23,8 @@ import { langOf } from '../playground/strings.js';
 const props = defineProps({ name: { type: String, default: null }, data: { type: Object, default: null } });
 
 const WORDS = {
-  en: { faster: 'lower is faster', range: 'fastest to slowest run' },
-  ko: { faster: '짧을수록 빠름', range: '가장 빠른 판부터 느린 판까지' },
+  en: { faster: 'lower is faster', dash: '–' },
+  ko: { faster: '짧을수록 빠름', dash: '~' },
 };
 
 const { lang } = useData();
@@ -30,6 +33,7 @@ const w = WORDS[code];
 const data = computed(() => props.data ?? DATA.charts[props.name]);
 const shown = computed(() => !data.value.placeholder || import.meta.env.DEV);
 const pick = (v) => (v && typeof v === 'object' ? v[code] ?? v.en : v);
+const fill = (template, values) => template.replace(/\{(\w+)\}/g, (_, k) => values[k] ?? '');
 
 // Round axis values: the step is 1, 2, 2.5 or 5 times a power of ten, the axis ends at the first tick past the
 // largest value, and of the steps that give 2 to 4 intervals the one that leaves the least empty space wins.
@@ -47,44 +51,45 @@ function roundTicks(top) {
   return Array.from({ length: best.n + 1 }, (_, i) => i * best.step);
 }
 
-const ticks = computed(() => {
-  const highs = data.value.bars.flatMap((b) => [b.value ?? 0, b.range?.[1] ?? 0]);
-  return data.value.ticks ?? roundTicks(Math.max(1, ...highs));
-});
+const ticks = computed(() => data.value.ticks ?? roundTicks(Math.max(1, ...data.value.bars.map((b) => b.value ?? 0))));
 const axisMax = computed(() => ticks.value[ticks.value.length - 1]);
 const pct = (v) => `${Math.min(100, (v / axisMax.value) * 100)}%`;
-const number = (v, decimals) =>
-  v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+const decimals = computed(() => data.value.decimals ?? 0);
+const number = (v, places = decimals.value) =>
+  v.toLocaleString('en-US', { minimumFractionDigits: places, maximumFractionDigits: places });
+// "130 s" and "103 ms", but "130초": a unit in letters takes a space, one in Hangul does not.
+const unit = computed(() => pick(data.value.unit));
+const withUnit = (text) => `${text}${/^[a-z]/i.test(unit.value) ? ' ' : ''}${unit.value}`;
 
-const parts = computed(() => (data.value.parts ?? []).map((p) => ({ ...p, name: pick(p.name) })));
-const hasRange = computed(() => data.value.bars.some((b) => b.range));
-
-const rows = computed(() => {
-  const d = data.value;
-  const decimals = d.decimals ?? 0;
-  return d.bars.map((b) => {
-    const total = b.value ?? 0;
-    const segments = b.parts
-      ? parts.value.map((p) => ({ key: p.key, width: `${((b.parts[p.key] ?? 0) / total) * 100}%` }))
-      : [{ key: 'whole', width: '100%' }];
-    const range = b.range ? ` (${number(b.range[0], decimals)}–${number(b.range[1], decimals)})` : '';
-    return {
-      name: pick(b.name),
-      highlight: b.highlight,
-      width: b.value == null ? '0%' : pct(total),
-      segments,
-      range: b.range && { left: pct(b.range[0]), width: `calc(${pct(b.range[1])} - ${pct(b.range[0])})` },
-      label: b.value == null ? '—' : `${number(b.value, decimals)} ${d.unit}${range}`,
-      sub: pick(b.sub),
-      detail: pick(b.detail),
-    };
-  });
+const headline = computed(() => {
+  const h = data.value.headline;
+  if (!h) return null;
+  const by = (id) => data.value.bars.find((b) => b.id === id).value;
+  return fill(pick(h.text), { n: Math.round(by(h.slower) / by(h.faster)) });
 });
+
+const runs = computed(() => {
+  const d = data.value;
+  if (!d.runs) return null;
+  const ranges = d.bars.filter((b) => b.range).map((b) => withUnit(`${number(b.range[0])}${w.dash}${number(b.range[1])}`));
+  return fill(pick(d.runs), ranges);
+});
+
+const rows = computed(() =>
+  data.value.bars.map((b) => ({
+    name: pick(b.name),
+    highlight: b.highlight,
+    width: b.value == null ? '0%' : pct(b.value),
+    value: b.value == null ? '—' : withUnit(pick(b.text) ?? number(b.value)),
+    sub: pick(b.sub),
+    detail: pick(b.detail),
+  })),
+);
 
 const tickLabels = computed(() =>
   ticks.value.map((t, i) => ({
     left: pct(t),
-    text: i === ticks.value.length - 1 ? `${number(t, 0)} ${data.value.unit}` : number(t, 0),
+    text: i === ticks.value.length - 1 ? withUnit(number(t, 0)) : number(t, 0),
     edge: i === 0 ? 'first' : i === ticks.value.length - 1 ? 'last' : '',
   })),
 );
@@ -92,160 +97,130 @@ const tickLabels = computed(() =>
 
 <template>
   <figure v-if="shown" class="bb" :class="{ 'bb-placeholder': data.placeholder }">
+    <p v-if="headline" class="bb-headline">{{ headline }}</p>
     <div v-if="data.title" class="bb-title">
       {{ pick(data.title) }}
       <span v-if="data.lowerIsBetter" class="bb-hint">{{ w.faster }}</span>
     </div>
-    <ul v-if="parts.length || hasRange" class="bb-legend">
-      <li v-for="(p, i) in parts" :key="p.key">
-        <span class="bb-swatch" aria-hidden="true">
-          <span :class="['bb-seg', 'bb-ours', `bb-part-${i}`]"></span><span :class="['bb-seg', `bb-part-${i}`]"></span>
-        </span>
-        {{ p.name }}
-      </li>
-      <li v-if="hasRange"><span class="bb-key-range" aria-hidden="true"></span>{{ w.range }}</li>
-    </ul>
-    <div class="bb-grid">
-      <div v-for="r in rows" :key="r.name" class="bb-row" :class="{ 'bb-me': r.highlight }">
-        <span class="bb-name">{{ r.name }}</span>
-        <span class="bb-value">
-          <span class="bb-main">{{ r.label }}</span>
+    <div class="bb-rows">
+      <div
+        v-for="r in rows"
+        :key="r.name"
+        class="bb-row"
+        :class="{ 'bb-me': r.highlight }"
+        :tabindex="r.detail ? 0 : undefined"
+      >
+        <span class="bb-label">
+          <span class="bb-name">{{ r.name }}</span>
           <span v-if="r.sub" class="bb-sub">{{ r.sub }}</span>
-          <span v-if="r.detail" class="visually-hidden">{{ r.detail }}</span>
         </span>
-        <span class="bb-plot" :title="r.detail" aria-hidden="true">
-          <span v-for="t in tickLabels" :key="t.left" class="bb-gridline" :style="{ left: t.left }"></span>
-          <span class="bb-bar" :style="{ width: r.width }">
-            <span
-              v-for="(s, i) in r.segments"
-              :key="s.key"
-              :class="['bb-seg', `bb-part-${i}`, { 'bb-ours': r.highlight }]"
-              :style="{ width: s.width }"
-            ></span>
-          </span>
-          <span v-if="r.range" class="bb-range" :style="{ left: r.range.left, width: r.range.width }"></span>
+        <span class="bb-plot">
+          <span v-for="t in tickLabels" :key="t.left" class="bb-gridline" :style="{ left: t.left }" aria-hidden="true"></span>
+          <span class="bb-bar" :style="{ width: r.width }" aria-hidden="true"></span>
+          <span class="bb-value">{{ r.value }}</span>
+          <span v-if="r.detail" class="visually-hidden">{{ r.detail }}</span>
+          <span v-if="r.detail" class="bb-tip" aria-hidden="true">{{ r.detail }}</span>
         </span>
       </div>
       <div class="bb-row bb-axis" aria-hidden="true">
-        <span class="bb-name"></span>
-        <span class="bb-value"></span>
+        <span class="bb-label"></span>
         <span class="bb-plot">
           <span v-for="t in tickLabels" :key="t.left" class="bb-tick" :class="t.edge" :style="{ left: t.left }">{{ t.text }}</span>
         </span>
       </div>
     </div>
-    <figcaption class="bb-conditions">{{ pick(data.conditions) }}</figcaption>
+    <figcaption class="bb-caption">
+      <span v-if="runs" class="bb-runs">{{ runs }}</span>
+      <span v-if="data.conditions">{{ pick(data.conditions) }}</span>
+    </figcaption>
   </figure>
 </template>
 
 <style scoped>
-/* Two steps per row: the first part (or a whole bar) and the second part. ursula's rows wear the site accent, the
-   others a grey; every step keeps 3:1 against the page, and each pair and the two first steps stay apart for
-   colour-blind readers too (checked with an OKLab colour-difference test in light and dark). */
+/* ursula's bars wear the site accent, the others a neutral grey; both keep at least 3:1 against the page in light and
+   dark, and they stay apart for colour-blind readers too (checked with an OKLab colour-difference test). */
 .bb {
-  --bb-ours-0: #82641c;
-  --bb-ours-1: #4f3c0f;
-  --bb-other-0: #868990;
-  --bb-other-1: #46484d;
+  --bb-ours: #82641c;
+  --bb-other: #868990;
+  --bb-label-width: 15rem;
+  --bb-value-room: 5.5rem;
   margin: 24px 0;
-  padding: 20px;
+  padding: 24px;
   border: 1px solid var(--vp-c-border);
   border-radius: 12px;
 }
 .dark .bb {
-  --bb-ours-0: #dab975;
-  --bb-ours-1: #9a7a35;
-  --bb-other-0: #99968f;
-  --bb-other-1: #6a6864;
+  --bb-ours: #dab975;
+  --bb-other: #99968f;
 }
 .bb-placeholder {
   border-style: dashed;
+}
+.bb-headline {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-text-1);
 }
 .bb-title {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
   align-items: baseline;
-  margin-bottom: 12px;
   font-size: 16px;
   font-weight: 600;
   color: var(--vp-c-text-1);
+}
+.bb-headline + .bb-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
 }
 .bb-hint {
   font-size: 13px;
   font-weight: 400;
   color: var(--vp-c-text-2);
 }
-.bb-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
-  font-size: 13px;
-  color: var(--vp-c-text-2);
+.bb-rows {
+  margin-top: 16px;
 }
-.bb-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-}
-.bb-swatch {
-  display: inline-flex;
-  gap: 2px;
-}
-.bb-swatch .bb-seg {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-}
-.bb-key-range {
-  position: relative;
-  box-sizing: border-box;
-  width: 20px;
-  height: 10px;
-  border-left: 2px solid var(--vp-c-text-1);
-  border-right: 2px solid var(--vp-c-text-1);
-}
-.bb-key-range::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--vp-c-text-1);
-}
-/* One grid for every row, so the names, the plot and the values line up across rows; the rows touch, so the
-   gridlines run through. The value comes before the plot in the page so that on a phone it can sit beside the name. */
-.bb-grid {
-  display: grid;
-  grid-template-columns: max-content minmax(120px, 1fr) max-content;
-  grid-auto-flow: row dense;
-  column-gap: 16px;
-}
+/* A row is the name with its muted second line, then the plot. Every plot leaves the same room on its right for the
+   longest value, so the axis lines up across rows and a value always fits just past the end of its bar. */
 .bb-row {
-  display: contents;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--bb-label-width) minmax(0, 1fr);
+  column-gap: 16px;
+  outline: none;
+}
+.bb-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 8px 0;
 }
 .bb-name {
-  grid-column: 1;
-  align-self: center;
-  padding: 8px 0;
   font-size: 14px;
-  white-space: nowrap;
+  line-height: 1.35;
   color: var(--vp-c-text-1);
 }
 .bb-me .bb-name {
   font-weight: 700;
 }
+.bb-sub {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--vp-c-text-2);
+}
 .bb-plot {
-  grid-column: 2;
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 48px;
+  margin-right: var(--bb-value-room);
 }
 .bb-gridline {
   position: absolute;
@@ -253,77 +228,70 @@ const tickLabels = computed(() =>
   bottom: 0;
   width: 1px;
   background: var(--vp-c-divider);
+  opacity: 0.6;
 }
+/* Square at the axis, 4px round at the data end; a bar too short to see still shows 2px. */
 .bb-bar {
   position: relative;
-  display: flex;
-  gap: 2px;
-  height: 14px;
-}
-.bb-seg {
-  display: block;
+  flex: none;
   min-width: 2px;
-  height: 100%;
-  background: var(--bb-other-0);
-}
-.bb-seg.bb-part-1 {
-  background: var(--bb-other-1);
-}
-.bb-seg.bb-ours {
-  background: var(--bb-ours-0);
-}
-.bb-seg.bb-ours.bb-part-1 {
-  background: var(--bb-ours-1);
-}
-/* Square at the axis, 4px round at the data end. */
-.bb-bar .bb-seg:last-child {
+  height: 28px;
   border-radius: 0 4px 4px 0;
+  background: var(--bb-other);
 }
-.bb-placeholder .bb-bar .bb-seg {
+.bb-me .bb-bar {
+  background: var(--bb-ours);
+}
+.bb-placeholder .bb-bar {
   background: repeating-linear-gradient(45deg, var(--vp-c-default-2) 0 6px, transparent 6px 12px);
 }
-/* The fastest-to-slowest line: 2px with end ticks, ringed in the page colour where it crosses a bar. */
-.bb-range {
-  position: absolute;
-  top: 50%;
-  box-sizing: border-box;
-  height: 12px;
-  margin-top: -6px;
-  border-left: 2px solid var(--vp-c-text-1);
-  border-right: 2px solid var(--vp-c-text-1);
-}
-.bb-range::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--vp-c-text-1);
-  box-shadow: 0 0 0 1px var(--vp-c-bg);
-}
 .bb-value {
-  grid-column: 3;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 6px 0;
-  font-size: 13px;
+  position: relative;
+  flex: none;
+  margin-left: 8px;
+  font-size: 15px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-.bb-main {
-  font-weight: 600;
   color: var(--vp-c-text-1);
 }
-.bb-sub {
-  font-size: 12px;
-  color: var(--vp-c-text-2);
+/* Where the time went, shown above the bar on hover or keyboard focus. */
+.bb-tip {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: min(28rem, 100%);
+  padding: 6px 10px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 6px;
+  background: var(--vp-c-bg-elv);
+  box-shadow: var(--vp-shadow-2);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vp-c-text-1);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.bb-row:hover .bb-tip,
+.bb-row:focus-visible .bb-tip {
+  visibility: visible;
+  opacity: 1;
+}
+.bb-row:focus-visible .bb-bar {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
 }
 .bb-axis .bb-plot {
   min-height: 24px;
   align-items: flex-start;
-  border-top: 1px solid var(--vp-c-text-3);
+  border-top: 1px solid var(--vp-c-divider);
+}
+.bb-axis .bb-label {
+  padding: 0;
 }
 .bb-tick {
   position: absolute;
@@ -340,40 +308,44 @@ const tickLabels = computed(() =>
 .bb-tick.last {
   transform: translateX(-100%);
 }
-.bb-axis .bb-name,
-.bb-axis .bb-value {
-  padding: 0;
-}
-.bb-conditions {
+.bb-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 12px 0 0;
   font-size: 13px;
   line-height: 1.6;
   color: var(--vp-c-text-2);
 }
-/* On a phone the name and the value share a line and the bar runs the full width under them. */
+.bb-runs {
+  color: var(--vp-c-text-1);
+}
+/* On a phone the name and its second line sit above the bar, and the bar runs the full width under them. */
 @media (max-width: 639px) {
   .bb {
+    --bb-value-room: 4.5rem;
     padding: 16px;
   }
-  .bb-grid {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .bb-headline {
+    font-size: 22px;
   }
-  .bb-name {
-    align-self: end;
-    padding: 10px 0 2px;
-    white-space: normal;
+  .bb-row {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .bb-value {
-    grid-column: 2;
-    align-items: flex-end;
+  .bb-label {
+    display: block;
     padding: 10px 0 2px;
+  }
+  .bb-sub::before {
+    content: ' · ';
   }
   .bb-plot {
-    grid-column: 1 / -1;
-    min-height: 22px;
+    min-height: 32px;
   }
-  .bb-axis .bb-name,
-  .bb-axis .bb-value {
+  .bb-bar {
+    height: 24px;
+  }
+  .bb-axis .bb-label {
     display: none;
   }
   .bb-axis .bb-plot {
