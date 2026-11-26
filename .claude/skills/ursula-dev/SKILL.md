@@ -104,6 +104,13 @@ Treat these as the public interface and update docs (README en/ko, site en/ko) a
 4. The `test` check of the CI workflow must pass. `main` takes no direct pushes.
 5. Squash-merge; the pull request title becomes the commit on `main`, so give it the `<type>: <description>` form.
 
+## Roadmap
+
+`site/roadmap.md` and `site/ko/roadmap.md` list the open issues labelled `roadmap`, one line and a link each. GitHub issues are the source of truth; the page follows them.
+
+- New planned work: open an issue with the `roadmap` label, then add one line to Planned on both pages.
+- When a pull request ships a roadmap item: in the same pull request, move its line to "Recently shipped" with the pull request link (keep about ten there) and write `Fixes #<n>` so merging closes the issue.
+
 ## Releases
 
 Follow `RELEASING.md`: a release is a pull request `chore: release <version>` that sets the version in `package.json` and `src/version.ts` and rebuilds the bundled command. Merging it publishes to npm, tags `v<version>` and creates the GitHub release.

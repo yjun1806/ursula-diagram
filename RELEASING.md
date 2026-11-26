@@ -13,6 +13,9 @@ Every change reaches `main` through a pull request. A release is a pull request 
 
 Pushing to `main` also redeploys the documentation site.
 
+When a pull request ships an item on the roadmap (an issue labelled `roadmap`), move its line on `site/roadmap.md` and
+`site/ko/roadmap.md` to "Recently shipped" in the same pull request, and close the issue with `Fixes #<n>`.
+
 ## Releases
 
 Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a patch bump (`0.x.y`) does not.
