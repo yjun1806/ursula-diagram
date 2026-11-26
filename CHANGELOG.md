@@ -7,6 +7,8 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 
 ## Unreleased
 
+## 0.2.2 (2026-11-26)
+
 ### Changed
 
 - The json of a class diagram takes `maxWidth`, `composition` and `quality` like its svg, and the json of a requirement diagram takes `quality`, so `--check` describes the drawn layout. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)

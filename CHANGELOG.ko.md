@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+## 0.2.2 (2026-11-26)
+
 ### Changed
 
 - class diagram의 json이 svg처럼 `maxWidth`, `composition`, `quality`를 받고, requirement diagram의 json이 `quality`를 받습니다. 그래서 `--check`가 그려진 배치를 설명합니다. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
