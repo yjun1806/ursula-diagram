@@ -10,7 +10,7 @@ const t = WHY[langOf(lang.value)];
 
 <template>
   <section class="why">
-    <h2>{{ t.title }}</h2>
+    <h2 id="why" tabindex="-1">{{ t.title }} <a class="header-anchor" href="#why">&#8203;</a></h2>
     <p class="why-lead">{{ t.lead }}</p>
     <table class="why-table">
       <thead>

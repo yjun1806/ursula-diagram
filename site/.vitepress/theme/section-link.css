@@ -1,0 +1,105 @@
+/* The copy-link button beside every h2 and h3 with an id (see section-link.js). It replaces VitePress's "#":
+   a link icon in the left gutter, outside the heading's text, so the heading never reflows or wraps differently. */
+:is(h2, h3)[id] {
+  position: relative;
+}
+:is(h2, h3)[id] > a.header-anchor {
+  position: absolute;
+  top: var(--section-link-top, 0);
+  left: 0;
+  display: flex;
+  align-items: center;
+  width: 0.87em;
+  height: 1lh;
+  margin-left: -0.87em;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--vp-c-text-3);
+  text-decoration: none;
+  user-select: none;
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    opacity 0.2s;
+}
+:is(h2, h3)[id] > a.header-anchor::before {
+  content: '';
+  display: block;
+  width: 0.62em;
+  height: 0.62em;
+  background-color: currentColor;
+  -webkit-mask: var(--section-link-icon) center / contain no-repeat;
+  mask: var(--section-link-icon) center / contain no-repeat;
+}
+:is(h2, h3)[id] > a.header-anchor.copied::before {
+  --section-link-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+:root {
+  --section-link-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
+}
+:is(h2, h3)[id]:hover > a.header-anchor,
+:is(h2, h3)[id] > a.header-anchor:focus-visible,
+:is(h2, h3)[id] > a.header-anchor.copied {
+  opacity: 1;
+}
+:is(h2, h3)[id] > a.header-anchor:hover,
+:is(h2, h3)[id] > a.header-anchor:focus-visible,
+:is(h2, h3)[id] > a.header-anchor.copied {
+  color: var(--vp-c-brand-1);
+}
+:is(h2, h3)[id] > a.header-anchor:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+/* No hover on touch screens: the icon stays, faint. */
+@media (hover: none) {
+  :is(h2, h3)[id] > a.header-anchor {
+    opacity: 0.55;
+  }
+}
+
+/* Where the icon's line starts: below the rule and padding VitePress puts above a document h2. */
+.vp-doc h2[id] {
+  --section-link-top: 24px;
+}
+.examples-type .vp-doc h2[id] {
+  --section-link-top: 20px;
+}
+.home-prose h2[id],
+.vp-doc .ag-title,
+.vp-doc .tg-title {
+  --section-link-top: 0px;
+}
+
+/* "Link copied", next to the button that copied; also read out by screen readers. */
+.section-link-status {
+  position: fixed;
+  z-index: 100;
+  padding: 4px 10px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  background: var(--vp-c-bg-elv);
+  box-shadow: var(--vp-shadow-2);
+  color: var(--vp-c-text-1);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+.section-link-status.shown {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(h2, h3)[id] > a.header-anchor,
+  .section-link-status {
+    transition: none;
+  }
+}

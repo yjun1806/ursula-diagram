@@ -38,7 +38,7 @@ const ALL = [
 
 <template>
   <section class="tg">
-    <h2 class="tg-title">{{ t.types }}</h2>
+    <h2 id="types" class="tg-title" tabindex="-1">{{ t.types }} <a class="header-anchor" href="#types">&#8203;</a></h2>
     <div class="tg-grid">
       <a v-for="c in cards" :key="c.id" class="tg-card" :href="c.href">
         <span class="tg-thumb ursula-frame"><img :src="c.src" :alt="c.name" loading="lazy" /></span>

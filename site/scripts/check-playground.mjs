@@ -66,6 +66,40 @@ if (existsSync(built)) {
   if (missingKo.length) fail(`no Korean page for ${missingKo.join(', ')}`);
   else console.log('ok   every English page has a Korean page');
   if (!readFileSync(join(built, 'index.html'), 'utf8').includes('ursula-lang')) fail('the language redirect is not in the page head');
+
+  // Section links: every h2 and h3 with an id carries the anchor that section-link.js turns into a copy button,
+  // pointing at that same id, and the built script carries the button's labels.
+  const allPages = (d, rel = '') =>
+    readdirSync(join(d, rel), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? (rel === '' && e.name === 'assets' ? [] : allPages(d, join(rel, e.name))) : e.name.endsWith('.html') ? [join(rel, e.name)] : [],
+    );
+  let headings = 0;
+  const unlinked = [];
+  for (const page of allPages(built)) {
+    const html = readFileSync(join(built, page), 'utf8');
+    for (const [, , attrs, inner] of html.matchAll(/<(h[23])\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
+      const id = /\sid="([^"]*)"/.exec(attrs)?.[1];
+      if (id === undefined) continue;
+      headings++;
+      if (!inner.includes(`<a class="header-anchor" href="#${id}"`)) unlinked.push(`${page}#${id}`);
+    }
+  }
+  if (unlinked.length) fail(`${unlinked.length} of ${headings} headings have no section link: ${unlinked.slice(0, 10).join(', ')}`);
+  else console.log(`ok   section links: ${headings} of ${headings} h2/h3 headings with an id`);
+  const labelled = readdirSync(join(built, 'assets'), { recursive: true })
+    .filter((f) => f.endsWith('.js'))
+    .some((f) => {
+      const js = readFileSync(join(built, 'assets', f), 'utf8');
+      return js.includes('Copy link to this section') && js.includes('이 절의 링크 복사');
+    });
+  if (!labelled) fail('no built script carries the section link labels');
+  else console.log('ok   section link script');
+  // The button's rule must stand on its own in the built CSS; an unclosed rule above it would nest it and hide it.
+  const styled = readdirSync(join(built, 'assets'))
+    .filter((f) => f.endsWith('.css'))
+    .some((f) => /}:is\(h2,h3\)\[id\]>a\.header-anchor\{position:absolute/.test(readFileSync(join(built, 'assets', f), 'utf8')));
+  if (!styled) fail('the built CSS has no top-level rule for the section link button');
+  else console.log('ok   section link style');
 }
 
 // The Examples pages: how many official examples the engine drew. A refused example shows its error on its page

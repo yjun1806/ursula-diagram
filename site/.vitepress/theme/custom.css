@@ -517,6 +517,7 @@ h3,
 .ex-total {
   font-size: 14px;
   color: var(--vp-c-text-2);
+}
 
 /*
  * The comparison page (frontmatter pageClass: compare-page, aside: false): the content takes the width the outline
