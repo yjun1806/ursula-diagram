@@ -3,7 +3,8 @@ import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutCynefin } from './layout.ts';
 import { parseCynefin } from './parse.ts';
-import { cynefinTextLines } from './text.ts';
+import { cynefinTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 registerFrontEnd({
   name: 'cynefin',
@@ -15,7 +16,10 @@ registerFrontEnd({
     });
   },
   textLines(src, maxWidth, opts) {
-    return cynefinTextLines(parseCynefin(src, opts.heading), maxWidth);
+    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseCynefin(src, opts.heading);

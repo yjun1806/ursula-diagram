@@ -4,11 +4,14 @@ import { runCommand } from '../src/command/run.ts';
 import { renderText, renderTextSpans } from '../src/index.ts';
 
 const root = new URL('../site/examples/official/', import.meta.url).pathname;
-/** The types drawn as boxes and lines, whose terminal drawing comes from one layout. */
-const TYPES = ['flowchart', 'class', 'state', 'er', 'requirement', 'c4', 'usecase', 'architecture'];
+/** Every folder of official examples, one per type (railroad has one per grammar). */
+const TYPES = readdirSync(root, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name)
+  .sort();
 const ESC = '\u001b[';
 
-describe('terminal tones of box-and-line drawings', () => {
+describe('terminal tones', () => {
   it('give the same text as the plain drawing for every official example', () => {
     for (const type of TYPES) {
       for (const file of readdirSync(`${root}${type}`).filter((f) => f.endsWith('.mmd'))) {
@@ -24,6 +27,18 @@ describe('terminal tones of box-and-line drawings', () => {
         }
       }
     }
+  });
+
+  it('mark something in every type: each type has an official example with a tone other than normal', () => {
+    const plain = TYPES.filter((type) =>
+      readdirSync(`${root}${type}`)
+        .filter((f) => f.endsWith('.mmd'))
+        .every((file) => {
+          const toned = renderTextSpans(readFileSync(`${root}${type}/${file}`, 'utf8'), 120);
+          return 'error' in toned || toned.lines.every((l) => l.every((s) => s.tone === 'normal'));
+        }),
+    );
+    expect(plain).toEqual([]);
   });
 
   it('write node names in bold and dotted lines dim', () => {

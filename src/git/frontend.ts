@@ -4,7 +4,8 @@ import type { FrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutGit } from './layout.ts';
 import { parseGit } from './parse.ts';
-import { gitTextLines } from './text.ts';
+import { gitTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 export const gitFrontEnd: FrontEnd = {
   name: 'git',
@@ -14,7 +15,10 @@ export const gitFrontEnd: FrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return gitTextLines(parseGit(src, opts.heading, opts.config), maxWidth);
+    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth);
   },
   json(src, mode, opts) {
     const graph = parseGit(src, opts.heading, opts.config);

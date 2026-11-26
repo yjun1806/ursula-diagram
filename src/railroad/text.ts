@@ -1,5 +1,6 @@
 import { cellWidth } from '../metrics.ts';
-import { cut } from '../text/terminal.ts';
+import { cut, spansOf } from '../text/terminal.ts';
+import type { TextSpan } from '../types.ts';
 import { wrapWords } from '../text/wrap.ts';
 import type { Node, Railroad } from './model.ts';
 
@@ -50,20 +51,32 @@ export function ebnf(node: Node): string {
   }
 }
 
-/** One line per rule as `name = definition ;`; a line wider than `maxWidth` breaks at the `|` of its choice, then at spaces. */
-export function railroadTextLines(model: Railroad, maxWidth: number | undefined): string[] {
-  const head = model.title === undefined ? [] : [maxWidth === undefined ? model.title : cut(model.title, maxWidth)];
+/** A line of a rule: `prefix` written as the rule name (bold) and the rest of it dim, then `body`, its closing `;` dim. */
+function ruleLine(name: string, prefix: string, body: string, closes: boolean): TextSpan[] {
+  const named = prefix.startsWith(name) ? name : '';
+  const end = closes && body.endsWith(';') ? body.length - 1 : body.length;
+  return spansOf([named, 'bold'], [prefix.slice(named.length), 'dim'], body.slice(0, end), [body.slice(end), 'dim']);
+}
+
+/**
+ * One line per rule as `name = definition ;`; a line wider than `maxWidth` breaks at the `|` of its choice, then at
+ * spaces. The title and the rule names are bold; `=`, the `|` that starts a broken line and `;` are dim.
+ */
+export function railroadTextSpans(model: Railroad, maxWidth: number | undefined): TextSpan[][] {
+  const head = model.title === undefined ? [] : [spansOf([maxWidth === undefined ? model.title : cut(model.title, maxWidth), 'bold'])];
   const rows = model.rules.flatMap((rule) => {
     const first = `${rule.name} = `;
     const whole = `${first}${ebnf(rule.body)} ;`;
-    if (maxWidth === undefined || cellWidth(whole) <= maxWidth) return [whole];
+    if (maxWidth === undefined || cellWidth(whole) <= maxWidth) return [ruleLine(rule.name, first, `${ebnf(rule.body)} ;`, true)];
     const pieces = rule.body.k === 'choice' ? rule.body.items.map(ebnf) : [ebnf(rule.body)];
     const lead = ' '.repeat(cellWidth(rule.name));
     return pieces.flatMap((piece, i) => {
       const prefix = i === 0 ? first : `${lead} ${rule.body.k === 'choice' && rule.body.ordered === true ? '/' : '|'} `;
       const room = Math.max(1, maxWidth - cellWidth(prefix));
-      const body = i === pieces.length - 1 ? `${piece} ;` : piece;
-      return wrapWords(body, room, cellWidth, { blank: true }).map((l, j) => (j === 0 ? prefix : ' '.repeat(cellWidth(prefix))) + l);
+      const last = i === pieces.length - 1;
+      const body = last ? `${piece} ;` : piece;
+      const wrapped = wrapWords(body, room, cellWidth, { blank: true });
+      return wrapped.map((l, j) => ruleLine(rule.name, j === 0 ? prefix : ' '.repeat(cellWidth(prefix)), l, last && j === wrapped.length - 1));
     });
   });
   return [...head, ...rows];

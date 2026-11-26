@@ -6,6 +6,7 @@ import { layoutPacket } from './layout.ts';
 import { parsePacket } from './parse.ts';
 import type { PacketOptions } from './parse.ts';
 import { layoutPacketText } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 function packetOptions(opts: { heading?: string; config?: Record<string, FrontValue> }): PacketOptions {
   return { ...(opts.heading === undefined ? {} : { heading: opts.heading }), ...(opts.config === undefined ? {} : { config: opts.config }) };
@@ -19,6 +20,9 @@ registerFrontEnd({
     return renderThemedScene(scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
+    return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
     return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth);
   },
   json(src, mode, opts) {

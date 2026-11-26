@@ -5,6 +5,7 @@ import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutXychart } from './layout.ts';
 import { parseXychart } from './parse.ts';
 import { xychartTable } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 const read = (src: string, opts: object) => {
   const front = frontOf(opts);
@@ -19,6 +20,9 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
+    return xychartTable(read(src, opts), cellRuler(), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
     return xychartTable(read(src, opts), cellRuler(), maxWidth);
   },
   json(src, mode, opts) {

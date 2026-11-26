@@ -1,6 +1,6 @@
 import { cellWidth } from '../metrics.ts';
-import { renderTextLayout } from '../render/text.ts';
-import type { Layout, LayoutEdge, LayoutLane, LayoutNode } from '../types.ts';
+import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
+import type { Layout, LayoutEdge, LayoutLane, LayoutNode, TextSpan } from '../types.ts';
 import { ZONE_NAMES, ZONE_ORDER, zoneOf } from './model.ts';
 import type { EventModel, Frame } from './model.ts';
 import { routeWires, spareRows } from './wires.ts';
@@ -384,6 +384,8 @@ const NAME_ROWS = 2;
 /** A drawing that fits, and how many of its band names are cut short. */
 interface Drawing {
   lines: string[];
+  /** The same rows as `lines`, with tones. */
+  spans: () => TextSpan[][];
   cut: number;
   /** The rows of the drawing before any were opened at its rules. */
   rows: number;
@@ -419,6 +421,16 @@ const RESERVES = [0, 2, 4, 8];
  * than `WAY_BUDGET` for one way; `told` hears what it has cost so far.
  */
 export function drawEventModel(model: EventModel, maxWidth: number | undefined, told?: (spent: number) => void): string[] | undefined {
+  return bestDrawing(model, maxWidth, told)?.lines;
+}
+
+/** The rows of `drawEventModel` with tones: box names bold, band names bold. */
+export function drawEventModelSpans(model: EventModel, maxWidth: number | undefined): TextSpan[][] | undefined {
+  return bestDrawing(model, maxWidth)?.spans();
+}
+
+/** The drawing `drawEventModel` writes. */
+function bestDrawing(model: EventModel, maxWidth: number | undefined, told?: (spent: number) => void): Drawing | undefined {
   if (model.frames.length === 0) return undefined;
   const limit = maxWidth ?? Number.POSITIVE_INFINITY;
   let spent = 0;
@@ -447,9 +459,10 @@ export function drawEventModel(model: EventModel, maxWidth: number | undefined, 
     // A name that ran past the end of its rule: the rules are drawn again long enough to hold it.
     const widest = largest(first.map(cellWidth), 0);
     const reach = Math.min(widest + 2, limit);
-    const lines = widest > layout.width ? renderTextLayout({ ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) }, limit) : first;
+    const drawn = widest > layout.width ? { ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) } : layout;
+    const lines = drawn === layout ? first : renderTextLayout(drawn, limit);
     if (!lines.every((line) => cellWidth(line) <= limit) || nameOverLine(layout, lines)) return undefined;
-    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? '').includes(lane.label)).length, rows: lines.length - grid.opened };
+    return { lines, spans: () => renderTextLayoutSpans(drawn, limit), cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? '').includes(lane.label)).length, rows: lines.length - grid.opened };
   };
   // The first way that fits is drawn, unless it cuts a band name short and a later way writes every name whole in few more rows.
   const firstWhole = (ways: Array<() => Drawing | undefined>): Drawing | undefined => {
@@ -465,7 +478,7 @@ export function drawEventModel(model: EventModel, maxWidth: number | undefined, 
   };
   // Lines that do not fit drawn the tidy way, with one stem to a side of a box, are drawn again free of that.
   const one = firstWhole(VARIANTS.map((variant) => () => attempt(variant, limit, 'one', true) ?? attempt(variant, limit, 'one', false)));
-  if (one !== undefined || maxWidth === undefined || spent > BUDGET || tooLarge) return one?.lines;
+  if (one !== undefined || maxWidth === undefined || spent > BUDGET || tooLarge) return one;
   const wide = VARIANTS.filter((v) => v.step === VARIANTS[0]?.step);
   // The ways are tried from the one whose boxes and band rules take the fewest rows: the first that fits is the shortest of them, or near it.
   const ways = wide
@@ -473,5 +486,5 @@ export function drawEventModel(model: EventModel, maxWidth: number | undefined, 
     .map(({ variant, wrap, set }) => ({ variant, wrap, least: set === undefined ? Number.POSITIVE_INFINITY : leastRows(set.slots, set.bands.length) }))
     .sort((a, b) => a.least - b.least);
   const wrapped = (tidy: boolean): Drawing | undefined => firstWhole(ways.map((way) => () => attempt(way.variant, way.wrap, 'any', tidy)));
-  return (wrapped(true) ?? wrapped(false))?.lines;
+  return wrapped(true) ?? wrapped(false);
 }

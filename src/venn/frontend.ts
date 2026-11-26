@@ -4,7 +4,8 @@ import type { FrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutVenn } from './layout.ts';
 import { parseVenn } from './parse.ts';
-import { vennTextLines } from './text.ts';
+import { vennTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 export const vennFrontEnd: FrontEnd = {
   name: 'venn',
@@ -14,7 +15,10 @@ export const vennFrontEnd: FrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return vennTextLines(parseVenn(src, opts.heading), maxWidth);
+    return vennTextSpans(parseVenn(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return vennTextSpans(parseVenn(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const venn = parseVenn(src, opts.heading);

@@ -4,7 +4,8 @@ import type { FrontEnd, RenderOptions } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { colorByOf, layoutMindmap } from './layout.ts';
 import { parseMindmap } from './parse.ts';
-import { mindmapTextLines } from './text.ts';
+import { mindmapTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 function layoutOf(src: string, opts: RenderOptions, mode: 'svg' | 'text') {
   const map = parseMindmap(src);
@@ -23,7 +24,10 @@ export const mindmapFrontEnd: FrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return mindmapTextLines(parseMindmap(src), maxWidth, opts.heading);
+    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading);
   },
   json(src, mode, opts) {
     const { map, layout } = layoutOf(src, opts, mode);

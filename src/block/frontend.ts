@@ -3,7 +3,8 @@ import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutBlock } from './layout.ts';
 import { parseBlock } from './parse.ts';
-import { blockTextLines } from './text.ts';
+import { blockTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 registerFrontEnd({
   name: 'block',
@@ -14,7 +15,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return blockTextLines(parseBlock(src, opts.heading), maxWidth);
+    return blockTextSpans(parseBlock(src, opts.heading), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return blockTextSpans(parseBlock(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseBlock(src, opts.heading);

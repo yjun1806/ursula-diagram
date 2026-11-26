@@ -4,7 +4,8 @@ import { registerFrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutTreemap } from './layout.ts';
 import { parseTreemap } from './parse.ts';
-import { treemapTextLines } from './text.ts';
+import { treemapTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 const read = (src: string, opts: object) => {
   const front = frontOf(opts);
@@ -19,7 +20,10 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return treemapTextLines(read(src, opts), maxWidth);
+    return treemapTextSpans(read(src, opts), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return treemapTextSpans(read(src, opts), maxWidth);
   },
   json(src, mode, opts) {
     const treemap = read(src, opts);

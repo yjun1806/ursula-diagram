@@ -5,7 +5,8 @@ import type { FrontEnd } from '../registry.ts';
 import { renderThemedScene } from '../render/scene-svg.ts';
 import { layoutRadar } from './layout.ts';
 import { parseRadar } from './parse.ts';
-import { radarTextLines } from './text.ts';
+import { radarTextSpans } from './text.ts';
+import { joinSpans } from '../text/terminal.ts';
 
 export const radarFrontEnd: FrontEnd = {
   name: 'radar',
@@ -15,7 +16,10 @@ export const radarFrontEnd: FrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return radarTextLines(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
+    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth).map(joinSpans);
+  },
+  textSpans(src, maxWidth, opts) {
+    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
   },
   json(src, _mode, opts) {
     return layoutRadar(parseRadar(src, opts.heading, frontOf(opts).config), pixelRuler());

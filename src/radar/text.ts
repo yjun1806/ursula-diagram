@@ -1,10 +1,11 @@
 import { cellWidth } from '../metrics.ts';
-import { cut, padEnd, padStart } from '../text/terminal.ts';
+import { cut, padEnd, padStart, spansOf, trimEndSpans } from '../text/terminal.ts';
+import type { TextSpan } from '../types.ts';
 import type { Radar } from './model.ts';
 
 
-/** Values as a table: a row per axis, a column per curve. */
-export function radarTextLines(model: Radar, maxWidth: number | undefined): string[] {
+/** Values as a table: a row per axis, a column per curve. The title is bold; the curve names (the legend) and the axis names are dim. */
+export function radarTextSpans(model: Radar, maxWidth: number | undefined): TextSpan[][] {
   const cols = model.curves.map((c, k) => ({ head: c.label, cells: model.axes.map((_, i) => String(c.values[i] ?? '')), k }));
   const labels = model.axes.map((a) => a.label);
   let labelW = Math.max(0, ...labels.map(cellWidth));
@@ -22,11 +23,11 @@ export function radarTextLines(model: Radar, maxWidth: number | undefined): stri
       else colW[colW.findIndex((w) => w === widest)] = widest - 1;
     }
   }
-  const lines: string[] = [];
-  if (model.title !== undefined) lines.push(maxWidth === undefined ? model.title : cut(model.title, maxWidth));
-  if (cols.length > 0) lines.push(padEnd('', labelW) + cols.map((c, j) => `  ${padStart(cut(c.head, colW[j] ?? 0), colW[j] ?? 0)}`).join(''));
+  const lines: TextSpan[][] = [];
+  if (model.title !== undefined) lines.push(spansOf([maxWidth === undefined ? model.title : cut(model.title, maxWidth), 'bold']));
+  if (cols.length > 0) lines.push(spansOf(padEnd('', labelW), ...cols.map((c, j) => ['  ' + padStart(cut(c.head, colW[j] ?? 0), colW[j] ?? 0), 'dim'] as const)));
   labels.forEach((l, i) => {
-    lines.push(padEnd(cut(l, labelW), labelW) + cols.map((c, j) => `  ${padStart(c.cells[i] ?? '', colW[j] ?? 0)}`).join(''));
+    lines.push(spansOf([padEnd(cut(l, labelW), labelW), 'dim'], cols.map((c, j) => `  ${padStart(c.cells[i] ?? '', colW[j] ?? 0)}`).join('')));
   });
-  return lines.map((l) => l.trimEnd());
+  return lines.map(trimEndSpans);
 }

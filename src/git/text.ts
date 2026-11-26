@@ -1,9 +1,13 @@
 import { cellWidth } from '../metrics.ts';
-import { cut } from '../text/terminal.ts';
+import { cut, cutSpans, spansOf, trimEndSpans } from '../text/terminal.ts';
+import type { TextSpan } from '../types.ts';
 import { displayOrder } from './model.ts';
 import type { Commit, GitGraph } from './model.ts';
 
 const GLYPH = { NORMAL: '●', HIGHLIGHT: '◉', REVERSE: '⊗' } as const;
+
+/** Branch names in parentheses, each name bold. */
+const branchList = (names: readonly string[]): TextSpan[] => spansOf('(', ...names.flatMap((n, i) => [i === 0 ? '' : ', ', [n, 'bold'] as const]), ')');
 
 /** One cell per branch column: a glyph, plus the filler between it and the next column. */
 interface Row {
@@ -15,8 +19,9 @@ interface Row {
 /**
  * The graph as `git log --graph` draws it, oldest commit first: one row per commit, one column per branch
  * (`●` commit, `│` branch line, `╮` fork, `╯` merge), then the commit id, tag and the branches that end there.
+ * The title and the branch names are bold, the commit ids dim; tags and highlighted commits (`◉`) are an accent.
  */
-export function gitTextLines(graph: GitGraph, maxWidth: number | undefined): string[] {
+export function gitTextSpans(graph: GitGraph, maxWidth: number | undefined): TextSpan[][] {
   const order = displayOrder(graph);
   const col = new Map(order.map((n, i) => [n, i] as const));
   const cols = order.length;
@@ -81,26 +86,26 @@ export function gitTextLines(graph: GitGraph, maxWidth: number | undefined): str
     }
   }
 
-  const note = (c: Commit): string => {
-    const parts: string[] = [];
-    if (graph.config.showCommitLabel) parts.push(c.id);
-    if (c.tag !== undefined) parts.push(`[${c.tag}]`);
+  const note = (c: Commit): TextSpan[] => {
+    const parts: TextSpan[][] = [];
+    if (graph.config.showCommitLabel) parts.push(spansOf([c.id, 'dim']));
+    if (c.tag !== undefined) parts.push(spansOf([`[${c.tag}]`, 'accent']));
     const names = tips.get(c.seq);
-    if (names !== undefined) parts.push(`(${names.join(', ')})`);
-    return parts.join('  ');
+    if (names !== undefined) parts.push(branchList(names));
+    return spansOf(...parts.flatMap((p, i) => (i === 0 ? [p] : ['  ', p])));
   };
 
-  const graphCells = rows.map((row) => row.glyph.map((g, i) => `${g}${row.fill[i] ?? ''}`).join(''));
-  const graphW = Math.max(0, ...graphCells.map(cellWidth));
+  const graphCells = rows.map((row) => spansOf(...row.glyph.flatMap((g, i) => [[g, g === GLYPH.HIGHLIGHT ? 'accent' : 'normal'] as const, row.fill[i] ?? ''])));
+  const graphW = Math.max(0, ...graphCells.map((r) => cellWidth(r.map((s) => s.text).join(''))));
   const lines = graph.commits.map((c, i) => {
-    const left = (graphCells[i] ?? '').replace(/\s+$/u, '');
-    const pad = ' '.repeat(Math.max(0, graphW - cellWidth(left)));
+    const left = trimEndSpans(graphCells[i] ?? []);
+    const pad = ' '.repeat(Math.max(0, graphW - cellWidth(left.map((s) => s.text).join(''))));
     const text = note(c);
     const room = maxWidth === undefined ? undefined : Math.max(1, maxWidth - graphW - 2);
-    return `${left}${pad}  ${room === undefined ? text : cut(text, room)}`.replace(/\s+$/u, '');
+    return trimEndSpans(spansOf(left, `${pad}  `, room === undefined ? text : cutSpans(text, room)));
   });
-  const head = graph.title === undefined ? [] : [maxWidth === undefined ? graph.title : cut(graph.title, maxWidth)];
+  const head = graph.title === undefined ? [] : [spansOf([maxWidth === undefined ? graph.title : cut(graph.title, maxWidth), 'bold'])];
   const strays = order.filter((n) => !graph.commits.some((c) => c.branch === n) && !(tips.get(graph.branches.find((b) => b.name === n)?.parent ?? -1) ?? []).includes(n));
-  const tail = graph.config.showBranches && strays.length > 0 ? [`(${strays.join(', ')})`] : [];
+  const tail = graph.config.showBranches && strays.length > 0 ? [branchList(strays)] : [];
   return [...head, ...lines, ...tail];
 }
