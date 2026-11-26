@@ -1,24 +1,11 @@
 import { cellWidth } from '../metrics.ts';
 import type { Layout, LayoutEdge, LayoutNode } from '../types.ts';
 import { cornersOf } from '../text/corners.ts';
+import { E, lineCell, N, RUNS, S, towardBox, traceCells, W } from '../text/lines.ts';
 import { cellsOf, labelsMissing, roomViolations } from './text-read.ts';
 
-const N = 1;
-const E = 2;
-const S = 4;
-const W = 8;
 const LEVEL = E | W;
 const UPRIGHT = N | S;
-
-/** The ways the line glyph of a cell runs on. */
-const RUNS: Record<string, number> = {
-  '─': E | W, '━': E | W, '┄': E | W,
-  '│': N | S, '┃': N | S, '┆': N | S,
-  '┌': S | E, '┐': S | W, '└': N | E, '┘': N | W,
-  '┏': S | E, '┓': S | W, '┗': N | E, '┛': N | W,
-  '├': N | S | E, '┤': N | S | W, '┬': E | W | S, '┴': E | W | N, '┼': N | E | S | W,
-  '┣': N | S | E, '┫': N | S | W, '┳': E | W | S, '┻': E | W | N, '╋': N | E | S | W,
-};
 
 /** Arrowheads. */
 const HEADS: ReadonlySet<string> = new Set(['▶', '◀', '▼', '▲', '▷', '◁', '▽', '△']);
@@ -76,18 +63,7 @@ export const BREAK_KINDS: ReadonlyArray<keyof Breaks> = ['brokenLines', 'brokenB
 
 /** The cells of a line and the ways it runs on in each, as the drawing draws it; undefined for a line with a slanted stretch. */
 function runsOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>): { cells: Array<[number, number]>; bits: Map<string, number> } | undefined {
-  const cellAt = (index: number): [number, number] => {
-    const p = edge.points[index] ?? { x: 0, y: 0 };
-    let x = Math.floor(p.x + 1e-9);
-    let y = Math.floor(p.y + 1e-9);
-    const node = index === 0 ? nodes.get(edge.from) : index === edge.points.length - 1 ? nodes.get(edge.to) : undefined;
-    if (node !== undefined) {
-      if (Math.abs(p.x - node.x) < 1e-9) x -= 1;
-      if (Math.abs(p.y - node.y) < 1e-9) y -= 1;
-    }
-    return [x, y];
-  };
-  const corners = edge.points.map((_, i) => cellAt(i));
+  const corners = edge.points.map((_, i) => lineCell(edge, nodes, i));
   const bits = new Map<string, number>();
   const cells: Array<[number, number]> = [];
   const add = (x: number, y: number, bit: number): void => {
@@ -98,30 +74,12 @@ function runsOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>): { cells: Arra
   const first = corners[0];
   if (first === undefined) return undefined;
   add(first[0], first[1], 0);
-  for (let i = 0; i + 1 < corners.length; i++) {
-    const [x1, y1] = corners[i] as [number, number];
-    const [x2, y2] = corners[i + 1] as [number, number];
-    const dx = Math.sign(x2 - x1);
-    const dy = Math.sign(y2 - y1);
-    if (dx !== 0 && dy !== 0) return undefined;
-    if (dx === 0 && dy === 0) continue;
-    const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
-    const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
-    for (let x = x1, y = y1; x !== x2 || y !== y2; ) {
-      add(x, y, out);
-      x += dx;
-      y += dy;
-      add(x, y, back);
-    }
-  }
+  if (!traceCells(corners, add, 'stop')) return undefined;
   // The end on a box reaches toward the box.
   const toward = (index: number, id: string): void => {
-    const n = nodes.get(id);
-    const p = edge.points[index];
     const cell = corners[index];
-    if (n === undefined || p === undefined || cell === undefined) return;
-    const bit = Math.abs(p.x - n.x) < 1e-9 ? E : Math.abs(p.x - n.x - n.w) < 1e-9 ? W : Math.abs(p.y - n.y) < 1e-9 ? S : Math.abs(p.y - n.y - n.h) < 1e-9 ? N : 0;
-    if (bit !== 0) add(cell[0], cell[1], bit);
+    const bit = towardBox(edge, nodes, index, id);
+    if (cell !== undefined && bit !== 0) add(cell[0], cell[1], bit);
   };
   toward(0, edge.from);
   toward(edge.points.length - 1, edge.to);

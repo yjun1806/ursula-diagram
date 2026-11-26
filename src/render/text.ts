@@ -2,25 +2,15 @@ import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { placeLaneName } from '../layout/lane-names.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
 import { cornersOf } from '../text/corners.ts';
+import { E, HEAVY, lineCell, N, S, towardBox, traceCells, W } from '../text/lines.ts';
 import { RELATION_MARKS } from '../edge-ends.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutLane, LayoutNode, TextSpan, TextTone } from '../types.ts';
-
-const N = 1;
-const E = 2;
-const S = 4;
-const W = 8;
 
 const LIGHT: Record<number, string> = {
   [E | W]: '─', [E]: '─', [W]: '─',
   [N | S]: '│', [N]: '│', [S]: '│',
   [S | E]: '┌', [S | W]: '┐', [N | E]: '└', [N | W]: '┘',
   [N | S | E]: '├', [N | S | W]: '┤', [E | W | S]: '┬', [E | W | N]: '┴', [N | E | S | W]: '┼',
-};
-const HEAVY: Record<number, string> = {
-  [E | W]: '━', [E]: '━', [W]: '━',
-  [N | S]: '┃', [N]: '┃', [S]: '┃',
-  [S | E]: '┏', [S | W]: '┓', [N | E]: '┗', [N | W]: '┛',
-  [N | S | E]: '┣', [N | S | W]: '┫', [E | W | S]: '┳', [E | W | N]: '┻', [N | E | S | W]: '╋',
 };
 
 const PRIORITY: Record<EdgeStyle, number> = { dotted: 0, normal: 1, thick: 2 };
@@ -175,21 +165,6 @@ interface Cell {
   arrow?: string;
 }
 
-function cellOf(edge: LayoutEdge, nodes: Map<string, LayoutNode>, index: number): [number, number] {
-  const p = edge.points[index];
-  if (!p) return [0, 0];
-  let x = Math.floor(p.x + 1e-9);
-  let y = Math.floor(p.y + 1e-9);
-  const isEnd = index === 0 || index === edge.points.length - 1;
-  const node = nodes.get(index === 0 ? edge.from : edge.to);
-  if (isEnd && node) {
-    // A port on a left or top border is drawn in the cell just outside that border.
-    if (Math.abs(p.x - node.x) < 1e-9) x -= 1;
-    if (Math.abs(p.y - node.y) < 1e-9) y -= 1;
-  }
-  return [x, y];
-}
-
 function arrowFor(edge: LayoutEdge): string {
   const a = edge.points[edge.points.length - 2];
   const b = edge.points[edge.points.length - 1];
@@ -269,34 +244,15 @@ function drawEdges(c: Canvas, layout: Layout): void {
   };
   for (const edge of layout.edges) {
     if (edge.invisible) continue;
-    const pts = edge.points.map((_, i) => cellOf(edge, nodes, i));
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const [x1, y1] = pts[i] ?? [0, 0];
-      const [x2, y2] = pts[i + 1] ?? [0, 0];
-      const dx = Math.sign(x2 - x1);
-      const dy = Math.sign(y2 - y1);
-      if (dx === 0 && dy === 0) continue;
-      const out = dx > 0 ? E : dx < 0 ? W : dy > 0 ? S : N;
-      const back = dx > 0 ? W : dx < 0 ? E : dy > 0 ? N : S;
-      let x = x1;
-      let y = y1;
-      while (x !== x2 || y !== y2) {
-        touch(x, y, out, edge.style);
-        x += dx;
-        y += dy;
-        touch(x, y, back, edge.style);
-      }
-    }
+    const pts = edge.points.map((_, i) => lineCell(edge, nodes, i));
+    traceCells(pts, (x, y, bit) => touch(x, y, bit, edge.style), 'walk');
     // The end that sits on a box also reaches toward that box, so a line that turns at once draws a corner.
     const first = pts[0];
     const last = pts[pts.length - 1];
     const toward = (index: number, id: string): void => {
-      const n = nodes.get(id);
-      const p = edge.points[index];
       const cell = index === 0 ? first : last;
-      if (!n || !p || !cell) return;
-      const bit = Math.abs(p.x - n.x) < 1e-9 ? E : Math.abs(p.x - n.x - n.w) < 1e-9 ? W : Math.abs(p.y - n.y) < 1e-9 ? S : Math.abs(p.y - n.y - n.h) < 1e-9 ? N : 0;
-      if (bit !== 0) touch(cell[0], cell[1], bit, edge.style);
+      const bit = towardBox(edge, nodes, index, id);
+      if (cell && bit !== 0) touch(cell[0], cell[1], bit, edge.style);
     };
     toward(0, edge.from);
     toward(edge.points.length - 1, edge.to);
