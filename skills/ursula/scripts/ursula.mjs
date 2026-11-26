@@ -31316,6 +31316,20 @@ function centreAt(c, x) {
   return c.y0 * (u * u * u + 3 * u * u * t) + c.y1 * (3 * u * t * t + t * t * t);
 }
 function crossingWeight(lines) {
+  const xs = [...new Set(lines.flatMap((c) => [c.x0, c.x1]))];
+  const slot = new Map(xs.map((x, k) => [x, k]));
+  const start = lines.map((c) => slot.get(c.x0));
+  const end = lines.map((c) => slot.get(c.x1));
+  const centres = new Float64Array(lines.length * xs.length).fill(Number.NaN);
+  const centre = (i, k) => {
+    const at = i * xs.length + k;
+    const known = centres[at];
+    if (!Number.isNaN(known))
+      return known;
+    const y = centreAt(lines[i], xs[k]);
+    centres[at] = y;
+    return y;
+  };
   let total = 0;
   for (let a = 0;a < lines.length; a++) {
     const p = lines[a];
@@ -31325,8 +31339,10 @@ function crossingWeight(lines) {
       const hi = Math.min(p.x1, q.x1);
       if (hi - lo < 0.000001)
         continue;
-      const before = centreAt(p, lo) - centreAt(q, lo);
-      const after = centreAt(p, hi) - centreAt(q, hi);
+      const kLo = p.x0 >= q.x0 ? start[a] : start[b];
+      const kHi = p.x1 <= q.x1 ? end[a] : end[b];
+      const before = centre(a, kLo) - centre(b, kLo);
+      const after = centre(a, kHi) - centre(b, kHi);
       if (before * after < -0.000000001)
         total += Math.min(p.weight, q.weight);
     }
