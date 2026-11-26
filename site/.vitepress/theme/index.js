@@ -16,6 +16,7 @@ import ExampleTypes from './examples/ExampleTypes.vue';
 import ExampleView from './examples/ExampleView.vue';
 import ColourTable from './colours/ColourTable.vue';
 import ZoomLayer from './zoom/ZoomLayer.vue';
+import ArtifactDemo from './use-cases/ArtifactDemo.vue';
 import { watchLanguageChoice } from './language-choice.js';
 import { watchSectionLinks } from './section-link.js';
 import './theme.css';
@@ -44,6 +45,7 @@ export default {
     app.component('ExampleTypes', ExampleTypes);
     app.component('ExampleView', ExampleView);
     app.component('ColourTable', ColourTable);
+    app.component('ArtifactDemo', ArtifactDemo);
     if (inBrowser) {
       watchLanguageChoice(siteData.value.base);
       watchSectionLinks();
