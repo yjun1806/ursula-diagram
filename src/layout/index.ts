@@ -281,7 +281,6 @@ function layoutMirrored(graph: Graph, how: 'RL' | 'BT', ruler: Ruler, opts: Layo
  * with the pixel ruler (the given ruler when it is one), so every medium shows the same arrangement.
  */
 export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): Layout {
-  const out = (drawn: Drawn): Layout => (opts.room === false ? drawn.closed : drawn.opened());
   const picked = layoutPicked(graph, given, opts);
   // A caller that names whether lines share ports compares drawings made each way: it gets the one it names.
   if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined) return picked;
@@ -289,15 +288,19 @@ export function layout(graph: Graph, given: Ruler, opts: LayoutOptions = {}): La
   // as one. The drawing is made again with a blank cell between ports and between tracks, and kept when it has fewer
   // of them, fits the width, crosses no more lines and breaks nothing more (see `breaksOf`). It may be wider and longer.
   // When it does not, every box is made a cell wider on either side too, for a label that lost its room to a port.
+  // A spaced drawing is never narrower, so a drawing already too wide is not spaced, and boxes are not widened when
+  // spaced ports alone are too wide. A caller that fits the width draws again narrower: that drawing is spaced.
   const labels = labelsOf(graph);
   const limit = opts.maxWidth ?? given.defaultWidth;
+  const fits = (l: Layout): boolean => limit === undefined || !Number.isFinite(limit) || (l.width <= limit && textCost(l).width <= limit);
+  if (!fits(picked)) return picked;
   const crowded = adjacentOf(breaksIn(picked, labels, limit));
   if (crowded === 0) return picked;
   for (const how of ['ports', 'wide'] as const) {
     // Drawn once, with no other way of drawing it to choose from: the choice is the one against the drawing it replaces.
-    const spaced = out(layoutShared(graph, { ...given, spaced: how }, opts));
-    const fits = limit === undefined || !Number.isFinite(limit) || Math.max(spaced.width, textCost(spaced).width) <= limit;
-    if (fits && adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit)) return spaced;
+    const spaced = layoutShared(graph, { ...given, spaced: how }, opts).opened();
+    if (!fits(spaced)) return picked;
+    if (adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit)) return spaced;
   }
   return picked;
 }
@@ -312,7 +315,7 @@ function layoutPicked(graph: Graph, given: Ruler, opts: LayoutOptions): Layout {
   const ranks = plain || opts.ranked === false ? undefined : layoutRanks(graph, given, limit);
   const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
   if (ranked !== undefined && opts.ranked === true) return ranked;
-  const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
+  const labels = labelsOf(graph);
   // Every drawing made otherwise is held against the usual drawing, arranged once for both: it crosses no more lines, and breaks no line, box or label the usual drawing keeps whole.
   const usual = out(layoutShared(graph, given, { ...opts, bare: true }));
   const tidied = out(layoutShared(graph, given, opts));
@@ -457,7 +460,7 @@ function layoutOnce(graph: Graph, given: Ruler, opts: LayoutOptions, turned?: Gr
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l: Layout): boolean => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
   // A step that tidies a drawing up is not taken where it breaks a line, a box or a label the drawing kept whole.
-  const labels = graph.edges.flatMap((e) => (e.label === undefined || e.label === '' ? [] : [e.label]));
+  const labels = labelsOf(graph);
   const intact = (after: Layout, before: Layout): boolean => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
   // Spare rows are taken out all at once where that breaks nothing, and one by one otherwise.
   const spare = (l: Layout): Layout => {
