@@ -13,6 +13,7 @@ import { CARDS } from '../.vitepress/theme/home/agents.js';
 import { INSTALL } from '../.vitepress/theme/home/install.js';
 import { colourRows } from '../.vitepress/theme/colours/colours.mjs';
 import { checkCommands, documents } from '../../scripts/docs/commands.mjs';
+import { listedIssues, openRoadmapIssues } from './roadmap.mjs';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -337,6 +338,22 @@ for (const doc of documents()) {
 }
 if (refused.length || termRefused.length) fail(`the docs claim every example draws, but ${refused.length} SVG and ${termRefused.length} terminal drawings failed`);
 console.log(`ok   ${claims} claims of the number of examples in the docs say ${items.length}`);
+
+// The roadmap pages list the same issues, and those are the open issues labelled `roadmap`. The second half needs
+// GitHub; without it the check says it skipped, and the rule in RELEASING.md (move a shipped line in the same pull
+// request) is what keeps the pages right.
+const [listedEn, listedKo] = ['roadmap.md', 'ko/roadmap.md'].map((p) => listedIssues(readFileSync(join(site, p), 'utf8')));
+const sorted = (set) => [...set].sort((a, b) => a - b).map((n) => `#${n}`).join(' ');
+if (sorted(listedEn) !== sorted(listedKo)) fail(`roadmap.md lists ${sorted(listedEn)} but ko/roadmap.md lists ${sorted(listedKo)}`);
+const roadmap = await openRoadmapIssues();
+if (roadmap.skipped) console.log(`skip the roadmap against GitHub: ${roadmap.skipped}`);
+else {
+  const closed = [...listedEn].filter((n) => !roadmap.open.has(n));
+  const missing = [...roadmap.open].filter((n) => !listedEn.has(n));
+  if (closed.length) fail(`the roadmap pages list ${sorted(closed)} under Planned or In progress, but GitHub has no open roadmap issue with that number: move the line to Recently shipped or remove it`);
+  if (missing.length) fail(`the open roadmap issues ${sorted(missing)} are not on the roadmap pages: add a line to Planned`);
+  if (!closed.length && !missing.length) console.log(`ok   the roadmap pages list the ${roadmap.open.size} open roadmap issues`);
+}
 
 if (failed) process.exit(1);
 console.log('all playground checks passed');

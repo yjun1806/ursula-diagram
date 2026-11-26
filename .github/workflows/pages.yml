@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
   pages: write
   id-token: write
 
@@ -34,6 +35,9 @@ jobs:
         working-directory: site
       - name: The playground draws every example with the built engine
         run: npm run check
+        env:
+          # Lets the check compare the roadmap pages with the open roadmap issues without the anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
         working-directory: site
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
