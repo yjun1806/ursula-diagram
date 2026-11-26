@@ -30,14 +30,7 @@ export const HOME_STRINGS = {
       'A skill that has the model lay out each drawing makes more designed pictures: a title, zones, a legend, a highlight it chose. ursula\'s are plainer, but complete, clean and the same every time, and they took 11–17 s instead of 65–174 s.',
     measureShown:
       'The same three texts drawn by each skill, the first of two runs, unedited; click a picture to enlarge it. Under each picture: the mean time and total tokens of the two runs, then what we checked in it.',
-    measureLead:
-      'Measured in Claude Code with claude-opus-5-5: the same prompt, a fresh session for each run, 3 public Mermaid texts, 2 runs each.',
-    measureRows: ['ursula skill', 'A skill that has the model lay out the drawing'],
-    tokens: 'total tokens',
-    split: { model: 'model turns', command: ['ursula command', 'its own scripts'], other: 'other commands' },
     exitCode: 'exit code',
-    measureNote:
-      'The engine itself draws in about 0.1–0.4 s per call; the rest is the model reading the skill, writing the Mermaid text and answering. The model wrote 0.6k–1.3k tokens with ursula against 6.7k–18.8k when it wrote the drawing itself, and writing tokens takes time. The ursula command took longer inside the session than alone, most likely because it was the session\'s first command, which took 1.2–5.5 s whatever it ran. For each text, the two ursula runs gave byte-identical SVGs.',
     measureMore: 'How ursula compares with other tools',
     types: 'Every type, drawn by the same engine',
     typesLead: 'The type is read from the first line of the text, as Mermaid does. All 35:',
@@ -72,14 +65,7 @@ export const HOME_STRINGS = {
       '모델이 그림마다 배치를 정하는 스킬은 더 공들인 그림을 냅니다. 제목, 구역, 범례를 넣고 강조할 곳도 스스로 고릅니다. ursula의 그림은 그보다 수수하지만 빠진 것 없이 깔끔하고 매번 같으며, 65~174초가 아니라 11~17초에 나옵니다.',
     measureShown:
       '같은 글 세 개를 두 스킬로 그린 그림입니다. 두 번 그린 것 가운데 첫 판이고, 손대지 않았습니다. 그림을 누르면 크게 보입니다. 그림 아래에는 두 판의 평균 시간과 전체 토큰, 그리고 그림에서 확인한 것을 적었습니다.',
-    measureLead:
-      'Claude Code에서 claude-opus-5-5로 쟀습니다. 같은 지시문으로, 실행할 때마다 새 세션을 열어 공개 Mermaid 글 3개를 두 번씩 그렸습니다.',
-    measureRows: ['ursula 스킬', '모델이 배치를 정하는 스킬'],
-    tokens: '전체 토큰',
-    split: { model: '모델 턴', command: ['ursula 명령', '자체 스크립트'], other: '다른 명령' },
     exitCode: '종료 코드',
-    measureNote:
-      '엔진이 그리는 시간은 한 번에 0.1~0.4초쯤입니다. 나머지는 모델이 스킬을 읽고, Mermaid 글을 쓰고, 답하는 시간입니다. 모델이 쓴 토큰은 ursula와 함께일 때 0.6k~1.3k, 그림을 직접 쓸 때 6.7k~18.8k였고, 토큰을 쓰는 데에도 시간이 듭니다. 세션 안의 ursula 명령이 따로 돌릴 때보다 오래 걸린 것은 세션의 첫 명령이어서라고 봅니다. 첫 명령은 무엇을 실행하든 1.2~5.5초가 걸렸습니다. ursula 스킬로 두 번 그린 SVG는 글마다 바이트 단위까지 같았습니다.',
     measureMore: '다른 도구와 비교',
     types: '모든 유형을 같은 엔진으로',
     typesLead: 'Mermaid처럼 글의 첫 줄을 보고 유형을 정합니다. 35가지 전부:',

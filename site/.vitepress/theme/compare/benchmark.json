@@ -1,5 +1,84 @@
 {
   "charts": {
+    "skillMean": {
+      "conditions": {
+        "en": "Mean of 6 runs per skill (3 public Mermaid texts, 2 runs each) in Claude Code with claude-opus-5-5, a fresh session per run. The engine itself draws in 0.1–0.4 s; the rest is the model.",
+        "ko": "Claude Code에서 claude-opus-5-5로 공개 Mermaid 글 3개를 두 번씩, 매번 새 세션에서 그린 6번의 평균입니다. 엔진이 그리는 시간은 0.1~0.4초이고 나머지는 모델의 시간입니다."
+      },
+      "unit": "s",
+      "decimals": 0,
+      "ticks": [
+        0,
+        60,
+        120,
+        180
+      ],
+      "parts": [
+        {
+          "key": "model",
+          "name": {
+            "en": "model turns",
+            "ko": "모델 턴"
+          }
+        },
+        {
+          "key": "commands",
+          "name": {
+            "en": "commands",
+            "ko": "명령"
+          }
+        }
+      ],
+      "bars": [
+        {
+          "name": {
+            "en": "ursula skill",
+            "ko": "ursula 스킬"
+          },
+          "value": 13.9,
+          "range": [
+            11,
+            17
+          ],
+          "highlight": true,
+          "parts": {
+            "model": 9.87,
+            "commands": 4.03
+          },
+          "sub": {
+            "en": "36k–40k total tokens",
+            "ko": "전체 토큰 36k~40k"
+          },
+          "detail": {
+            "en": "model turns 9.9 s, ursula command 4.0 s, other commands 0.03 s",
+            "ko": "모델 턴 9.9초, ursula 명령 4.0초, 다른 명령 0.03초"
+          }
+        },
+        {
+          "name": {
+            "en": "A skill that has the model lay out the drawing",
+            "ko": "모델이 배치를 정하는 스킬"
+          },
+          "value": 129.8,
+          "range": [
+            65,
+            174
+          ],
+          "parts": {
+            "model": 126.74,
+            "commands": 3.07
+          },
+          "sub": {
+            "en": "330k–672k total tokens",
+            "ko": "전체 토큰 330k~672k"
+          },
+          "detail": {
+            "en": "model turns 126.7 s, its own scripts 0.9 s, other commands 2.2 s",
+            "ko": "모델 턴 126.7초, 자체 스크립트 0.9초, 다른 명령 2.2초"
+          }
+        }
+      ]
+    },
     "skill": {
       "title": {
         "en": "Seconds per drawing, from the request to the saved file",
@@ -17,7 +96,11 @@
             "en": "Flowchart · diagram-design",
             "ko": "flowchart · diagram-design"
           },
-          "value": 71
+          "value": 71,
+          "range": [
+            65,
+            78
+          ]
         },
         {
           "name": {
@@ -25,14 +108,22 @@
             "ko": "flowchart · ursula"
           },
           "value": 11,
-          "highlight": true
+          "highlight": true,
+          "range": [
+            11,
+            12
+          ]
         },
         {
           "name": {
             "en": "C4 · diagram-design",
             "ko": "C4 · diagram-design"
           },
-          "value": 164
+          "value": 164,
+          "range": [
+            154,
+            174
+          ]
         },
         {
           "name": {
@@ -40,14 +131,22 @@
             "ko": "C4 · ursula"
           },
           "value": 17,
-          "highlight": true
+          "highlight": true,
+          "range": [
+            16,
+            17
+          ]
         },
         {
           "name": {
             "en": "Sequence · diagram-design",
             "ko": "sequence · diagram-design"
           },
-          "value": 152
+          "value": 152,
+          "range": [
+            144,
+            161
+          ]
         },
         {
           "name": {
@@ -55,10 +154,20 @@
             "ko": "sequence · ursula"
           },
           "value": 13,
-          "highlight": true
+          "highlight": true,
+          "range": [
+            13,
+            14
+          ]
         }
       ],
-      "decimals": 0
+      "decimals": 0,
+      "ticks": [
+        0,
+        60,
+        120,
+        180
+      ]
     },
     "speed": {
       "title": {
