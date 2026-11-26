@@ -7,8 +7,8 @@ pageClass: examples-index
 # Examples
 
 Every picture on these pages is the output of `ursula-diagram <file> --format svg`, unedited. This page shows
-all 531 examples of the Mermaid documentation as small pictures, grouped by type. Click a picture to enlarge it. Click
-its name to see it beside its Mermaid text on the [page of its type](#types).
+all 531 examples of the Mermaid documentation as small pictures, grouped by type. <WebOnly>Click a picture to enlarge it. </WebOnly><WebOnly agent="The Mermaid text of each is">Click
+its name to see it beside its Mermaid text</WebOnly> on the [page of its type](#types).
 
 ## At a glance
 

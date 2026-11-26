@@ -26,6 +26,7 @@ const files = (rel = '') =>
   );
 const all = files();
 const isStatic = (file) => existsSync(join(site, 'public', file));
+const WEB_ONLY = ['click a picture', 'enlarge', 'in its own tab', 'buttons above'];
 const isRedirect = (html) => /<meta[^>]*http-equiv="refresh"/i.test(html);
 
 // The English pages: every built HTML page outside ko/ but 404.html, the files copied from public/ and the redirects.
@@ -51,6 +52,8 @@ if (missing.length) fail(`llms.txt lacks ${missing.length} English pages: ${miss
 const twice = twins.filter((t, i) => twins.indexOf(t) !== i);
 if (twice.length) fail(`llms.txt lists ${twice.join(', ')} more than once`);
 const korean = [llms, readFileSync(fullFile, 'utf8')].flatMap((text) => [...text.matchAll(new RegExp(`${SITE_URL}ko(/[^)\\s]*)?`, 'g'))].map((m) => m[0]));
+const fullWeb = WEB_ONLY.filter((words) => readFileSync(fullFile, 'utf8').toLowerCase().includes(words));
+if (fullWeb.length) fail(`llms-full.txt has web-only words: ${fullWeb.join(', ')}`);
 if (korean.length) fail(`llms.txt or llms-full.txt links to Korean pages: ${[...new Set(korean)].slice(0, 5).join(', ')}`);
 const koTwins = all.filter((f) => f.startsWith('ko/') && f.endsWith('.md'));
 if (koTwins.length) fail(`the build has Korean Markdown twins: ${koTwins.slice(0, 5).join(', ')}`);
@@ -75,6 +78,9 @@ for (const twin of twins) {
   const fence = /^\s*```(ursula-output|ursula-input|examples-glance)\b.*$/m.exec(text);
   if (fence) problems.push(`build-time fence ${fence[0].trim()}`);
   if (/^:::/m.test(prose)) problems.push('a ::: container');
+  // Words that only make sense on the web page; mark them with <WebOnly> (theme/web-only/WebOnly.vue).
+  const web = WEB_ONLY.find((words) => text.toLowerCase().includes(words));
+  if (web) problems.push(`web-only words "${web}"`);
   if (problems.length) fail(`${twin}: ${problems.join('; ')}`);
   else readable++;
 }

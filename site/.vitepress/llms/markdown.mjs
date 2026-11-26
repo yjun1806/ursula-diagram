@@ -49,7 +49,8 @@ const absoluteLinks = (line, url) => line.replace(/\]\((\/[^)\s]*)\)/g, (_, href
  * the page in a failed drawing's error.
  */
 export function agentMarkdown(body, { url, where }) {
-  const lines = body.split('\n');
+  // <WebOnly> words (theme/web-only/WebOnly.vue) are for the web page: drop them, or write their `agent` text.
+  const lines = body.replace(/<WebOnly(?:\s+agent="([^"]*)")?\s*>([\s\S]*?)<\/WebOnly>/g, (_, agent) => agent ?? '').split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
