@@ -10,6 +10,7 @@
 
 - 에이전트 스킬이 `node …/scripts/ursula.mjs` 명령을 셸 변수에 담지 말고 매번 전부 적으라고 알립니다. zsh는 변수를 단어로 나누지 않아 첫 그림이 실패하던 일이 없어집니다. [#84](https://github.com/yjun1806/ursula-diagram/pull/84)
 - 다이어그램 글의 단어가 라틴 문자보다 한글로 더 많이 쓰였으면 범례가 Flow, Pending, Call, Reply 대신 한국어(흐름, 요청, 대기, 호출, 응답, 비동기, 실패)로 적힙니다. `legend` 옵션으로 준 이름은 그대로 우선합니다. [#85](https://github.com/yjun1806/ursula-diagram/pull/85)
+- 그림을 고른 뒤 상자의 빈 면으로 다시 그리는 선이 지나가는 상자와 6px이 아니라 24px 떨어집니다. 상태 전이 선이 상관없는 상태 상자 옆을 바짝 붙어 지나가지 않고, 라벨이 선이 지나가는 상자에 붙어 서지 않습니다. [#86](https://github.com/yjun1806/ursula-diagram/pull/86)
 
 ## 0.2.3 (2026-11-26)
 
