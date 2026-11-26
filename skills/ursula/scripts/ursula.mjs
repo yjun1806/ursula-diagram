@@ -6581,6 +6581,21 @@ function mirroredEdges(l, cost) {
   }
   return dropped;
 }
+function joiningEdges(l) {
+  const byId = new Map(l.nodes.map((n) => [n.id, n]));
+  const order = new Map(l.nodes.map((n, i) => [n.id, i]));
+  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const out = new Set;
+  l.edges.forEach((e, i) => {
+    if (e.end === "none" || fed.has(e.from))
+      return;
+    const goesOn = l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane);
+    const joined = l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
+    if (goesOn && joined)
+      out.add(i);
+  });
+  return out;
+}
 function score(l) {
   const known = scores.get(l);
   if (known !== undefined)
@@ -6601,10 +6616,8 @@ function scoreOnce(l) {
   const against = [];
   const bendCost = (e) => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
   const mirrored = mirroredEdges(l, bendCost);
-  const order = new Map(l.nodes.map((n, i) => [n.id, i]));
-  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const joins = joiningEdges(l);
   let joining = 0;
-  const joins = (e) => e.end !== "none" && !fed.has(e.from) && l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane) && l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
   for (const [i, e] of l.edges.entries()) {
     if (!mirrored.has(i))
       bends += bendCost(e);
@@ -6615,7 +6628,7 @@ function scoreOnce(l) {
     const upward = l.composition !== "stages" && l.direction !== "TD" && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8)
       against.push([e.from, e.to]);
-    if (upward && !joins(e))
+    if (upward && !joins.has(i))
       folded++;
     else if (upward)
       joining++;

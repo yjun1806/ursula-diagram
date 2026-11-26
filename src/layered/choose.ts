@@ -343,6 +343,25 @@ export function mirroredEdges(l: Pick<Layout, 'nodes' | 'edges' | 'direction'>, 
 }
 
 /** Quality of a finished drawing, from its coordinates: [invalid things, cost, edge length]; smaller is better, compared left to right. */
+/**
+ * Arrows that may run up into a row above without folding a flow: from a node that no line leads into and that goes
+ * on along a flow of its own in its lane, to a node that also takes a line from a node written before it. A flow
+ * written later joins one written earlier from below. Indices into `l.edges`.
+ */
+export function joiningEdges(l: Pick<Layout, 'nodes' | 'edges'>): Set<number> {
+  const byId = new Map(l.nodes.map((n) => [n.id, n] as const));
+  const order = new Map(l.nodes.map((n, i) => [n.id, i] as const));
+  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const out = new Set<number>();
+  l.edges.forEach((e, i) => {
+    if (e.end === 'none' || fed.has(e.from)) return;
+    const goesOn = l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane);
+    const joined = l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
+    if (goesOn && joined) out.add(i);
+  });
+  return out;
+}
+
 export function score(l: Layout): number[] {
   // One drawing is measured many times while candidates are compared and changes are tried.
   const known = scores.get(l);
@@ -365,18 +384,8 @@ function scoreOnce(l: Layout): number[] {
   const against: Array<[string, string]> = [];
   const bendCost = (e: LayoutEdge): number => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
   const mirrored = mirroredEdges(l, bendCost);
-  // An arrow up from a node that no line leads into and that starts a flow of its own, to a node that also takes a line
-  // from a node written before it, does not fold a flow: a flow written later joins one written earlier from below.
-  // It costs `joining` instead of `upward`.
-  const order = new Map(l.nodes.map((n, i) => [n.id, i] as const));
-  const fed = new Set(l.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const joins = joiningEdges(l);
   let joining = 0;
-  const joins = (e: LayoutEdge): boolean =>
-    e.end !== 'none' &&
-    !fed.has(e.from) &&
-    // The node it leaves goes on along a flow of its own in its lane.
-    l.edges.some((o) => o !== e && o.from === e.from && o.to !== e.from && o.to !== e.to && byId.get(o.to)?.lane === byId.get(e.from)?.lane) &&
-    l.edges.some((o) => o !== e && o.to === e.to && o.from !== e.to && (order.get(o.from) ?? Infinity) < (order.get(e.from) ?? -Infinity));
   for (const [i, e] of l.edges.entries()) {
     if (!mirrored.has(i)) bends += bendCost(e);
     const first = e.points[0];
@@ -386,7 +395,7 @@ function scoreOnce(l: Layout): number[] {
     const to = byId.get(e.to);
     const upward = l.composition !== 'stages' && l.direction !== 'TD' && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
-    if (upward && !joins(e)) folded++;
+    if (upward && !joins.has(i)) folded++;
     else if (upward) joining++;
   }
   for (let s = 0; s < (g.at[l.edges.length] as number); s++) length += Math.abs((g.v[s * 8 + 2] as number) - (g.v[s * 8] as number)) + Math.abs((g.v[s * 8 + 3] as number) - (g.v[s * 8 + 1] as number));

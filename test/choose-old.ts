@@ -2,7 +2,7 @@
 import type { Layout, LayoutEdge } from '../src/types.ts';
 import type { Fold } from '../src/layered/rows.ts';
 import { directionsOf, mixedSideEnds } from './sides-old.ts';
-import { mirroredEdges } from '../src/layered/choose.ts';
+import { joiningEdges, mirroredEdges } from '../src/layered/choose.ts';
 import { unzoned } from '../src/layered/composition.ts';
 
 /**
@@ -87,7 +87,7 @@ export function violations(l: Layout): number {
 }
 
 /** What a drawing pays, in bends: a crossing costs several, then each extra row, each edge against the reading direction, and more for a whole chain of them. */
-export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 } as const;
+export const WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1, joining: 1 } as const;
 
 const properCross = (a: Seg, b: Seg): boolean => {
   const ah = Math.abs(a.ay - a.by) < EPS;
@@ -206,6 +206,9 @@ export function score(l: Layout): number[] {
   // Mirror pairs are charged for one edge (`mirroredEdges`, new since the rewrite and shared with choose.ts).
   const bendCost = (e: LayoutEdge): number => (e.main ? WEIGHTS.bendMain : WEIGHTS.bend) * Math.max(0, e.points.length - 2);
   const mirrored = mirroredEdges(l, bendCost);
+  // Lines of a flow written later that join one written earlier from below (`joiningEdges`, shared with choose.ts).
+  const joins = joiningEdges(l);
+  let joining = 0;
   for (const [i, e] of l.edges.entries()) {
     if (!mirrored.has(i)) bends += bendCost(e);
     const first = e.points[0];
@@ -215,7 +218,8 @@ export function score(l: Layout): number[] {
     const to = byId.get(e.to);
     const upward = l.composition !== 'stages' && l.direction !== 'TD' && from !== undefined && to !== undefined && from !== to && from.lane === to.lane && to[across] < from[across] - 0.5;
     if (first && last && last[axis] < first[axis] - 8) against.push([e.from, e.to]);
-    if (upward) folded++;
+    if (upward && !joins.has(i)) folded++;
+    else if (upward) joining++;
     for (const s of segments(e)) length += Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
   }
   // An edge against the reading direction that leaves a node that sends out two more edges than it takes in, or enters
@@ -253,6 +257,7 @@ export function score(l: Layout): number[] {
     rowCost +
     tightCost +
     WEIGHTS.upward * folded +
+    WEIGHTS.joining * joining +
     WEIGHTS.back * against.length +
     WEIGHTS.heavyBack * heavyAgainst +
     WEIGHTS.backChain * chained +
