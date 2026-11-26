@@ -25,6 +25,19 @@ const page = renderHtml(src, { title: 'Flow' });
 
 `spansToAnsi`는 조각으로 된 줄 하나를 `--color`처럼 ANSI 색 코드를 붙여 씁니다.
 
+## PNG
+
+`ursula-diagram/png`는 Node에서 PNG를 그립니다. `ursula-diagram` 옆에 선택 설치 패키지 `@resvg/resvg-js`를 깔아야 합니다.
+기본 입구는 이 패키지를 불러오지 않고, 브라우저에서는 쓰지 않습니다.
+
+```ts
+import { renderPng } from 'ursula-diagram/png';
+
+const png = await renderPng(src, { theme: 'dark', scale: 2 }); // Uint8Array
+```
+
+패키지가 없으면 프로미스가 `PngRendererMissing`으로 거부되고, 그 메시지가 설치 명령입니다.
+
 ## 옵션
 
 `renderText`, `renderTextSpans`, `renderTextSvg`는 셋째 인자로 명령의 옵션을 받습니다. `charset`(`'unicode'` 또는

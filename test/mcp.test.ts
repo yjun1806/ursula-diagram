@@ -114,7 +114,7 @@ describe('ursula-diagram mcp', () => {
       { jsonrpc: '2.0', id: 2 },
       call(3, 'paint', { source: flow }),
       call(4, 'render', { source: 3 }),
-      call(5, 'render', { source: flow, format: 'png' }),
+      call(5, 'render', { source: flow, format: 'gif' }),
       call(6, 'render', { source: flow, width: -4 }),
       { jsonrpc: '2.0', id: 7, method: 'ping' },
     ]);

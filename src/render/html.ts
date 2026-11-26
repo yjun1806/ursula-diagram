@@ -11,7 +11,8 @@ export interface HtmlOptions {
   theme?: Theme;
 }
 
-const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
+/** The page behind a drawing, light and dark; a PNG paints it too. */
+export const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
 
 /**
  * Declarations of one colour scheme: every colour of a drawing and the page background. The background of a drawing

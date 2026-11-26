@@ -6,6 +6,7 @@
 | `text` | Box-drawing characters, laid out for `--width`. No colour codes unless you add `--color`. |
 | `text-svg` | The terminal drawing as one SVG, for where text would lose its columns. |
 | `html` | One file with the drawing, a light and dark switch, and saving as PNG or SVG. |
+| `png` | An image file in the colours of `--theme`, twice the size of the SVG unless `--scale` says. Needs the optional `@resvg/resvg-js`. |
 | `json` | The placement: boxes, lines and labels with their coordinates. |
 | `check` | The engine's report without the drawing: one line of counts (bends, crossings), the lines that cross and the most bent lines with their source line numbers, and sometimes questions a writer can answer by editing the text. |
 | `fixed` | The text with the fixes of `--fix` made, to save in place of it. Nothing is drawn. |
@@ -34,6 +35,10 @@ ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
 ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
 ```
 
+```bash [png]
+ursula-diagram flow.mmd --format png --theme dark > flow.png
+```
+
 ```bash [check]
 ursula-diagram flow.mmd --format check
 ```
@@ -49,7 +54,20 @@ ursula-diagram flow.mmd --format fixed > flow-fixed.mmd
 :::
 
 The command reads standard input when no file is given. `--theme auto|light|dark` sets the light or dark of an
-`html` page; `auto` follows the system setting.
+`html` page; `auto` follows the system setting. For `png` it picks the colours written into the image, on a solid
+page colour; `auto` is light there.
+
+`png` draws the SVG with the optional package `@resvg/resvg-js`, which `ursula-diagram` does not install. The text
+is set in the fonts installed on the machine, so Korean, Chinese or Japanese labels need such a font. macOS has
+one; on Linux a package such as `fonts-noto-cjk` adds one, and without any font the PNG has no text. Install the
+renderer once:
+
+```bash
+npm i -g @resvg/resvg-js
+```
+
+Without it, `--format png` ends with code 2 and prints that command. A PNG is bytes, so the command refuses to write
+one to a terminal: redirect it to a file.
 
 ## Options {#options}
 

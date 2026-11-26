@@ -16,6 +16,7 @@ Examples
   ursula-diagram flow.mmd --format text --width 100
   ursula-diagram flow.mmd --format svg --check > flow.svg
   ursula-diagram flow.mmd --format html --title "Order flow" > flow.html
+  ursula-diagram flow.mmd --format png --theme dark > flow.png
   ursula-diagram syntax wardley
 
 Which format
@@ -23,6 +24,8 @@ Which format
   text-svg  the terminal drawing for a chat window, a web page or a document
   svg       a picture for a document or a page; follows light and dark
   html      one file to open, switch light and dark, and save a PNG
+  png       an image file, in the colours of --theme; needs the optional
+            package @resvg/resvg-js (npm i -g @resvg/resvg-js)
   json      boxes, lines and labels with coordinates, for a program
   check     the engine's report on the svg layout, without the drawing; a
             terminal drawing routes its lines on its own grid and can differ

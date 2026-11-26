@@ -26,6 +26,19 @@ entity-relationship drawing, so that the bars of its counts on upright lines bec
 
 `spansToAnsi` writes one line of spans with ANSI colour codes, as `--color` does.
 
+## PNG
+
+`ursula-diagram/png` draws a PNG in Node with the optional package `@resvg/resvg-js`, installed beside
+`ursula-diagram`. The main entrance never loads it, and a browser has no use for it.
+
+```ts
+import { renderPng } from 'ursula-diagram/png';
+
+const png = await renderPng(src, { theme: 'dark', scale: 2 }); // Uint8Array
+```
+
+Without the package the promise rejects with `PngRendererMissing`, whose message is the command that installs it.
+
 ## Options
 
 `renderText`, `renderTextSpans` and `renderTextSvg` take the options of the command as a third argument: `charset`

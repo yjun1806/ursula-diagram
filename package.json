@@ -34,6 +34,10 @@
       "types": "./dist/html.d.ts",
       "default": "./dist/html.js"
     },
+    "./png": {
+      "types": "./dist/png.d.ts",
+      "default": "./dist/png.js"
+    },
     "./global": "./dist/ursula.global.js"
   },
   "bin": {
@@ -49,6 +53,14 @@
   "engines": {
     "node": ">=22"
   },
+  "peerDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "peerDependenciesMeta": {
+    "@resvg/resvg-js": {
+      "optional": true
+    }
+  },
   "scripts": {
     "build": "bun scripts/build.ts",
     "typecheck": "tsc --noEmit",
@@ -61,6 +73,7 @@
     "docs:sync": "node scripts/docs-sync.mjs"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

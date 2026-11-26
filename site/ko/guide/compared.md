@@ -82,8 +82,8 @@ Mermaid 문서의 같은 예시를 네 도구가 각자 기본 설정으로 그�
 
 ## 다른 도구가 더 맞는 경우
 
-- **명령줄에서 PNG가 필요할 때.** mermaid-cli는 PNG를 바로 씁니다. 대신 한 장에 630ms가 걸리고 Chromium이 필요합니다.
-  ursula에서는 한 파일 HTML 페이지의 버튼으로만 PNG를 저장할 수 있습니다.
+- **더 설치하지 않고 PNG가 필요할 때.** mermaid-cli는 PNG를 바로 씁니다. 대신 한 장에 630ms가 걸리고 Chromium이 필요합니다.
+  ursula는 선택 설치 패키지 `@resvg/resvg-js`(약 4MB)를 깔아야 PNG를 씁니다.
 - **그림마다 새 프로세스를 띄울 때.** mmdflux와 mermaid-ascii는 9~11ms가 걸립니다. ursula는 103ms가 걸리는데, 그중
   59ms는 빈 Node 스크립트를 실행해도 드는 시간입니다.
 - **한 프로그램 안에서 라이브러리를 여러 번 부를 때.** flowchart 한 장을 그리는 데 Pele는 0.015ms,

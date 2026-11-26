@@ -2,6 +2,8 @@ import { renderHtml } from '../html.ts';
 import { checkLines, fixSource, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg } from '../index.ts';
 import { checkDetails } from '../layered/details.ts';
 import type { SequenceLayout } from '../sequence/model.ts';
+import type { ResvgModule } from '../render/png.ts';
+import { PNG_HINT, svgToPng } from '../render/png.ts';
 import type { Layout } from '../types.ts';
 import { UrsulaError } from '../types.ts';
 import type { DrawRequest } from './args.ts';
@@ -13,8 +15,18 @@ export type ExitCode = 0 | 1 | 2 | 3 | 4;
 
 export interface Outcome {
   stdout: string;
+  /** The PNG of `--format png`, written to standard output in place of `stdout`. */
+  bytes?: Uint8Array;
   stderr: string;
   code: ExitCode;
+}
+
+/** What the command takes from where it runs. */
+export interface Host {
+  /** The PNG renderer, looked up only when a PNG is asked for; undefined when it is not installed. */
+  loadPng?: () => ResvgModule | undefined;
+  /** Font folders for the renderer to load besides the ones it finds. */
+  fontDirs?: readonly string[];
 }
 
 function layoutOptions(req: DrawRequest) {
@@ -115,8 +127,8 @@ function drawing(src: string, req: DrawRequest): string {
 }
 
 /** Draws `src` as the request asks; never throws. With `fix`, or format `fixed`, it first fixes what has one reading. */
-export function drawCommand(src: string, req: DrawRequest): Outcome {
-  if (!req.fix && req.format !== 'fixed') return drawn(src, req);
+export function drawCommand(src: string, req: DrawRequest, host: Host = {}): Outcome {
+  if (!req.fix && req.format !== 'fixed') return drawn(src, req, host);
   let fixed: ReturnType<typeof fixSource>;
   try {
     fixed = fixSource(src);
@@ -125,12 +137,26 @@ export function drawCommand(src: string, req: DrawRequest): Outcome {
   }
   const named = fixReport(fixed.fixes);
   // `fixed` prints the text, fixed as far as it goes, and says whether it draws the way `check` would.
-  const out = drawn(fixed.source, req.format === 'fixed' ? { ...req, format: 'check', check: false } : req);
+  const out = drawn(fixed.source, req.format === 'fixed' ? { ...req, format: 'check', check: false } : req, host);
   return req.format === 'fixed' ? { stdout: fixed.source, stderr: `${named}${out.stderr}`, code: out.code } : { ...out, stderr: `${named}${out.stderr}` };
 }
 
-function drawn(src: string, req: DrawRequest): Outcome {
+/** The PNG of the svg drawing, in the colours of `--theme` (auto is light); code 2 when the renderer is missing. */
+function png(src: string, req: DrawRequest, host: Host): Outcome {
+  const resvg = host.loadPng?.();
+  if (resvg === undefined) return { stdout: '', stderr: `error: ${PNG_HINT}\n`, code: 2 };
+  const svg = selectFrontEnd(src).svg(src, layoutOptions(req));
+  const bytes = svgToPng(svg, resvg, {
+    theme: req.theme === 'dark' ? 'dark' : 'light',
+    ...(req.scale === undefined ? {} : { scale: req.scale }),
+    ...(host.fontDirs === undefined ? {} : { fontDirs: host.fontDirs }),
+  });
+  return { stdout: '', bytes, stderr: req.check ? sideReport(src, req) : '', code: 0 };
+}
+
+function drawn(src: string, req: DrawRequest, host: Host): Outcome {
   try {
+    if (req.format === 'png') return png(src, req, host);
     if ((req.format === 'text' || req.format === 'text-svg') && req.width !== undefined) {
       const out = fitted(src, req, req.width);
       return out.code === 0 && req.check ? { ...out, stderr: sideReport(src, req) } : out;

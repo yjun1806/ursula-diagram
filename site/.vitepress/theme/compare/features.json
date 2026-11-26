@@ -349,10 +349,7 @@
           "values": [
             true,
             true,
-            {
-              "en": "page only¹",
-              "ko": "페이지에서만¹"
-            },
+            "✓¹",
             true
           ],
           "highlight": true
@@ -425,8 +422,8 @@
         }
       ],
       "note": {
-        "en": "¹ The command does not write PNG; the one-file page from --format html has a button that saves one.",
-        "ko": "¹ 명령은 PNG를 쓰지 않습니다. --format html로 만든 한 파일 페이지의 버튼으로 PNG를 저장합니다."
+        "en": "¹ With the optional @resvg/resvg-js installed. Without it, the one-file page from --format html has a button that saves a PNG.",
+        "ko": "¹ 선택 설치 패키지 @resvg/resvg-js가 있을 때. 없으면 --format html로 만든 한 파일 페이지의 버튼으로 PNG를 저장합니다."
       }
     },
     "runtime": {
