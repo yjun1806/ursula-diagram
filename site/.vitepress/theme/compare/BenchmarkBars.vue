@@ -16,9 +16,8 @@
 // While "placeholder" is true the chart renders only in the dev server, marked as placeholder, and nothing in a build,
 // so no made-up number reaches the published site.
 import { computed } from 'vue';
-import { useData } from 'vitepress';
 import DATA from './benchmark.json';
-import { langOf } from '../playground/strings.js';
+import { pickLang, useLang, useWords } from '../locale.js';
 
 const props = defineProps({ name: { type: String, default: null }, data: { type: Object, default: null } });
 
@@ -27,12 +26,11 @@ const WORDS = {
   ko: { faster: '짧을수록 빠름', dash: '~' },
 };
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const w = WORDS[code];
+const code = useLang();
+const w = useWords(WORDS, code);
 const data = computed(() => props.data ?? DATA.charts[props.name]);
 const shown = computed(() => !data.value.placeholder || import.meta.env.DEV);
-const pick = (v) => (v && typeof v === 'object' ? v[code] ?? v.en : v);
+const pick = (v) => pickLang(code.value, v);
 const fill = (template, values) => template.replace(/\{(\w+)\}/g, (_, k) => values[k] ?? '');
 
 // Round axis values: the step is 1, 2, 2.5 or 5 times a power of ten, the axis ends at the first tick past the
@@ -71,7 +69,7 @@ const headline = computed(() => {
 const runs = computed(() => {
   const d = data.value;
   if (!d.runs) return null;
-  const ranges = d.bars.filter((b) => b.range).map((b) => withUnit(`${number(b.range[0])}${w.dash}${number(b.range[1])}`));
+  const ranges = d.bars.filter((b) => b.range).map((b) => withUnit(`${number(b.range[0])}${w.value.dash}${number(b.range[1])}`));
   return fill(pick(d.runs), ranges);
 });
 

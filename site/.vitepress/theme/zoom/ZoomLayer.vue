@@ -2,17 +2,15 @@
 // The enlarged picture, for every page: a click on a .ex-zoom button (the Examples pages, the picture grids) opens its
 // <img> large in a dialog, fitted to the screen, with a button for the full size. A button with data-light shows the
 // picture on a light panel in both themes, as the grids do, so pictures by other tools look as they were drawn.
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { useData } from 'vitepress';
-import { langOf } from '../playground/strings.js';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { useWords } from '../locale.js';
 
 const T = {
   en: { dialog: 'Enlarged picture', close: 'Close', fit: 'Fit to screen', full: 'Full size' },
   ko: { dialog: '크게 본 그림', close: '닫기', fit: '화면에 맞추기', full: '원래 크기' },
 };
 
-const { lang } = useData();
-const t = computed(() => T[langOf(lang.value)]);
+const t = useWords(T);
 
 const dialog = ref(null);
 const shown = ref(null); // { src, alt, width, height, light }

@@ -8,28 +8,26 @@
 // While "placeholder" is true the table renders only in the dev server, marked as placeholder, and nothing in a build.
 // The table keeps its width and scrolls inside its own box on a narrow screen instead of squeezing its cells.
 import { computed } from 'vue';
-import { useData } from 'vitepress';
 import DATA from './features.json';
-import { langOf } from '../playground/strings.js';
+import { pickLang, useLang, useWords } from '../locale.js';
 
 const props = defineProps({ name: { type: String, required: true }, data: { type: Object, default: null } });
 
-const { lang } = useData();
-const code = langOf(lang.value);
+const code = useLang();
 const data = computed(() => props.data ?? DATA.tables[props.name]);
 const shown = computed(() => !data.value.placeholder || import.meta.env.DEV);
-const pick = (v) => (v && typeof v === 'object' ? v[code] ?? v.en : v);
+const pick = (v) => pickLang(code.value, v);
 
 const WORDS = {
   en: { yes: 'Yes', no: 'No', unknown: 'Not checked' },
   ko: { yes: '예', no: '아니요', unknown: '확인하지 않음' },
 };
-const w = WORDS[code];
+const w = useWords(WORDS, code);
 
 function cell(v) {
-  if (v === true) return { kind: 'yes', text: '✓', label: w.yes };
-  if (v === false) return { kind: 'no', text: '—', label: w.no };
-  if (v == null) return { kind: 'unknown', text: '?', label: w.unknown };
+  if (v === true) return { kind: 'yes', text: '✓', label: w.value.yes };
+  if (v === false) return { kind: 'no', text: '—', label: w.value.no };
+  if (v == null) return { kind: 'unknown', text: '?', label: w.value.unknown };
   if (typeof v === 'number') return { kind: 'num', text: v.toLocaleString('en-US', { maximumFractionDigits: 3 }), label: '' };
   return { kind: 'text', text: pick(v), label: '' };
 }

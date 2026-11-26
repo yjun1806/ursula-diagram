@@ -1,22 +1,23 @@
 <script setup>
 // The home page's case for agents: what the command does for an agent, each with the command and what it prints.
 // The measured time per drawing next to another skill is in SkillBlock.vue.
-import { useData, withBase } from 'vitepress';
+import { computed } from 'vue';
+import { withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { CARDS } from './agents.js';
 import OUTPUTS from './outputs.json';
-import { langOf } from '../playground/strings.js';
+import { localPath, useLang, useWords } from '../locale.js';
 import CopyButton from './CopyButton.vue';
 import CodeBlock from './CodeBlock.vue';
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const t = HOME_STRINGS[code];
-const prefix = code === 'ko' ? '/ko' : '';
-const skillPage = withBase(`${prefix}/guide/agent-skill`);
+const code = useLang();
+const t = useWords(HOME_STRINGS, code);
+const skillPage = computed(() => localPath(code.value, '/guide/agent-skill'));
 
-const cards = CARDS.map((c, i) => ({ ...c, output: OUTPUTS.cards[c.id] ?? '', step: i + 1, title: t.cards[c.id][0], body: t.cards[c.id][1] }));
-const loopSrc = withBase(`/assets/${code === 'ko' ? 'ko-' : ''}loop.svg`);
+const cards = computed(() =>
+  CARDS.map((c, i) => ({ ...c, output: OUTPUTS.cards[c.id] ?? '', step: i + 1, title: t.value.cards[c.id][0], body: t.value.cards[c.id][1] })),
+);
+const loopSrc = computed(() => withBase(`/assets/${code.value === 'ko' ? 'ko-' : ''}loop.svg`));
 </script>
 
 <template>

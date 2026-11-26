@@ -1,14 +1,13 @@
 <script setup>
 // Thumbnails of the Examples page with their type names, each linking to its type's examples, and the names of all 35 types the engine reads.
-import { useData, withBase } from 'vitepress';
+import { computed } from 'vue';
+import { withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
-import { langOf } from '../playground/strings.js';
+import { localPath, useLang, useWords } from '../locale.js';
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const t = HOME_STRINGS[code];
-const prefix = code === 'ko' ? '/ko' : '';
-const examples = withBase(`${prefix}/examples/`);
+const code = useLang();
+const t = useWords(HOME_STRINGS, code);
+const examples = computed(() => localPath(code.value, '/examples/'));
 
 const SHOWN = {
   en: [
@@ -20,12 +19,14 @@ const SHOWN = {
     ['er', 'Entity relationship'], ['c4', 'C4 context'], ['mindmap', 'Mindmap'], ['gantt', 'Gantt'],
   ],
 };
-const cards = SHOWN[code].map(([id, name]) => ({
-  id,
-  name,
-  src: withBase(`/assets/${code === 'ko' ? 'ko-' : ''}${id}.svg`),
-  href: withBase(`${prefix}/examples/${id}`),
-}));
+const cards = computed(() =>
+  SHOWN[code.value].map(([id, name]) => ({
+    id,
+    name,
+    src: withBase(`/assets/${code.value === 'ko' ? 'ko-' : ''}${id}.svg`),
+    href: localPath(code.value, `/examples/${id}`),
+  })),
+);
 
 // Every type the engine draws, in alphabetical order.
 const ALL = [

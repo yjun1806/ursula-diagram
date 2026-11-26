@@ -8,17 +8,16 @@
 // its columns and scrolls sideways inside its own box, ursula's column first; each cell then shows its tool's name,
 // because the sticky header cannot follow a box that scrolls sideways.
 import { computed } from 'vue';
-import { useData, withBase } from 'vitepress';
+import { withBase } from 'vitepress';
 import { GRIDS } from './pictures.js';
 import SIZES from './sizes.json';
-import { langOf } from '../playground/strings.js';
+import { localPath, pickLang, useLang, useWords } from '../locale.js';
 
 const props = defineProps({ name: { type: String, required: true }, named: { type: Boolean, default: false } });
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const pick = (v) => (v && typeof v === 'object' ? v[code] ?? v.en : v);
-const link = (href) => (href.startsWith('/') ? withBase(`${code === 'ko' ? '/ko' : ''}${href}`) : href);
+const code = useLang();
+const pick = (v) => pickLang(code.value, v);
+const link = (href) => (href.startsWith('/') ? localPath(code.value, href) : href);
 
 const grid = computed(() => GRIDS[props.name]);
 const columns = computed(() => (props.named && grid.value.named ? grid.value.named : grid.value.columns).map(pick));
@@ -42,7 +41,7 @@ const rows = computed(() =>
     })),
   })),
 );
-const enlarge = code === 'ko' ? '그림 크게 보기' : 'Enlarge picture';
+const enlarge = useWords({ en: 'Enlarge picture', ko: '그림 크게 보기' }, code);
 </script>
 
 <template>

@@ -2,16 +2,15 @@
 // The first thing under the hero: the time per drawing of the ursula skill next to a skill that has the model lay out
 // the drawing and next to the engine alone, and the drawings both skills made from the same three texts, so the speed
 // is never shown without the result. The chart's numbers are charts.skillMean in ../compare/benchmark.json.
-import { useData, withBase } from 'vitepress';
+import { computed } from 'vue';
 import { HOME_STRINGS } from './strings.js';
-import { langOf } from '../playground/strings.js';
+import { localPath, useLang, useWords } from '../locale.js';
 import PicGrid from '../compare/PicGrid.vue';
 import BenchmarkBars from '../compare/BenchmarkBars.vue';
 
-const { lang } = useData();
-const code = langOf(lang.value);
-const t = HOME_STRINGS[code];
-const comparePage = withBase(`${code === 'ko' ? '/ko' : ''}/guide/compared`);
+const code = useLang();
+const t = useWords(HOME_STRINGS, code);
+const comparePage = computed(() => localPath(code.value, '/guide/compared'));
 </script>
 
 <template>

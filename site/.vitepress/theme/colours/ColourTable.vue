@@ -6,18 +6,16 @@
 // Each value shows a swatch and the value in monospace; the swatch is hidden from screen readers, which read the value.
 // On a narrow screen the description moves under the variable name, so the swatches stay in view, and the table
 // scrolls inside its own box when it is still wider than the screen.
-import { useData } from 'vitepress';
 import { data as rows } from './colours.data.mjs';
-import { langOf } from '../playground/strings.js';
+import { useLang, useWords } from '../locale.js';
 
-const { lang } = useData();
-const code = langOf(lang.value);
+const code = useLang();
 
 const WORDS = {
   en: { variable: 'Variable', colours: 'What it colours', light: 'Light', dark: 'Dark', series: 'Chart series' },
   ko: { variable: '변수', colours: '칠하는 것', light: '밝은 값', dark: '어두운 값', series: '차트 계열' },
 };
-const w = WORDS[code];
+const w = useWords(WORDS, code);
 
 const series = rows.filter((r) => /^s\d+$/.test(r.name));
 
