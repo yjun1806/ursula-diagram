@@ -52,7 +52,6 @@ const crossingsIn = (l: Layout): number =>
 function laidOut(model: UsecaseModel, opts: RenderOptions, text: boolean): Layout {
   const draw = (columns: GridSpec | undefined): Layout =>
     layout(columns === undefined ? model.graph : { ...model.graph, placer: 'c4-grid', grid: columns }, text ? cellRuler() : pixelRuler(), {
-      ...(opts.engine === undefined ? {} : { engine: opts.engine }),
       ...(opts.quality === undefined ? {} : { quality: opts.quality }),
       ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
       ...(text ? { fold: true } : {}),

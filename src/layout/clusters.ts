@@ -376,7 +376,7 @@ function buildLevel(plan: Plan, id: string, direction: Direction, mirror: 'RL' |
   const level: Graph = { direction, ...(mirror === undefined ? {} : { mirror }), lanes: graph.lanes.slice(0, 1), nodes, edges };
   const { maxWidth, maxHeight, ...rest } = plan.opts;
   const root = id === '';
-  const engine = (g: Graph): Layout => plan.draw(g, ruler, { ...rest, engine: 'layered', legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
+  const engine = (g: Graph): Layout => plan.draw(g, ruler, { ...rest, legend: false, questions: false, ...(root ? { ...(maxWidth === undefined ? {} : { maxWidth }), ...(maxHeight === undefined ? {} : { maxHeight }) } : { maxWidth: Infinity }) });
   const touched = new Set(graph.edges.flatMap((e) => [e.from, e.to]));
   const drawLevel = (g: Graph): Layout => {
     const full = engine(g);

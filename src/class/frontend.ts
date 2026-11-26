@@ -46,11 +46,10 @@ registerFrontEnd({
   svg(src, opts) {
     const graph = read(src, opts.config);
     const title = opts.title ?? accessibleTitle(src) ?? opts.heading ?? `Class diagram: ${graph.nodes.filter((n) => n.shape === 'rect').length} classes, ${graph.edges.length} relations`;
-    const { maxWidth, legend: _legend, engine, composition, quality, ...svgOpts } = opts;
+    const { maxWidth, legend: _legend, composition, quality, ...svgOpts } = opts;
     const laid = layout(graph, pixelRuler(), {
       legend: false,
       ...(maxWidth === undefined ? {} : { maxWidth }),
-      ...(engine === undefined ? {} : { engine }),
       ...(composition === undefined ? {} : { composition }),
       ...(quality === undefined ? {} : { quality }),
     });

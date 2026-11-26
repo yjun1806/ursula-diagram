@@ -6,7 +6,7 @@ import { endpointViolations, geometryViolations } from './helpers.ts';
 
 const draw = (src: string) => {
   const g = parse(src);
-  return { g, l: layout(g, pixelRuler(), { engine: 'layered', composition: 'lanes' }) };
+  return { g, l: layout(g, pixelRuler(), { composition: 'lanes' }) };
 };
 
 const lanes = (targets: string[]): string =>

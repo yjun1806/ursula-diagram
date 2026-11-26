@@ -16,8 +16,8 @@ Read this before changing anything in this repository. To draw a diagram, use th
 | `src/index.ts` | Library entrance: `render`, `renderText`, `renderTextSpans`, `renderTextSvg`. Importing it registers every front end. |
 | `src/registry.ts` | Picks the front end by the first word of the text; strips front matter; wraps errors. |
 | `src/<type>/` | One diagram type: `parse.ts`, `frontend.ts` (svg, terminal lines, json), and its own layout when it has one. Flowcharts live in `src/parse.ts` and `src/flowchart-frontend.ts`. |
-| `src/layout/` | Layout of boxes and lines (flowchart, class, state, ER, requirement, architecture, C4, use case): `layout()` in `index.ts` picks the engine; the grid engine (`engine: 'grid'`), labels, records, terminal tidying and checks. `text-intact.ts` holds `breaksOf`. |
-| `src/layered/` | The layered engine, the default: ranks, order, ports, routing, bands, questions. |
+| `src/layout/` | Layout of boxes and lines (flowchart, class, state, ER, requirement, architecture, C4, use case): `layout()` in `index.ts` hands the graph to the layered engine and tidies terminal drawings; labels, records and checks. `text-intact.ts` holds `breaksOf`. |
+| `src/layered/` | The layered engine: ranks, order, ports, routing, bands, questions. |
 | `src/chart/` | Shared pieces of the charts (ticks, arcs, label placement). |
 | `src/render/` | SVG (`svg.ts`, `scene-svg.ts`, themes), terminal text (`text.ts`), ASCII (`ascii.ts`), terminal as SVG (`text-svg.ts`), HTML. |
 | `src/text/` | Fitting, wrapping and cutting text by terminal cells. `src/metrics.ts` has the rulers (pixels, cells). |

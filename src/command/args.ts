@@ -13,7 +13,6 @@ export interface DrawRequest {
   charset?: 'unicode' | 'ascii';
   questions: boolean;
   elbows: boolean;
-  engine?: 'grid' | 'layered';
   composition?: 'auto' | 'lanes' | 'stages';
   detail?: 'auto' | 'full' | 'narrow' | 'title';
   quality?: 'fast' | 'best';
@@ -61,7 +60,6 @@ export const OPTIONS: readonly OptionSpec[] = [
   },
   { name: '--detail', value: 'D', choices: ['auto', 'full', 'narrow', 'title'], help: 'how much of each box text keeps: auto (the fullest that fits), full, narrow, title', apply: choice('detail', ['auto', 'full', 'narrow', 'title']) },
   { name: '--quality', value: 'Q', choices: ['fast', 'best'], help: 'layout effort, fast or best; pictures draw best and text fast unless told', apply: choice('quality', ['fast', 'best']) },
-  { name: '--engine', value: 'E', choices: ['layered', 'grid'], help: 'the flowchart layout engine: layered (the default) or grid', apply: choice('engine', ['grid', 'layered']) },
   { name: '--composition', value: 'C', choices: ['auto', 'lanes', 'stages'], help: 'swimlanes along the flow (lanes), across it (stages), or auto', apply: choice('composition', ['auto', 'lanes', 'stages']) },
   { name: '--no-legend', help: 'no legend of line styles', apply: (req) => ({ ...req, legend: false }) },
   { name: '--no-questions', help: 'no questions in the check report', apply: (req) => ({ ...req, questions: false }) },

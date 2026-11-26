@@ -214,7 +214,7 @@ describe('layered alignment', () => {
 });
 
 describe('layered straightening', () => {
-  const lay = (src: string) => layout(parse(src), pixelRuler(), { engine: 'layered', composition: 'lanes' });
+  const lay = (src: string) => layout(parse(src), pixelRuler(), { composition: 'lanes' });
   const edge = (l: ReturnType<typeof lay>, from: string, to: string) => l.edges.find((e) => e.from === from && e.to === to);
 
   it('keeps the best of the four alignments instead of a half-step average', () => {
@@ -269,7 +269,7 @@ describe('layered straightening', () => {
     n[Short]
   end
   w --> n`);
-    const l = layout(g, pixelRuler(), { engine: 'layered', composition: 'lanes' });
+    const l = layout(g, pixelRuler(), { composition: 'lanes' });
     const e = l.edges[0];
     const wide = l.nodes.find((n) => n.id === 'w');
     expect(wide && wide.w > 160).toBe(true);
@@ -288,7 +288,7 @@ describe('layered ports on a box side', () => {
   for (const flip of [false, true]) {
     it(`gives pieces of a hub with five partners ports in the order of their other ends (partners ${flip ? 'below' : 'above'})`, () => {
       const g = parse(hub(flip));
-      const l = layout(g, pixelRuler(), { engine: 'layered' });
+      const l = layout(g, pixelRuler());
       expect(l.diagnostics.filter((d) => d.kind === 'crossing')).toEqual([]);
       expect(geometryViolations(l)).toEqual([]);
       expect(endpointViolations(l, layeredRuler(pixelRuler()), g)).toEqual([]);
@@ -317,8 +317,8 @@ describe('layered fitting a lane into the width', () => {
 
   it('keeps a narrower canvas valid by closing gaps or adding rows', () => {
     const g = parse('flowchart LR\n  A[One] --> B[Two]\n  B --> C[Three]\n  C --> D[Four]');
-    const wide = layout(g, cellRuler(), { engine: 'layered', maxWidth: 200 });
-    const tight = layout(g, cellRuler(), { engine: 'layered', maxWidth: wide.width - 2 });
+    const wide = layout(g, cellRuler(), { maxWidth: 200 });
+    const tight = layout(g, cellRuler(), { maxWidth: wide.width - 2 });
     expect(new Set(wide.nodes.map((n) => n.y)).size).toBe(1);
     expect(tight.width).toBeLessThanOrEqual(wide.width);
     expect(geometryViolations(tight)).toEqual([]);
@@ -383,7 +383,7 @@ describe('layered pass-through lines', () => {
   b3 --> c1`;
     const g = parse(src);
     for (const maxWidth of [1280, 800]) {
-      const l = layout(g, pixelRuler(), { engine: 'layered', maxWidth });
+      const l = layout(g, pixelRuler(), { maxWidth });
       expect(geometryViolations(l)).toEqual([]);
       expect(endpointViolations(l, layeredRuler(pixelRuler()), g)).toEqual([]);
       expect(l.width).toBeLessThanOrEqual(maxWidth);
@@ -402,8 +402,8 @@ describe('layered grid and width remedies', () => {
 
   it('closes the pixel gap before dropping a box from a row', () => {
     const g = parse('flowchart LR\n  A[Receive order] --> B[Check stock]\n  B --> C[Pack parcel]\n  C --> D[Ship parcel]\n  D --> E[Notify buyer]\n  E --> F[Close order]');
-    const natural = layout(g, pixelRuler(), { engine: 'layered', maxWidth: Infinity });
-    const narrower = layout(g, pixelRuler(), { engine: 'layered', maxWidth: natural.width - 16 });
+    const natural = layout(g, pixelRuler(), { maxWidth: Infinity });
+    const narrower = layout(g, pixelRuler(), { maxWidth: natural.width - 16 });
     expect(new Set(natural.nodes.map((n) => n.y)).size).toBe(1);
     expect(new Set(narrower.nodes.map((n) => n.y)).size).toBe(1);
     expect(narrower.width).toBeLessThanOrEqual(natural.width - 16);
@@ -429,7 +429,7 @@ describe('layered grid and width remedies', () => {
   t4 --> w
   t3 --> s`;
     const g = parse(src);
-    const l = layout(g, pixelRuler(), { engine: 'layered' });
+    const l = layout(g, pixelRuler());
     const main = ['m1', 'm2', 'm3', 'm4'].map((id) => l.nodes.find((n) => n.id === id)?.y);
     expect(new Set(main).size).toBe(1);
     // The node the text starts from must stand in the first place, which can cost the top lane rows.
@@ -442,7 +442,7 @@ describe('layered grid and width remedies', () => {
 
 describe('layered routing', () => {
   it('draws an aligned pair as one straight segment centre to centre', () => {
-    const l = layout(parse('swimlane-beta LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { engine: 'layered', composition: 'lanes' });
+    const l = layout(parse('swimlane-beta LR\n  subgraph a[A]\n    x[Top]\n  end\n  subgraph b[B]\n    y[Bottom]\n  end\n  x --> y'), pixelRuler(), { composition: 'lanes' });
     const [x, y] = l.nodes;
     expect(l.edges[0]?.points.length).toBe(2);
     expect(l.edges[0]?.points[0]?.x).toBeCloseTo((x?.x ?? 0) + (x?.w ?? 0) / 2);
@@ -470,10 +470,10 @@ describe('layered routing', () => {
   });
 
   it('draws flat neighbours as one segment and a flat edge over a node as a U', () => {
-    const adjacent = layout(parse('flowchart LR\n  A[One] --> B[Two]'), pixelRuler(), { engine: 'layered' });
+    const adjacent = layout(parse('flowchart LR\n  A[One] --> B[Two]'), pixelRuler());
     expect(adjacent.edges[0]?.points.length).toBe(2);
     expect(adjacent.edges[0]?.points[0]?.y).toBe(adjacent.edges[0]?.points[1]?.y);
-    const u = layout(parse('flowchart LR\n  A[One] --> B[Two]\n  B --> C[Three]\n  A --> C'), pixelRuler(), { engine: 'layered' });
+    const u = layout(parse('flowchart LR\n  A[One] --> B[Two]\n  B --> C[Three]\n  A --> C'), pixelRuler());
     const skip = u.edges.find((e) => e.from === 'A' && e.to === 'C');
     expect(skip?.points.length).toBe(4);
     expect(geometryViolations(u)).toEqual([]);
@@ -528,10 +528,10 @@ describe('layered pipeline invariants', () => {
   for (const [name, src] of Object.entries(fixtures)) {
     it(`fixture ${name} has no violation in pixels or cells`, () => {
       const g = parse(src);
-      const px = layout(g, pixelRuler(), { engine: 'layered' });
+      const px = layout(g, pixelRuler());
       expect(geometryViolations(px)).toEqual([]);
       expect(endpointViolations(px, layeredRuler(pixelRuler()), g)).toEqual([]);
-      const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: 120 });
+      const cells = layout(g, cellRuler(), { maxWidth: 120 });
       expect(geometryViolations(cells)).toEqual([]);
       expect(endpointViolations(cells, layeredRuler(cellRuler()), g)).toEqual([]);
     });
@@ -542,7 +542,7 @@ describe('layered pipeline invariants', () => {
       const g = parse(generate(seed));
       const [name, ruler] = rulers[seed % rulers.length] ?? rulers[0] ?? ['pixel', pixelRuler()];
       for (const maxWidth of [1280, 800, Infinity]) {
-        const l = layout(g, ruler, { engine: 'layered', maxWidth });
+        const l = layout(g, ruler, { maxWidth });
         expect([name, maxWidth, geometryViolations(l)]).toEqual([name, maxWidth, []]);
         expect([name, maxWidth, endpointViolations(l, layeredRuler(ruler), g)]).toEqual([name, maxWidth, []]);
       }
@@ -552,7 +552,7 @@ describe('layered pipeline invariants', () => {
   it('lays the cell ruler out for generated graphs without violation', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const g = parse(generate(seed));
-      const l = layout(g, cellRuler(), { engine: 'layered', maxWidth: 120 });
+      const l = layout(g, cellRuler(), { maxWidth: 120 });
       expect(geometryViolations(l)).toEqual([]);
     }
   }, 60000);
@@ -560,29 +560,24 @@ describe('layered pipeline invariants', () => {
   it('is deterministic', () => {
     for (const src of [fixtures.twoLanes, generate(7), generate(31)]) {
       const g = parse(src);
-      expect(JSON.stringify(layout(g, pixelRuler(), { engine: 'layered' }))).toBe(JSON.stringify(layout(g, pixelRuler(), { engine: 'layered' })));
+      expect(JSON.stringify(layout(g, pixelRuler()))).toBe(JSON.stringify(layout(g, pixelRuler())));
     }
   });
 
   it('keeps every node in its lane on pixel and cell rulers, whose capacity in boxes differs', () => {
     const g = parse(fixtures.twoLanes);
-    const px = layout(g, pixelRuler(), { engine: 'layered', maxWidth: widthForColumns(g, pixelRuler(), 5), refine: false });
-    const cells = layout(g, cellRuler(), { engine: 'layered', maxWidth: widthForColumns(g, layeredRuler(cellRuler()), 5), refine: false });
+    const px = layout(g, pixelRuler(), { maxWidth: widthForColumns(g, pixelRuler(), 5), refine: false });
+    const cells = layout(g, cellRuler(), { maxWidth: widthForColumns(g, layeredRuler(cellRuler()), 5), refine: false });
     expect(cells.nodes.map((n) => n.lane)).toEqual(px.nodes.map((n) => n.lane));
   });
 
-  it('uses the layered engine when none is named', () => {
-    const g = parse(fixtures.twoLanes);
-    expect(layout(g, pixelRuler())).toEqual(layout(g, pixelRuler(), { engine: 'layered' }));
-  });
-
   it('renders text through the engine, aligned with Korean labels', () => {
-    const out = renderText(fixtures.twoLanes, 120, { engine: 'layered' });
+    const out = renderText(fixtures.twoLanes, 120);
     expect('lines' in out).toBe(true);
     if (!('lines' in out)) return;
     expect(out.lines.some((line) => line.includes('주문 접수'))).toBe(true);
     expect(Math.max(...out.lines.map(cellWidth))).toBeLessThanOrEqual(120);
-    const korean = renderText(fixtures.korean, 80, { engine: 'layered' });
+    const korean = renderText(fixtures.korean, 80);
     expect('lines' in korean).toBe(true);
   });
 });

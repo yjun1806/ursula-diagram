@@ -19,10 +19,9 @@ type Composition = 'auto' | 'lanes' | 'stages';
 
 type Quality = 'fast' | 'best';
 
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality }): { maxWidth?: number; legend?: LegendOption; engine?: 'grid' | 'layered'; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality } {
+function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality }): { maxWidth?: number; legend?: LegendOption; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality } {
   return {
     ...(opts.quality === undefined ? {} : { quality: opts.quality }),
-    ...(opts.engine === undefined ? {} : { engine: opts.engine }),
     ...(opts.composition === undefined ? {} : { composition: opts.composition }),
     ...(opts.questions === undefined ? {} : { questions: opts.questions }),
     ...(opts.elbows === undefined ? {} : { elbows: opts.elbows }),
@@ -37,7 +36,6 @@ export type TextStep = 1 | 2 | 3 | 4;
 interface TextOptionsIn {
   legend?: LegendOption;
   maxHeight?: number;
-  engine?: 'grid' | 'layered';
   composition?: Composition;
   quality?: Quality;
   detail?: Detail;
@@ -58,7 +56,7 @@ interface Attempt {
  * setting that fits is then drawn once with candidates and refinement. Reports the layout, the step and the inner width.
  */
 export function drawText(src: string, maxWidth: number | undefined, opts: TextOptionsIn): { lines: string[]; layout: Layout; step: TextStep; w: number } {
-  const { legend, maxHeight, engine, composition, quality, detail = 'auto', bare = false } = opts;
+  const { legend, maxHeight, composition, quality, detail = 'auto', bare = false } = opts;
   const full = parse(src);
   const inner = innerWidth(full);
   const widths = innerWidths(full);
@@ -74,7 +72,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
   // A quick drawing is the usual one (see `LayoutOptions.bare`) unless `tidied`, when its labels are brought into sight as in the drawing given out.
   const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition, room = true, tidied = false): { lines: string[]; layout: Layout } => {
     const laid = layout(a.graph, cellRuler(), {
-      ...layoutOptions({ legend, engine, composition: as, ...(quality === undefined ? {} : { quality }) }),
+      ...layoutOptions({ legend, composition: as, ...(quality === undefined ? {} : { quality }) }),
       ...(maxHeight === undefined ? {} : { maxHeight }),
       ...(maxWidth === undefined ? {} : { maxWidth }),
       fold,
@@ -196,8 +194,8 @@ registerFrontEnd({
   name: 'flowchart',
   headers: ['flowchart', 'graph', 'swimlane-beta'],
   svg(src, opts) {
-    const { maxWidth, legend, engine, composition, quality, ...svgOpts } = opts;
-    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, engine, composition, ...(quality === undefined ? {} : { quality }) })), { ...svgOpts, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
+    const { maxWidth, legend, composition, quality, ...svgOpts } = opts;
+    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, composition, ...(quality === undefined ? {} : { quality }) })), { ...svgOpts, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
