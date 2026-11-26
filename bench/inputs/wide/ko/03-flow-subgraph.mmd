@@ -1,0 +1,8 @@
+flowchart TD
+    subgraph 프론트엔드
+        A[화면 렌더링] --> B[상태 저장소]
+    end
+    subgraph 백엔드
+        C[인증 서버] --> D[(사용자 DB)]
+    end
+    B --> C

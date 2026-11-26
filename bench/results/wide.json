@@ -1,0 +1,743 @@
+{
+ "width": "100",
+ "summary": {
+  "ursula": {
+   "ko_drawn": 13,
+   "both_drawn": 13,
+   "ko_dangling": 31,
+   "en_dangling": 31,
+   "worse": [],
+   "extra": {
+    "01-flow-td": 0,
+    "02-flow-lr": 0,
+    "03-flow-subgraph": 0,
+    "04-flow-fanout": 0,
+    "05-flow-mixed": 0,
+    "06-seq-login": 0,
+    "07-seq-pay": 0,
+    "08-state-order": 0,
+    "09-state-door": 0,
+    "10-class": 0,
+    "11-er": 0,
+    "12-er-attr": 0,
+    "13-flow-long": 0,
+    "14-flow-cjkmix": 0,
+    "15-flow-emoji": 18
+   }
+  },
+  "beautiful-mermaid": {
+   "ko_drawn": 13,
+   "both_drawn": 13,
+   "ko_dangling": 366,
+   "en_dangling": 41,
+   "worse": [
+    "01-flow-td",
+    "02-flow-lr",
+    "03-flow-subgraph",
+    "04-flow-fanout",
+    "05-flow-mixed",
+    "06-seq-login",
+    "07-seq-pay",
+    "08-state-order",
+    "09-state-door",
+    "10-class",
+    "11-er",
+    "12-er-attr",
+    "13-flow-long"
+   ],
+   "extra": {
+    "01-flow-td": 20,
+    "02-flow-lr": 20,
+    "03-flow-subgraph": 26,
+    "04-flow-fanout": 18,
+    "05-flow-mixed": 30,
+    "06-seq-login": 46,
+    "07-seq-pay": 48,
+    "08-state-order": 25,
+    "09-state-door": 28,
+    "10-class": 23,
+    "11-er": 14,
+    "12-er-attr": 17,
+    "13-flow-long": 10,
+    "14-flow-cjkmix": 12,
+    "15-flow-emoji": 16
+   }
+  },
+  "mmdflux": {
+   "ko_drawn": 11,
+   "both_drawn": 11,
+   "ko_dangling": 42,
+   "en_dangling": 41,
+   "worse": [
+    "09-state-door"
+   ],
+   "extra": {
+    "01-flow-td": 0,
+    "02-flow-lr": 0,
+    "03-flow-subgraph": 0,
+    "04-flow-fanout": 0,
+    "05-flow-mixed": 0,
+    "06-seq-login": 0,
+    "07-seq-pay": 0,
+    "08-state-order": 0,
+    "09-state-door": 1,
+    "10-class": 0,
+    "11-er": null,
+    "12-er-attr": null,
+    "13-flow-long": 0,
+    "14-flow-cjkmix": 0,
+    "15-flow-emoji": 0
+   }
+  },
+  "mermaid-ascii": {
+   "ko_drawn": 10,
+   "both_drawn": 10,
+   "ko_dangling": 19,
+   "en_dangling": 19,
+   "worse": [],
+   "extra": {
+    "01-flow-td": 0,
+    "02-flow-lr": 0,
+    "03-flow-subgraph": 0,
+    "04-flow-fanout": 0,
+    "05-flow-mixed": 0,
+    "06-seq-login": 0,
+    "07-seq-pay": 0,
+    "08-state-order": null,
+    "09-state-door": null,
+    "10-class": null,
+    "11-er": 0,
+    "12-er-attr": 0,
+    "13-flow-long": 0,
+    "14-flow-cjkmix": 0,
+    "15-flow-emoji": 0
+   }
+  },
+  "termaid": {
+   "ko_drawn": 13,
+   "both_drawn": 13,
+   "ko_dangling": 10,
+   "en_dangling": 10,
+   "worse": [],
+   "extra": {
+    "01-flow-td": 0,
+    "02-flow-lr": 0,
+    "03-flow-subgraph": 0,
+    "04-flow-fanout": 0,
+    "05-flow-mixed": 0,
+    "06-seq-login": 0,
+    "07-seq-pay": 0,
+    "08-state-order": 0,
+    "09-state-door": 0,
+    "10-class": 0,
+    "11-er": 0,
+    "12-er-attr": 0,
+    "13-flow-long": 0,
+    "14-flow-cjkmix": 0,
+    "15-flow-emoji": 0
+   }
+  }
+ },
+ "per_drawing": {
+  "ursula|ko|01-flow-td": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "ursula|ko|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "ursula|ko|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|ko|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|ko|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|ko|06-seq-login": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|ko|07-seq-pay": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|ko|08-state-order": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "ursula|ko|09-state-door": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|ko|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|ko|11-er": {
+   "drawn": true,
+   "dangling": 11
+  },
+  "ursula|ko|12-er-attr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "ursula|ko|13-flow-long": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "ursula|ko|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "ursula|ko|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 18
+  },
+  "ursula|en|01-flow-td": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "ursula|en|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "ursula|en|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|en|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|en|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|en|06-seq-login": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|en|07-seq-pay": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "ursula|en|08-state-order": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "ursula|en|09-state-door": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|en|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "ursula|en|11-er": {
+   "drawn": true,
+   "dangling": 11
+  },
+  "ursula|en|12-er-attr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "ursula|en|13-flow-long": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "ursula|en|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "ursula|en|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|ko|01-flow-td": {
+   "drawn": true,
+   "dangling": 24
+  },
+  "beautiful-mermaid|ko|02-flow-lr": {
+   "drawn": true,
+   "dangling": 20
+  },
+  "beautiful-mermaid|ko|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 26
+  },
+  "beautiful-mermaid|ko|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 19
+  },
+  "beautiful-mermaid|ko|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 36
+  },
+  "beautiful-mermaid|ko|06-seq-login": {
+   "drawn": true,
+   "dangling": 54
+  },
+  "beautiful-mermaid|ko|07-seq-pay": {
+   "drawn": true,
+   "dangling": 56
+  },
+  "beautiful-mermaid|ko|08-state-order": {
+   "drawn": true,
+   "dangling": 27
+  },
+  "beautiful-mermaid|ko|09-state-door": {
+   "drawn": true,
+   "dangling": 32
+  },
+  "beautiful-mermaid|ko|10-class": {
+   "drawn": true,
+   "dangling": 24
+  },
+  "beautiful-mermaid|ko|11-er": {
+   "drawn": true,
+   "dangling": 21
+  },
+  "beautiful-mermaid|ko|12-er-attr": {
+   "drawn": true,
+   "dangling": 17
+  },
+  "beautiful-mermaid|ko|13-flow-long": {
+   "drawn": true,
+   "dangling": 10
+  },
+  "beautiful-mermaid|ko|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 12
+  },
+  "beautiful-mermaid|ko|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 16
+  },
+  "beautiful-mermaid|en|01-flow-td": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "beautiful-mermaid|en|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|en|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|en|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "beautiful-mermaid|en|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 6
+  },
+  "beautiful-mermaid|en|06-seq-login": {
+   "drawn": true,
+   "dangling": 8
+  },
+  "beautiful-mermaid|en|07-seq-pay": {
+   "drawn": true,
+   "dangling": 8
+  },
+  "beautiful-mermaid|en|08-state-order": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "beautiful-mermaid|en|09-state-door": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "beautiful-mermaid|en|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "beautiful-mermaid|en|11-er": {
+   "drawn": true,
+   "dangling": 7
+  },
+  "beautiful-mermaid|en|12-er-attr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|en|13-flow-long": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|en|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "beautiful-mermaid|en|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mmdflux|ko|01-flow-td": {
+   "drawn": true,
+   "dangling": 9
+  },
+  "mmdflux|ko|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mmdflux|ko|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|ko|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 6
+  },
+  "mmdflux|ko|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 5
+  },
+  "mmdflux|ko|06-seq-login": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|ko|07-seq-pay": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|ko|08-state-order": {
+   "drawn": true,
+   "dangling": 5
+  },
+  "mmdflux|ko|09-state-door": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "mmdflux|ko|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "mmdflux|ko|11-er": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mmdflux|ko|12-er-attr": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mmdflux|ko|13-flow-long": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|ko|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "mmdflux|ko|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mmdflux|en|01-flow-td": {
+   "drawn": true,
+   "dangling": 9
+  },
+  "mmdflux|en|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mmdflux|en|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|en|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 6
+  },
+  "mmdflux|en|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 5
+  },
+  "mmdflux|en|06-seq-login": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|en|07-seq-pay": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|en|08-state-order": {
+   "drawn": true,
+   "dangling": 5
+  },
+  "mmdflux|en|09-state-door": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|en|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "mmdflux|en|11-er": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mmdflux|en|12-er-attr": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mmdflux|en|13-flow-long": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mmdflux|en|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "mmdflux|en|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|01-flow-td": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|06-seq-login": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mermaid-ascii|ko|07-seq-pay": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mermaid-ascii|ko|08-state-order": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|ko|09-state-door": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|ko|10-class": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|ko|11-er": {
+   "drawn": true,
+   "dangling": 13
+  },
+  "mermaid-ascii|ko|12-er-attr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|13-flow-long": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|ko|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|01-flow-td": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|06-seq-login": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mermaid-ascii|en|07-seq-pay": {
+   "drawn": true,
+   "dangling": 3
+  },
+  "mermaid-ascii|en|08-state-order": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|en|09-state-door": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|en|10-class": {
+   "drawn": false,
+   "dangling": null
+  },
+  "mermaid-ascii|en|11-er": {
+   "drawn": true,
+   "dangling": 13
+  },
+  "mermaid-ascii|en|12-er-attr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|13-flow-long": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "mermaid-ascii|en|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|01-flow-td": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "termaid|ko|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "termaid|ko|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|06-seq-login": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|07-seq-pay": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|08-state-order": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|09-state-door": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "termaid|ko|11-er": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "termaid|ko|12-er-attr": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "termaid|ko|13-flow-long": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|ko|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|01-flow-td": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "termaid|en|02-flow-lr": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|03-flow-subgraph": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "termaid|en|04-flow-fanout": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|05-flow-mixed": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|06-seq-login": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|07-seq-pay": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|08-state-order": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|09-state-door": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|10-class": {
+   "drawn": true,
+   "dangling": 1
+  },
+  "termaid|en|11-er": {
+   "drawn": true,
+   "dangling": 4
+  },
+  "termaid|en|12-er-attr": {
+   "drawn": true,
+   "dangling": 2
+  },
+  "termaid|en|13-flow-long": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|14-flow-cjkmix": {
+   "drawn": true,
+   "dangling": 0
+  },
+  "termaid|en|15-flow-emoji": {
+   "drawn": true,
+   "dangling": 0
+  }
+ }
+}

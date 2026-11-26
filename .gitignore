@@ -2,3 +2,8 @@ node_modules
 *.log
 .DS_Store
 dist
+
+# benchmark tools and their output
+bench/.cache
+bench/node_modules
+__pycache__

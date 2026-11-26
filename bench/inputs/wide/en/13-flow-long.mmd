@@ -1,0 +1,4 @@
+flowchart TD
+    A[Upload user profile image] --> B[Save to S3 bucket]
+    B --> C[Thumbnail lambda]
+    C --> D[Invalidate CDN cache]

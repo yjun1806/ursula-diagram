@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant 사용자
+    participant 웹서버
+    participant 인증
+    사용자->>웹서버: 로그인 요청
+    웹서버->>인증: 토큰 검증
+    인증-->>웹서버: 확인 완료
+    웹서버-->>사용자: 메인 화면

@@ -1,0 +1,6 @@
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Opened: press btn
+    Opened --> Closed: 10s pass
+    Closed --> Locked: lock
+    Locked --> Closed: unlock

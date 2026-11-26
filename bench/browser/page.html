@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ursula and Mermaid.js, time per flowchart</title>
+<body>
+<script src="ursula.global.js"></script>
+<script src="mermaid.min.js"></script>
+<script>
+// Draws every flowchart with ursula.render and mermaid.render in this one page: one untimed pass each (warm-up), then
+// one timed pass. A call counts only when it returns an SVG (and, for Mermaid, not its error picture); a call that
+// throws or returns something else is counted as not drawn and its time is left out.
+const stats = (a) => {
+  const s = [...a].sort((x, y) => x - y)
+  const q = (p) => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1) + 0.5))]
+  return { median: q(0.5), p10: q(0.1), p90: q(0.9), min: s[0], max: s[s.length - 1] }
+}
+const isSvg = (out) => typeof out === 'string' && out.includes('<svg') && !out.includes('aria-roledescription="error"')
+
+async function timePass(inputs, draw) {
+  for (const t of inputs) { try { await draw(t) } catch {} } // warm-up
+  const ms = []
+  let notDrawn = 0
+  for (const t of inputs) {
+    const t0 = performance.now()
+    let out = null
+    try { out = await draw(t) } catch {}
+    const took = performance.now() - t0
+    if (isSvg(out)) ms.push(took)
+    else notDrawn++
+  }
+  return { drawn: ms.length, notDrawn, ...stats(ms) }
+}
+
+async function run() {
+  const inputs = await (await fetch('inputs.json')).json()
+  const out = { files: inputs.length }
+  out.ursula = await timePass(inputs, (t) => ursula.render(t))
+  mermaid.initialize({ startOnLoad: false })
+  let i = 0
+  out.mermaid = await timePass(inputs, async (t) => (await mermaid.render('m' + i++, t)).svg)
+  out.userAgent = navigator.userAgent
+  return out
+}
+window.benchmark = run()
+</script>

@@ -1,0 +1,12 @@
+classDiagram
+    class 회원 {
+        +이름 string
+        +이메일 string
+        +가입하기()
+    }
+    class 주문 {
+        +주문번호 int
+        +합계금액 int
+        +취소하기()
+    }
+    회원 "1" --> "*" 주문 : 주문함

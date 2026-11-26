@@ -1,0 +1,389 @@
+[
+  {
+    "skill": "diagram-design",
+    "input": "c4-container",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 153927,
+    "duration_api_ms": 150460,
+    "wall_ms": 154608,
+    "num_turns": 11,
+    "tool_calls": 9,
+    "tools": {
+      "Skill": 1,
+      "Bash": 5,
+      "Read": 3
+    },
+    "tokens": {
+      "input": 18,
+      "output": 15380,
+      "cache_read": 310207,
+      "cache_creation": 53035
+    },
+    "tokens_total": 378640,
+    "cost_usd": 0.7939934,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "diagram-design",
+    "input": "c4-container",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 173848,
+    "duration_api_ms": 169822,
+    "wall_ms": 177562,
+    "num_turns": 14,
+    "tool_calls": 12,
+    "tools": {
+      "Skill": 1,
+      "Bash": 9,
+      "Read": 2
+    },
+    "tokens": {
+      "input": 26,
+      "output": 17653,
+      "cache_read": 585861,
+      "cache_creation": 68110
+    },
+    "tokens_total": 671650,
+    "cost_usd": 1.0152162,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "diagram-design",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 161214,
+    "duration_api_ms": 155685,
+    "wall_ms": 161937,
+    "num_turns": 14,
+    "tool_calls": 12,
+    "tools": {
+      "Skill": 1,
+      "Bash": 7,
+      "Read": 3,
+      "Write": 1
+    },
+    "tokens": {
+      "input": 26,
+      "output": 18826,
+      "cache_read": 581479,
+      "cache_creation": 65553
+    },
+    "tokens_total": 665884,
+    "cost_usd": 1.0173438000000001,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "diagram-design",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 143527,
+    "duration_api_ms": 141476,
+    "wall_ms": 150872,
+    "num_turns": 10,
+    "tool_calls": 8,
+    "tools": {
+      "Skill": 1,
+      "Bash": 5,
+      "Read": 1,
+      "Write": 1
+    },
+    "tokens": {
+      "input": 18,
+      "output": 17887,
+      "cache_read": 315688,
+      "cache_creation": 58402
+    },
+    "tokens_total": 391995,
+    "cost_usd": 0.8881656,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "diagram-design",
+    "input": "order-flow",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 65113,
+    "duration_api_ms": 62015,
+    "wall_ms": 65779,
+    "num_turns": 10,
+    "tool_calls": 8,
+    "tools": {
+      "Skill": 1,
+      "Bash": 6,
+      "Read": 1
+    },
+    "tokens": {
+      "input": 18,
+      "output": 6663,
+      "cache_read": 277842,
+      "cache_creation": 45430
+    },
+    "tokens_total": 329953,
+    "cost_usd": 0.5523404,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "diagram-design",
+    "input": "order-flow",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 77749,
+    "duration_api_ms": 75919,
+    "wall_ms": 81510,
+    "num_turns": 12,
+    "tool_calls": 10,
+    "tools": {
+      "Skill": 1,
+      "Bash": 6,
+      "Read": 2,
+      "Write": 1
+    },
+    "tokens": {
+      "input": 22,
+      "output": 8530,
+      "cache_read": 385578,
+      "cache_creation": 49189
+    },
+    "tokens_total": 443319,
+    "cost_usd": 0.6413156,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "out.html",
+      "out.png"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 17997,
+    "duration_api_ms": 15870,
+    "wall_ms": 18862,
+    "num_turns": 5,
+    "tool_calls": 3,
+    "tools": {
+      "Skill": 1,
+      "Bash": 2
+    },
+    "tokens": {
+      "input": 8,
+      "output": 1726,
+      "cache_read": 43097,
+      "cache_creation": 10648
+    },
+    "tokens_total": 55479,
+    "cost_usd": 0.1283554,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "c4-container",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 17405,
+    "duration_api_ms": 15462,
+    "wall_ms": 18054,
+    "num_turns": 5,
+    "tool_calls": 3,
+    "tools": {
+      "Skill": 1,
+      "Bash": 2
+    },
+    "tokens": {
+      "input": 8,
+      "output": 1714,
+      "cache_read": 43086,
+      "cache_creation": 10643
+    },
+    "tokens_total": 55451,
+    "cost_usd": 0.1280732,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 11858,
+    "duration_api_ms": 8744,
+    "wall_ms": 12943,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 862,
+      "cache_read": 27454,
+      "cache_creation": 9451
+    },
+    "tokens_total": 37773,
+    "cost_usd": 0.0983628,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "checkout-sequence",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 11909,
+    "duration_api_ms": 10159,
+    "wall_ms": 12735,
+    "num_turns": 4,
+    "tool_calls": 2,
+    "tools": {
+      "Skill": 1,
+      "Bash": 1
+    },
+    "tokens": {
+      "input": 6,
+      "output": 1034,
+      "cache_read": 27454,
+      "cache_creation": 9569
+    },
+    "tokens_total": 38063,
+    "cost_usd": 0.1027468,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run1",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 15470,
+    "duration_api_ms": 13472,
+    "wall_ms": 16325,
+    "num_turns": 6,
+    "tool_calls": 4,
+    "tools": {
+      "Skill": 1,
+      "Bash": 3
+    },
+    "tokens": {
+      "input": 10,
+      "output": 1114,
+      "cache_read": 53372,
+      "cache_creation": 9385
+    },
+    "tokens_total": 63881,
+    "cost_usd": 0.10807440000000001,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  },
+  {
+    "skill": "ursula",
+    "input": "order-flow",
+    "run": "run2",
+    "is_error": false,
+    "subtype": "success",
+    "duration_ms": 14154,
+    "duration_api_ms": 11883,
+    "wall_ms": 14996,
+    "num_turns": 6,
+    "tool_calls": 4,
+    "tools": {
+      "Skill": 1,
+      "Bash": 3
+    },
+    "tokens": {
+      "input": 10,
+      "output": 884,
+      "cache_read": 53091,
+      "cache_creation": 9116
+    },
+    "tokens_total": 63101,
+    "cost_usd": 0.1012662,
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "files": [
+      "diagram.mmd",
+      "out.png",
+      "out.svg"
+    ]
+  }
+]

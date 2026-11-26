@@ -4,6 +4,7 @@
 // - dependencies: package.json `dependencies` (0) and `npm view mermaid@12.3.0 dependencies` (22).
 // - render time: the 116 flowchart examples in site/examples/official/flowchart, ursula.render and mermaid.render in
 //   the same page, one warm-up pass each, then one timed pass; median and 10th–90th percentile per drawing.
+// `npm run bench:browser` reruns the render-time and bundle-size measurement (bench/browser/).
 
 export const WHY = {
   en: {

@@ -84,3 +84,22 @@ Mermaid 문서의 같은 예시를 네 도구가 각자 기본 설정으로 그�
   beautiful-mermaid의 글자 출력은 0.009ms로 ursula(0.6ms)보다 빠릅니다.
 - **터미널로 보낼 그림의 라벨에 이모지가 있을 때.** ursula는 이모지를 한 칸으로 세기 때문에 이모지가 든 그림에서
   선 끊김이 18개 늘었습니다. mmdflux, mermaid-ascii, termaid는 늘어난 끊김이 0개였습니다.
+
+## 직접 재 보기
+
+이 수치를 잰 스크립트는 저장소의 `bench/`에 있습니다. 저장소를 클론한 폴더에서 아래 명령을 실행하면 다른 도구를
+`bench/.cache`에 설치하고, 도구마다 그리는 예시 수, 명령 한 번과 라이브러리 호출 한 번의 시간, 넓은 글자 처리를 잽니다.
+30분쯤 걸리고, mermaid-cli가 Chromium을 내려받습니다.
+
+```bash
+npm run bench:tools
+```
+
+아래 명령은 headless Chrome 한 페이지에서 ursula와 Mermaid.js의 시간을 잽니다.
+
+```bash
+npm run bench:browser
+```
+
+무엇을 재는지, 무엇이 필요한지, Claude Code를 실행해 비용이 드는 스킬 비교를 다시 돌리는 법은
+[bench/README.md](https://github.com/yjun1806/ursula-diagram/blob/main/bench/README.md)에 있습니다. 수치가 틀렸거나 도구의 새 버전이 나왔으면 [이슈를 열어 주세요](https://github.com/yjun1806/ursula-diagram/issues/new).

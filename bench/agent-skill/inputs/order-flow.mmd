@@ -1,0 +1,15 @@
+flowchart LR
+  subgraph shop[Storefront]
+    A[주문 접수] --> B[결제 확인]
+    B --> C[Order confirmed<br>email sent]
+    G[Customer notified]
+  end
+  subgraph wh[Warehouse]
+    D[Pick items] --> E[Pack]
+    E --> H[Quality check]
+    H --> F[Ship]
+    R[Restock]
+  end
+  B ==>|paid| D
+  F --> G
+  E -.-> R

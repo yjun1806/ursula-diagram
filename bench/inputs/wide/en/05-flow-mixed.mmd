@@ -1,0 +1,7 @@
+flowchart LR
+    A([Start]) --> B[Read Kafka msg]
+    B --> C{Format check}
+    C -->|pass| D[Write to DB]
+    C -->|fail| E[Retry queue]
+    E --> B
+    D --> F([End])

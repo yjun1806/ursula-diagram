@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant User
+    participant WebSrv
+    participant Auth
+    User->>WebSrv: Login req
+    WebSrv->>Auth: Verify token
+    Auth-->>WebSrv: Verified
+    WebSrv-->>User: Main view
