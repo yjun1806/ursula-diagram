@@ -1,6 +1,6 @@
 # 빠른 시작
 
-사용하는 패키지 매니저로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
+사용하는 패키지 매니저로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 이름 `ud`와 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다. `npx ud`는 안 됩니다. npx는 짧은 이름을 패키지 이름으로 찾는데, npm에는 `ud`라는 다른 패키지가 있습니다.
 
 ::: code-group
 
@@ -50,6 +50,25 @@ ursula-diagram order.mmd --format svg > order.svg
 :::
 
 설치하지 않고 글을 그려 보려면 [플레이그라운드](/ko/playground)를 엽니다.
+
+## 업데이트
+
+`update`는 npm 레지스트리에 최신 버전을 묻고, ursula-diagram을 설치한 방법(npm·pnpm·bun 전역, 프로젝트, 에이전트 스킬)에
+맞는 설치 명령을 출력합니다. 스스로는 아무것도 바꾸지 않고, 새 버전이 나와 있으면 코드 1로 끝납니다.
+
+<!-- exit 1 -->
+
+```bash
+ursula-diagram update
+```
+
+`--yes`를 붙이면 npm·pnpm·bun 전역 설치일 때 그 명령까지 실행합니다. 짧은 이름으로도 똑같이 됩니다.
+
+```bash
+ud update --yes
+```
+
+네트워크를 쓰는 명령은 `update` 하나뿐입니다. 레지스트리의 답을 5초 기다리고, 답이 없으면 코드 5로 끝납니다. 그림을 그릴 때는 네트워크를 쓰지 않습니다.
 
 ## Mermaid 판
 

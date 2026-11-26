@@ -42,7 +42,8 @@
   },
   "bin": {
     "ursula": "skills/ursula/scripts/ursula.mjs",
-    "ursula-diagram": "skills/ursula/scripts/ursula.mjs"
+    "ursula-diagram": "skills/ursula/scripts/ursula.mjs",
+    "ud": "skills/ursula/scripts/ursula.mjs"
   },
   "files": [
     "dist",

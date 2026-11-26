@@ -56,7 +56,7 @@ flowchrt LR
 
 `ursula-diagram syntax`는 유형 목록을, `ursula-diagram syntax <유형>`은 작은 예시와 규칙을 보여 줍니다.
 
-종료 코드는 0(그림을 그림), 1(글의 오류), 2(옵션 오류), 3(폭 부족), 4(엔진 안의 오류)입니다. 모든 옵션은
+종료 코드는 0(그림을 그림), 1(글의 오류), 2(옵션 오류), 3(폭 부족), 4(엔진 안의 오류)입니다. [`update`](/ko/guide/quick-start#업데이트)는 새 버전이 나와 있으면 1, npm 레지스트리에 닿지 못하면 5로 끝납니다. 모든 옵션은
 [출력 형식](/ko/guide/output-formats#options) 페이지에 있습니다.
 
 # 줄이 맞지 않을 때

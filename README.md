@@ -50,7 +50,7 @@ and with `--format text --width 80`.
 
 ## Install and use
 
-Install the command (Node 22 or later):
+Install the command (Node 22 or later; it also installs the short name `ud`):
 
 ```bash
 npm install -g ursula-diagram

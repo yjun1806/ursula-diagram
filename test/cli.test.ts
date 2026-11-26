@@ -29,8 +29,9 @@ describe('--help', () => {
 
   it('names the commands, the formats and the exit codes', () => {
     const text = cli(['--help']).stdout;
-    for (const word of ['syntax', 'mcp', 'text-svg', 'html', 'png', 'json', 'check', 'Exit codes']) expect(text).toContain(word);
-    for (const code of ['0 ', '1 ', '2 ', '3 ', '4 ']) expect(text).toContain(code);
+    for (const word of ['syntax', 'mcp', 'update', '--yes', 'text-svg', 'html', 'png', 'json', 'check', 'Exit codes']) expect(text).toContain(word);
+    for (const code of ['0 ', '1 ', '2 ', '3 ', '4 ', '5 ']) expect(text).toContain(code);
+    expect(text).toContain("Only 'update' uses the network");
   });
 });
 
@@ -51,11 +52,40 @@ describe('--version', () => {
 
 describe('exit codes', () => {
   it('2 for an option it does not know, with a pointer to --help', () => {
-    const r = cli(['--colour']);
+    const r = cli(['--zzz']);
     expect(r.status).toBe(2);
     expect(r.stdout).toBe('');
-    expect(r.stderr).toMatch(/^usage: ursula-diagram/);
+    expect(r.stderr).toMatch(/^error: unknown option --zzz\nusage: ursula-diagram/);
     expect(r.stderr).toContain("Run 'ursula-diagram --help' for more.");
+  });
+
+  it('2 for a misspelt option, naming the option it is near', () => {
+    for (const [typed, meant] of [['--colour', '--color'], ['--widht', '--width'], ['--no-legnd', '--no-legend'], ['--hepl', '--help']]) {
+      const r = runCommand([typed as string], () => '');
+      expect(r.code).toBe(2);
+      expect(r.stderr).toMatch(new RegExp(`^error: unknown option ${typed}\\ndid you mean: ${meant}\\nusage: ursula-diagram`));
+    }
+  });
+
+  it('2 for an option removed in 0.2.2, saying why it went', () => {
+    const cases = [
+      ['--engine', 'error: --engine was removed in 0.2.2 (the default layout is the only one now)'],
+      ['--no-questions', 'error: --no-questions was removed in 0.2.2 (it never changed the output)'],
+      ['--no-elbows', 'error: --no-elbows was removed in 0.2.2 (the check now always matches the drawing)'],
+    ];
+    for (const [option, line] of cases) {
+      const r = runCommand(['--format', 'text', option as string, 'grid'], () => 'flowchart LR\nA --> B\n');
+      expect(r.code).toBe(2);
+      expect(r.stdout).toBe('');
+      expect(r.stderr.split('\n')[0]).toBe(line);
+      expect(r.stderr).toContain('usage: ursula-diagram');
+    }
+  });
+
+  it('the usage line alone for a second file', () => {
+    const r = runCommand(['a.mmd', 'b.mmd'], () => '');
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/^usage: ursula-diagram/);
   });
 
   it('2 for a width that is not a number, and for a missing value', () => {
