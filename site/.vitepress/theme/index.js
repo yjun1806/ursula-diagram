@@ -7,6 +7,8 @@ import InstallTabs from './home/InstallTabs.vue';
 import TypeGrid from './home/TypeGrid.vue';
 import BenchmarkBars from './compare/BenchmarkBars.vue';
 import FeatureTable from './compare/FeatureTable.vue';
+import ExampleJump from './examples/ExampleJump.vue';
+import ExampleTypes from './examples/ExampleTypes.vue';
 import { watchLanguageChoice } from './language-choice.js';
 import './theme.css';
 import './custom.css';
@@ -24,6 +26,8 @@ export default {
     app.component('TypeGrid', TypeGrid);
     app.component('BenchmarkBars', BenchmarkBars);
     app.component('FeatureTable', FeatureTable);
+    app.component('ExampleJump', ExampleJump);
+    app.component('ExampleTypes', ExampleTypes);
     if (inBrowser) watchLanguageChoice(siteData.value.base);
   },
 };

@@ -1,4 +1,5 @@
-// Runs the playground's drawing code under Node against the engine file the site serves, for every example file.
+// Runs the playground's drawing code under Node against the engine file the site serves, for every example file,
+// and counts the official examples the Examples pages draw.
 // Run after `npm run build` (or `node scripts/prepare.mjs`).
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -62,6 +63,29 @@ if (existsSync(built)) {
   if (missingKo.length) fail(`no Korean page for ${missingKo.join(', ')}`);
   else console.log('ok   every English page has a Korean page');
   if (!readFileSync(join(built, 'index.html'), 'utf8').includes('ursula-lang')) fail('the language redirect is not in the page head');
+}
+
+// The Examples pages: how many official examples the engine drew. A refused example shows its error on its page
+// instead of failing the build, so the count here is where a regression shows.
+const rendered = JSON.parse(readFileSync(join(site, '.vitepress', 'examples', 'rendered.json'), 'utf8')).types;
+const items = rendered.flatMap((t) => t.items.map((i) => ({ ...i, type: t.id })));
+const onDisk = rendered.reduce((n, t) => n + readdirSync(join(site, 'examples', 'official', t.id)).filter((f) => f.endsWith('.mmd')).length, 0);
+if (onDisk !== items.length) fail(`rendered.json has ${items.length} examples but examples/official/ has ${onDisk}; run node scripts/prepare.mjs`);
+const refused = items.filter((i) => i.error);
+for (const i of refused) console.log(`WARN official example ${i.type}/${i.name}: ${i.error}`);
+console.log(`ok   official examples: ${items.length - refused.length} of ${items.length} drawn, ${refused.length} errors, in ${rendered.length} types`);
+if (existsSync(built)) {
+  for (const t of rendered) {
+    for (const page of [`examples/${t.id}.html`, `ko/examples/${t.id}.html`]) {
+      const path = join(built, page);
+      const shown = existsSync(path) ? readFileSync(path, 'utf8').split('class="ex-item"').length - 1 : -1;
+      if (shown !== t.items.length) fail(`${page} shows ${shown} examples, not ${t.items.length}`);
+    }
+  }
+  console.log(`ok   ${rendered.length} type pages in each language show every example`);
+  for (const [page, target] of [['gallery.html', '/examples/'], ['ko/gallery.html', '/ko/examples/']]) {
+    if (!readFileSync(join(built, page), 'utf8').includes(`url=/ursula-diagram${target}`)) fail(`${page} does not send the visitor to ${target}`);
+  }
 }
 
 const text = readFileSync(join(dir, 'order-flow.mmd'), 'utf8');

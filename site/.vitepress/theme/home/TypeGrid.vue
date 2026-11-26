@@ -1,5 +1,5 @@
 <script setup>
-// Gallery thumbnails with their type names, and the names of all 35 types the engine reads.
+// Thumbnails of the Examples page with their type names, each linking to its type's examples, and the names of all 35 types the engine reads.
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { langOf } from '../playground/strings.js';
@@ -7,7 +7,8 @@ import { langOf } from '../playground/strings.js';
 const { lang } = useData();
 const code = langOf(lang.value);
 const t = HOME_STRINGS[code];
-const gallery = withBase(code === 'ko' ? '/ko/gallery' : '/gallery');
+const prefix = code === 'ko' ? '/ko' : '';
+const examples = withBase(`${prefix}/examples/`);
 
 const SHOWN = {
   en: [
@@ -23,6 +24,7 @@ const cards = SHOWN[code].map(([id, name]) => ({
   id,
   name,
   src: withBase(`/assets/${code === 'ko' ? 'ko-' : ''}${id}.svg`),
+  href: withBase(`${prefix}/examples/${id}`),
 }));
 
 // The README's list, in its order.
@@ -38,7 +40,7 @@ const ALL = [
   <section class="tg">
     <h2 class="tg-title">{{ t.types }}</h2>
     <div class="tg-grid">
-      <a v-for="c in cards" :key="c.id" class="tg-card" :href="gallery">
+      <a v-for="c in cards" :key="c.id" class="tg-card" :href="c.href">
         <span class="tg-thumb ursula-frame"><img :src="c.src" :alt="c.name" loading="lazy" /></span>
         <span class="tg-name">{{ c.name }}</span>
       </a>
@@ -47,7 +49,7 @@ const ALL = [
     <ul class="tg-chips">
       <li v-for="name in ALL" :key="name">{{ name }}</li>
     </ul>
-    <p class="tg-more"><a :href="gallery">{{ t.gallery }} →</a></p>
+    <p class="tg-more"><a :href="examples">{{ t.examples }} →</a></p>
   </section>
 </template>
 

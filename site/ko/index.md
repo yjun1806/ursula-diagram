@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: ursula
+  name: ursula-diagram
   text: Mermaid 글을 SVG와 터미널 글자 그림으로
   tagline: 브라우저도, 실행 의존성도 필요 없습니다. 같은 글은 언제나 같은 그림이 됩니다.
   actions:
@@ -31,7 +31,7 @@ features:
 
 ## 하는 일
 
-ursula는 Mermaid 문서에 있는 유형 35가지의 글을 읽고, 상자·선·라벨의 자리를 직접 계산합니다. 코딩 에이전트를 위해
+ursula-diagram은 Mermaid 문서에 있는 유형 35가지의 글을 읽고, 상자·선·라벨의 자리를 직접 계산합니다. 코딩 에이전트를 위해
 만들었습니다. 에이전트가 Mermaid 글 몇 줄을 쓰면 엔진이 배치를 계산해 SVG나 에이전트 터미널용 글자 그림으로 그립니다.
 SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. 같은 글은 언제나 같은 그림이 됩니다. Node만 있으면 돌고, 브라우저나
 DOM이 필요 없으며, 실행할 때 설치할 것도 없습니다.

@@ -13,7 +13,7 @@ export const HOME_STRINGS = {
     needsNode: 'Needs Node 22 or later. npx runs it once without installing.',
     types: 'Every type, drawn by the same engine',
     typesLead: 'The type is read from the first line of the text, as Mermaid does. All 35:',
-    gallery: 'Open the gallery',
+    examples: 'See every example',
   },
   ko: {
     input: 'Mermaid 입력',
@@ -27,6 +27,6 @@ export const HOME_STRINGS = {
     needsNode: 'Node 22 이상이 필요합니다. npx는 설치하지 않고 한 번 실행합니다.',
     types: '모든 유형을 같은 엔진으로',
     typesLead: 'Mermaid처럼 글의 첫 줄로 유형을 읽습니다. 35가지 전부:',
-    gallery: '그림 모음 보기',
+    examples: '예제 모두 보기',
   },
 };
