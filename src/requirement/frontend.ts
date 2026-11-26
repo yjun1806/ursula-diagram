@@ -1,4 +1,5 @@
 import { layout } from '../layout/index.ts';
+import { layoutOptionsOf } from '../layout/options.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { FrontEnd } from '../registry.ts';
@@ -18,22 +19,22 @@ export const requirementFrontEnd: FrontEnd = {
     const requirements = model.nodes.filter((n) => n.kind === 'requirement').length;
     const summary = `Requirement diagram: ${requirements} requirements, ${model.nodes.length - requirements} elements, ${model.relations.length} relations`;
     const title = svgOpts.title ?? model.accTitle ?? opts.heading ?? summary;
-    const laid = layout(requirementGraph(model, ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(quality === undefined ? {} : { quality }) });
+    const laid = layout(requirementGraph(model, ruler), ruler, layoutOptionsOf({ maxWidth, quality }));
     return renderSvg(laid, { title, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     const ruler = cellRuler();
-    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(opts.quality === undefined ? {} : { quality: opts.quality }) });
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth, quality: opts.quality }));
     return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
   },
   textSpans(src, maxWidth, opts) {
     const ruler = cellRuler();
-    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(maxWidth === undefined ? {} : { maxWidth }), ...(opts.quality === undefined ? {} : { quality: opts.quality }) });
+    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth, quality: opts.quality }));
     return titledSpans(renderTextLayoutSpans(laid), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const ruler = mode === 'text' ? cellRuler() : pixelRuler();
-    return layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }) });
+    return layout(requirementGraph(parseRequirement(src), ruler), ruler, layoutOptionsOf({ maxWidth: opts.maxWidth, quality: opts.quality }));
   },
 };
 

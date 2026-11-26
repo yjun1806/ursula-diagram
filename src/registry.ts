@@ -15,8 +15,6 @@ export interface RenderOptions extends SvgOptions {
   frontMatter?: Record<string, FrontValue>;
   maxWidth?: number;
   composition?: 'auto' | 'lanes' | 'stages';
-  questions?: boolean;
-  elbows?: boolean;
   /** 'fast' or 'best'; pixels draw 'best', the terminal 'fast', unless told. */
   quality?: 'fast' | 'best';
 }
@@ -31,8 +29,6 @@ export interface TextOptions {
   legend?: SvgOptions['legend'];
   maxHeight?: number;
   composition?: 'auto' | 'lanes' | 'stages';
-  questions?: boolean;
-  elbows?: boolean;
   quality?: 'fast' | 'best';
   /** How much of every box a terminal drawing keeps; 'auto' (the default) takes the fullest step that fits the width. */
   detail?: 'auto' | 'full' | 'narrow' | 'title';

@@ -6,9 +6,14 @@
 
 ## Unreleased
 
+### Changed
+
+- class diagram의 json이 svg처럼 `maxWidth`, `composition`, `quality`를 받고, requirement diagram의 json이 `quality`를 받습니다. 그래서 `--check`가 그려진 배치를 설명합니다. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
+
 ### Removed
 
 - 둘째 flowchart 배치 엔진을 지웠습니다. `--engine` 옵션, 라이브러리의 `engine` 옵션(`LayoutOptions`, `RenderOptions`, `TextOptions`, `renderText`, `renderTextSpans`, `renderTextSvg`), 그 엔진만 읽던 `LayoutOptions`의 `laneAxis` 옵션이 없어졌습니다. 그림은 하나도 바뀌지 않습니다. [#70](https://github.com/yjun1806/ursula-diagram/pull/70)
+- `--no-questions`와 `--no-elbows` 옵션, 라이브러리의 `questions`와 `elbows` 옵션(`RenderOptions`, `TextOptions`, `LayoutOptions`, renderText 계열)을 지웠습니다. [#72](https://github.com/yjun1806/ursula-diagram/pull/72)
 
 ## 0.2.1 (2026-11-26)
 

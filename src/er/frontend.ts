@@ -1,4 +1,5 @@
 import { layout } from '../layout/index.ts';
+import { layoutOptionsOf } from '../layout/options.ts';
 import { cellWidth, cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { RenderOptions, TextOptions } from '../registry.ts';
@@ -12,11 +13,7 @@ const summary = (g: Graph): string => `Entity relationship diagram: ${g.nodes.le
 
 function pixels(src: string, opts: RenderOptions): Layout & { title: string } {
   const model = parseEr(src, opts.heading);
-  const laid = layout({ ...model.graph, placer: 'c4-grid' }, pixelRuler(), {
-    legend: false,
-    ...(opts.quality === undefined ? {} : { quality: opts.quality }),
-    ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
-  });
+  const laid = layout({ ...model.graph, placer: 'c4-grid' }, pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
   return { ...laid, title: opts.title ?? model.title ?? summary(model.graph) };
 }
 

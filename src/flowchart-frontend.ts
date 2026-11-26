@@ -14,21 +14,11 @@ import type { Detail } from './text-detail.ts';
 import { descriptionList, innerWidth, innerWidths, titlesOnly, wrapGraph } from './text-detail.ts';
 import type { Graph, Layout } from './types.ts';
 import { titledLines, titledSpans } from './front/title.ts';
+import { layoutOptionsOf } from './layout/options.ts';
 
 type Composition = 'auto' | 'lanes' | 'stages';
 
 type Quality = 'fast' | 'best';
-
-function layoutOptions(opts: { maxWidth?: number; legend?: LegendOption; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality }): { maxWidth?: number; legend?: LegendOption; composition?: Composition; questions?: boolean; elbows?: boolean; quality?: Quality } {
-  return {
-    ...(opts.quality === undefined ? {} : { quality: opts.quality }),
-    ...(opts.composition === undefined ? {} : { composition: opts.composition }),
-    ...(opts.questions === undefined ? {} : { questions: opts.questions }),
-    ...(opts.elbows === undefined ? {} : { elbows: opts.elbows }),
-    ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
-    ...(opts.legend === undefined ? {} : { legend: opts.legend }),
-  };
-}
 
 /** The step a terminal drawing was made with: 1 all text, 2 text wrapped narrower, 3 titles only, 4 titles only with the flow folded. */
 export type TextStep = 1 | 2 | 3 | 4;
@@ -72,7 +62,7 @@ export function drawText(src: string, maxWidth: number | undefined, opts: TextOp
   // A quick drawing is the usual one (see `LayoutOptions.bare`) unless `tidied`, when its labels are brought into sight as in the drawing given out.
   const draw = (a: Attempt, fold: boolean, quick: boolean, as: Composition | undefined = composition, room = true, tidied = false): { lines: string[]; layout: Layout } => {
     const laid = layout(a.graph, cellRuler(), {
-      ...layoutOptions({ legend, composition: as, ...(quality === undefined ? {} : { quality }) }),
+      ...layoutOptionsOf({ legend, composition: as, ...(quality === undefined ? {} : { quality }) }),
       ...(maxHeight === undefined ? {} : { maxHeight }),
       ...(maxWidth === undefined ? {} : { maxWidth }),
       fold,
@@ -195,7 +185,7 @@ registerFrontEnd({
   headers: ['flowchart', 'graph', 'swimlane-beta'],
   svg(src, opts) {
     const { maxWidth, legend, composition, quality, ...svgOpts } = opts;
-    return renderSvg(layout(parse(src), pixelRuler(), layoutOptions({ maxWidth, legend, composition, ...(quality === undefined ? {} : { quality }) })), { ...svgOpts, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
+    return renderSvg(layout(parse(src), pixelRuler(), layoutOptionsOf({ maxWidth, legend, composition, ...(quality === undefined ? {} : { quality }) })), { ...svgOpts, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
@@ -205,6 +195,6 @@ registerFrontEnd({
     return titledSpans(layoutSpans(drawn.layout, drawn.lines), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
-    return layout(parse(src), mode === 'text' ? cellRuler() : pixelRuler(), layoutOptions(opts));
+    return layout(parse(src), mode === 'text' ? cellRuler() : pixelRuler(), layoutOptionsOf(opts));
   },
 });

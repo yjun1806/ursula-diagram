@@ -3,7 +3,7 @@ import { refineLabels } from '../layered/label-spot.ts';
 import { cellWidth } from '../metrics.ts';
 import type { Ruler } from '../metrics.ts';
 import type { Diagnostic, Direction, Graph, GraphEdge, GraphNode, Layout, LayoutCluster, LayoutEdge, LayoutNode, Point } from '../types.ts';
-import type { LayoutOptions } from './index.ts';
+import type { EngineOptions } from './index.ts';
 import { withLegend } from './legend.ts';
 import { crossingCount } from './check.ts';
 import { routeGlobally } from './global-route.ts';
@@ -25,7 +25,7 @@ const NAME_GAP = 12;
 type Rect = { x: number; y: number; w: number; h: number };
 
 /** Draws one level of the clusters: the graph has no clusters left, only boxes of a given size. */
-export type DrawLevel = (graph: Graph, ruler: Ruler, opts: LayoutOptions) => Layout;
+export type DrawLevel = (graph: Graph, ruler: Ruler, opts: EngineOptions) => Layout;
 
 const tidy = (v: number): number => {
   const r = Math.round(v * 1e6) / 1e6;
@@ -221,7 +221,7 @@ const indexOfMarker = (id: string | undefined): number | undefined => (id !== un
 interface Plan {
   graph: Graph;
   ruler: Ruler;
-  opts: LayoutOptions;
+  opts: EngineOptions;
   draw: DrawLevel;
   tree: Tree;
   edges: Routed[];
@@ -934,7 +934,7 @@ export function placeNames(layout: Layout, ruler: Ruler, rows: ReadonlySet<strin
  * clusters directly in it, and then stands as one box of its size in the level above. A line that crosses a cluster
  * border is drawn between the outermost boxes it joins; inside, it goes on from the border to its node.
  */
-export function layoutClusters(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
+export function layoutClusters(graph: Graph, ruler: Ruler, opts: EngineOptions, draw: DrawLevel): Layout {
   // The levels are drawn the same whichever way the lines are put together afterwards, so each level is drawn once per setting.
   const levels = remembered(draw);
   if (opts.clusterExits !== undefined || opts.nestedSpread !== undefined || ruler.terminal === true) return chooseDrawing(graph, ruler, opts, levels);
@@ -985,7 +985,7 @@ const better = (x: number[], y: number[]): boolean => {
 
 const subtitledOf = (graph: Graph): Set<string> => new Set((graph.clusters ?? []).filter((c) => c.subtitled === true).map((c) => c.id));
 
-function chooseDrawing(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel): Layout {
+function chooseDrawing(graph: Graph, ruler: Ruler, opts: EngineOptions, draw: DrawLevel): Layout {
   // Drawn once with every name on one line; the clusters whose name has no room there get a taller name row, and the drawing is made once more.
   const drawn = (exits: boolean): Layout => {
     const first = layoutPass(graph, ruler, opts, draw, subtitledOf(graph), exits);
@@ -1045,7 +1045,7 @@ function routedOnce(layout: Layout, ruler: Ruler, subtitled: ReadonlySet<string>
   return { ...kept, clusters: placeNames(kept, ruler, rows, subtitled).clusters };
 }
 
-function layoutPass(graph: Graph, ruler: Ruler, opts: LayoutOptions, draw: DrawLevel, rows: ReadonlySet<string>, useExits: boolean): { layout: Layout; need: Set<string> } {
+function layoutPass(graph: Graph, ruler: Ruler, opts: EngineOptions, draw: DrawLevel, rows: ReadonlySet<string>, useExits: boolean): { layout: Layout; need: Set<string> } {
   const tree = treeOf(graph);
   const plan: Plan = { graph, ruler, opts, draw, tree, edges: placeEdges(graph, tree), home: (graph.lanes[0] ?? { id: '_' }).id, rows };
   const top = buildLevel(plan, '', graph.direction, graph.mirror);

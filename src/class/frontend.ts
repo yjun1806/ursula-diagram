@@ -2,6 +2,7 @@ import { cellRuler, cellWidth, pixelRuler } from '../metrics.ts';
 import { clip } from '../text/fit.ts';
 import { registerFrontEnd } from '../registry.ts';
 import { layout } from '../layout/index.ts';
+import { layoutOptionsOf } from '../layout/options.ts';
 import { renderSvg } from '../render/svg.ts';
 import { renderTextLayout, renderTextLayoutSpans } from '../render/text.ts';
 import { createAccessibilityReader } from '../front/accessibility.ts';
@@ -46,13 +47,8 @@ registerFrontEnd({
   svg(src, opts) {
     const graph = read(src, opts.config);
     const title = opts.title ?? accessibleTitle(src) ?? opts.heading ?? `Class diagram: ${graph.nodes.filter((n) => n.shape === 'rect').length} classes, ${graph.edges.length} relations`;
-    const { maxWidth, legend: _legend, composition, quality, ...svgOpts } = opts;
-    const laid = layout(graph, pixelRuler(), {
-      legend: false,
-      ...(maxWidth === undefined ? {} : { maxWidth }),
-      ...(composition === undefined ? {} : { composition }),
-      ...(quality === undefined ? {} : { quality }),
-    });
+    const { maxWidth: _maxWidth, legend: _legend, composition: _composition, quality: _quality, ...svgOpts } = opts;
+    const laid = layout(graph, pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
     return renderSvg(laid, { ...svgOpts, title, legend: false, ...(opts.heading === undefined ? {} : { drawTitle: opts.heading }) });
   },
   textLines(src, maxWidth, opts) {
@@ -62,6 +58,6 @@ registerFrontEnd({
     return titledSpans(renderTextLayoutSpans(terminal(src, maxWidth, opts.config).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
-    return layout(read(src, opts.config), mode === 'text' ? cellRuler() : pixelRuler(), { legend: false });
+    return layout(read(src, opts.config), mode === 'text' ? cellRuler() : pixelRuler(), { ...layoutOptionsOf(opts), legend: false });
   },
 });

@@ -92,7 +92,7 @@ function withinWidth<T>(maxWidth: number, draw: () => T[], width: (line: T) => n
 export function renderText(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { lines: string[] } | TextError {
   return withinWidth(maxWidth, () => selectFrontEnd(src).textLines(src, maxWidth, opts), cellWidth);
 }
@@ -104,7 +104,7 @@ export function renderText(
 export function renderTextSpans(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { lines: TextSpan[][] } | TextError {
   const draw = (): TextSpan[][] => {
     const frontEnd = selectFrontEnd(src);
@@ -122,7 +122,7 @@ export function renderTextSpans(
 export function renderTextSvg(
   src: string,
   maxWidth: number,
-  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'questions' | 'elbows' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
+  opts: Pick<LayoutOptions, 'legend' | 'maxHeight' | 'composition' | 'quality'> & Pick<TextOptions, 'detail' | 'charset'> = {},
 ): { svg: string } | TextError {
   const drawn = renderTextSpans(src, maxWidth, opts);
   return 'error' in drawn ? drawn : { svg: drawTextSvg(drawn.lines) };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellRuler, layout, parse, pixelRuler } from '../src/index.ts';
+import { layoutWith } from '../src/layout/index.ts';
 import { CANDIDATES, WEIGHTS, crossingsOf, farness, offCentre, pickBest, score, startMissed, violations } from '../src/layered/choose.ts';
 import * as fixtures from './fixtures.ts';
 import { assignLayers } from '../src/layered/rows.ts';
@@ -177,17 +178,17 @@ describe('score', () => {
 
 describe('main flow in the drawing', () => {
   it('marks the edges that join two main-flow nodes in turn, and no others', () => {
-    const l = layout(parse(twoBands), pixelRuler(), { composition: 'lanes', questions: false });
+    const l = layoutWith(parse(twoBands), pixelRuler(), { composition: 'lanes', questions: false });
     const marked = l.edges.filter((e) => e.main).map((e) => `${e.from}>${e.to}`).sort();
     expect(marked).toEqual(['m1>m2', 'm2>m3', 'm3>m4', 'm4>m5']);
-    const staged = layout(parse('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nend\nQ --> R'), pixelRuler(), { composition: 'stages', questions: false });
+    const staged = layoutWith(parse('swimlane-beta LR\nsubgraph a[A]\nP --> Q\nend\nsubgraph b[B]\nR\nend\nQ --> R'), pixelRuler(), { composition: 'stages', questions: false });
     expect(staged.edges.some((e) => e.main)).toBe(false);
   });
 
   it('counts crossings on the segments as the crossing diagnostics do', () => {
     for (const src of [...Object.values(fixtures), twoBands]) {
       for (const ruler of [pixelRuler(), cellRuler()]) {
-        const l = layout(parse(src), ruler, ruler === cellRuler() ? { maxWidth: 160, questions: false } : { questions: false });
+        const l = layoutWith(parse(src), ruler, ruler === cellRuler() ? { maxWidth: 160, questions: false } : { questions: false });
         const [onMain, other] = crossingsOf(l);
         expect(onMain + other).toBe(l.diagnostics.filter((d) => d.kind === 'crossing').length);
       }
@@ -195,7 +196,7 @@ describe('main flow in the drawing', () => {
   });
 
   it('finds the fan-out nodes that are off the middle of their partners', () => {
-    const l = layout(parse('swimlane-beta LR\nsubgraph a[A]\nP\nend\nsubgraph b[B]\nX\nY\nZ\nend\nP --> X\nP --> Y\nP --> Z'), pixelRuler(), { composition: 'lanes', questions: false });
+    const l = layoutWith(parse('swimlane-beta LR\nsubgraph a[A]\nP\nend\nsubgraph b[B]\nX\nY\nZ\nend\nP --> X\nP --> Y\nP --> Z'), pixelRuler(), { composition: 'lanes', questions: false });
     expect(Array.isArray(offCentre(l))).toBe(true);
     expect(offCentre({ ...l, pitch: undefined } as Layout)).toEqual([]);
   });

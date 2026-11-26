@@ -1,4 +1,5 @@
 import { layout } from '../layout/index.ts';
+import { layoutOptionsOf } from '../layout/options.ts';
 import { cellRuler, pixelRuler } from '../metrics.ts';
 import { registerFrontEnd } from '../registry.ts';
 import type { RenderOptions } from '../registry.ts';
@@ -8,18 +9,11 @@ import type { Layout } from '../types.ts';
 import { parseState } from './parse.ts';
 import { titledLines, titledSpans } from '../front/title.ts';
 
-type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'composition' | 'questions' | 'elbows' | 'quality'>;
+type Opts = Pick<RenderOptions, 'maxWidth' | 'legend' | 'composition' | 'quality'>;
 
 function drawn(src: string, ruler: ReturnType<typeof pixelRuler>, opts: Opts): { layout: Layout; title: string | undefined } {
   const { graph, accTitle } = parseState(src);
-  const laid = layout(graph, ruler, {
-    legend: false,
-    ...(opts.composition === undefined ? {} : { composition: opts.composition }),
-    ...(opts.questions === undefined ? {} : { questions: opts.questions }),
-    ...(opts.elbows === undefined ? {} : { elbows: opts.elbows }),
-    ...(opts.quality === undefined ? {} : { quality: opts.quality }),
-    ...(opts.maxWidth === undefined ? {} : { maxWidth: opts.maxWidth }),
-  });
+  const laid = layout(graph, ruler, { ...layoutOptionsOf(opts), legend: false });
   return { layout: laid, title: accTitle };
 }
 

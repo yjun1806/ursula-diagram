@@ -31,13 +31,12 @@ export interface Host {
   pngFonts?: (svg: string) => { fonts: PngFonts; warnings: readonly string[] };
 }
 
+/** The options of a request that reach the layout: the same for the drawing, the terminal drawing and the check. */
 function layoutOptions(req: DrawRequest) {
   return {
     ...(req.width === undefined ? {} : { maxWidth: req.width }),
     ...(req.legend ? {} : { legend: false as const }),
     ...(req.composition === undefined ? {} : { composition: req.composition }),
-    ...(req.questions ? {} : { questions: false }),
-    ...(req.elbows ? {} : { elbows: false }),
     ...(req.detail === undefined ? {} : { detail: req.detail }),
     ...(req.quality === undefined ? {} : { quality: req.quality }),
     ...(req.charset === undefined ? {} : { charset: req.charset }),

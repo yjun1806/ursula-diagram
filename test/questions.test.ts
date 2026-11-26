@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkLines, layout, parse, pixelRuler } from '../src/index.ts';
+import { layoutWith } from '../src/layout/index.ts';
 import { score } from '../src/layered/choose.ts';
 import { pictureOf } from '../src/layered/questions.ts';
 
@@ -54,7 +55,7 @@ describe('questions', () => {
     expect(q?.before?.composition).toBe('lanes');
     expect(q?.after?.composition).toBe('stages');
     expect((q?.after?.cost ?? 0)).toBeLessThan(q?.before?.cost ?? 0);
-    const real = pictureOf(layout(parse(split), pixelRuler(), { questions: false }));
+    const real = pictureOf(layoutWith(parse(split), pixelRuler(), { questions: false }));
     expect(q?.after).toEqual(real);
   });
 
@@ -75,7 +76,7 @@ describe('questions', () => {
   it('can be switched off, and never counts as a problem', () => {
     const g = parse(mixed);
     const on = layout(g, pixelRuler());
-    const off = layout(g, pixelRuler(), { questions: false });
+    const off = layoutWith(g, pixelRuler(), { questions: false });
     expect(off.diagnostics.some((d) => d.kind === 'question')).toBe(false);
     expect(score(on)).toEqual(score(off));
     expect(on.edges).toEqual(off.edges);
