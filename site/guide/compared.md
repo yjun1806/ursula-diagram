@@ -82,8 +82,8 @@ and Pele drew them in headless Chrome. One row per example, one column per tool;
 
 ## When another tool fits better
 
-- **You need a PNG from the command line.** mermaid-cli writes one, at 630 ms and a Chromium per drawing. ursula
-  saves a PNG only from its one-file HTML page.
+- **You need a PNG with nothing more to install.** mermaid-cli writes one as it comes, at 630 ms and a Chromium per
+  drawing. ursula writes PNG once the optional `@resvg/resvg-js` (about 4 MB) is installed.
 - **You start a new process for every drawing.** mmdflux and mermaid-ascii take 9 to 11 ms; ursula takes 103 ms,
   59 ms of which an empty Node script already takes.
 - **You call a library many times in one program.** Pele (0.015 ms) and beautiful-mermaid's text output (0.009 ms)

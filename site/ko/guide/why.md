@@ -110,7 +110,7 @@ mermaid-ascii는 160개(3가지)를 그립니다. ursula는 531개(35가지)를 
 
 - **사람이 그림 한 장을 공들여 디자인할 때.** ursula 그림의 생김새는 한 가지이고 바꿀 수 있는 것은 색뿐입니다. 그림
   스킬이나 디자이너가 낫습니다.
-- **명령줄에서 PNG가 필요할 때.** ursula의 명령은 PNG를 쓰지 않습니다. `--format html` 페이지의 버튼으로만 PNG를 저장합니다.
+- **더 설치하지 않고 PNG가 필요할 때.** ursula는 선택 설치 패키지 `@resvg/resvg-js`(약 4MB)를 깔아야 PNG를 씁니다.
   mermaid-cli는 PNG를 바로 씁니다. 대신 한 장에 630ms가 걸리고 Chromium이 필요합니다.
 - **그림마다 새 프로세스를 띄울 때.** mmdflux와 mermaid-ascii는 9~11ms, ursula는 103ms가 걸립니다. 그중 59ms는 빈 Node
   스크립트를 실행해도 드는 시간입니다.

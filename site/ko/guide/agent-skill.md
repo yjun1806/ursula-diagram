@@ -36,8 +36,9 @@ cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 
 셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 띄웁니다. 도구는 셋입니다.
 `render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`, `fix`), `check`(`fix`), `syntax`. `render`는 따로 정하지 않으면
-`text` 형식을 `width` 100으로 그립니다. `format`은 `text`, `text-svg`, `svg`, `html` 가운데 하나입니다. `fix: true`를 주면
-결과 끝에 고친 곳과 고친 글이 붙습니다.
+`text` 형식을 `width` 100으로 그립니다. `format`은 `text`, `text-svg`, `svg`, `html`, `png` 가운데 하나입니다. `fix: true`를 주면
+결과 끝에 고친 곳과 고친 글이 붙습니다. `format: "png"`(`theme`은 light나 dark)는 그림을 이미지 내용으로 돌려줘서, 이미지를
+보여 주는 클라이언트에서 그림이 바로 보입니다. `@resvg/resvg-js`가 있어야 하고, 없으면 설치 명령을 담은 오류가 돌아옵니다.
 
 Claude Code에서는 이 명령으로 등록합니다.
 

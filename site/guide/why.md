@@ -118,8 +118,8 @@ mermaid-ascii do not write SVG.
 
 - **A person designs one picture with care.** ursula's drawings have one look, and only the colours can change. A
   drawing skill or a designer does better.
-- **You need a PNG from the command line.** The ursula command does not write PNG; only the button on a
-  `--format html` page saves one. mermaid-cli writes a PNG directly, at 630 ms and a Chromium per drawing.
+- **You need a PNG with nothing more to install.** ursula writes PNG only once the optional `@resvg/resvg-js`
+  (about 4 MB) is installed. mermaid-cli writes one as it comes, at 630 ms and a Chromium per drawing.
 - **You start a new process for every drawing.** mmdflux and mermaid-ascii take 9–11 ms, ursula 103 ms, of which
   59 ms is what an empty Node script takes.
 - **Labels in a terminal drawing contain emoji.** ursula counts an emoji as one cell, so the drawings with emoji had

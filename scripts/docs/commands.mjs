@@ -24,6 +24,7 @@ export const ALLOWED = [
   { pattern: /^claude mcp add /, why: "changes Claude Code's configuration" },
   { pattern: /^cp -R "\$\(npm root -g\)\/ursula-diagram\/skills\/ursula" /, why: 'needs the package installed globally and writes into ~/.claude' },
   { pattern: /^npm view ursula-diagram /, why: 'asks the npm registry' },
+  { pattern: /^npm i(nstall)? (-g )?@resvg\/resvg-js$/, why: 'installs the optional PNG renderer from the npm registry' },
   { pattern: /^(npm install|npm ci)$/, why: 'installs the dependencies of a checkout' },
   { pattern: /^(npx tsc --noEmit|npm test|npm run test:rewrite|npm run compare|npm run docs:sync)$/, why: 'checks or rewrites the checkout itself; CI runs the checks' },
   { pattern: /^(bun|npx -y bun@1) scripts\/build\.ts$/, why: 'builds the checkout; CI runs it' },
