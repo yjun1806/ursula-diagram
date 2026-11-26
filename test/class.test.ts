@@ -248,3 +248,38 @@ describe('a parent written at the end of a line', () => {
     expect(y('Animal')).toBeLessThan(y('Fish'));
   });
 });
+
+describe('class diagram: a terminal drawing too wide for the width', () => {
+  const NARROW = `classDiagram
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Animal <|-- Zebra
+    Animal : +int age
+    Animal : +String gender
+    Animal: +isMammalWithAVeryLongMethodName()
+    class Duck{
+        +String beakColorThatIsWrittenOutInFull
+        +swimAcrossTheLakeToTheOtherSide()
+    }
+    class Fish{
+        -int sizeInFeet
+        -canEat()
+    }`;
+
+  it('cuts the lines of notes when the drawing has only notes', () => {
+    const r = renderText('classDiagram\n  note "a note with a rather long text inside that is over forty cells wide"', 40);
+    expect('lines' in r && r.lines.join('\n')).toContain('…');
+  });
+
+  it('gives up on a drawing it cannot fit after one round of cuts, not one round per cut length', () => {
+    // Timed against the same drawing at a width it fits, so a busy machine slows both alike.
+    const timed = (width: number): number => {
+      renderText(NARROW, width);
+      const t = performance.now();
+      for (let i = 0; i < 3; i += 1) renderText(NARROW, width);
+      return performance.now() - t;
+    };
+    expect(renderText(NARROW, 30)).toMatchObject({ error: expect.stringMatching(/columns wide; the limit is 30/u) });
+    expect(timed(30)).toBeLessThan(2 * timed(60));
+  });
+});

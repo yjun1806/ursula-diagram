@@ -43,16 +43,12 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const graph = read(src, opts.config);
     const draw = (g: Graph): string[] => renderTextLayout(layout(g, cellRuler(), { legend: false, fold: true, ...(maxWidth === undefined ? {} : { maxWidth }) }));
-    const widest = (lines: string[]): number => Math.max(0, ...lines.map(cellWidth));
     let lines = draw(graph);
-    if (maxWidth === undefined) return titledLines(lines, opts.heading, maxWidth);
-    // A drawing that is too wide is drawn again with every line of every box cut shorter, from 40 cells down to 8.
+    // layout() cuts the lines of boxes divided into compartments itself; a drawing with none (notes only) is cut here.
+    if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined)) return titledLines(lines, opts.heading, maxWidth);
+    const widest = (ls: string[]): number => Math.max(0, ...ls.map(cellWidth));
     for (let limit = 40; widest(lines) > maxWidth && limit >= 8; limit -= 4) {
-      const clipLines = (ls: string[]): string[] => ls.map((l) => clip(l, limit));
-      lines = draw({
-        ...graph,
-        nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: clipLines(n.lines), ...(n.compartments === undefined ? {} : { compartments: n.compartments.map((c) => ({ ...c, lines: clipLines(c.lines) })) }) })),
-      });
+      lines = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
     }
     return titledLines(lines, opts.heading, maxWidth);
   },
