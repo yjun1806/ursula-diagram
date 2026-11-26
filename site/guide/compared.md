@@ -34,7 +34,7 @@ reading the skill, writing the Mermaid text and answering. The model wrote 0.6kâ
 <FeatureTable name="skillTime" />
 
 The pictures below are the first of the two runs per text, unedited. Under each: the mean time and total tokens of the
-two runs, then what we checked in the picture. Click a picture to enlarge it; the name links to the input text.
+two runs, then what we checked in the picture. <WebOnly agent="The name">Click a picture to enlarge it; the name</WebOnly> links to the input text.
 
 <PicGrid name="skill" named />
 
@@ -77,7 +77,7 @@ its box and breaks the lines that meet it.
 ## The same examples side by side
 
 These are examples from the Mermaid documentation, each drawn by four tools at their defaults on a light page. Mermaid
-and Pele drew them in headless Chrome. One row per example, one column per tool; click a picture to enlarge it.
+and Pele drew them in headless Chrome. One row per example, one column per tool<WebOnly>; click a picture to enlarge it</WebOnly>.
 
 <PicGrid name="side" />
 

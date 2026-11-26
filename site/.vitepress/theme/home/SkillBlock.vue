@@ -4,6 +4,7 @@
 // is never shown without the result. The chart's numbers are charts.skillMean in ../compare/benchmark.json.
 import { computed } from 'vue';
 import { HOME_STRINGS } from './strings.js';
+import { forWeb } from '../web-only/text.js';
 import { localPath, useLang, useWords } from '../locale.js';
 import PicGrid from '../compare/PicGrid.vue';
 import BenchmarkBars from '../compare/BenchmarkBars.vue';
@@ -18,7 +19,7 @@ const comparePage = computed(() => localPath(code.value, '/guide/compared'));
     <h2>{{ t.measureTitle }}</h2>
     <p class="sk-lead">{{ t.measureHeadline }}</p>
     <BenchmarkBars class="sk-chart" name="skillMean" />
-    <p class="sk-note">{{ t.measureShown }}</p>
+    <p class="sk-note">{{ forWeb(t.measureShown) }}</p>
     <PicGrid name="skill" />
     <p class="sk-more"><a :href="comparePage">{{ t.measureMore }} →</a></p>
   </section>

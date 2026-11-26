@@ -2,6 +2,7 @@
 // Under the skill comparison: one sentence with the measured numbers, a short table against Mermaid.js, and three of
 // the timed flowcharts drawn by both.
 import { WHY } from './why.js';
+import { forWeb } from '../web-only/text.js';
 import { useWords } from '../locale.js';
 import PicGrid from '../compare/PicGrid.vue';
 
@@ -30,7 +31,7 @@ const t = useWords(WHY);
     </table>
     <p class="why-cap">{{ t.caption }}</p>
     <h3 class="why-strip">{{ t.strip }}</h3>
-    <p class="why-cap">{{ t.stripNote }}</p>
+    <p class="why-cap">{{ forWeb(t.stripNote) }}</p>
     <PicGrid name="mermaid" />
   </section>
 </template>

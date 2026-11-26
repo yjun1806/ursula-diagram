@@ -13,6 +13,7 @@ import { SOURCE } from '../theme/home/sample.js';
 import { INSTALL } from '../theme/home/install.js';
 import { LOOP } from '../theme/home/loop.js';
 import { TYPE_NAMES } from '../theme/home/type-names.js';
+import { forAgents } from '../theme/web-only/text.js';
 
 const json = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const FEATURES = json('../theme/compare/features.json');
@@ -161,7 +162,7 @@ export function homeTop(hero, url) {
     '',
     benchmarkBars({ name: 'skillMean' }),
     '',
-    t.measureShown,
+    forAgents(t.measureShown),
     '',
     picGrid({ name: 'skill' }, url),
     '',
@@ -177,7 +178,7 @@ export function homeTop(hero, url) {
     '',
     `### ${why.strip}`,
     '',
-    why.stripNote,
+    forAgents(why.stripNote),
     '',
     picGrid({ name: 'mermaid' }, url),
     '',

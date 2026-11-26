@@ -15,7 +15,7 @@ description: 'Every --format of the ursula Mermaid CLI: SVG, terminal text, text
 | `check` | The engine's report without the drawing: one line of counts (bends, crossings), the lines that cross and the most bent lines with their source line numbers, and sometimes questions a writer can answer by editing the text. |
 | `fixed` | The text with the fixes of `--fix` made, to save in place of it. Nothing is drawn. |
 
-One command per format, each in its own tab. The `json` tab reads the text from standard input:
+One command per format<WebOnly>, each in its own tab</WebOnly>. The `json` <WebOnly agent="command">tab</WebOnly> reads the text from standard input:
 
 ::: code-group
 

@@ -28,8 +28,12 @@ export const HOME_STRINGS = {
     measureTitle: 'Seconds per drawing, and the drawings',
     measureHeadline:
       'A skill that has the model lay out each drawing makes more designed pictures: a title, zones, a legend, a highlight it chose. ursula\'s are plainer, but complete, clean and the same every time, and they took 11–17 s instead of 65–174 s.',
-    measureShown:
-      'The same three texts drawn by each skill, the first of two runs, unedited; click a picture to enlarge it. Under each picture: the mean time and total tokens of the two runs, then what we checked in it.',
+    // An array of parts: the { web } part is left out of the Markdown for AI agents (../web-only/text.js).
+    measureShown: [
+      'The same three texts drawn by each skill, the first of two runs, unedited',
+      { web: '; click a picture to enlarge it' },
+      '. Under each picture: the mean time and total tokens of the two runs, then what we checked in it.',
+    ],
     exitCode: 'exit code',
     measureMore: 'How ursula compares with other tools',
     types: 'Every type, drawn by the same engine',

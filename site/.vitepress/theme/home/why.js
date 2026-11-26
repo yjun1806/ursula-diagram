@@ -23,8 +23,12 @@ export const WHY = {
     caption:
       'Measured on 26 November 2026 on an Apple M2 Max in headless Chrome 158: the 116 flowchart examples of the Mermaid documentation, drawn as SVG by both in the same page after one warm-up pass. Bundle sizes are gzip -9 of ursula.global.js and of mermaid.min.js.',
     strip: 'Same input, both drawings',
-    stripNote:
-      'The three of those 116 flowcharts with the most lines (7, 6 and 5; a tie goes to the lower file number, and 08 is left out because it repeats 07). ursula\'s drawings come from this site\'s engine; Mermaid\'s from Mermaid.js 12.3.0 in the page the times were measured in. Click a picture to enlarge it; the name links to the text.',
+    stripNote: [
+      'The three of those 116 flowcharts with the most lines (7, 6 and 5; a tie goes to the lower file number, and 08 is left out because it repeats 07). ursula\'s drawings come from this site\'s engine; Mermaid\'s from Mermaid.js 12.3.0 in the page the times were measured in. ',
+      // Parts the Markdown for AI agents writes otherwise (../web-only/text.js).
+      { web: 'Click a picture to enlarge it; the name', agent: 'The name' },
+      ' links to the text.',
+    ],
   },
   ko: {
     title: '왜 ursula-diagram인가',
