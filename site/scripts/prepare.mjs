@@ -1,5 +1,6 @@
 // Copies the engine build and the README pictures into public/, so the site always shows the engine of this checkout,
-// then draws the home page's loop (scripts/render-loop.mjs) and the official examples (scripts/render-examples.mjs) with it.
+// then draws the home page's loop (scripts/render-loop.mjs), the official examples (scripts/render-examples.mjs) and the
+// terminal texts of the picture grids (scripts/render-compare.mjs) with it.
 // Run `bun scripts/build.ts` in the repository root first.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -33,3 +34,7 @@ renderLoop();
 // The Examples pages: every official example drawn with this engine.
 const { renderExamples } = await import('./render-examples.mjs');
 renderExamples();
+
+// The picture grids next to the speed numbers: the terminal texts of the Compared page and the size of every picture.
+const { renderCompare } = await import('./render-compare.mjs');
+renderCompare();

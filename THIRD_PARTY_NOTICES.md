@@ -15,6 +15,17 @@ Copied without change, one example per file:
 - `test/fixtures-c4/` — the C4 examples.
 - `examples/c4-container.mmd` and `examples/c4-deployment.mmd` — two of the C4 examples.
 
+Drawings of these examples by other tools, kept as they came out for the documentation site's comparisons (each tool's
+output of the example text; the tools themselves are not included):
+
+- `site/public/compare/` — SVGs by Mermaid.js 12.3.0, mermaid-cli 12.2.0, Pele 1.13.0, beautiful-mermaid 1.1.3 and
+  mmdflux 2.6.1. Mermaid's need a browser, so they are saved here rather than drawn when the site is built.
+- `site/compare-text/` — terminal text by beautiful-mermaid 1.1.3, mmdflux 2.6.1, mermaid-ascii 1.6.2 and
+  termaid 0.14.0.
+- `site/public/compare/skill/*-skill.png` — pictures a Claude Code session drew with the
+  [diagram-design](https://github.com/cathrynlavery/diagram-design) skill (MIT) from `examples/order-flow.mmd`,
+  `examples/c4-container.mmd` and `examples/checkout-sequence.mmd`.
+
 Adapted inside test files (each says so on its first line, "Examples adapted from the Mermaid documentation (MIT)"):
 
 - `test/architecture.test.ts`

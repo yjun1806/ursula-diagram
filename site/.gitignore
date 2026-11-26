@@ -8,3 +8,7 @@ public/assets/
 public/example-svg/
 public/example-term/
 .vitepress/examples/rendered.json
+
+# Drawn by scripts/render-compare.mjs
+public/compare-term/
+.vitepress/theme/compare/sizes.json

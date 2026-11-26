@@ -25,7 +25,11 @@ export const HOME_STRINGS = {
       everywhere: ['The same loop everywhere', 'Run it as a command, through the agent skill, or over MCP: ursula-diagram mcp serves render, check and syntax to agents without a shell.'],
       same: ['Same text, same drawing', 'The engine computes the layout, not a model, so a drawing does not change between runs or between agents.'],
     },
-    measureTitle: 'Seconds per drawing',
+    measureTitle: 'Seconds per drawing, and the drawings',
+    measureHeadline:
+      'A skill that has the model lay out each drawing makes more designed pictures: a title, zones, a legend, a highlight it chose. ursula\'s are plainer, but complete, clean and the same every time, and they took 12–18 s instead of 65–174 s.',
+    measureShown:
+      'The same three texts drawn by each skill, the first of two runs, unedited; click a picture to enlarge it. Under each picture: the mean time and total tokens of the two runs, then what we checked in it.',
     measureLead:
       'Measured in Claude Code with claude-opus-5-5: the same prompt, a fresh session for each run, 3 public Mermaid texts, 2 runs each.',
     measureRows: ['ursula skill', 'A skill that has the model lay out the drawing'],
@@ -62,7 +66,11 @@ export const HOME_STRINGS = {
       everywhere: ['어디서나 같은 루프', '명령, 에이전트 스킬, MCP 어느 쪽으로 돌려도 루프는 같습니다. 셸을 쓸 수 없는 에이전트는 ursula-diagram mcp가 여는 render, check, syntax를 씁니다.'],
       same: ['같은 글은 같은 그림', '배치는 모델이 아니라 엔진이 계산합니다. 그래서 실행할 때마다, 에이전트가 바뀌어도 그림은 같습니다.'],
     },
-    measureTitle: '그림 한 장에 걸린 시간',
+    measureTitle: '그림 한 장에 걸린 시간과 그 그림',
+    measureHeadline:
+      '모델이 그림마다 배치를 정하는 스킬은 더 공들인 그림을 냅니다. 제목, 구역, 범례를 넣고 강조할 곳도 스스로 고릅니다. ursula의 그림은 그보다 수수하지만 빠진 것 없이 깔끔하고 매번 같으며, 65~174초가 아니라 12~18초에 나옵니다.',
+    measureShown:
+      '같은 글 세 개를 두 스킬로 그린 그림입니다. 두 번 그린 것 가운데 첫 판이고, 손대지 않았습니다. 그림을 누르면 크게 보입니다. 그림 아래에는 두 판의 평균 시간과 전체 토큰, 그리고 그림에서 확인한 것을 적었습니다.',
     measureLead:
       'Claude Code에서 claude-opus-5-5로 쟀습니다. 같은 지시문으로, 실행할 때마다 새 세션을 열어 공개 Mermaid 글 3개를 두 번씩 그렸습니다.',
     measureRows: ['ursula 스킬', '모델이 배치를 정하는 스킬'],

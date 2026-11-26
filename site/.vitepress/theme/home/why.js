@@ -21,6 +21,9 @@ export const WHY = {
     ],
     caption:
       'Measured on 26 November 2026 on an Apple M2 Max in headless Chrome 158: the 116 flowchart examples of the Mermaid documentation, drawn as SVG by both in the same page after one warm-up pass. Bundle sizes are gzip -9 of ursula.global.js and of mermaid.min.js.',
+    strip: 'Same input, both drawings',
+    stripNote:
+      'The three of those 116 flowcharts with the most lines (7, 6 and 5; a tie goes to the lower file number, and 08 is left out because it repeats 07). ursula\'s drawings come from this site\'s engine; Mermaid\'s from Mermaid.js 12.3.0 in the page the times were measured in. Click a picture to enlarge it; the name links to the text.',
   },
   ko: {
     title: '왜 ursula-diagram인가',
@@ -37,5 +40,8 @@ export const WHY = {
     ],
     caption:
       '2026년 11월 26일 Apple M2 Max의 headless Chrome 158에서 쟀습니다. Mermaid 문서의 flowchart 예시 116장을 한 페이지에서 둘 다 SVG로 그렸고, 한 번 미리 돌린 뒤 쟀습니다. 파일 크기는 ursula.global.js와 mermaid.min.js를 gzip -9로 압축한 크기입니다.',
+    strip: '같은 글, 두 그림',
+    stripNote:
+      '그 116장 가운데 선이 가장 많은 flowchart 세 장입니다(7개, 6개, 5개). 선 수가 같으면 파일 번호가 앞선 것을 골랐고, 08은 07과 같은 그래프라 뺐습니다. ursula 그림은 이 사이트의 엔진이, Mermaid 그림은 시간을 잰 그 페이지에서 Mermaid.js 12.3.0이 그렸습니다. 그림을 누르면 크게 보이고, 이름을 누르면 글이 나옵니다.',
   },
 };

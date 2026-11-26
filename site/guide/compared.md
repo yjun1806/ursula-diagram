@@ -19,12 +19,20 @@ An agent can draw a diagram in two ways: the model lays it out and writes the SV
 engine lays it out. The same three drawings went through [diagram-design](https://github.com/cathrynlavery/diagram-design),
 a skill of the first kind, and through the ursula skill.
 
+diagram-design makes the more designed pictures: a title, zones, a legend, a highlight it chose. ursula's are plainer,
+but complete, clean and the same every time, and the agent finished them 5 to 13 times sooner.
+
 <FeatureTable name="skill" />
 
 <BenchmarkBars name="skill" />
 
-Both skills kept every node, edge and label. diagram-design also chose a layout, a title and legend wording for each
-picture; ursula has one look and changes only its colours.
+The pictures below are the first of the two runs per text, unedited. Under each: the mean time and total tokens of the
+two runs, then what we checked in the picture. Click a picture to enlarge it; the name links to the input text.
+
+<PicGrid name="skill" named />
+
+diagram-design chose a layout, a title and legend wording for each picture, and they change from run to run; ursula
+has one look and changes only its colours.
 
 ## What each tool draws
 
@@ -33,6 +41,13 @@ picture; ursula has one look and changes only its colours.
 ## Speed
 
 <BenchmarkBars name="speed" />
+
+The flowchart example 101-flowcharts, the one with the most lines of the 116, drawn by every tool in the chart at its
+defaults; the text tools at 100 columns. The terminal texts are shown as pictures with every character in its own cell,
+so the columns hold in any font. beautiful-mermaid's text leaves out a2, b2 and the lines inside the groups, and
+mermaid-ascii's runs lines through its own group boxes.
+
+<PicGrid name="tools" />
 
 Most of the 103 ms is the start of Node. Called as a library inside one program, the gap turns the other way for two
 of the tools:
@@ -55,61 +70,9 @@ its box and breaks the lines that meet it.
 ## The same examples side by side
 
 These are examples from the Mermaid documentation, each drawn by four tools at their defaults on a light page. Mermaid
-and Pele drew them in headless Chrome.
+and Pele drew them in headless Chrome. One row per example, one column per tool; click a picture to enlarge it.
 
-### Flowchart
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-flowchart-100-subgraphs-2.svg" alt="Flowchart: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-flowchart-100-subgraphs-2.svg" alt="Flowchart: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-flowchart-100-subgraphs-2.svg" alt="Flowchart: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-flowchart-100-subgraphs-2.svg" alt="Flowchart: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### Sequence
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-sequence-02-with-the-defaults.svg" alt="Sequence: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-sequence-02-with-the-defaults.svg" alt="Sequence: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-sequence-02-with-the-defaults.svg" alt="Sequence: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-sequence-02-with-the-defaults.svg" alt="Sequence: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### Class
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-class-02-with-the-defaults.svg" alt="Class: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-class-02-with-the-defaults.svg" alt="Class: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-class-02-with-the-defaults.svg" alt="Class: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-class-02-with-the-defaults.svg" alt="Class: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### Entity relationship
-
-<div class="compare-pics compare-pics-large">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-er-02-entity-relationship-diagrams-2.svg" alt="Entity relationship: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-er-02-entity-relationship-diagrams-2.svg" alt="Entity relationship: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-er-02-entity-relationship-diagrams-2.svg" alt="Entity relationship: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-er-02-entity-relationship-diagrams-2.svg" alt="Entity relationship: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### C4 system context
-
-<div class="compare-pics compare-pics-large">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-c4-02-c4-system-context-diagram.svg" alt="C4 system context: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">Does not draw this type</span></div></figure>
-</div>
-
-### Pie
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-pie-02-example.svg" alt="Pie: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-pie-02-example.svg" alt="Pie: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-pie-02-example.svg" alt="Pie: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">Does not draw this type</span></div></figure>
-</div>
+<PicGrid name="side" />
 
 ## When another tool fits better
 

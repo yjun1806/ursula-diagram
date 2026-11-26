@@ -19,12 +19,20 @@ mermaid-ascii 1.6.2, termaid 0.14.0입니다.
 맡깁니다. 같은 그림 세 장을 앞 방식의 스킬인 [diagram-design](https://github.com/cathrynlavery/diagram-design)과 뒤 방식의
 ursula 스킬로 각각 그렸습니다.
 
+diagram-design의 그림이 더 공들였습니다. 제목, 구역, 범례를 넣고 강조할 곳도 스스로 고릅니다. ursula의 그림은 그보다
+수수하지만 빠진 것 없이 깔끔하고 매번 같으며, 에이전트가 5~13배 빨리 끝냈습니다.
+
 <FeatureTable name="skill" />
 
 <BenchmarkBars name="skill" />
 
-두 스킬 모두 노드·간선·라벨을 빠짐없이 그렸습니다. diagram-design은 그림마다 배치와 제목, 범례 문구까지 골랐습니다. ursula의
-그림은 생김새가 한 가지이고, 바꿀 수 있는 것은 색뿐입니다.
+아래 그림은 글마다 두 번 그린 것 가운데 첫 판이고, 손대지 않았습니다. 그림 아래에는 두 판의 평균 시간과 전체 토큰, 그리고
+그림에서 확인한 것을 적었습니다. 그림을 누르면 크게 보이고, 이름을 누르면 입력 글이 나옵니다.
+
+<PicGrid name="skill" named />
+
+diagram-design은 그림마다 배치와 제목, 범례 문구까지 골랐고, 그 선택은 판마다 달라집니다. ursula의 그림은 생김새가 한
+가지이고, 바꿀 수 있는 것은 색뿐입니다.
 
 ## 그리는 예시 수
 
@@ -33,6 +41,13 @@ ursula 스킬로 각각 그렸습니다.
 ## 속도
 
 <BenchmarkBars name="speed" />
+
+아래는 116장 가운데 선이 가장 많은 flowchart 예시 101-flowcharts를 위 그래프의 도구가 모두 기본 설정으로 그린 그림입니다.
+글자 그림 도구는 100열로 그렸습니다. 터미널 글은 글자마다 한 칸씩 자리를 잡은 그림으로 보여 주므로 어느 글꼴에서도 열이
+맞습니다. beautiful-mermaid의 글자 그림에는 a2, b2와 구역 안의 선이 빠졌고, mermaid-ascii의 글자 그림은 선이 구역 상자를
+가로지릅니다.
+
+<PicGrid name="tools" />
 
 ursula가 명령 한 번에 쓰는 103ms는 대부분 Node를 띄우는 데 듭니다. 프로그램 하나 안에서 라이브러리로 부르면 Pele,
 beautiful-mermaid와의 순서가 뒤집힙니다.
@@ -55,61 +70,9 @@ beautiful-mermaid와의 순서가 뒤집힙니다.
 ## 같은 예시를 나란히
 
 Mermaid 문서의 같은 예시를 네 도구가 각자 기본 설정으로 그렸습니다. 그림은 모두 밝은 바탕에 놓았습니다. Mermaid와 Pele는
-헤드리스 Chrome에서 그렸습니다.
+헤드리스 Chrome에서 그렸습니다. 예시마다 한 줄, 도구마다 한 칸이고, 그림을 누르면 크게 보입니다.
 
-### flowchart
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-flowchart-100-subgraphs-2.svg" alt="flowchart: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-flowchart-100-subgraphs-2.svg" alt="flowchart: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-flowchart-100-subgraphs-2.svg" alt="flowchart: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-flowchart-100-subgraphs-2.svg" alt="flowchart: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### sequence
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-sequence-02-with-the-defaults.svg" alt="sequence: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-sequence-02-with-the-defaults.svg" alt="sequence: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-sequence-02-with-the-defaults.svg" alt="sequence: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-sequence-02-with-the-defaults.svg" alt="sequence: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### class
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-class-02-with-the-defaults.svg" alt="class: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-class-02-with-the-defaults.svg" alt="class: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-class-02-with-the-defaults.svg" alt="class: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-class-02-with-the-defaults.svg" alt="class: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### ER
-
-<div class="compare-pics compare-pics-large">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-er-02-entity-relationship-diagrams-2.svg" alt="ER: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-er-02-entity-relationship-diagrams-2.svg" alt="ER: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-er-02-entity-relationship-diagrams-2.svg" alt="ER: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><img src="/compare/beautiful-mermaid-er-02-entity-relationship-diagrams-2.svg" alt="ER: beautiful-mermaid" loading="lazy"></div></figure>
-</div>
-
-### C4 system context
-
-<div class="compare-pics compare-pics-large">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-c4-02-c4-system-context-diagram.svg" alt="C4 system context: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-c4-02-c4-system-context-diagram.svg" alt="C4 system context: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">이 유형을 그리지 않습니다</span></div></figure>
-</div>
-
-### pie
-
-<div class="compare-pics">
-  <figure><figcaption>ursula</figcaption><div><img src="/compare/ursula-pie-02-example.svg" alt="pie: ursula" loading="lazy"></div></figure>
-  <figure><figcaption>Mermaid</figcaption><div><img src="/compare/mermaid-pie-02-example.svg" alt="pie: Mermaid" loading="lazy"></div></figure>
-  <figure><figcaption>Pele</figcaption><div><img src="/compare/pele-pie-02-example.svg" alt="pie: Pele" loading="lazy"></div></figure>
-  <figure><figcaption>beautiful-mermaid</figcaption><div><span class="none">이 유형을 그리지 않습니다</span></div></figure>
-</div>
+<PicGrid name="side" />
 
 ## 다른 도구가 더 맞는 경우
 
