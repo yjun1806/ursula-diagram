@@ -22615,6 +22615,7 @@ var LADDER = [
   ["y", [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 1e4, 1e5, 1e6]]
 ];
 var MAX_TICKS = 2000;
+var PER_NEXT = { ms: 1000, s: 60, min: 60, h: 24 };
 var DEFAULT_FORMAT = {
   ms: "%H:%M:%S.%L",
   s: "%H:%M:%S",
@@ -22636,6 +22637,14 @@ function aligned(t0, t1, unit, step, weekday) {
     return;
   if (unit === "ms" || unit === "s" || unit === "min" || unit === "h") {
     const u = unitLength(unit);
+    if (PER_NEXT[unit] % step === 0) {
+      const span = u * step;
+      const first = Math.ceil(t0 / u) * u;
+      const ahead = (-first % span + span) % span;
+      for (let t = ahead === 0 ? first : first + ahead;t <= t1; t += span)
+        out.push(t);
+      return out.length > MAX_TICKS ? undefined : out;
+    }
     for (let t = Math.ceil(t0 / u) * u;t <= t1; t += u) {
       const c = toCivil(t);
       const field = unit === "ms" ? c.ms : unit === "s" ? c.ss : unit === "min" ? c.mm : c.hh;
@@ -23053,7 +23062,12 @@ function emptyLayout(model, titleWidth) {
   return { scene: { width, height, title: sceneName(model), items }, bars: [], ticks, scale: 0, origin: LEFT2, omitted: [] };
 }
 function crosses2(x, a, b, spansAt) {
-  return range(Math.min(a, b) + 1, Math.max(a, b)).some((r) => spansAt(r).some(([x0, x1]) => x >= x0 - 4 && x <= x1 + 4));
+  for (let r = Math.min(a, b) + 1;r < Math.max(a, b); r++) {
+    for (const [x0, x1] of spansAt(r))
+      if (x >= x0 - 4 && x <= x1 + 4)
+        return true;
+  }
+  return false;
 }
 function orderLines(lineSection, links, spans) {
   const crossings = (order) => {
@@ -23084,9 +23098,6 @@ function permutations(items) {
   if (items.length <= 1)
     return [items];
   return items.flatMap((first, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [first, ...rest]));
-}
-function range(from, to) {
-  return Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i);
 }
 function roundedOutline(x, y, w, h, r) {
   return `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
