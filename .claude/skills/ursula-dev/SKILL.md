@@ -82,7 +82,7 @@ cd site && npm ci && npm run build && npm run check
 - a shell block holds more than one command or a trailing `# comment`. Say what a command is for in the sentence before it. Mark a block whose lines must run together in order with `<!-- sequence -->` in a README, or wrap it in `<div class="cmd-sequence">` on the site;
 - an English page has no Korean page, or an example fails to draw.
 
-Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest.
+The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest.
 
 ## The bundled command
 
@@ -94,7 +94,7 @@ npx -y bun@1 scripts/build.ts
 
 ## Public surface
 
-Treat these as the public interface and update docs (README en/ko, site en/ko) and tests with them: command options and `--help`, exit codes (1 text error, 2 wrong options, 3 too narrow, 4 engine failure), MCP tools and their arguments, library exports and types in `src/index.ts`, and the `syntax` catalog.
+Treat these as the public interface and update the site pages (en and ko) and tests with them: command options and `--help`, exit codes (1 text error, 2 wrong options, 3 too narrow, 4 engine failure), MCP tools and their arguments, library exports and types in `src/index.ts`, and the `syntax` catalog.
 
 ## Pull requests
 

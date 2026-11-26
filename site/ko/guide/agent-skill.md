@@ -1,7 +1,7 @@
 # 에이전트 스킬
 
-`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--format check`로
-엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
+`skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--check`를
+붙여 그리면서 엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이어서, 스킬은 Node 22 이상만 있으면 아무것도 설치하지 않고 돌아갑니다.
 
 [skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다. 스킬을 둘 곳을 고릅니다. 이 프로젝트, 모든 프로젝트(`-g`), 한 에이전트(`-a`) 가운데 하나입니다.
@@ -28,8 +28,27 @@ npx skills add yjun1806/ursula-diagram -a claude-code
 cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 ```
 
-스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--format check`를 돌린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
+스킬을 쓰면 에이전트는 Mermaid 글을 쓰고 `--check`와 `--fix`(틀린 머리글·키워드와 flowchart의 `->`를 고치고 고친 곳을
+알립니다)를 붙여 그린 뒤, 독자가 있는 곳에 맞춰 출력을 고릅니다. 터미널에는
 `text`, 채팅이나 웹 페이지에는 `text-svg`, 파일에는 `svg`나 `html`을 줍니다.
+
+## MCP로
+
+셸이 없는 에이전트에서는 `ursula-diagram mcp`가 같은 명령을 표준 입출력 MCP 서버로 띄웁니다. 도구는 셋입니다.
+`render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`, `fix`), `check`(`fix`), `syntax`. `fix: true`를 주면
+결과 끝에 고친 곳과 고친 글이 붙습니다.
+
+Claude Code에서는 이 명령으로 등록합니다.
+
+```bash
+claude mcp add ursula -- npx -y ursula-diagram mcp
+```
+
+Claude Desktop에서는 `claude_desktop_config.json`에 이 설정을 넣습니다. 같은 형식을 받는 다른 클라이언트에도 그대로 쓸 수 있습니다.
+
+```json
+{ "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
+```
 
 # 에이전트 터미널에서
 

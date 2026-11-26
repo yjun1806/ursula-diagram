@@ -1,5 +1,5 @@
-// The Mermaid text of the README gallery, in English (README.md) and Korean (README.ko.md), and the pie of the terminal
-// section. Plain data, so the Node check can read it too.
+// The Mermaid text of the Examples page's gallery, in English and Korean, and the pie of the In a terminal
+// page. Plain data, so the Node check can read it too.
 
 export const GALLERY_EN = {
   flowchart: `flowchart LR

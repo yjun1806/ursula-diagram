@@ -1,4 +1,4 @@
-// Copies the engine build and the README pictures into public/, so the site always shows the engine of this checkout,
+// Copies the engine build and the pictures in assets/ into public/, so the site always shows the engine of this checkout,
 // then draws the home page's loop (scripts/render-loop.mjs), the official examples (scripts/render-examples.mjs) and the
 // terminal texts of the picture grids (scripts/render-compare.mjs) with it.
 // Run `bun scripts/build.ts` in the repository root first.
