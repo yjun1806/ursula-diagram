@@ -8,6 +8,7 @@ import { withLegend } from './legend.ts';
 import { crossingCount } from './check.ts';
 import { routeGlobally } from './global-route.ts';
 import { gridUp } from './place.ts';
+import { Heap } from './heap.ts';
 
 /** Space between a cluster box and what stands in it, and the extra line on top that holds the name. */
 export const CLUSTER_PAD = 24;
@@ -507,51 +508,6 @@ function clash(a: Point, b: Point, drawn: Seg[]): number {
     if (x > Math.min(h.a.x, h.b.x) + EPS && x < Math.max(h.a.x, h.b.x) - EPS && y > Math.min(v.a.y, v.b.y) + EPS && y < Math.max(v.a.y, v.b.y) - EPS) cost += CROSS_COST;
   }
   return cost;
-}
-
-/** A binary heap of numbers keyed by cost. */
-class Heap {
-  private readonly cost: number[] = [];
-  private readonly item: number[] = [];
-  get size(): number {
-    return this.item.length;
-  }
-  push(cost: number, item: number): void {
-    let i = this.item.length;
-    this.cost.push(cost);
-    this.item.push(item);
-    while (i > 0) {
-      const p = (i - 1) >> 1;
-      if ((this.cost[p] as number) <= cost) break;
-      this.swap(i, p);
-      i = p;
-    }
-  }
-  pop(): { cost: number; item: number } {
-    const top = { cost: this.cost[0] as number, item: this.item[0] as number };
-    const lastCost = this.cost.pop() as number;
-    const lastItem = this.item.pop() as number;
-    if (this.item.length > 0) {
-      this.cost[0] = lastCost;
-      this.item[0] = lastItem;
-      let i = 0;
-      for (;;) {
-        const l = 2 * i + 1;
-        const r = l + 1;
-        let m = i;
-        if (l < this.item.length && (this.cost[l] as number) < (this.cost[m] as number)) m = l;
-        if (r < this.item.length && (this.cost[r] as number) < (this.cost[m] as number)) m = r;
-        if (m === i) break;
-        this.swap(i, m);
-        i = m;
-      }
-    }
-    return top;
-  }
-  private swap(i: number, j: number): void {
-    [this.cost[i], this.cost[j]] = [this.cost[j] as number, this.cost[i] as number];
-    [this.item[i], this.item[j]] = [this.item[j] as number, this.item[i] as number];
-  }
 }
 
 interface Inside {

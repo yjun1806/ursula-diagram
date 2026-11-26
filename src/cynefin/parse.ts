@@ -1,11 +1,7 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import { DOMAINS } from './model.ts';
 import type { Cynefin, CynefinTransition, Domain } from './model.ts';
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 const ITEM = /^"([^"]*)"$/u;
 const TRANSITION = /^([A-Za-z]+)\s*-->\s*([A-Za-z]+)\s*(?::\s*(.*))?$/u;

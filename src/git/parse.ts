@@ -1,12 +1,8 @@
 import type { FrontValue } from '../front-matter.ts';
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Branch, Commit, CommitType, GitConfig, GitGraph, Orientation } from './model.ts';
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 const HEADER = /^gitgraph(?:\s+(LR|TB|BT))?\s*:?\s*$/iu;
 const ATTR = /^\s*(id|type|tag|msg|parent|order)\s*:\s*(?:"([^"]*)"|(\S+))/iu;

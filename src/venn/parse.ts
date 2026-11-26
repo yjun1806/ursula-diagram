@@ -1,5 +1,5 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Venn, VennSet, VennText, VennUnion } from './model.ts';
 
 const ID = String.raw`"[^"]*"|[^\s,\[\]:"]+`;
@@ -10,10 +10,6 @@ const UNION = new RegExp(String.raw`^union\s+((?:${ID})(?:\s*,\s*(?:${ID}))+)${L
 const TEXT = new RegExp(String.raw`^text\s+(${ID})${LABEL}\s*$`, 'u');
 const STYLE = new RegExp(String.raw`^style\s+((?:${ID})(?:\s*,\s*(?:${ID}))*)\s+(.+)$`, 'u');
 const NUMBER = /^\d+(?:\.\d+)?$/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 const unquote = (id: string): string => (id.startsWith('"') ? id.slice(1, -1) : id);
 

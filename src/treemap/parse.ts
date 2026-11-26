@@ -1,17 +1,13 @@
 import type { FrontValue } from '../front-matter.ts';
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { TreeNode, Treemap } from './model.ts';
 
 const HEADERS = new Set(['treemap-beta', 'treemap']);
 const NODE = /^(?:"([^"]*)"|'([^']*)')\s*(?::\s*(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*)?(?::::([A-Za-z_][\w-]*))?\s*;?$/u;
 const LOOSE = /^(?:"([^"]*)"|'([^']*)')\s*:\s*(.+?)\s*;?$/u;
 const CLASS_DEF = /^classDef\s+(\S+)\s+(.*?)\s*;?$/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 export interface TreemapSettings {
   valueFormat?: string;

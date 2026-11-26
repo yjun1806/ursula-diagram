@@ -1,15 +1,11 @@
 import type { FrontValue } from '../front-matter.ts';
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Sankey, SankeyLink, SankeyNode } from './model.ts';
 
 const HEADERS = new Set(['sankey-beta', 'sankey']);
 const NUMBER = /^(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 export interface SankeySettings {
   showValues?: boolean;

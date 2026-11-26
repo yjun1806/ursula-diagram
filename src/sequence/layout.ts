@@ -1,5 +1,6 @@
 import type { Ruler, TextRole } from '../metrics.ts';
 import type { Diagnostic, SceneItem } from '../types.ts';
+import { wrapWords } from '../text/wrap.ts';
 import { kindOf } from './model.ts';
 import type {
   Box,
@@ -227,19 +228,7 @@ function queuePath(x0: number, x1: number, y: number, h: number): string {
 }
 
 function wrapLine(line: string, cap: number, measure: (s: string) => number): string[] {
-  if (cap === Infinity || measure(line) <= cap) return [line];
-  const out: string[] = [];
-  let cur = '';
-  for (const word of line.split(/\s+/).filter((w) => w !== '')) {
-    const next = cur === '' ? word : `${cur} ${word}`;
-    if (cur === '' || measure(next) <= cap) cur = next;
-    else {
-      out.push(cur);
-      cur = word;
-    }
-  }
-  if (cur !== '') out.push(cur);
-  return out;
+  return wrapWords(line, cap, measure, { keepIfFits: true, longWord: 'keep' });
 }
 
 /** All lines that may be wrapped, with the text role they are measured in. */

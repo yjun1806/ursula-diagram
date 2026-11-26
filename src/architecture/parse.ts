@@ -1,5 +1,5 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { ArchAlign, ArchEdge, ArchGroup, ArchNode, Architecture, Side } from './model.ts';
 
 const ID = '[\\w-]+';
@@ -10,10 +10,6 @@ const SERVICE = DECLARATION('service');
 const JUNCTION = new RegExp(`^junction\\s+(${ID})(?:\\s+in\\s+(${ID}))?$`, 'u');
 const EDGE = new RegExp(`^(${ID})(\\{group\\})?:([TBLR])\\s*(<)?--(>)?\\s*([TBLR]):(${ID})(\\{group\\})?$`, 'u');
 const ALIGN = /^align\s+(row|column)\s+(.+)$/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 /**
  * Parses `architecture-beta`: groups, services, junctions, edges between sides, and `align` lines.

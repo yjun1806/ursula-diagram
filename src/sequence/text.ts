@@ -1,5 +1,6 @@
 import { cellWidth, cellWidthOf } from '../metrics.ts';
 import type { Ruler, SequenceTextMetrics } from '../metrics.ts';
+import { wrapWords } from '../text/wrap.ts';
 import { UrsulaError } from '../types.ts';
 import type { TextSpan, TextTone } from '../types.ts';
 import { kindOf } from './model.ts';
@@ -68,33 +69,9 @@ export function joinSpans(line: TextSpan[]): string {
   return line.map((s) => s.text).join('');
 }
 
-/** Greedy word wrap; a word wider than `cap` is cut only when `hard` is set. */
-function wrapWords(text: string, cap: number, hard: boolean): string[] {
-  if (cap === Infinity || cellWidth(text) <= cap) return [text];
-  const out: string[] = [];
-  let cur = '';
-  const flush = (): void => {
-    if (cur !== '') out.push(cur);
-    cur = '';
-  };
-  for (const word of text.split(/\s+/).filter((w) => w !== '')) {
-    const next = cur === '' ? word : `${cur} ${word}`;
-    if (cellWidth(next) <= cap) {
-      cur = next;
-      continue;
-    }
-    flush();
-    if (!hard || cellWidth(word) <= cap) {
-      cur = word;
-      continue;
-    }
-    for (const ch of word) {
-      if (cellWidth(cur) + cellWidthOf(ch.codePointAt(0) ?? 0) > cap) flush();
-      cur += ch;
-    }
-  }
-  flush();
-  return out;
+/** Greedy word wrap of a line that does not fit; a word wider than `cap` is cut only when `hard` is set. */
+function wrapCells(text: string, cap: number, hard: boolean): string[] {
+  return wrapWords(text, cap, cellWidth, { keepIfFits: true, longWord: hard ? 'break' : 'keep' });
 }
 
 const HEADS: Record<MessageStmt['head'], readonly [string, string]> = {
@@ -195,7 +172,7 @@ function prepare(
     return named.flatMap((l) => {
       const words = l.split(/\s+/).filter((w) => w !== '');
       const longest = Math.max(0, ...words.map((w) => cellWidth(w)));
-      return wrapWords(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
+      return wrapCells(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
     });
   });
   const boxW = headLines.map((lines) => {
@@ -464,7 +441,7 @@ function render(c: Ctx, gaps: number[]): Rendered {
       return;
     }
     const pad = T.noteBoxPad;
-    const lines = wrapWords(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
+    const lines = wrapCells(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
     const inner = Math.max(...lines.map(cellWidth)) + 2 * pad;
     const w = inner + 2 * R.nodeBorder;
     const x = place(w);
@@ -495,7 +472,7 @@ function render(c: Ctx, gaps: number[]): Rendered {
     const hi = bound();
     const lo = low();
     const act = (col: number): boolean => (depth[col] ?? 0) > 0;
-    const lines = (cap: number): string[] => wrapWords(m.label, cap - m.numExtra, true);
+    const lines = (cap: number): string[] => wrapCells(m.label, cap - m.numExtra, true);
     const blockW = (ls: string[]): number => m.numExtra + Math.max(0, ...ls.map(cellWidth));
 
     if (m.a === m.b) {
@@ -638,7 +615,7 @@ function render(c: Ctx, gaps: number[]): Rendered {
     lines.push([]);
     for (const f of c.footnotes) {
       const numExtra = f.numText === '' ? 0 : cellWidth(f.numText) + 1;
-      wrapWords(f.label, cap - numExtra, true).forEach((l, k) => {
+      wrapCells(f.label, cap - numExtra, true).forEach((l, k) => {
         const row: TextSpan[] = [];
         if (pad !== '') row.push({ text: pad, tone: 'normal' });
         if (k === 0 && f.numText !== '') row.push({ text: f.numText, tone: 'bold' }, { text: ' ', tone: 'normal' });

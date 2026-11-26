@@ -29,6 +29,14 @@ describe('wrapWords', () => {
     expect(wrapWords('   ', 5, chars, { blank: true })).toEqual(['']);
   });
 
+  it('keeps text that fits as written with keepIfFits, and wraps the rest as usual', () => {
+    expect(wrapWords('a  b', 5, chars, { keepIfFits: true })).toEqual(['a  b']);
+    expect(wrapWords('a  b', 5, chars)).toEqual(['a b']);
+    expect(wrapWords('a  b', Infinity, chars, { keepIfFits: true })).toEqual(['a  b']);
+    expect(wrapWords('   ', 5, chars, { keepIfFits: true })).toEqual(['   ']);
+    expect(wrapWords('aa  bb cc', 5, chars, { keepIfFits: true })).toEqual(['aa bb', 'cc']);
+  });
+
   it('measures with the given function', () => {
     expect(wrapWords('한글 한글', 4, cellWidth)).toEqual(['한글', '한글']);
   });

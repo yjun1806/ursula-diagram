@@ -1,5 +1,6 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 
 export type C4Type = 'context' | 'container' | 'component' | 'dynamic' | 'deployment';
 
@@ -95,10 +96,6 @@ const HINTS: Readonly<Record<string, C4Hint>> = { U: 'up', Up: 'up', D: 'down', 
 const IGNORED = /^(Update[A-Za-z]*|Add[A-Za-z]*|Rewrite[A-Za-z]*|Lay_[A-Za-z]+|SHOW_[A-Z_]+|HIDE_[A-Z_]+|LAYOUT_[A-Z_]+|Legend[A-Za-z]*|SetPropertyHeader|WithoutPropertyHeader)$/;
 
 const BREAK = /<br\s*\/?>/gi;
-
-const fail = (message: string, line: number): never => {
-  throw new UrsulaError(message, 'syntax', line);
-};
 
 /** Splits the inside of a macro call at commas outside double quotes. */
 function splitArgs(text: string, line: number): string[] {

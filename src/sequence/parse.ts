@@ -1,4 +1,4 @@
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import { PARTICIPANT_KINDS } from './model.ts';
 import type { ArrowHead, BlockKind, MessageStmt, Participant, ParticipantGroup, ParticipantKind, Sequence, Statement } from './model.ts';
 
@@ -93,10 +93,6 @@ function textLines(text: string): string[] {
     .trim()
     .split(BREAK)
     .map((l) => l.trim());
-}
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
 }
 
 /** Removes a `%%` comment. */
