@@ -2,7 +2,7 @@ import { renderHtml } from '../html.ts';
 import { checkLines, fixSource, selectFrontEnd, sequenceCheckLines, spansToAnsi, spansToSvg } from '../index.ts';
 import { checkDetails } from '../layered/details.ts';
 import type { SequenceLayout } from '../sequence/model.ts';
-import type { ResvgModule } from '../render/png.ts';
+import type { PngFonts, ResvgModule } from '../render/png.ts';
 import { PNG_HINT, svgToPng } from '../render/png.ts';
 import type { Layout } from '../types.ts';
 import { UrsulaError } from '../types.ts';
@@ -17,6 +17,8 @@ export interface Outcome {
   stdout: string;
   /** The PNG of `--format png`, written to standard output in place of `stdout`. */
   bytes?: Uint8Array;
+  /** Why the PNG lacks text, when it does; also in `stderr` as `warning: …` lines. */
+  warnings?: readonly string[];
   stderr: string;
   code: ExitCode;
 }
@@ -25,8 +27,8 @@ export interface Outcome {
 export interface Host {
   /** The PNG renderer, looked up only when a PNG is asked for; undefined when it is not installed. */
   loadPng?: () => ResvgModule | undefined;
-  /** Font folders for the renderer to load besides the ones it finds. */
-  fontDirs?: readonly string[];
+  /** The fonts for the PNG of an SVG, and warnings when its text cannot be drawn; every system font when not given. */
+  pngFonts?: (svg: string) => { fonts: PngFonts; warnings: readonly string[] };
 }
 
 function layoutOptions(req: DrawRequest) {
@@ -146,12 +148,16 @@ function png(src: string, req: DrawRequest, host: Host): Outcome {
   const resvg = host.loadPng?.();
   if (resvg === undefined) return { stdout: '', stderr: `error: ${PNG_HINT}\n`, code: 2 };
   const svg = selectFrontEnd(src).svg(src, layoutOptions(req));
+  const chosen = host.pngFonts?.(svg);
   const bytes = svgToPng(svg, resvg, {
     theme: req.theme === 'dark' ? 'dark' : 'light',
     ...(req.scale === undefined ? {} : { scale: req.scale }),
-    ...(host.fontDirs === undefined ? {} : { fontDirs: host.fontDirs }),
+    ...(chosen === undefined ? {} : { fonts: chosen.fonts }),
   });
-  return { stdout: '', bytes, stderr: req.check ? sideReport(src, req) : '', code: 0 };
+  // A missing font never fails the drawing: the PNG is written and the warning says what it lacks.
+  const warnings = chosen?.warnings ?? [];
+  const warned = warnings.map((w) => `warning: ${w}\n`).join('');
+  return { stdout: '', bytes, ...(warnings.length === 0 ? {} : { warnings }), stderr: `${warned}${req.check ? sideReport(src, req) : ''}`, code: 0 };
 }
 
 function drawn(src: string, req: DrawRequest, host: Host): Outcome {

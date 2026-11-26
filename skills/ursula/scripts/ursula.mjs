@@ -3,9 +3,9 @@ if (Number(process.versions.node.split('.')[0]) < 22) { console.error('ursula ne
 
 // src/cli.ts
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync as readFileSync2 } from "node:fs";
 import { createRequire } from "node:module";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // src/render/colors.ts
@@ -10599,6 +10599,11 @@ var PNG_RENDERER = "@resvg/resvg-js";
 var PNG_HINT = `install ${PNG_RENDERER} to write PNG: npm i -g ${PNG_RENDERER}`;
 var DEFAULT_SCALE = 2;
 var MAX_SCALE = 8;
+function fontOptions(fonts) {
+  if ("system" in fonts)
+    return { loadSystemFonts: true, ...fonts.dirs === undefined || fonts.dirs.length === 0 ? {} : { fontDirs: [...fonts.dirs] } };
+  return { loadSystemFonts: false, fontFiles: [...fonts.files], ...fonts.defaultFamily === undefined ? {} : { defaultFontFamily: fonts.defaultFamily } };
+}
 var DARK_RULES = /\n@media \(prefers-color-scheme: dark\)\{\n[\s\S]*?\n\}(?=<\/style>)/g;
 var VARIABLE = /var\(--ursula-([a-z0-9-]+)\s*(?:,([^)]*))?\)/g;
 var FONT_FAMILY = /font-family:([^;}"]*)/g;
@@ -10630,7 +10635,7 @@ function svgToPng(svg, resvg, opts = {}) {
   const drawn = new resvg.Resvg(bakeSvg(svg, theme), {
     fitTo: { mode: "zoom", value: scale },
     background: PAPER[theme === "dark" ? 1 : 0],
-    font: { loadSystemFonts: true, ...opts.fontDirs === undefined || opts.fontDirs.length === 0 ? {} : { fontDirs: [...opts.fontDirs] } }
+    font: fontOptions(opts.fonts ?? { system: true, ...opts.fontDirs === undefined ? {} : { dirs: opts.fontDirs } })
   });
   return drawn.render().asPng();
 }
@@ -40962,12 +40967,16 @@ function png(src, req, host) {
     return { stdout: "", stderr: `error: ${PNG_HINT}
 `, code: 2 };
   const svg = selectFrontEnd(src).svg(src, layoutOptions5(req));
+  const chosen = host.pngFonts?.(svg);
   const bytes = svgToPng(svg, resvg, {
     theme: req.theme === "dark" ? "dark" : "light",
     ...req.scale === undefined ? {} : { scale: req.scale },
-    ...host.fontDirs === undefined ? {} : { fontDirs: host.fontDirs }
+    ...chosen === undefined ? {} : { fonts: chosen.fonts }
   });
-  return { stdout: "", bytes, stderr: req.check ? sideReport(src, req) : "", code: 0 };
+  const warnings = chosen?.warnings ?? [];
+  const warned = warnings.map((w) => `warning: ${w}
+`).join("");
+  return { stdout: "", bytes, ...warnings.length === 0 ? {} : { warnings }, stderr: `${warned}${req.check ? sideReport(src, req) : ""}`, code: 0 };
 }
 function drawn4(src, req, host) {
   try {
@@ -41209,7 +41218,8 @@ function render3(args, host) {
   if (out.code !== 0)
     return { content: [text(out.stderr), ...note], isError: true };
   const drawn = out.bytes === undefined ? text(out.stdout) : { type: "image", data: base64(out.bytes), mimeType: "image/png" };
-  return { content: [drawn, ...req.check ? [text(out.stderr)] : [], ...note], isError: false };
+  const side = req.check || out.warnings !== undefined ? [text(out.stderr)] : [];
+  return { content: [drawn, ...side, ...note], isError: false };
 }
 function check(args) {
   const { src, note } = fixedSource(args);
@@ -41300,6 +41310,395 @@ function extraFontDirs() {
   return ["/usr/share/fonts", "/usr/local/share/fonts", join(home, ".local/share/fonts"), join(home, ".fonts")].filter((dir) => existsSync(dir));
 }
 
+// src/node/font-index.ts
+import { existsSync as existsSync2, opendirSync, readFileSync, statSync } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
+
+// src/node/sfnt.ts
+import { closeSync, openSync, readSync } from "node:fs";
+function bytesAt(fd, offset, length) {
+  const buf = Buffer.alloc(Math.max(0, length));
+  const got = length > 0 ? readSync(fd, buf, 0, length, offset) : 0;
+  return buf.subarray(0, got);
+}
+function withFile(path, read) {
+  let fd;
+  try {
+    fd = openSync(path, "r");
+  } catch {
+    return;
+  }
+  try {
+    return read(fd);
+  } catch {
+    return;
+  } finally {
+    closeSync(fd);
+  }
+}
+function faceOffsets2(fd) {
+  const head = bytesAt(fd, 0, 12);
+  if (head.length < 12)
+    return [];
+  if (head.toString("latin1", 0, 4) !== "ttcf")
+    return [0];
+  const faces = Math.min(head.readUInt32BE(8), 256);
+  const offsets = bytesAt(fd, 12, faces * 4);
+  const out = [];
+  for (let i = 0;i + 4 <= offsets.length; i += 4)
+    out.push(offsets.readUInt32BE(i));
+  return out;
+}
+function tableOf(fd, at, tag) {
+  const head = bytesAt(fd, at, 12);
+  if (head.length < 12)
+    return;
+  const dir = bytesAt(fd, at + 12, head.readUInt16BE(4) * 16);
+  for (let i = 0;i + 16 <= dir.length; i += 16)
+    if (dir.toString("latin1", i, i + 4) === tag)
+      return { offset: dir.readUInt32BE(i + 8), length: dir.readUInt32BE(i + 12) };
+  return;
+}
+var TYPOGRAPHIC_FAMILY = 16;
+var FAMILY = 1;
+function nameText2(platform, raw) {
+  if (platform === 0 || platform === 3) {
+    const swapped = Buffer.from(raw);
+    swapped.swap16();
+    return swapped.toString("utf16le");
+  }
+  return platform === 1 ? raw.toString("latin1") : undefined;
+}
+function faceFamilies(fd, at) {
+  const table = tableOf(fd, at, "name");
+  if (table === undefined)
+    return [];
+  const name = bytesAt(fd, table.offset, Math.min(table.length, 1 << 18));
+  if (name.length < 6)
+    return [];
+  const count = name.readUInt16BE(2);
+  const strings = name.readUInt16BE(4);
+  const records = [];
+  for (let r = 0;r < count && 6 + r * 12 + 12 <= name.length; r++) {
+    const rec = 6 + r * 12;
+    const id = name.readUInt16BE(rec + 6);
+    if (id !== FAMILY && id !== TYPOGRAPHIC_FAMILY)
+      continue;
+    const len = name.readUInt16BE(rec + 8);
+    const off = strings + name.readUInt16BE(rec + 10);
+    if (len === 0 || off + len > name.length)
+      continue;
+    const platform = name.readUInt16BE(rec);
+    const text = nameText2(platform, name.subarray(off, off + len))?.trim();
+    if (text === undefined || text === "")
+      continue;
+    records.push({ id, english: platform === 3 && name.readUInt16BE(rec + 4) === 1033, text });
+  }
+  const typographic = records.some((r) => r.id === TYPOGRAPHIC_FAMILY);
+  const chosen = records.filter((r) => r.id === (typographic ? TYPOGRAPHIC_FAMILY : FAMILY));
+  return [...new Set([...chosen.filter((r) => r.english), ...chosen.filter((r) => !r.english)].map((r) => r.text))];
+}
+function fontFamilies(path) {
+  return withFile(path, (fd) => {
+    const names = new Set;
+    for (const at of faceOffsets2(fd))
+      for (const n of faceFamilies(fd, at))
+        names.add(n);
+    return [...names];
+  }) ?? [];
+}
+var NOTHING = () => false;
+function format4(t) {
+  const segs = t.readUInt16BE(6) / 2;
+  const ends = 14;
+  const starts = ends + segs * 2 + 2;
+  const deltas = starts + segs * 2;
+  const ranges = deltas + segs * 2;
+  return (cp) => {
+    if (cp > 65535)
+      return false;
+    for (let s = 0;s < segs; s++) {
+      if (cp > t.readUInt16BE(ends + s * 2))
+        continue;
+      const start = t.readUInt16BE(starts + s * 2);
+      if (cp < start)
+        return false;
+      const delta = t.readUInt16BE(deltas + s * 2);
+      const rangeOffset = t.readUInt16BE(ranges + s * 2);
+      if (rangeOffset === 0)
+        return (cp + delta & 65535) !== 0;
+      const at = ranges + s * 2 + rangeOffset + (cp - start) * 2;
+      if (at + 2 > t.length)
+        return false;
+      const glyph = t.readUInt16BE(at);
+      return glyph !== 0 && (glyph + delta & 65535) !== 0;
+    }
+    return false;
+  };
+}
+function format12(t, same = false) {
+  const groups = t.readUInt32BE(12);
+  return (cp) => {
+    let lo = 0;
+    let hi = groups - 1;
+    while (lo <= hi) {
+      const mid = lo + hi >> 1;
+      const at = 16 + mid * 12;
+      if (at + 12 > t.length)
+        return false;
+      if (cp < t.readUInt32BE(at))
+        hi = mid - 1;
+      else if (cp > t.readUInt32BE(at + 4))
+        lo = mid + 1;
+      else
+        return t.readUInt32BE(at + 8) + (same ? 0 : cp - t.readUInt32BE(at)) !== 0;
+    }
+    return false;
+  };
+}
+var PREFERRED = [
+  [3, 10],
+  [0, 6],
+  [0, 4],
+  [3, 1],
+  [0, 3],
+  [0, 2],
+  [0, 1],
+  [0, 0]
+];
+function fontCoverage(path) {
+  return withFile(path, (fd) => {
+    const at = faceOffsets2(fd)[0];
+    if (at === undefined)
+      return;
+    const table = tableOf(fd, at, "cmap");
+    if (table === undefined)
+      return;
+    const head = bytesAt(fd, table.offset, 4);
+    if (head.length < 4)
+      return;
+    const records = bytesAt(fd, table.offset + 4, head.readUInt16BE(2) * 8);
+    const subtables = [];
+    for (let i = 0;i + 8 <= records.length; i += 8)
+      subtables.push({ platform: records.readUInt16BE(i), encoding: records.readUInt16BE(i + 2), offset: records.readUInt32BE(i + 4) });
+    for (const [platform, encoding] of PREFERRED) {
+      const sub = subtables.find((s) => s.platform === platform && s.encoding === encoding);
+      if (sub === undefined)
+        continue;
+      const start = table.offset + sub.offset;
+      const kind = bytesAt(fd, start, 8);
+      const format = kind.length < 8 ? 0 : kind.readUInt16BE(0);
+      if (format !== 4 && format !== 12 && format !== 13)
+        continue;
+      const length = format === 4 ? Math.min(table.length - sub.offset, 1 << 20) : kind.readUInt32BE(4);
+      const body = bytesAt(fd, start, length);
+      return format === 4 ? format4(body) : format12(body, format === 13);
+    }
+    return;
+  }) ?? NOTHING;
+}
+
+// src/node/font-index.ts
+var FONT_FILE = /\.(ttf|otf|ttc|otc)$/i;
+function fontconfigDirs(conf = "/etc/fonts/fonts.conf", home = homedir2(), env = process.env) {
+  if (!existsSync2(conf))
+    return;
+  const dirs = [];
+  const seen = new Set;
+  const expand = (path, prefix, base) => {
+    if (path.startsWith("~"))
+      return join2(home, path.slice(1));
+    if (prefix === "xdg")
+      return join2(env["XDG_DATA_HOME"] ?? join2(home, ".local/share"), path);
+    if (prefix === "relative" || !isAbsolute(path))
+      return resolve2(base, path);
+    return path;
+  };
+  const read = (file) => {
+    if (seen.has(file))
+      return;
+    seen.add(file);
+    let stat;
+    try {
+      stat = statSync(file);
+    } catch {
+      return;
+    }
+    if (stat.isDirectory()) {
+      const names = [];
+      const dir = opendirSync(file);
+      for (let entry = dir.readSync();entry !== null; entry = dir.readSync())
+        if (entry.name.endsWith(".conf"))
+          names.push(entry.name);
+      dir.closeSync();
+      for (const name of names.sort())
+        read(join2(file, name));
+      return;
+    }
+    const text = readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+    for (const m of text.matchAll(/<(dir|include)\b([^>]*)>([^<]*)<\/\1>/g)) {
+      const prefix = /prefix="([^"]*)"/.exec(m[2] ?? "")?.[1];
+      const path = expand((m[3] ?? "").trim(), prefix, dirname(file));
+      if (m[1] === "dir")
+        dirs.push(path);
+      else
+        read(path);
+    }
+  };
+  read(conf);
+  return dirs;
+}
+function systemFontDirs(platform = process.platform, home = homedir2(), env = process.env) {
+  if (platform === "darwin") {
+    let assets = [];
+    try {
+      const dir = opendirSync("/System/Library/AssetsV2");
+      for (let entry = dir.readSync();entry !== null; entry = dir.readSync())
+        if (entry.name.startsWith("com_apple_MobileAsset_Font"))
+          assets.push(join2("/System/Library/AssetsV2", entry.name));
+      dir.closeSync();
+    } catch {
+      assets = [];
+    }
+    return ["/Library/Fonts", "/System/Library/Fonts", ...assets, "/Network/Library/Fonts", join2(home, "Library/Fonts")];
+  }
+  if (platform === "win32") {
+    const root = env["SYSTEMROOT"] ?? env["WINDIR"] ?? "C:\\Windows";
+    return [join2(root, "Fonts"), ...env["USERPROFILE"] === undefined ? [] : [join2(env["USERPROFILE"], "AppData/Local/Microsoft/Windows/Fonts")]];
+  }
+  return fontconfigDirs(undefined, home, env) ?? ["/usr/share/fonts", "/usr/local/share/fonts", join2(home, ".local/share/fonts")];
+}
+function filesUnder(dir, out, depth = 0) {
+  if (depth > 8)
+    return;
+  let handle;
+  try {
+    handle = opendirSync(dir);
+  } catch {
+    return;
+  }
+  const names = [];
+  for (let entry = handle.readSync();entry !== null; entry = handle.readSync())
+    names.push(entry.name);
+  handle.closeSync();
+  for (const name of names) {
+    const path = join2(dir, name);
+    let stat;
+    try {
+      stat = statSync(path);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory())
+      filesUnder(path, out, depth + 1);
+    else if (stat.isFile() && FONT_FILE.test(name))
+      out.push(path);
+  }
+}
+function buildFontIndex(dirs) {
+  const paths = [];
+  for (const dir of dirs)
+    filesUnder(dir, paths);
+  const files = [];
+  const families = new Map;
+  for (const path of new Set(paths)) {
+    const names = fontFamilies(path);
+    if (names.length === 0)
+      continue;
+    files.push({ path, families: names });
+    for (const name of names) {
+      const lower = name.toLowerCase();
+      const had = families.get(lower);
+      families.set(lower, { name: had?.name ?? name, files: [...had?.files ?? [], path] });
+    }
+  }
+  return { files, families };
+}
+var indexes = new Map;
+function systemFontIndex(extraDirs = []) {
+  const dirs = [...new Set([...systemFontDirs(), ...extraDirs])];
+  const key = dirs.join(`
+`);
+  const known = indexes.get(key);
+  if (known !== undefined)
+    return known;
+  const index = buildFontIndex(dirs);
+  indexes.set(key, index);
+  return index;
+}
+var coverages = new Map;
+function coverageOf(path) {
+  const known = coverages.get(path);
+  if (known !== undefined)
+    return known;
+  const coverage = fontCoverage(path);
+  coverages.set(path, coverage);
+  return coverage;
+}
+
+// src/node/png-fonts.ts
+var EAST_ASIAN = /[ᄀ-ᇿ⺀-⿟　-㏿㐀-䶿一-鿿ꥠ-꥿가-퟿豈-﫿︰-﹏＀-￯]/u;
+var GENERIC = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy"]);
+var NO_FONT = "no font file found, so the PNG has no text; install a font (on Debian or Ubuntu: apt install fonts-noto-core)";
+var NO_EAST_ASIAN = "no font has the Korean, Chinese or Japanese characters of this drawing, so they are missing from the PNG; install one (on Debian or Ubuntu: apt install fonts-noto-cjk)";
+var ENTITY2 = /&(?:#x([0-9a-f]+)|#([0-9]+)|(lt|gt|amp|quot|apos));/gi;
+var NAMED2 = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
+function textOf(svg) {
+  return svg.replace(/<(style|title|desc|script)\b[\s\S]*?<\/\1>/g, "").replace(/<[^>]*>/g, "").replace(ENTITY2, (_, hex, dec, name) => hex !== undefined ? String.fromCodePoint(parseInt(hex, 16)) : dec !== undefined ? String.fromCodePoint(Number(dec)) : NAMED2[(name ?? "").toLowerCase()] ?? "");
+}
+function familyLists(svg) {
+  const lists = [...svg.matchAll(/font-family(?::|=")([^;}"<>]*)/g)].map((m) => (m[1] ?? "").split(",").map((f) => f.trim().replace(/^['"]|['"]$/g, "").toLowerCase()).filter((f) => f !== ""));
+  return lists.filter((l) => l.length > 0);
+}
+function firstFamily(names, index) {
+  return names.find((name) => !GENERIC.has(name) && index.families.has(name));
+}
+function chooseFonts(svg, index, coverage = coverageOf) {
+  const chars = [...new Set(textOf(svg))].filter((c) => c.trim() !== "");
+  if (chars.length === 0)
+    return { fonts: { files: [] }, warnings: [] };
+  const first = index.files[0];
+  if (first === undefined)
+    return { fonts: { system: true }, warnings: [NO_FONT] };
+  const fallbackFamily = first.families[0]?.toLowerCase() ?? "";
+  const families = new Set(familyLists(svg).map((list) => firstFamily(list, index) ?? fallbackFamily));
+  if (families.size === 0)
+    families.add(fallbackFamily);
+  const primary = [...families].map((f) => index.families.get(f)?.files ?? []);
+  const files = new Set(primary.flat());
+  const has = (path, cp) => coverage(path)(cp);
+  let lacking = false;
+  for (const c of chars) {
+    const cp = c.codePointAt(0) ?? 0;
+    if (primary.every((group) => group.some((f) => has(f, cp))))
+      continue;
+    const found = index.files.find((f) => has(f.path, cp));
+    if (found !== undefined)
+      files.add(found.path);
+    else if (EAST_ASIAN.test(c))
+      lacking = true;
+  }
+  const order = new Map(index.files.map((f, i) => [f.path, i]));
+  const sorted = [...files].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  const usesFallback = families.has(fallbackFamily);
+  const defaultFamily = usesFallback ? first.families[0] : index.families.get([...families][0] ?? "")?.name;
+  return {
+    fonts: { files: sorted, ...defaultFamily === undefined ? {} : { defaultFamily } },
+    warnings: lacking ? [NO_EAST_ASIAN] : []
+  };
+}
+function pngFonts(svg, extraDirs = []) {
+  let index;
+  try {
+    index = systemFontIndex(extraDirs);
+  } catch {
+    return { fonts: { system: true, dirs: [...extraDirs] }, warnings: [] };
+  }
+  const chosen = chooseFonts(svg, index);
+  return "system" in chosen.fonts ? { ...chosen, fonts: { system: true, dirs: [...extraDirs] } } : chosen;
+}
+
 // src/cli.ts
 function globalPackages() {
   const windows = process.platform === "win32";
@@ -41307,7 +41706,7 @@ function globalPackages() {
   const dir = npm.status === 0 ? npm.stdout.trim() : "";
   return dir === "" ? undefined : dir;
 }
-var besides = (dir) => pathToFileURL(join2(dir, "package.json")).href;
+var besides = (dir) => pathToFileURL(join3(dir, "package.json")).href;
 function loadPng() {
   const places = [() => import.meta.url, () => besides(process.cwd()), () => {
     const dir = globalPackages();
@@ -41323,9 +41722,10 @@ function loadPng() {
   }
   return;
 }
+var fontsFor = (svg) => pngFonts(svg, extraFontDirs());
 var args = process.argv.slice(2);
 if (args[0] === "mcp" && args.length === 1) {
-  const host = { loadPng, fontDirs: extraFontDirs() };
+  const host = { loadPng, pngFonts: fontsFor };
   const lines = lineSplitter((line) => {
     if (line.trim() === "")
       return;
@@ -41337,7 +41737,7 @@ if (args[0] === "mcp" && args.length === 1) {
   process.stdin.on("data", (chunk) => lines.push(chunk));
   process.stdin.on("end", () => lines.end());
 } else {
-  const out = runCommand(args, (file) => readFileSync(file ?? 0, "utf8"), { loadPng, fontDirs: extraFontDirs(), stdoutIsTty: process.stdout.isTTY === true });
+  const out = runCommand(args, (file) => readFileSync2(file ?? 0, "utf8"), { loadPng, pngFonts: fontsFor, stdoutIsTty: process.stdout.isTTY === true });
   if (out.bytes !== undefined)
     process.stdout.write(out.bytes);
   else if (out.stdout !== "")

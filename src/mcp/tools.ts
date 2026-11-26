@@ -112,7 +112,9 @@ function render(args: Record<string, unknown>, host: Host): ToolResult {
   const out = drawCommand(src, req, host);
   if (out.code !== 0) return { content: [text(out.stderr), ...note], isError: true };
   const drawn: Content = out.bytes === undefined ? text(out.stdout) : { type: 'image', data: base64(out.bytes), mimeType: 'image/png' };
-  return { content: [drawn, ...(req.check ? [text(out.stderr)] : []), ...note], isError: false };
+  // The check report and any font warning ride in stderr; a warning alone comes back as one text line.
+  const side = req.check || out.warnings !== undefined ? [text(out.stderr)] : [];
+  return { content: [drawn, ...side, ...note], isError: false };
 }
 
 function check(args: Record<string, unknown>): ToolResult {
