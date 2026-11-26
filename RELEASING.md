@@ -14,7 +14,9 @@ Every change reaches `main` through a pull request. A release is a pull request 
 Pushing to `main` also redeploys the documentation site.
 
 When a pull request ships an item on the roadmap (an issue labelled `roadmap`), move its line on `site/roadmap.md` and
-`site/ko/roadmap.md` to "Recently shipped" in the same pull request, and close the issue with `Fixes #<n>`.
+`site/ko/roadmap.md` to "Recently shipped" under `### Unreleased` (`### 출시 예정` on the Korean page) in the same pull
+request, and close the issue with `Fixes #<n>`. The site's `npm run check` (run on every push to `main` before the site
+deploys) fails when the pages list a closed issue or miss an open one.
 
 ## Releases
 
@@ -24,13 +26,15 @@ Versions follow semver. Before 1.0, a minor bump (`0.x.0`) may change the API; a
 2. Set the new version in `version` of `package.json` and in `VERSION` of `src/version.ts`. A test fails when the two differ.
 3. Rebuild the bundled skill command, which carries the version: `bun scripts/build.ts`.
    Check that `skills/ursula/scripts/ursula.mjs` changed.
-4. Commit the three files as `chore: release <version>`, push, and open a pull request with that name.
-5. Merge it after `CI` passes. That is the whole release.
-6. On the push to `main`, the `Release` workflow sees that the version in `package.json` is not on npm yet. It runs the
+4. If the roadmap pages have an `### Unreleased` (`### 출시 예정`) heading, rename it to `### <version> (<date>)` on both
+   (`site/roadmap.md`, `site/ko/roadmap.md`).
+5. Commit the changed files as `chore: release <version>`, push, and open a pull request with that name.
+6. Merge it after `CI` passes. That is the whole release.
+7. On the push to `main`, the `Release` workflow sees that the version in `package.json` is not on npm yet. It runs the
    tests and the build, publishes to npm through trusted publishing (with provenance, no token), tags the commit
    `v<version>` and creates the GitHub release with generated notes. Pushes that do not change the version stop after
    that check.
-7. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
+8. npm can take a few minutes to serve a new version. Check with `npm view ursula-diagram version`.
 
 If the workflow fails before publishing, fix the cause in a pull request; the next push to `main` (or running the
 `Release` workflow by hand from the Actions tab) tries again. A version that reached npm cannot be published again;
