@@ -16,8 +16,8 @@ const SHOWN = {
     ['er', 'Entity relationship'], ['c4', 'C4 context'], ['mindmap', 'Mindmap'], ['gantt', 'Gantt'],
   ],
   ko: [
-    ['flowchart', '흐름도'], ['sequence', '시퀀스'], ['class', '클래스'], ['state', '상태'],
-    ['er', 'ER'], ['c4', 'C4 컨텍스트'], ['mindmap', '마인드맵'], ['gantt', '간트'],
+    ['flowchart', 'Flowchart'], ['sequence', 'Sequence'], ['class', 'Class'], ['state', 'State'],
+    ['er', 'Entity relationship'], ['c4', 'C4 context'], ['mindmap', 'Mindmap'], ['gantt', 'Gantt'],
   ],
 };
 const cards = SHOWN[code].map(([id, name]) => ({

@@ -4,12 +4,13 @@ import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { SOURCE, TEXT_NARROW, TEXT_WIDE } from './sample.js';
 import { langOf } from '../playground/strings.js';
+import CopyButton from './CopyButton.vue';
 
 const { lang } = useData();
 const code = langOf(lang.value);
 const t = HOME_STRINGS[code];
 const playground = code === 'ko' ? '/ko/playground' : '/playground';
-const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림' : 'The same flowchart drawn by ursula as SVG';
+const alt = code === 'ko' ? '같은 flowchart를 ursula가 SVG로 그린 그림' : 'The same flowchart drawn by ursula as SVG';
 </script>
 
 <template>
@@ -19,6 +20,7 @@ const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림'
         <figcaption>
           <span class="hs-label">{{ t.input }}</span>
           <code>order.mmd</code>
+          <CopyButton class="hs-copy" :text="SOURCE" />
         </figcaption>
         <pre><code>{{ SOURCE }}</code></pre>
       </figure>
@@ -39,6 +41,8 @@ const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림'
             <span class="hs-label">{{ t.terminal }}</span>
             <code class="hs-wide">--format text --width {{ TEXT_WIDE.width }}</code>
             <code class="hs-narrow">--format text --width {{ TEXT_NARROW.width }}</code>
+            <CopyButton class="hs-copy hs-wide" dark :text="TEXT_WIDE.text" />
+            <CopyButton class="hs-copy hs-narrow" dark :text="TEXT_NARROW.text" />
           </figcaption>
           <pre class="hs-wide"><code>{{ TEXT_WIDE.text }}</code></pre>
           <pre class="hs-narrow"><code>{{ TEXT_NARROW.text }}</code></pre>
@@ -98,12 +102,15 @@ const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림'
 .hs-panel figcaption {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 4px 12px;
-  padding: 10px 16px;
+  padding: 8px 10px 8px 16px;
   border-bottom: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg-alt);
   font-size: 14px;
+}
+.hs-copy {
+  margin-left: auto;
 }
 .hs-label {
   font-weight: 600;
@@ -125,6 +132,9 @@ const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림'
 }
 .hs-in pre {
   background: var(--vp-c-bg-alt);
+  /* Mermaid text wraps, as every Mermaid block on the site does; the terminal drawing keeps its columns. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .hs-in figcaption {
   background: var(--vp-c-bg-soft);
@@ -170,6 +180,9 @@ const alt = code === 'ko' ? '같은 흐름도를 ursula가 SVG로 그린 그림'
   }
   .hs-panel figcaption code.hs-narrow {
     display: inline;
+  }
+  .hs-panel figcaption .hs-copy.hs-narrow {
+    display: inline-block;
   }
 }
 .hs-foot {

@@ -5,6 +5,8 @@ import Playground from './playground/Playground.vue';
 import HomeShowcase from './home/HomeShowcase.vue';
 import InstallTabs from './home/InstallTabs.vue';
 import TypeGrid from './home/TypeGrid.vue';
+import AgentCards from './home/AgentCards.vue';
+import WhyBlock from './home/WhyBlock.vue';
 import BenchmarkBars from './compare/BenchmarkBars.vue';
 import FeatureTable from './compare/FeatureTable.vue';
 import ExampleJump from './examples/ExampleJump.vue';
@@ -15,15 +17,17 @@ import './custom.css';
 
 export default {
   extends: DefaultTheme,
-  // The home page: the install command under the hero's buttons, and the input and both outputs under the hero.
+  // The home page: the install command under the hero's buttons; under the hero, the measured case against Mermaid.js,
+  // then the input and both outputs.
   Layout: () =>
     h(DefaultTheme.Layout, null, {
       'home-hero-actions-after': () => h(InstallTabs),
-      'home-hero-after': () => h(HomeShowcase),
+      'home-hero-after': () => [h(WhyBlock), h(HomeShowcase)],
     }),
   enhanceApp({ app, siteData }) {
     app.component('Playground', Playground);
     app.component('TypeGrid', TypeGrid);
+    app.component('AgentCards', AgentCards);
     app.component('BenchmarkBars', BenchmarkBars);
     app.component('FeatureTable', FeatureTable);
     app.component('ExampleJump', ExampleJump);
