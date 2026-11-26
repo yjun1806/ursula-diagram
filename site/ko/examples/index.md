@@ -1,11 +1,11 @@
 # 예제
 
-이 페이지들의 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. 이 페이지에는 몇 가지를
-모아 보이고, [유형별 페이지](#types)에는 Mermaid 문서의 예시를 모두 글과 그림을 나란히 놓아 실었습니다.
+예제 페이지의 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. 이 페이지에는 몇 장만
+골라 모았고, [유형별 페이지](#types)에는 Mermaid 문서의 예시 전부를 글과 그림을 나란히 놓아 실었습니다.
 
 ## 한눈에 보기
 
-SVG는 글자를 정한 자리에 놓으므로 한글 라벨도 그대로 씁니다.
+SVG는 글자를 정해진 좌표에 놓으므로 한글 라벨도 그대로 들어갑니다.
 
 <div class="gallery">
   <figure><figcaption>Flowchart</figcaption><div class="ursula-frame"><img src="/assets/ko-flowchart.svg" alt="Flowchart" width="400"></div></figure>
@@ -19,7 +19,7 @@ SVG는 글자를 정한 자리에 놓으므로 한글 라벨도 그대로 씁니
 </div>
 
 <details>
-<summary>그림마다의 Mermaid 글</summary>
+<summary>그림별 Mermaid 글</summary>
 
 ```
 flowchart LR
@@ -130,10 +130,10 @@ mindmap
 
 ## 유형별 예시 {#types}
 
-Mermaid 문서는 다이어그램 유형마다 페이지가 있습니다. 아래 유형별 페이지에는 그 문서 페이지의 코드 블록을 모두
-ursula로 그려 글 옆에 그림을 놓았습니다. 유형은 Mermaid와 같이 글의 첫 줄에서 읽습니다.
+Mermaid 문서에는 다이어그램 유형마다 페이지가 하나씩 있습니다. 아래 유형별 페이지는 그 문서 페이지의 코드 블록을 모두
+ursula로 그려 글 옆에 그림을 놓았습니다. ursula는 Mermaid처럼 글의 첫 줄을 보고 유형을 정합니다.
 
 <ExampleTypes />
 
 예시 글은 [Mermaid 문서](https://mermaid.js.org/)에서 MIT 라이선스로 가져왔습니다.
-[THIRD_PARTY_NOTICES.md](https://github.com/yjun1806/ursula-diagram/blob/main/THIRD_PARTY_NOTICES.md)를 보세요.
+자세한 내용은 [THIRD_PARTY_NOTICES.md](https://github.com/yjun1806/ursula-diagram/blob/main/THIRD_PARTY_NOTICES.md)에 있습니다.

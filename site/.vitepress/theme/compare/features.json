@@ -63,7 +63,7 @@
       ],
       "note": {
         "en": "Mean of two runs per skill. Tokens are the total of input, output and cache, which Claude Code resends every turn; the output tokens alone were 7.6k–18.4k for diagram-design and 0.9k–1.7k for ursula. diagram-design took 11–12.5 turns per drawing, ursula 4–6.",
-        "ko": "스킬마다 두 번의 평균입니다. 토큰은 입력·출력·캐시를 더한 값이고, 캐시는 Claude Code가 턴마다 다시 보냅니다. 출력 토큰만 보면 diagram-design이 7.6k~18.4k, ursula가 0.9k~1.7k입니다. 턴은 diagram-design이 그림 한 장에 11~12.5, ursula가 4~6입니다."
+        "ko": "스킬마다 두 번의 평균입니다. 토큰은 입력·출력·캐시를 더한 값이고, 캐시는 Claude Code가 턴마다 다시 보냅니다. 출력 토큰만 보면 diagram-design이 7.6k~18.4k, ursula가 0.9k~1.7k입니다. 턴 수는 그림 한 장에 diagram-design이 11~12.5, ursula가 4~6입니다."
       }
     },
     "coverage": {

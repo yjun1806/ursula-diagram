@@ -27,11 +27,11 @@ export const EXAMPLE_STRINGS = {
   },
   ko: {
     lead: (n, link) =>
-      `Mermaid 문서 ${link} 페이지의 예시 ${n}개를 모두 ursula가 그려 고치지 않고 실었습니다. 왼쪽이 Mermaid 글이고 오른쪽이 SVG 그림입니다. 터미널 탭을 누르면 80열 터미널 그림이 나옵니다.`,
+      `Mermaid 문서 ${link} 페이지의 예시 ${n}개를 ursula가 모두 그렸고, 고치지 않고 실었습니다. 왼쪽은 Mermaid 글, 오른쪽은 SVG 그림입니다. 터미널 탭을 누르면 80열 터미널에 그린 그림이 나옵니다.`,
     termNote: {
-      table: '터미널에서는 ursula가 이 유형을 그림 대신 표로 보입니다.',
-      list: '터미널에서는 ursula가 이 유형을 그림 대신 목록으로 보입니다.',
-      rules: '터미널에서는 ursula가 이 유형을 그림 대신 문법 규칙 글로 보입니다.',
+      table: '터미널에서는 ursula가 이 유형을 그림 대신 표로 보여 줍니다.',
+      list: '터미널에서는 ursula가 이 유형을 그림 대신 목록으로 보여 줍니다.',
+      rules: '터미널에서는 ursula가 이 유형을 그림 대신 문법 규칙 글로 보여 줍니다.',
     },
     jump: '예시로 건너뛰기',
     failed: 'ursula가 이 글을 그리지 못했습니다:',
