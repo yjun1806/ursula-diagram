@@ -24,7 +24,7 @@ but complete, clean and the same every time, and the agent finished them 6 to 12
 
 <FeatureTable name="skill" />
 
-<BenchmarkBars name="skill" />
+<BenchmarkBars name="skillMean" />
 
 Almost all of that time is the model's. The engine itself draws in about 0.1–0.4 s per call; the rest is the model
 reading the skill, writing the Mermaid text and answering. The model wrote 0.6k–1.3k tokens with ursula against

@@ -24,7 +24,7 @@ diagram-design의 그림이 더 공들였습니다. 제목, 구역, 범례를 �
 
 <FeatureTable name="skill" />
 
-<BenchmarkBars name="skill" />
+<BenchmarkBars name="skillMean" />
 
 이 시간은 거의 다 모델의 몫입니다. 엔진이 그리는 시간은 한 번에 0.1~0.4초쯤이고, 나머지는 모델이 스킬을 읽고, Mermaid
 글을 쓰고, 답하는 시간입니다. 모델이 쓴 토큰은 ursula와 함께일 때 0.6k~1.3k, 그림을 직접 쓸 때 6.7k~18.8k였고, 토큰을
