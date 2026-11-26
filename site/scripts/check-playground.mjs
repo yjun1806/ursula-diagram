@@ -373,7 +373,7 @@ console.log(`ok   ${claims} claims of the number of examples in the docs say ${i
 
 // The roadmap pages list the same issues, and those are the open issues labelled `roadmap`. The second half needs
 // GitHub; without it the check says it skipped, and the rule in RELEASING.md (move a shipped line in the same pull
-// request) is what keeps the pages right. Done may link closed issues; only Planned and In progress are compared.
+// request) is what keeps the pages right. Only Planned and In progress are compared; Not planned links no issues.
 const [listedEn, listedKo] = ['roadmap.md', 'ko/roadmap.md'].map((p) => listedIssues(readFileSync(join(site, p), 'utf8')));
 const sorted = (set) => [...set].sort((a, b) => a - b).map((n) => `#${n}`).join(' ');
 if (sorted(listedEn) !== sorted(listedKo)) fail(`roadmap.md lists ${sorted(listedEn)} but ko/roadmap.md lists ${sorted(listedKo)}`);
@@ -382,7 +382,7 @@ if (roadmap.skipped) console.log(`skip the roadmap against GitHub: ${roadmap.ski
 else {
   const closed = [...listedEn].filter((n) => !roadmap.open.has(n));
   const missing = [...roadmap.open].filter((n) => !listedEn.has(n));
-  if (closed.length) fail(`the roadmap pages list ${sorted(closed)} under Planned or In progress, but GitHub has no open roadmap issue with that number: move the line to Done, or remove it`);
+  if (closed.length) fail(`the roadmap pages list ${sorted(closed)} under Planned or In progress, but GitHub has no open roadmap issue with that number: remove the line (shipped work goes in CHANGELOG.md)`);
   if (missing.length) fail(`the open roadmap issues ${sorted(missing)} are not on the roadmap pages: add a line to Planned`);
   if (!closed.length && !missing.length) console.log(`ok   the roadmap pages list the ${roadmap.open.size} open roadmap issues`);
 }

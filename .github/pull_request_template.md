@@ -63,5 +63,6 @@ out: a plain revert, or what a revert would not undo (a published version, for o
 - [ ] `npx tsc --noEmit` and `npm test` pass
 - [ ] The bundled skill command is rebuilt (`npx -y bun@1 scripts/build.ts`) if `src/` changed
 - [ ] `cd site && npm run build && npm run check` passes if `site/` or a README changed
+- [ ] A line under `## Unreleased` in `CHANGELOG.md` and `CHANGELOG.ko.md` if users of the package would notice this
 - [ ] English and Korean are in step
-- [ ] One command per code block; diagram type names in English; no version numbers written into the docs
+- [ ] One command per code block; diagram type names in English; no version numbers written into the docs outside the changelogs
