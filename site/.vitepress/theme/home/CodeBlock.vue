@@ -33,12 +33,23 @@ defineProps({
   right: 8px;
   z-index: 2;
 }
+/* The scrolling area stops short of the copy button, so no line runs under it, and its scrollbar always shows. */
 .cblock.cblock pre {
   position: static;
-  margin: 0;
-  padding: 12px 76px 12px 16px;
+  margin: 0 76px 0 0;
+  padding: 12px 0 12px 16px;
   overflow-x: auto;
   background: transparent;
+}
+.cblock.cblock pre::-webkit-scrollbar {
+  height: 8px;
+}
+.cblock.cblock pre::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--vp-c-default-1);
+}
+.cblock-dark.cblock-dark pre::-webkit-scrollbar-thumb {
+  background: #3a3937;
 }
 .cblock.cblock pre code {
   display: block;

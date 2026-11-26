@@ -9,7 +9,6 @@ export const CARDS = [
   },
   {
     id: 'errors',
-    featured: true,
     commands: ["printf 'flowchrt LR\\n A-->B\\n' | ursula-diagram --format text"],
     output: `error: line 1: expected a 'flowchart' or 'graph' header
   1 | flowchrt LR
