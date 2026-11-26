@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import { existsSync } from 'node:fs';
 import { TABS, decodeState, draw, encodeState } from '../.vitepress/theme/playground/draw.js';
 import { GALLERY_EN, GALLERY_KO } from '../.vitepress/theme/playground/gallery-texts.js';
+import { isMermaid } from '../.vitepress/mermaid-fence.mjs';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -73,19 +74,91 @@ const onDisk = rendered.reduce((n, t) => n + readdirSync(join(site, 'examples', 
 if (onDisk !== items.length) fail(`rendered.json has ${items.length} examples but examples/official/ has ${onDisk}; run node scripts/prepare.mjs`);
 const refused = items.filter((i) => i.error);
 for (const i of refused) console.log(`WARN official example ${i.type}/${i.name}: ${i.error}`);
-console.log(`ok   official examples: ${items.length - refused.length} of ${items.length} drawn, ${refused.length} errors, in ${rendered.length} types`);
+console.log(`ok   official examples as SVG: ${items.length - refused.length} of ${items.length} drawn, ${refused.length} errors, in ${rendered.length} types`);
+const termRefused = items.filter((i) => i.termError);
+for (const i of termRefused) console.log(`WARN official example ${i.type}/${i.name} in the terminal: ${i.termError}`);
+console.log(`ok   official examples in the terminal at 80 columns: ${items.length - termRefused.length} of ${items.length} drawn, ${termRefused.length} errors`);
+for (const i of items.filter((x) => x.term)) {
+  for (const ext of ['svg', 'txt']) {
+    if (!existsSync(join(site, 'public', `${i.term}.${ext}`))) fail(`${i.term}.${ext} is missing`);
+  }
+}
 if (existsSync(built)) {
   for (const t of rendered) {
     for (const page of [`examples/${t.id}.html`, `ko/examples/${t.id}.html`]) {
       const path = join(built, page);
       const shown = existsSync(path) ? readFileSync(path, 'utf8').split('class="ex-item"').length - 1 : -1;
       if (shown !== t.items.length) fail(`${page} shows ${shown} examples, not ${t.items.length}`);
+      const terms = existsSync(path) ? readFileSync(path, 'utf8').split('ex-view ex-only-term').length - 1 : -1;
+      if (terms !== t.items.length) fail(`${page} has ${terms} terminal views, not ${t.items.length}`);
     }
   }
-  console.log(`ok   ${rendered.length} type pages in each language show every example`);
+  console.log(`ok   ${rendered.length} type pages in each language show every example as SVG and in the terminal`);
   for (const [page, target] of [['gallery.html', '/examples/'], ['ko/gallery.html', '/ko/examples/']]) {
     if (!readFileSync(join(built, page), 'utf8').includes(`url=/ursula-diagram${target}`)) fail(`${page} does not send the visitor to ${target}`);
   }
+}
+
+// Every page: a code block (<pre>) sits in a VitePress code block wrapper with a copy button, and Mermaid text sits
+// in a `mermaid` block, which custom.css wraps instead of scrolling sideways.
+const unescape = (s) => s.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+
+/** The <pre> blocks of a page, each with the class of the <div> around it and whether that <div> has a copy button. */
+function preBlocks(html) {
+  const blocks = [];
+  const stack = [];
+  const tag = /<(\/?)(div|pre|button)\b([^>]*)>/g;
+  let m;
+  while ((m = tag.exec(html))) {
+    const [, close, name, attrs] = m;
+    const cls = attrs.match(/\sclass="([^"]*)"/)?.[1] ?? '';
+    if (name === 'div') {
+      if (close) stack.pop();
+      else stack.push({ cls, copy: false });
+    } else if (name === 'button' && !close && /(^|\s)copy(\s|$)/.test(cls) && stack.length) {
+      stack[stack.length - 1].copy = true;
+    } else if (name === 'pre' && !close) {
+      const end = html.indexOf('</pre>', tag.lastIndex);
+      const parent = stack[stack.length - 1] ?? { cls: '', copy: false };
+      blocks.push({ ...parent, text: unescape(html.slice(tag.lastIndex, end)) });
+      tag.lastIndex = end;
+    }
+  }
+  return blocks;
+}
+
+if (existsSync(built)) {
+  const allPages = (d, rel = '') =>
+    readdirSync(join(d, rel), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? (rel === '' && e.name === 'assets' ? [] : allPages(d, join(rel, e.name))) : e.name.endsWith('.html') ? [join(rel, e.name)] : [],
+    );
+  let pres = 0;
+  let mermaid = 0;
+  const noCopy = new Map();
+  const noWrap = new Map();
+  for (const page of allPages(built)) {
+    for (const b of preBlocks(readFileSync(join(built, page), 'utf8'))) {
+      pres++;
+      if (!(/language-/.test(b.cls) && b.copy)) noCopy.set(page, (noCopy.get(page) ?? 0) + 1);
+      if (isMermaid(b.text)) {
+        mermaid++;
+        if (!/language-mermaid/.test(b.cls)) noWrap.set(page, (noWrap.get(page) ?? 0) + 1);
+      }
+    }
+  }
+  // The home page's showcase (theme/home/HomeShowcase.vue) is being changed in another pull request; until it has
+  // copy buttons and a mermaid block, its pages warn instead of failing. Delete an entry once its page passes.
+  const PENDING = new Set(['index.html', 'ko/index.html']);
+  const report = (page, message) => (PENDING.has(page) ? console.log(`WARN ${page}: ${message} (pending)`) : fail(`${page}: ${message}`));
+  for (const [page, n] of noCopy) report(page, `${n} code blocks without a copy button`);
+  for (const [page, n] of noWrap) report(page, `${n} Mermaid blocks not marked as mermaid, so they do not wrap`);
+  for (const page of PENDING) if (!noCopy.has(page) && !noWrap.has(page)) fail(`${page} passes now; delete it from PENDING`);
+  const count = (m) => [...m.values()].reduce((a, b) => a + b, 0);
+  console.log(`ok   ${pres - count(noCopy)} of ${pres} code blocks on the built pages have a copy button`);
+  console.log(`ok   ${mermaid - count(noWrap)} of ${mermaid} Mermaid blocks on the built pages are mermaid blocks`);
+  const css = readdirSync(join(built, 'assets')).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(built, 'assets', f), 'utf8')).join('');
+  if (!/language-mermaid[^{}]*pre code\{[^}]*white-space:pre-wrap/.test(css)) fail('the built CSS does not wrap mermaid blocks');
+  else console.log('ok   the built CSS wraps mermaid blocks');
 }
 
 const text = readFileSync(join(dir, 'order-flow.mmd'), 'utf8');

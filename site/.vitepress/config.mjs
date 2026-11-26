@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import { TYPES } from './examples/types.mjs';
+import { mermaidFences } from './mermaid-fence.mjs';
 
 const repo = 'https://github.com/yjun1806/ursula-diagram';
 const base = '/ursula-diagram/';
@@ -41,7 +42,7 @@ function sidebar(prefix, t) {
           text: t.examples,
           link: `${prefix}/examples/`,
           collapsed: true,
-          items: TYPES.map((type) => ({ text: type[t.code], link: `${prefix}/examples/${type.id}` })),
+          items: TYPES.map((type) => ({ text: type.name, link: `${prefix}/examples/${type.id}` })),
         },
         { text: t.larger, link: `${prefix}/guide/larger-drawing` },
         { text: t.terminal, link: `${prefix}/guide/terminal` },
@@ -96,6 +97,7 @@ export default defineConfig({
   base,
   cleanUrls: true,
   lastUpdated: false,
+  markdown: { config: (md) => md.use(mermaidFences) },
   head: [
     ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}icon-32.png` }],
     ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}icon-16.png` }],

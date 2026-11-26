@@ -8,14 +8,14 @@
 SVG는 글자를 정한 자리에 놓으므로 한글 라벨도 그대로 씁니다.
 
 <div class="gallery">
-  <figure><figcaption>흐름도</figcaption><div class="ursula-frame"><img src="/assets/ko-flowchart.svg" alt="흐름도" width="400"></div></figure>
-  <figure><figcaption>시퀀스</figcaption><div class="ursula-frame"><img src="/assets/ko-sequence.svg" alt="시퀀스 다이어그램" width="400"></div></figure>
-  <figure><figcaption>클래스</figcaption><div class="ursula-frame"><img src="/assets/ko-class.svg" alt="클래스 다이어그램" width="150"></div></figure>
-  <figure><figcaption>상태</figcaption><div class="ursula-frame"><img src="/assets/ko-state.svg" alt="상태 다이어그램" width="140"></div></figure>
-  <figure><figcaption>ER</figcaption><div class="ursula-frame"><img src="/assets/ko-er.svg" alt="ER 다이어그램" width="400"></div></figure>
-  <figure><figcaption>C4 컨텍스트</figcaption><div class="ursula-frame"><img src="/assets/ko-c4.svg" alt="C4 컨텍스트 다이어그램" width="260"></div></figure>
-  <figure class="wide"><figcaption>마인드맵</figcaption><div class="ursula-frame"><img src="/assets/ko-mindmap.svg" alt="마인드맵" width="400"></div></figure>
-  <figure class="wide"><figcaption>간트</figcaption><div class="ursula-frame"><img src="/assets/ko-gantt.svg" alt="간트 차트" width="820"></div></figure>
+  <figure><figcaption>Flowchart</figcaption><div class="ursula-frame"><img src="/assets/ko-flowchart.svg" alt="Flowchart" width="400"></div></figure>
+  <figure><figcaption>Sequence</figcaption><div class="ursula-frame"><img src="/assets/ko-sequence.svg" alt="Sequence 다이어그램" width="400"></div></figure>
+  <figure><figcaption>Class</figcaption><div class="ursula-frame"><img src="/assets/ko-class.svg" alt="Class 다이어그램" width="150"></div></figure>
+  <figure><figcaption>State</figcaption><div class="ursula-frame"><img src="/assets/ko-state.svg" alt="State 다이어그램" width="140"></div></figure>
+  <figure><figcaption>Entity relationship</figcaption><div class="ursula-frame"><img src="/assets/ko-er.svg" alt="Entity relationship 다이어그램" width="400"></div></figure>
+  <figure><figcaption>C4 context</figcaption><div class="ursula-frame"><img src="/assets/ko-c4.svg" alt="C4 context 다이어그램" width="260"></div></figure>
+  <figure class="wide"><figcaption>Mindmap</figcaption><div class="ursula-frame"><img src="/assets/ko-mindmap.svg" alt="Mindmap" width="400"></div></figure>
+  <figure class="wide"><figcaption>Gantt</figcaption><div class="ursula-frame"><img src="/assets/ko-gantt.svg" alt="Gantt 차트" width="820"></div></figure>
 </div>
 
 <details>
