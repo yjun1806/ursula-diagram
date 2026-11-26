@@ -50,7 +50,8 @@ export function checkReport(src: string, req: DrawRequest, terminal = false): st
         ? sequenceCheckLines(laid)
         : ['no checks for this kind of diagram'];
   // A front end may add notes about the text itself, such as a Gantt chart with no tasks.
-  const notes = 'notes' in laid && Array.isArray(laid.notes) ? laid.notes.map((n: unknown) => `note: ${String(n)}`) : [];
+  // Only text notes count: a sequence layout also has `notes`, the note boxes it draws.
+  const notes = 'notes' in laid && Array.isArray(laid.notes) ? laid.notes.filter((n: unknown): n is string => typeof n === 'string').map((n) => `note: ${n}`) : [];
   return `${[...lines, ...notes].join('\n')}\n`;
 }
 

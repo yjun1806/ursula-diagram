@@ -134,3 +134,11 @@ describe('notes from the front end', () => {
     expect(out).not.toMatch(/note:/);
   });
 });
+
+describe('notes from the front end, sequence', () => {
+  it('does not print the note boxes of a sequence diagram as notes', () => {
+    const out = checkReport('sequenceDiagram\n  A->>B: hi\n  Note over A,B: a box\n', { format: 'check' } as DrawRequest);
+    expect(out).not.toMatch(/object Object/);
+    expect(out).not.toMatch(/^note:/m);
+  });
+});
