@@ -869,6 +869,30 @@ function flowMarker(id, cls) {
   return `<marker id="${id}" viewBox="0 0 ${length} ${width}" refX="1" refY="${cy}" markerWidth="${length}" markerHeight="${width}" markerUnits="userSpaceOnUse" orient="auto">` + `<path class="${cls}" d="M0 0L${length} ${cy}L0 ${width}z"/></marker>`;
 }
 
+// src/edge-ends.ts
+var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
+function endFields(e) {
+  return {
+    ...e.id === undefined ? {} : { id: e.id },
+    ...e.startEnd === undefined ? {} : { startEnd: e.startEnd },
+    ...e.end === undefined ? {} : { end: e.end },
+    ...e.invisible === undefined ? {} : { invisible: e.invisible }
+  };
+}
+
+// src/render/head-band.ts
+var HEAD_BAND = 28;
+function headBand(x, y, w, data) {
+  const inset = Number.parseFloat(SCENE_THEME.metrics["box-w"] ?? "0") / 2;
+  const r = Math.max(0, SCENE_THEME.boxRadius - inset);
+  const left = x + inset;
+  const right = x + w - inset;
+  const top = y + inset;
+  const bottom = y + HEAD_BAND;
+  const d = `M${left} ${bottom}V${top + r}A${r} ${r} 0 0 1 ${left + r} ${top}H${right - r}A${r} ${r} 0 0 1 ${right} ${top + r}V${bottom}Z`;
+  return { kind: "path", d, role: ["head-band"], ...data === undefined ? {} : { data } };
+}
+
 // src/layered/clearance.ts
 var PASS_CLEAR = 24;
 function tightPasses(l) {
@@ -4416,16 +4440,6 @@ function settleMixedSides(edges, nodes, ruler, step) {
     }
   }
   return { moved: moved(), diagnostics: [] };
-}
-
-// src/edge-ends.ts
-function endFields(e) {
-  return {
-    ...e.id === undefined ? {} : { id: e.id },
-    ...e.startEnd === undefined ? {} : { startEnd: e.startEnd },
-    ...e.end === undefined ? {} : { end: e.end },
-    ...e.invisible === undefined ? {} : { invisible: e.invisible }
-  };
 }
 
 // src/layered/bodies.ts
@@ -9997,7 +10011,6 @@ function trimmedPoints(edge, nodes) {
 }
 var accented = (edge, paint) => edge.style === "thick" || paint.roles.get(edge.from) === "decision";
 var MARK = 12;
-var MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
 function endMarkerId(end, accent, atStart) {
   switch (end) {
     case "none":
@@ -10013,7 +10026,7 @@ function endMarkerId(end, accent, atStart) {
   }
 }
 function endTrim(end) {
-  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : RELATION_MARKS.has(end) ? MARK : DOT / 2;
 }
 function markBody(end, accent) {
   const cls = (base) => accent ? `ursula-end-${base} ursula-end-${base}--accent` : `ursula-end-${base}`;
@@ -10101,7 +10114,7 @@ function extraEnds(layout, paint) {
         wanted.set(id, reversed(flowMarker(id, accent ? "ursula-arrow ursula-arrow--accent" : "ursula-arrow")));
       return;
     }
-    if (MARKS.has(end)) {
+    if (RELATION_MARKS.has(end)) {
       wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
       return;
     }
@@ -10160,7 +10173,7 @@ function endLabelSvg(edge) {
   return edge.invisible ? "" : one(edge.startLabel, "start") + one(edge.endLabel, "end");
 }
 function usesRecords(layout) {
-  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && MARKS.has(e.end) || e.startEnd !== undefined && MARKS.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
+  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
 }
 var points = (pts) => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(" ");
 function boxSvg(node, rx) {
@@ -10223,7 +10236,6 @@ function shapeSvg(node) {
       return boxSvg(node, radius);
   }
 }
-var HEAD_BAND = 28;
 var HEAD_BAND_GAP = 10;
 function headBandSvg(node, radius, height) {
   const inset = THEME.boxBorder / 2;
@@ -14782,7 +14794,6 @@ function markGlyphs(end, heading) {
       return [];
   }
 }
-var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
 function rulesOf2(layout) {
   const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
   if (vertical)
@@ -14805,7 +14816,6 @@ function drawEdges(c, layout) {
     return next;
   };
   const arrows = [];
-  const records = layout.nodes.some((n) => hasCompartments(n) || ["start-dot", "end-dot", "bar", "note", "ellipse", "actor"].includes(n.shape)) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd));
   const mark = (end, at, from) => {
     const dx = Math.sign(at[0] - from[0]);
     const dy = Math.sign(at[1] - from[1]);
@@ -17064,7 +17074,7 @@ var RUNS2 = {
 var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
 var UPRIGHT_HEADS = new Set(["▼", "▲", "▽", "△"]);
 var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
-var MARKS2 = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
+var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
 var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging", "overwritten"];
 function runsOf2(edge, nodes) {
   const cellAt = (index) => {
@@ -17158,7 +17168,7 @@ function breaksOf(layout, lines, labels, notes) {
       const need = run.bits.get(`${x},${y}`) ?? 0;
       if (((RUNS2[ch] ?? 0) & need) === need && need !== 0)
         return false;
-      if ((k < 2 || k >= ends - 2) && MARKS2.has(ch))
+      if ((k < 2 || k >= ends - 2) && MARKS.has(ch))
         return false;
       if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT3 || need === E3 || need === W4))
         return false;
@@ -17240,7 +17250,7 @@ function breaksOf(layout, lines, labels, notes) {
     if (n > 1)
       note(`lines ${pair} cross ${n} times`);
   }
-  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS2.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
+  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
   const inBox = (x, y) => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
   const rule = (x, y) => RUNS2[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
   const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT3) !== 0 || UPRIGHT_HEADS.has(at(x, y));
@@ -17471,7 +17481,7 @@ function breaksOf(layout, lines, labels, notes) {
     run?.cells.forEach(([x, y], k) => {
       const key = `${x},${y}`;
       const ch = at(x, y);
-      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS2.has(ch) || inBox(x, y))
+      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS.has(ch) || inBox(x, y))
         return;
       if ((byCell.get(key) ?? [i]).some((j) => {
         const s = spots[j];
@@ -22143,19 +22153,11 @@ function arrowsOf(roles) {
   const variant = roles.includes("edge--accent") ? "accent" : roles.includes("edge--msg") ? "msg" : "edge";
   return { variant, end: roles.includes("edge--arrow"), start: roles.includes("edge--arrow-start") };
 }
-function trimStart2(points, by) {
-  const [a, b, ...rest] = points;
-  if (a === undefined || b === undefined)
-    return [...points];
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  const cut = len === 0 ? 0 : Math.min(by, Math.max(0, len - 1));
-  return [{ x: a.x + (b.x - a.x) / (len || 1) * cut, y: a.y + (b.y - a.y) / (len || 1) * cut }, b, ...rest];
-}
 function lineSvg(item) {
   const roles = Array.isArray(item.role) ? item.role : ["edge"];
   const { variant, end, start } = arrowsOf(roles);
   const head = SCENE_THEME.arrow.length;
-  const points = start ? trimStart2(item.points, head) : item.points;
+  const points = start ? trimStart(item.points, head) : item.points;
   const d = pathData(points, item.radius ?? SCENE_THEME.bend, end ? head : 0);
   const markers = `${start ? ` marker-start="url(#${markerId2(variant, "start")})"` : ""}${end ? ` marker-end="url(#${markerId2(variant, "end")})"` : ""}`;
   return `<path class="${classOf(roles)}" d="${d}"${markers}${dataAttrs(item.data)}/>`;
@@ -24097,19 +24099,6 @@ registerFrontEnd({
   }
 });
 
-// src/render/head-band.ts
-var HEAD_BAND2 = 28;
-function headBand(x, y, w, data) {
-  const inset = Number.parseFloat(SCENE_THEME.metrics["box-w"] ?? "0") / 2;
-  const r = Math.max(0, SCENE_THEME.boxRadius - inset);
-  const left = x + inset;
-  const right = x + w - inset;
-  const top = y + inset;
-  const bottom = y + HEAD_BAND2;
-  const d = `M${left} ${bottom}V${top + r}A${r} ${r} 0 0 1 ${left + r} ${top}H${right - r}A${r} ${r} 0 0 1 ${right} ${top + r}V${bottom}Z`;
-  return { kind: "path", d, role: ["head-band"], ...data === undefined ? {} : { data } };
-}
-
 // src/eventmodeling/model.ts
 var ZONE_NAMES = {
   auto: "UI/Automation",
@@ -24290,7 +24279,7 @@ function layoutEventModel(model, ruler) {
     const data = { frame: frame.label, kind: frame.kind };
     boxItems.push({ kind: "box", x: p.x, y: p.y, w: p.w, h: p.h, role, data });
     boxItems.push(headBand(p.x, p.y, p.w, data));
-    boxItems.push({ kind: "text", x: p.x + p.w / 2, y: p.y + HEAD_BAND2 / 2, text: frame.kind, anchor: "middle", role: ["tag-text"], data });
+    boxItems.push({ kind: "text", x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: "middle", role: ["tag-text"], data });
     const nameY = p.y + NAME_UNDER_BAND;
     boxItems.push({ kind: "text", x: p.x + p.w / 2, y: nameY, text: frame.name, anchor: "middle", role: start ? ["name", "on-start"] : ["name"], data });
     if (size.rows.length > 0) {
@@ -32691,7 +32680,7 @@ function layoutArchitecture(model, ruler) {
     let firstLine = n.y + n.h / 2 - LINE_STEP * (names.length - 1) / 2;
     if (def.icon !== undefined) {
       items.push(headBand(n.x, n.y, n.w, data));
-      items.push({ kind: "text", x: cx, y: n.y + HEAD_BAND2 / 2, text: def.icon, role: ["tag-text"], data });
+      items.push({ kind: "text", x: cx, y: n.y + HEAD_BAND / 2, text: def.icon, role: ["tag-text"], data });
       firstLine = n.y + NAME_UNDER_BAND2;
     }
     names.forEach((line, i) => items.push({ kind: "text", x: cx, y: firstLine + LINE_STEP * i, text: line, role: ["name"], data }));
@@ -41026,17 +41015,9 @@ function drawing(src, req) {
       return renderHtml(src, { ...req.title === undefined ? {} : { title: req.title }, ...width === undefined ? {} : { maxWidth: width }, ...req.theme === undefined ? {} : { theme: req.theme } });
     case "check":
       return checkReport(src, req);
-    case "text": {
-      const rows = req.color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
-      return `${rows.join(`
-`)}
-`;
-    }
-    case "text-svg": {
-      const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
-      return `${renderTextSvg(spans)}
-`;
-    }
+    case "text":
+    case "text-svg":
+      return terminal3(src, req, width).out;
     case "json":
       return `${JSON.stringify(frontEnd.json(src, "svg", opts), null, 2)}
 `;
