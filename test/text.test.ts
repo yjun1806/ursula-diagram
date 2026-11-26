@@ -93,4 +93,16 @@ describe('renderText', () => {
     if ('error' in named) throw new Error(named.error);
     expect(named.lines[named.lines.length - 1]).toContain('━━ Call');
   });
+
+  it('writes the legend in Korean when most words of the diagram are Korean', () => {
+    const out = lines('flowchart LR\nA[주문] ==> B[결제]\nA -.-> C[취소]');
+    expect(out[out.length - 1]).toMatch(/^\s*━━ 요청 {3}┄┄ 대기$/);
+    const english = lines('flowchart LR\nA[order] ==> B[pay]\nA -.-> C[cancel]');
+    expect(english[english.length - 1]).toMatch(/━━ Request {3}┄┄ Pending$/);
+    const mixed = lines('flowchart LR\nA[Upload file] ==> B[Store it]\nA -.-> C[완료]');
+    expect(mixed[mixed.length - 1]).toMatch(/━━ Request {3}┄┄ Pending$/);
+    const named = renderText('flowchart LR\nA[주문] ==> B[결제]\nA -.-> C[취소]', 200, { legend: { thick: 'Call' } });
+    if ('error' in named) throw new Error(named.error);
+    expect(named.lines[named.lines.length - 1]).toMatch(/━━ Call {3}┄┄ 대기$/);
+  });
 });

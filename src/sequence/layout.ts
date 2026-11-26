@@ -1,7 +1,7 @@
 import type { Ruler, TextRole } from '../metrics.ts';
 import type { Diagnostic, SceneItem } from '../types.ts';
 import { wrapWords } from '../text/wrap.ts';
-import { kindOf } from './model.ts';
+import { kindOf, legendCaptions } from './model.ts';
 import type {
   Box,
   LegendKind,
@@ -66,7 +66,6 @@ const PORT_R = 3.25;
 const TAG_INSET = 8;
 
 const LEGEND_KINDS: readonly LegendKind[] = ['call', 'reply', 'async', 'failed'];
-const LEGEND_CAPTIONS: Record<LegendKind, string> = { call: 'Call', reply: 'Reply', async: 'Async', failed: 'Failed' };
 const LEGEND_LOOKS: Record<LegendKind, Look> = {
   call: { dash: false, arrow: 'filled' },
   reply: { dash: true, arrow: 'filled' },
@@ -1017,7 +1016,8 @@ function build(source: Sequence, R: Ruler, cap: number, tight: boolean, legendOp
   if (legendOption !== false) {
     const used = LEGEND_KINDS.filter((k) => kindsUsed.has(k));
     if (used.length >= 2) {
-      for (const k of used) legend.push({ kind: k, caption: legendOption?.[k] ?? LEGEND_CAPTIONS[k] });
+      const words = legendCaptions(source);
+      for (const k of used) legend.push({ kind: k, caption: legendOption?.[k] ?? words[k] });
     }
   }
   const sceneItems: SceneItem[] = items.map((it): SceneItem => {

@@ -1,3 +1,5 @@
+import type { Language } from '../text/language.ts';
+import { languageOf } from '../text/language.ts';
 import type { Diagnostic, Scene } from '../types.ts';
 
 export type ArrowHead = 'filled' | 'open' | 'cross' | 'none';
@@ -7,6 +9,22 @@ export type MessageKind = 'call' | 'reply' | 'async' | 'failed' | 'plain';
 export type LegendKind = Exclude<MessageKind, 'plain'>;
 /** `false` removes the legend; an object renames the captions of the kinds. */
 export type SequenceLegendOption = false | Partial<Record<LegendKind, string>>;
+
+/** The captions of the message kinds, in the language of the diagram's own text. */
+const LEGEND_CAPTIONS: Record<Language, Record<LegendKind, string>> = {
+  en: { call: 'Call', reply: 'Reply', async: 'Async', failed: 'Failed' },
+  ko: { call: '호출', reply: '응답', async: '비동기', failed: '실패' },
+};
+
+/** The legend captions for a diagram: Korean when its participants, messages, notes or blocks are written in Hangul. */
+export function legendCaptions(seq: Sequence): Record<LegendKind, string> {
+  const texts = [
+    ...seq.participants.flatMap((p) => p.lines),
+    ...seq.statements.flatMap((s) => ('lines' in s ? s.lines : [])),
+    ...(seq.groups ?? []).map((g) => g.label),
+  ];
+  return LEGEND_CAPTIONS[languageOf(texts)];
+}
 
 /** How a participant is drawn: a box, or one of the symbols of the Mermaid `@{ "type": ... }` notation. */
 export type ParticipantKind = 'participant' | 'actor' | 'boundary' | 'control' | 'entity' | 'database' | 'collections' | 'queue';

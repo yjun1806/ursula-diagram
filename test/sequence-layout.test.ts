@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellRuler, layoutSequence, parseSequence, pixelRuler } from '../src/index.ts';
+import { cellRuler, layoutSequence, layoutSequenceText, parseSequence, pixelRuler } from '../src/index.ts';
 import type { Box, Ruler, Sequence, SequenceLayout } from '../src/index.ts';
 
 const checkout = `sequenceDiagram
@@ -378,6 +378,14 @@ describe('layoutSequence geometry in pixels', () => {
     expect(texts(off)).toEqual([]);
     expect(off.height).toBeLessThan(l.height);
     expect(layoutSequence(seqOf('sequenceDiagram\nA->>B: a\nB->>A: b'), ruler).legend).toEqual([]);
+  });
+
+  it('writes the legend in Korean when most words of the diagram are Korean', () => {
+    const l = layoutSequence(seqOf('sequenceDiagram\nparticipant A as 주문\nparticipant B as 결제\nA->>B: 요청\nB-->>A: ok\nA-)B: 알림\nA-xB: 취소'), ruler);
+    expect(l.legend.map((e) => e.caption)).toEqual(['호출', '응답', '비동기', '실패']);
+    const text = layoutSequenceText(seqOf('sequenceDiagram\nparticipant A as 주문\nparticipant B as 결제\nA->>B: 요청\nB-->>A: ok'), cellRuler(), 80, undefined).map((l) => l.map((s) => s.text).join(''));
+    expect(text[text.length - 1]).toMatch(/─▶ 호출 +┄▶ 응답$/);
+    expect(layoutSequence(seqOf('sequenceDiagram\nA->>B: Upload file\nB-->>A: 완료'), ruler).legend.map((e) => e.caption)).toEqual(['Call', 'Reply']);
   });
 
   it('makes a note over two participants cover both lifelines', () => {
