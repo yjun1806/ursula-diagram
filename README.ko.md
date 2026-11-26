@@ -153,12 +153,19 @@ SVG를 내는 도구는 SVG를 그리는 시간을 쟀습니다.
 
 ## 빠른 시작
 
-npm으로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 설치됩니다). 설치하지 않고 한 번만 쓰려면 `npx ursula-diagram`을 씁니다.
+npm으로 `ursula-diagram` 명령을 설치합니다(Node 22 이상, 짧은 별칭 `ursula`도 함께 설치됩니다).
 
 ```bash
 npm install -g ursula-diagram
-npx ursula-diagram order.mmd --format text   # 설치하지 않고
 ```
+
+설치하지 않고 한 번만 쓰려면 `npx`로 부릅니다.
+
+```bash
+npx ursula-diagram order.mmd --format text
+```
+
+위의 flowchart를 `order.mmd`에 씁니다.
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -169,8 +176,18 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-ursula-diagram order.mmd --format text --width 80   # 위의 글자 그림
-ursula-diagram order.mmd --format svg > order.svg   # 위의 그림
+```
+
+위의 글자 그림을 80칸 폭으로 출력합니다.
+
+```bash
+ursula-diagram order.mmd --format text --width 80
+```
+
+위의 그림을 SVG로 저장합니다.
+
+```bash
+ursula-diagram order.mmd --format svg > order.svg
 ```
 
 
@@ -468,13 +485,45 @@ example: flowchart LR
 | `json` | 상자·선·라벨과 그 좌표. |
 | `check` | 꺾임·교차 수를 적은 한 줄. 때로 글을 어떻게 고치면 나아지는지 묻는 질문이 붙습니다. |
 
+SVG 파일을 만듭니다.
+
 ```bash
 ursula-diagram flow.mmd --format svg > flow.svg
+```
+
+100칸 폭의 글자 그림을 출력합니다.
+
+```bash
 ursula-diagram flow.mmd --format text --width 100
+```
+
+같은 그림을 ASCII 글자만으로 출력합니다.
+
+```bash
 ursula-diagram flow.mmd --format text --width 100 --charset ascii
+```
+
+글자 그림을 SVG 한 장으로 만듭니다.
+
+```bash
 ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
+```
+
+어두운 테마에 제목을 단 HTML 페이지를 만듭니다.
+
+```bash
 ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
+```
+
+`check`의 수와 질문만 출력합니다.
+
+```bash
 ursula-diagram flow.mmd --format check
+```
+
+표준 입력에서 글을 읽어 배치를 JSON으로 출력합니다.
+
+```bash
 cat flow.mmd | ursula --format json
 ```
 
@@ -553,12 +602,22 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습�
 붙여 그리면서 엔진에 그림을 점검받는 법, 읽는 사람에게 줄 출력을 고르는 법을 알려 줍니다. `scripts/ursula.mjs`는 명령을 한 파일로 묶은
 것이어서, 스킬은 Node 22 이상만 있으면 아무것도 설치하지 않고 돌아갑니다.
 
-[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다.
+[skills](https://skills.sh) 명령으로 설치합니다. Claude Code, Codex, Cursor 같은 에이전트에서 쓸 수 있습니다. 이 프로젝트에 설치합니다.
 
 ```bash
-npx skills add yjun1806/ursula-diagram            # 이 프로젝트에
-npx skills add yjun1806/ursula-diagram -g         # 모든 프로젝트에
-npx skills add yjun1806/ursula-diagram -a claude-code   # 한 에이전트에만
+npx skills add yjun1806/ursula-diagram
+```
+
+모든 프로젝트에 설치합니다.
+
+```bash
+npx skills add yjun1806/ursula-diagram -g
+```
+
+한 에이전트에만 설치합니다.
+
+```bash
+npx skills add yjun1806/ursula-diagram -a claude-code
 ```
 
 `skills/ursula` 폴더를 에이전트의 스킬 폴더에 직접 복사해도 됩니다. 이 폴더는 npm 패키지에도 들어 있습니다.
@@ -577,15 +636,17 @@ cp -R "$(npm root -g)/ursula-diagram/skills/ursula" ~/.claude/skills/
 `render`(`format`, `width`, `charset`, 점검 결과를 함께 받는 `check`, `fix`), `check`(`fix`), `syntax`. `fix: true`를 주면
 결과 끝에 고친 곳과 고친 글이 붙습니다.
 
+Claude Code에서는 이 명령으로 등록합니다.
+
 ```bash
-claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code
+claude mcp add ursula -- npx -y ursula-diagram mcp
 ```
+
+Claude Desktop에서는 `claude_desktop_config.json`에 이 설정을 넣습니다. 같은 형식을 받는 다른 클라이언트에도 그대로 쓸 수 있습니다.
 
 ```json
 { "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
 ```
-
-두 번째 설정은 Claude Desktop의 `claude_desktop_config.json`에 넣습니다. 같은 형식을 받는 다른 클라이언트에도 그대로 쓸 수 있습니다.
 
 ### 에이전트 터미널에서
 
@@ -613,13 +674,40 @@ function drawMermaidBlocks(reply: string, width: number): string {
 
 ## 개발
 
+의존성을 설치합니다.
+
 ```bash
 npm install
+```
+
+타입을 검사합니다.
+
+```bash
 npx tsc --noEmit
-npm test              # 느린 대조를 뺀 시험 전체
-npm run test:rewrite  # 층 배치 엔진의 느린 대조, 15분쯤
-bun scripts/build.ts  # dist/와 스킬 안의 명령. 그림이 바뀌면 다시 돌립니다
-cd site && npm install && npm run dev   # 문서 사이트와 플레이그라운드. 방금 만든 dist/를 씁니다
+```
+
+느린 대조를 뺀 시험 전체를 돌립니다.
+
+```bash
+npm test
+```
+
+층 배치 엔진의 느린 대조를 돌립니다. 15분쯤 걸립니다.
+
+```bash
+npm run test:rewrite
+```
+
+`dist/`와 스킬 안의 명령을 만듭니다. 그림이 바뀌면 다시 돌립니다.
+
+```bash
+bun scripts/build.ts
+```
+
+방금 만든 `dist/`로 문서 사이트와 플레이그라운드를 띄웁니다.
+
+```bash
+cd site && npm install && npm run dev
 ```
 
 빌드한 파일은 Node 22 이상에서 돕니다. 저장소를 받은 폴더에서는 Node 24 이상이 소스를 바로 실행합니다:

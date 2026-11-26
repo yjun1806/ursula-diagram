@@ -9,15 +9,39 @@
 | `json` | 상자·선·라벨과 그 좌표. |
 | `check` | 꺾임·교차 수를 적은 한 줄. 때로 글을 어떻게 고치면 나아지는지 묻는 질문이 붙습니다. |
 
-```bash
+형식마다 명령 하나를 탭으로 나눴습니다. `json` 탭은 표준 입력에서 글을 읽습니다.
+
+::: code-group
+
+```bash [svg]
 ursula-diagram flow.mmd --format svg > flow.svg
+```
+
+```bash [text]
 ursula-diagram flow.mmd --format text --width 100
+```
+
+```bash [text, ASCII]
 ursula-diagram flow.mmd --format text --width 100 --charset ascii
+```
+
+```bash [text-svg]
 ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
+```
+
+```bash [html]
 ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
+```
+
+```bash [check]
 ursula-diagram flow.mmd --format check
+```
+
+```bash [json]
 cat flow.mmd | ursula --format json
 ```
+
+:::
 
 파일을 주지 않으면 명령은 표준 입력에서 글을 읽습니다. `--theme auto|light|dark`는 `html` 페이지의 밝은·어두운
 모드를 정하고, `auto`는 시스템 설정을 따릅니다. 모든 옵션은 `ursula-diagram --help`로 확인합니다.

@@ -152,12 +152,19 @@ Korean text, outputs, the library inside one process and the same examples drawn
 
 ## Quick start
 
-Install the `ursula-diagram` command with npm (Node 22 or later; `ursula` is a short alias), or run it once with `npx`:
+Install the `ursula-diagram` command with npm (Node 22 or later; `ursula` is a short alias):
 
 ```bash
 npm install -g ursula-diagram
-npx ursula-diagram order.mmd --format text   # without installing
 ```
+
+Or run it once with `npx`, without installing:
+
+```bash
+npx ursula-diagram order.mmd --format text
+```
+
+Write the flowchart above into `order.mmd`:
 
 ```bash
 cat > order.mmd <<'EOF'
@@ -168,8 +175,18 @@ flowchart LR
   remind --> pay
   pick --> ship([Ship])
 EOF
-ursula-diagram order.mmd --format text --width 80   # the text drawing above
-ursula-diagram order.mmd --format svg > order.svg   # the picture above
+```
+
+Print the text drawing above, 80 columns wide:
+
+```bash
+ursula-diagram order.mmd --format text --width 80
+```
+
+Save the picture above as SVG:
+
+```bash
+ursula-diagram order.mmd --format svg > order.svg
 ```
 
 
@@ -469,13 +486,45 @@ are a few symbols that some terminals draw two cells wide (`·` `×` `—` `∩`
 | `json` | The placement: boxes, lines and labels with their coordinates. |
 | `check` | One line of counts (bends, crossings) and, sometimes, questions a writer can answer by editing the text. |
 
+An SVG file:
+
 ```bash
 ursula-diagram flow.mmd --format svg > flow.svg
+```
+
+A terminal drawing 100 columns wide:
+
+```bash
 ursula-diagram flow.mmd --format text --width 100
+```
+
+The same with ASCII characters only:
+
+```bash
 ursula-diagram flow.mmd --format text --width 100 --charset ascii
+```
+
+The terminal drawing as one SVG:
+
+```bash
 ursula-diagram flow.mmd --format text-svg --width 100 > flow-text.svg
+```
+
+An HTML page in the dark theme, with a title:
+
+```bash
 ursula-diagram flow.mmd --format html --theme dark --title "Flow" > flow.html
+```
+
+The counts and questions of `check`:
+
+```bash
 ursula-diagram flow.mmd --format check
+```
+
+The placement as JSON, with the text read from standard input:
+
+```bash
 cat flow.mmd | ursula --format json
 ```
 
@@ -557,12 +606,22 @@ draw it and ask the engine about it in one call with `--check`, and which output
 command as one file, so the skill runs with Node 22 or later and installs nothing.
 
 Install it with the [skills](https://skills.sh) command, which works for Claude Code, Codex, Cursor and other
-agents:
+agents. Into this project:
 
 ```bash
-npx skills add yjun1806/ursula-diagram            # into this project
-npx skills add yjun1806/ursula-diagram -g         # for every project
-npx skills add yjun1806/ursula-diagram -a claude-code   # for one agent only
+npx skills add yjun1806/ursula-diagram
+```
+
+For every project:
+
+```bash
+npx skills add yjun1806/ursula-diagram -g
+```
+
+For one agent only:
+
+```bash
+npx skills add yjun1806/ursula-diagram -a claude-code
 ```
 
 Or copy the `skills/ursula` folder into the skills folder of your agent by hand. The npm package carries it too:
@@ -581,15 +640,17 @@ Where an agent has no shell, `ursula-diagram mcp` serves the command over MCP on
 three tools: `render` (with `format`, `width`, `charset`, `check` for the report, and `fix`), `check` (with `fix`) and
 `syntax`. With `fix: true` the result ends with the fixes and the fixed source.
 
+In Claude Code:
+
 ```bash
-claude mcp add ursula -- npx -y ursula-diagram mcp    # Claude Code
+claude mcp add ursula -- npx -y ursula-diagram mcp
 ```
+
+In `claude_desktop_config.json` of Claude Desktop, and in other clients that take the same form:
 
 ```json
 { "mcpServers": { "ursula": { "command": "npx", "args": ["-y", "ursula-diagram", "mcp"] } } }
 ```
-
-The second is for `claude_desktop_config.json` of Claude Desktop, and for other clients that take the same form.
 
 ### In an agent's terminal
 
@@ -619,13 +680,40 @@ stays as text.
 
 ## Development
 
+Install the dependencies:
+
 ```bash
 npm install
+```
+
+Check the types:
+
+```bash
 npx tsc --noEmit
-npm test              # the whole suite but the slow comparisons
-npm run test:rewrite  # the slow comparisons of the layered engine, about a quarter of an hour
-bun scripts/build.ts  # dist/ and the command inside the skill; run it again when a drawing changes
-cd site && npm install && npm run dev   # the documentation site and playground, on the dist/ just built
+```
+
+Run the whole suite but the slow comparisons:
+
+```bash
+npm test
+```
+
+Run the slow comparisons of the layered engine, which take about a quarter of an hour:
+
+```bash
+npm run test:rewrite
+```
+
+Build `dist/` and the command inside the skill. Run it again when a drawing changes:
+
+```bash
+bun scripts/build.ts
+```
+
+Run the documentation site and playground on the `dist/` just built:
+
+```bash
+cd site && npm install && npm run dev
 ```
 
 The built files run on Node 22 or later. In a checkout, Node 24 or later also runs the sources directly:
