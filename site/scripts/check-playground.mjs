@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { existsSync } from 'node:fs';
-import { TABS, decodeState, draw, encodeState } from '../.vitepress/theme/playground/draw.js';
+import { TABS, FILES, copyText, decodeState, draw, encodeState, resolveColours } from '../.vitepress/theme/playground/draw.js';
 import { GALLERY_EN, GALLERY_KO } from '../.vitepress/theme/playground/gallery-texts.js';
 import { isMermaid } from '../.vitepress/mermaid-fence.mjs';
 import { CARDS } from '../.vitepress/theme/home/agents.js';
@@ -55,7 +55,7 @@ for (const [lang, gallery] of [['en', GALLERY_EN], ['ko', GALLERY_KO]]) {
 // The built pages: both playground routes carry the component, and every English page has a Korean twin.
 const built = join(site, '.vitepress', 'dist');
 if (existsSync(built)) {
-  for (const [page, words] of [['playground.html', ['Copy link', 'Example']], ['ko/playground.html', ['링크 복사', '예시']]]) {
+  for (const [page, words] of [['playground.html', ['Copy link', 'Copy Mermaid', 'Copy SVG', 'Download .svg', 'Example']], ['ko/playground.html', ['링크 복사', 'Mermaid 복사', 'SVG 복사', '.svg 내려받기', '예시']]]) {
     const html = readFileSync(join(built, page), 'utf8');
     const missing = ['pg-input', ...words].filter((w) => !html.includes(w));
     if (missing.length) fail(`${page} lacks ${missing.join(', ')}`);
@@ -319,6 +319,26 @@ const drawn = draw(engine, text, 'text', 100);
 const joined = drawn.lines?.map((l) => l.map((s) => s.text).join('')).join('\n').trimEnd();
 if (joined !== expected) fail('order-flow.mmd at width 100 differs from examples/order-flow.txt');
 else console.log('ok   order-flow.mmd text at width 100 matches examples/order-flow.txt');
+
+// The copy and download buttons hand over the engine's own output: the SVG markup as render() and renderTextSvg()
+// return it, colour variables and all, and the text drawing as the plain lines renderText() returns.
+const expectedCopy = {
+  svg: engine.render(text),
+  text: engine.renderText(text, 100).lines.join('\n'),
+  ascii: engine.renderText(text, 100, { charset: 'ascii' }).lines.join('\n'),
+  'text-svg': engine.renderTextSvg(text, 100).svg,
+};
+for (const { id } of TABS) {
+  const copied = copyText(draw(engine, text, id, 100));
+  if (!FILES[id]) fail(`the ${id} tab has no download file`);
+  else if (copied !== expectedCopy[id]) fail(`the ${id} tab copies something other than the engine output`);
+  else console.log(`ok   ${id} tab copies the engine output (${copied.length} characters) and downloads ${FILES[id].name}`);
+}
+if (!expectedCopy.svg.includes('var(--ursula-fg,')) fail('the copied SVG lost its colour variables');
+const fixed = resolveColours(expectedCopy.svg, (name) => (name === 'ursula-fg' ? '#123456' : ''));
+if (/var\(--/.test(fixed) || !fixed.includes('#123456') || !fixed.includes('#fcfcfa')) fail('resolveColours left a colour variable or ignored a value');
+else console.log('ok   the image copy fixes every colour variable to the page colour or the engine fallback');
+if (copyText(draw(engine, 'flowchart LR\n  A -->', 'svg', 80)) !== null) fail('an error gave something to copy');
 
 const bad = draw(engine, 'flowchart LR\n  A -->', 'svg', 80);
 const narrow = draw(engine, text, 'text', 20);
