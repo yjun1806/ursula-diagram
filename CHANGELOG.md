@@ -7,6 +7,10 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 
 ## Unreleased
 
+### Fixed
+
+- The agent skill tells the agent to write the full `node …/scripts/ursula.mjs` command in each call instead of a shell variable, which zsh does not split into words, so the first drawing no longer fails. [#84](https://github.com/yjun1806/ursula-diagram/pull/84)
+
 ## 0.2.3 (2026-11-26)
 
 ### Added
