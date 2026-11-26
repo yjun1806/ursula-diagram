@@ -92,12 +92,9 @@ No diagram type detected matching given configuration for text: flowchrt LR
 
 ursula answers:
 
-```
-error: line 1: expected a 'flowchart' or 'graph' header
-  1 | flowchrt LR
-    | ^^^^^^^^
-did you mean: flowchart
-example: flowchart LR
+```ursula-output exit=1 --format text
+flowchrt LR
+  A --> B
 ```
 
 An error with only one possible fix, like this one, is fixed by the engine with `--fix`, which then draws and names

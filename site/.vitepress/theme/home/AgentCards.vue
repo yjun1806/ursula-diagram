@@ -4,6 +4,7 @@
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
 import { CARDS } from './agents.js';
+import OUTPUTS from './outputs.json';
 import { langOf } from '../playground/strings.js';
 import CopyButton from './CopyButton.vue';
 import CodeBlock from './CodeBlock.vue';
@@ -14,7 +15,7 @@ const t = HOME_STRINGS[code];
 const prefix = code === 'ko' ? '/ko' : '';
 const skillPage = withBase(`${prefix}/guide/agent-skill`);
 
-const cards = CARDS.map((c, i) => ({ ...c, step: i + 1, title: t.cards[c.id][0], body: t.cards[c.id][1] }));
+const cards = CARDS.map((c, i) => ({ ...c, output: OUTPUTS.cards[c.id] ?? '', step: i + 1, title: t.cards[c.id][0], body: t.cards[c.id][1] }));
 const loopSrc = withBase(`/assets/${code === 'ko' ? 'ko-' : ''}loop.svg`);
 </script>
 

@@ -33,7 +33,14 @@ Build `dist/` and the command inside the skill. Run it again when a drawing chan
 bun scripts/build.ts
 ```
 
-Run the documentation site and playground on the `dist/` just built:
+Redraw the outputs the READMEs and `assets/` keep as files, after a build that changes a drawing. `npm test` fails
+while one of them differs from what the built command draws:
+
+```bash
+npm run docs:sync
+```
+
+The site draws its outputs at build time. Run the documentation site and playground on the `dist/` just built:
 
 ```bash
 cd site && npm install && npm run dev

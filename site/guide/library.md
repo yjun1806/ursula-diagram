@@ -24,6 +24,35 @@ colours terminal text itself. `spansToSvg` draws such lines as the picture `rend
 replaces the drawing characters of lines already drawn; give it `{ countBars: true }` for the lines of an
 entity-relationship drawing, so that the bars of its counts on upright lines become `-`.
 
+`spansToAnsi` writes one line of spans with ANSI colour codes, as `--color` does.
+
+## Options
+
+`renderText`, `renderTextSpans` and `renderTextSvg` take the options of the command as a third argument: `charset`
+(`'unicode'` or `'ascii'`), `detail`, `quality`, `engine`, `composition`, and `legend`, `questions` and `elbows` (each
+`false` for the `--no-` option). `render` takes `title`, `legend` and `maxWidth`; `renderHtml` takes `title`, `theme`
+and `maxWidth`.
+
+## Errors and fixes
+
+A text that cannot be drawn comes back from `renderText`, `renderTextSpans` and `renderTextSvg` as
+`{ error, line, column, hint, suggestion, example }`, every field but `error` only when known. `render` throws a
+`UrsulaError` with the same fields. `fixSource` makes the fixes of `--fix` and returns the fixed text with the list of
+fixes, each with `line`, `from`, `to` and `reason`:
+
+```ts
+import { fixSource, renderText } from 'ursula-diagram';
+
+const { source, fixes } = fixSource('flowchrt LR\n  A -> B');
+const text = renderText(source, 80);
+```
+
+`syntaxTypes()` lists the names of the types, as `ursula-diagram syntax` does, and `syntaxOf(type)` returns the
+entry of a name or a header (`name`, `headers`, `summary`, `example`, `rules`), or `undefined`.
+
+The package also exports the stages under these functions (`parse`, `layout`, `renderSvg`, `renderTextLayout` and
+others) for tools built on the engine; `dist/index.d.ts` lists them with their types.
+
 ## In a browser
 
 `ursula-diagram/global` is the engine as one file for a `<script>` tag; everything the package exports, and

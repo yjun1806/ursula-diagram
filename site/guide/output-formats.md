@@ -7,7 +7,8 @@
 | `text-svg` | The terminal drawing as one SVG, for where text would lose its columns. |
 | `html` | One file with the drawing, a light and dark switch, and saving as PNG or SVG. |
 | `json` | The placement: boxes, lines and labels with their coordinates. |
-| `check` | One line of counts (bends, crossings) and, sometimes, questions a writer can answer by editing the text. |
+| `check` | The engine's report without the drawing: one line of counts (bends, crossings), the lines that cross and the most bent lines with their source line numbers, and sometimes questions a writer can answer by editing the text. |
+| `fixed` | The text with the fixes of `--fix` made, to save in place of it. Nothing is drawn. |
 
 One command per format, each in its own tab. The `json` tab reads the text from standard input:
 
@@ -41,7 +42,18 @@ ursula-diagram flow.mmd --format check
 cat flow.mmd | ursula --format json
 ```
 
+```bash [fixed]
+ursula-diagram flow.mmd --format fixed > flow-fixed.mmd
+```
+
 :::
 
 The command reads standard input when no file is given. `--theme auto|light|dark` sets the light or dark of an
-`html` page; `auto` follows the system setting. Run `ursula-diagram --help` to list every option.
+`html` page; `auto` follows the system setting.
+
+## Options {#options}
+
+`ursula-diagram --help` prints every option, the formats and the exit codes:
+
+```ursula-output --help
+```

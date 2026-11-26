@@ -1,8 +1,10 @@
 <script setup>
-// The home page's first drawing: the Mermaid text, and the SVG and the terminal text ursula draws from it.
+// The home page's first drawing: the Mermaid text, and the SVG and the terminal text ursula draws from it, both drawn at
+// build time by scripts/render-home.mjs (public/assets/hero.svg and outputs.json).
 import { useData, withBase } from 'vitepress';
 import { HOME_STRINGS } from './strings.js';
-import { SOURCE, TEXT_NARROW, TEXT_WIDE } from './sample.js';
+import { SOURCE } from './sample.js';
+import OUTPUTS from './outputs.json';
 import { langOf } from '../playground/strings.js';
 import CodeBlock from './CodeBlock.vue';
 
@@ -10,6 +12,8 @@ const { lang } = useData();
 const code = langOf(lang.value);
 const t = HOME_STRINGS[code];
 const playground = code === 'ko' ? '/ko/playground' : '/playground';
+const TEXT_WIDE = OUTPUTS.terminal.wide;
+const TEXT_NARROW = OUTPUTS.terminal.narrow;
 const alt = code === 'ko' ? '같은 flowchart를 ursula가 SVG로 그린 그림' : 'The same flowchart drawn by ursula as SVG';
 </script>
 

@@ -5,82 +5,60 @@
 never cut off. These are the [examples page](/examples/)'s sequence, Gantt and mindmap texts, drawn with
 `ursula-diagram <file> --format text --width 80`.
 
-```
-╭───────────────╮   ╭─────╮       ╭───────────╮     ╭─────╮
-│ [actor] User  │   │ Web │       │ Auth API  │     │ DB  │
-╰───────────────╯   ╰─────╯       ╰───────────╯     ╰─────╯
-        ├── Log in ───▶┆                ┆              ┆
-        ┆              ├─ POST /login ─▶┆              ┆
-        ┆              ┆                ├─ Find user ─▶┆
-        ┆              ┆                ┆◀┄┄ Record ┄┄┄┤
-        ┆              ┆◀┄┄┄┄ Token ┄┄┄┄┤              ┆
-        ┆◀┄ Dashboard ┄┤                ┆              ┆
-
-─▶ Call   ┄▶ Reply
+```ursula-output input=gallery:sequence --format text --width 80
 ```
 
-```
-Release
-          January 2026
-          5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
-──────────┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──
-Build
-  Design  ███████████████ 5d
-  Engine                 ██████████████████████████████ 10d
-Ship
-  Docs                                                 ████████████ 4d
-  Release                                                         ◆ 0d milestone
+```ursula-output input=gallery:gantt --format text --width 80
 ```
 
-```
-Diagrams
-├── Flow
-│   ├── Flowchart
-│   └── Swimlanes
-├── Structure
-│   ├── Class
-│   └── ER
-└── Time
-    ├── Gantt
-    └── Timeline
+```ursula-output input=gallery:mindmap --format text --width 80
 ```
 
 A few types (pie, quadrant, radar, sankey, XY chart, timeline, user journey, railroad, Venn, Cynefin, Wardley) come
 out as a table or a list in a terminal, because that is more exact there than a picture:
 
-```
-pie title Pets
-  "Dogs" : 386
-  "Cats" : 85
-  "Rats" : 15
+```ursula-input gallery:pie
 ```
 
-```
-Pets
-Dogs  386  79.4%
-Cats   85  17.5%
-Rats   15   3.1%
+```ursula-output input=gallery:pie --format text --width 80
 ```
 
 ## Errors, the check and exit codes
 
-When a drawing cannot fit in `--width`, the command prints no drawing, ends with code 3 and names a width that fits.
-`--check` with any drawing format adds the engine's report on standard error: the counts, the lines that cross with
-their source line numbers, and questions. The report counts the svg layout; a terminal drawing routes its lines on its
-own grid, so its crossings can differ. `ursula-diagram syntax` lists every type, and
-`ursula-diagram syntax <type>` prints a small example and the rules. An error names the line and the column and,
-when it can, the word that was meant and a line written the right way:
+An error names the line and the column and, when it can, the word that was meant and a line written the right way.
+Here the first line misspells the header and the second uses a flowchart arrow Mermaid does not read:
 
+```ursula-output exit=1 --format text
+flowchrt LR
+  A -> B
 ```
-error: line 1: expected a 'flowchart' or 'graph' header
-  1 | flowchrt LR
-    | ^^^^^^^^
-did you mean: flowchart
-example: flowchart LR
+
+`--fix` makes the fixes that have only one reading, draws, and names each fix on standard error. Make the same change
+in your text, or take the whole fixed text from `--format fixed`:
+
+```ursula-output --fix --format text
+flowchrt LR
+  A -> B
 ```
+
+When a drawing cannot fit in `--width`, the command prints no drawing, ends with code 3 and names a width that fits.
+The home page's flowchart at `--width 20`:
+
+```ursula-output exit=3 input=home --format text --width 20
+```
+
+`--check` with any drawing format adds the engine's report on standard error; `--format check` prints the report
+alone. It holds the counts, the lines that cross with their source line numbers, and sometimes questions. The report
+counts the svg layout; a terminal drawing routes its lines on its own grid, so its crossings can differ. The report on
+the home page's flowchart:
+
+```ursula-output input=home --format check
+```
+
+`ursula-diagram syntax` lists every type, and `ursula-diagram syntax <type>` prints a small example and the rules.
 
 The exit code is 0 when drawn, 1 for an error in the text, 2 for wrong options, 3 when the drawing is too wide and 4
-for a failure inside the engine. `ursula-diagram --help` lists every option.
+for a failure inside the engine. Every option is on the [Output formats](/guide/output-formats#options) page.
 
 # When the columns do not line up
 
@@ -99,17 +77,7 @@ There are two ways out:
 
 - **`--charset ascii`** draws with ASCII characters only, for a terminal that draws box lines two cells wide:
 
-  ```
-                                           +------------+   +------------+
-                                  +- yes ->| Pick items |-->|    Ship    |
-  +------------+   +------------+ |        +------------+   +------------+
-  |   Order    |-->|   Paid?    |-+
-  |   placed   |   +------------+ |        +------------+
-  +------------+          ^       +- no -->|    Send    |
-                          |                |  reminder  |
-                          |                +------------+
-                          |                       |
-                          +-----------------------+
+  ```ursula-output input=home --format text --width 80 --charset ascii
   ```
 
 <details>

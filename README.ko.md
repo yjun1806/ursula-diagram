@@ -30,6 +30,7 @@ flowchart LR
 
 <p align="center"><img src="https://raw.githubusercontent.com/yjun1806/ursula-diagram/main/assets/hero.svg" alt="같은 flowchart를 ursula가 SVG로 그린 그림" width="640"></p>
 
+<!-- ursula-output --format text --width 80 -->
 ```
                                          ╭────────────╮   ╭────────────╮
                                 ┌─ yes ─▶│ Pick items │──▶│    Ship    │
@@ -79,7 +80,7 @@ claude mcp add ursula -- npx -y ursula-diagram mcp
 - [예제](https://yjun1806.github.io/ursula-diagram/ko/examples/): Mermaid 문서의 예시 531개를 SVG와 터미널 그림으로
 - [플레이그라운드](https://yjun1806.github.io/ursula-diagram/ko/playground): 브라우저에서 글을 그려 보기
 - [터미널에서](https://yjun1806.github.io/ursula-diagram/ko/guide/terminal): 글자 그림, 오류, 종료 코드, ASCII 출력
-- [출력 형식](https://yjun1806.github.io/ursula-diagram/ko/guide/output-formats): `svg`, `text`, `text-svg`, `html`, `json`, `check`
+- [출력 형식](https://yjun1806.github.io/ursula-diagram/ko/guide/output-formats): `svg`, `text`, `text-svg`, `html`, `json`, `check`, `fixed`와 모든 옵션
 - [라이브러리](https://yjun1806.github.io/ursula-diagram/ko/guide/library): `render`, `renderText`와 나머지 API
 - [에이전트 스킬과 MCP](https://yjun1806.github.io/ursula-diagram/ko/guide/agent-skill): 스킬 설치, MCP 서버와 그 설정
 - [색 바꾸기](https://yjun1806.github.io/ursula-diagram/ko/guide/colours): 그림의 CSS 변수

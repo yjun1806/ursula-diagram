@@ -5,81 +5,59 @@
 않습니다. 아래는 [예제](/ko/examples/) 페이지의 sequence·Gantt·mindmap을 영문 라벨로 바꿔 쓴 글을
 `ursula-diagram <파일> --format text --width 80`으로 그린 결과입니다.
 
-```
-╭───────────────╮   ╭─────╮       ╭───────────╮     ╭─────╮
-│ [actor] User  │   │ Web │       │ Auth API  │     │ DB  │
-╰───────────────╯   ╰─────╯       ╰───────────╯     ╰─────╯
-        ├── Log in ───▶┆                ┆              ┆
-        ┆              ├─ POST /login ─▶┆              ┆
-        ┆              ┆                ├─ Find user ─▶┆
-        ┆              ┆                ┆◀┄┄ Record ┄┄┄┤
-        ┆              ┆◀┄┄┄┄ Token ┄┄┄┄┤              ┆
-        ┆◀┄ Dashboard ┄┤                ┆              ┆
-
-─▶ Call   ┄▶ Reply
+```ursula-output input=gallery:sequence --format text --width 80
 ```
 
-```
-Release
-          January 2026
-          5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
-──────────┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──
-Build
-  Design  ███████████████ 5d
-  Engine                 ██████████████████████████████ 10d
-Ship
-  Docs                                                 ████████████ 4d
-  Release                                                         ◆ 0d milestone
+```ursula-output input=gallery:gantt --format text --width 80
 ```
 
-```
-Diagrams
-├── Flow
-│   ├── Flowchart
-│   └── Swimlanes
-├── Structure
-│   ├── Class
-│   └── ER
-└── Time
-    ├── Gantt
-    └── Timeline
+```ursula-output input=gallery:mindmap --format text --width 80
 ```
 
 몇몇 유형(pie, quadrant, radar, sankey, XY chart, timeline, user journey, railroad, Venn, Cynefin, Wardley)은
 터미널에서 표나 목록으로 나옵니다. 터미널에서는 그림보다 표나 목록이 더 정확하기 때문입니다.
 
-```
-pie title Pets
-  "Dogs" : 386
-  "Cats" : 85
-  "Rats" : 15
+```ursula-input gallery:pie
 ```
 
-```
-Pets
-Dogs  386  79.4%
-Cats   85  17.5%
-Rats   15   3.1%
+```ursula-output input=gallery:pie --format text --width 80
 ```
 
 ## 오류, 점검, 종료 코드
 
-그림이 `--width`에 들어가지 않으면 명령은 그림을 내지 않고 종료 코드 3으로 끝나며, 들어가는 폭을 알려 줍니다. 그리는
-형식에 `--check`를 더하면 엔진의 점검 결과가 표준 오류로 함께 나옵니다. 점검 결과에는 개수, 교차하는 선과 그 선을 적은
-줄 번호, 질문이 들어 있습니다. 점검은 svg 배치를 셉니다. 터미널 그림은 선을 자기 격자에 따로 그리므로 교차가 다를 수
-있습니다. `ursula-diagram syntax`는 유형 목록을, `ursula-diagram syntax <유형>`은 작은 예시와
-규칙을 보여 줍니다. 오류 메시지는 줄과 열을 가리키고, 가능하면 의도했을 낱말과 바르게 쓴 예시 한 줄을 붙입니다.
+오류 메시지는 줄과 열을 가리키고, 가능하면 의도했을 낱말과 바르게 쓴 예시 한 줄을 붙입니다. 아래 글은 첫 줄의 머리글을
+잘못 썼고, 둘째 줄에는 Mermaid가 읽지 않는 flowchart 화살표를 썼습니다.
 
+```ursula-output exit=1 --format text
+flowchrt LR
+  A -> B
 ```
-error: line 1: expected a 'flowchart' or 'graph' header
-  1 | flowchrt LR
-    | ^^^^^^^^
-did you mean: flowchart
-example: flowchart LR
+
+`--fix`는 고칠 방법이 하나뿐인 오류를 고쳐서 그리고, 고친 곳을 하나씩 표준 오류에 알립니다. 같은 고침을 원래 글에도
+적용합니다. 고친 글 전체가 필요하면 `--format fixed`로 받습니다.
+
+```ursula-output --fix --format text
+flowchrt LR
+  A -> B
 ```
+
+그림이 `--width`에 들어가지 않으면 명령은 그림을 내지 않고 종료 코드 3으로 끝나며, 들어가는 폭을 알려 줍니다. 아래는 첫
+화면의 flowchart를 `--width 20`으로 그린 결과입니다.
+
+```ursula-output exit=3 input=home --format text --width 20
+```
+
+그리는 형식에 `--check`를 더하면 엔진의 점검 결과가 표준 오류로 함께 나오고, `--format check`는 점검 결과만 냅니다. 점검
+결과에는 개수, 교차하는 선과 그 선을 적은 줄 번호, 때로 질문이 들어 있습니다. 점검은 svg 배치를 셉니다. 터미널 그림은
+선을 자기 격자에 따로 그리므로 교차가 다를 수 있습니다. 아래는 첫 화면 flowchart의 점검 결과입니다.
+
+```ursula-output input=home --format check
+```
+
+`ursula-diagram syntax`는 유형 목록을, `ursula-diagram syntax <유형>`은 작은 예시와 규칙을 보여 줍니다.
 
 종료 코드는 0(그림을 그림), 1(글의 오류), 2(옵션 오류), 3(폭 부족), 4(엔진 안의 오류)입니다. 모든 옵션은
-`ursula-diagram --help`로 확인합니다.
+[출력 형식](/ko/guide/output-formats#options) 페이지에 있습니다.
 
 # 줄이 맞지 않을 때
 
@@ -97,17 +75,7 @@ example: flowchart LR
 
 - **`--charset ascii`** 는 ASCII 글자만으로 그립니다. 상자 선 글자를 두 칸으로 그리는 터미널에서 씁니다.
 
-  ```
-                                           +------------+   +------------+
-                                  +- yes ->| Pick items |-->|    Ship    |
-  +------------+   +------------+ |        +------------+   +------------+
-  |   Order    |-->|   Paid?    |-+
-  |   placed   |   +------------+ |        +------------+
-  +------------+          ^       +- no -->|    Send    |
-                          |                |  reminder  |
-                          |                +------------+
-                          |                       |
-                          +-----------------------+
+  ```ursula-output input=home --format text --width 80 --charset ascii
   ```
 
 <details>

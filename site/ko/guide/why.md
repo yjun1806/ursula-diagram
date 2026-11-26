@@ -86,12 +86,9 @@ No diagram type detected matching given configuration for text: flowchrt LR
 
 같은 글을 ursula에 넣으면 이렇게 답합니다.
 
-```
-error: line 1: expected a 'flowchart' or 'graph' header
-  1 | flowchrt LR
-    | ^^^^^^^^
-did you mean: flowchart
-example: flowchart LR
+```ursula-output exit=1 --format text
+flowchrt LR
+  A --> B
 ```
 
 이렇게 고칠 방법이 하나뿐인 오류는 `--fix`를 주면 엔진이 고쳐서 그리고, 고친 줄을 알려 줍니다. 그림이 그려진 뒤에도
