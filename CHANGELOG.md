@@ -9,12 +9,12 @@ planned next is on the [roadmap](https://yjun1806.github.io/ursula-diagram/roadm
 
 ### Added
 
-- `ursula-diagram update` checks npm for a newer version and prints the command that updates this install (global npm, pnpm or bun, a project, npx or the agent skill); `--yes` runs it for a global install. It is the only command that uses the network, and ends with the new code 5 when npm cannot be reached. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
-- The package installs the command under the short name `ud` as well. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
+- `ursula-diagram update` checks npm for a newer version and prints the command that updates this install (global npm, pnpm or bun, a project, npx or the agent skill); `--yes` runs it for a global install. It is the only command that uses the network, and ends with the new code 5 when npm cannot be reached. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
+- The package installs the command under the short name `ud` as well. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
 
 ### Changed
 
-- An unknown option prints `error: unknown option --x` and a `did you mean` when an option is near; `--engine`, `--no-questions` and `--no-elbows` say they were removed in 0.2.2 and why. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
+- An unknown option prints `error: unknown option --x` and a `did you mean` when an option is near; `--engine`, `--no-questions` and `--no-elbows` say they were removed in 0.2.2 and why. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
 
 ## 0.2.2 (2026-11-26)
 

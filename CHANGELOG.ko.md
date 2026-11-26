@@ -8,12 +8,12 @@
 
 ### Added
 
-- `ursula-diagram update`가 npm에 새 버전이 있는지 묻고, 이 설치(npm·pnpm·bun 전역, 프로젝트, npx, 에이전트 스킬)를 업데이트하는 명령을 출력합니다. `--yes`를 붙이면 전역 설치일 때 그 명령을 실행합니다. 네트워크를 쓰는 명령은 이것 하나이고, npm에 닿지 못하면 새 코드 5로 끝납니다. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
-- 패키지가 명령을 짧은 이름 `ud`로도 설치합니다. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
+- `ursula-diagram update`가 npm에 새 버전이 있는지 묻고, 이 설치(npm·pnpm·bun 전역, 프로젝트, npx, 에이전트 스킬)를 업데이트하는 명령을 출력합니다. `--yes`를 붙이면 전역 설치일 때 그 명령을 실행합니다. 네트워크를 쓰는 명령은 이것 하나이고, npm에 닿지 못하면 새 코드 5로 끝납니다. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
+- 패키지가 명령을 짧은 이름 `ud`로도 설치합니다. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
 
 ### Changed
 
-- 모르는 옵션을 주면 `error: unknown option --x`를 출력하고, 가까운 옵션이 있으면 `did you mean`으로 알려 줍니다. `--engine`, `--no-questions`, `--no-elbows`는 0.2.2에서 지워졌다는 것과 그 까닭을 알려 줍니다. [#PR](https://github.com/yjun1806/ursula-diagram/pull/PR)
+- 모르는 옵션을 주면 `error: unknown option --x`를 출력하고, 가까운 옵션이 있으면 `did you mean`으로 알려 줍니다. `--engine`, `--no-questions`, `--no-elbows`는 0.2.2에서 지워졌다는 것과 그 까닭을 알려 줍니다. [#78](https://github.com/yjun1806/ursula-diagram/pull/78)
 
 ## 0.2.2 (2026-11-26)
 
