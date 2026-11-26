@@ -1,16 +1,12 @@
 import type { FrontValue } from '../front-matter.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { XyChart, XyConfig, XyPoint, XyRange, XySeries } from './model.ts';
 
 const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)`;
 const RANGE = new RegExp(String.raw`^(${NUMBER})\s*-->\s*(${NUMBER})$`);
 const VALUE = new RegExp(String.raw`^(${NUMBER})\s*(?:"([^"]*)")?$`);
 const HEADER = /^(xychart-beta|xychart)(?:\s+(horizontal|vertical))?$/;
-
-function fail(message: string, line: number): never {
-  throw new UrsulaError(message, 'syntax', line);
-}
 
 /** Removes a `%%` comment that is not inside quotes. */
 function stripComment(row: string): string {

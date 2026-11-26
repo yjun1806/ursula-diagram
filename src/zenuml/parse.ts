@@ -1,6 +1,6 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import type { BlockKind, MessageStmt, Participant, ParticipantKind, Sequence, Statement } from '../sequence/model.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 
 /** What the ZenUML text says, in the vocabulary of the sequence engine. */
 export interface ZenumlModel {
@@ -64,10 +64,6 @@ interface FrameEntry {
 }
 
 type Entry = CallEntry | FrameEntry;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 const unquote = (id: string): string => (id.startsWith('"') && id.endsWith('"') && id.length >= 2 ? id.slice(1, -1) : id);
 

@@ -1,10 +1,6 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { MindNode, MindRun, MindShape, Mindmap } from './model.ts';
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 /** Shape delimiters tried in order; the id is the run of characters before the opening delimiter. */
 const SHAPES: Array<[MindShape, RegExp]> = [

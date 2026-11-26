@@ -1,3 +1,5 @@
+import { Heap } from '../layout/heap.ts';
+
 /** A box on the cell grid: `x`, `y` is its top left border cell. */
 export interface Rect {
   x: number;
@@ -93,51 +95,6 @@ function bitsOf(path: Cell[], from: Rect, to: Rect): number[] {
     if (i === path.length - 1) bits |= toward(cell, to);
     return bits;
   });
-}
-
-class Heap {
-  private readonly keys: number[] = [];
-  private readonly items: number[] = [];
-
-  get size(): number {
-    return this.keys.length;
-  }
-
-  push(key: number, item: number): void {
-    let i = this.keys.length;
-    this.keys.push(key);
-    this.items.push(item);
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if ((this.keys[parent] as number) <= key) break;
-      this.keys[i] = this.keys[parent] as number;
-      this.items[i] = this.items[parent] as number;
-      i = parent;
-    }
-    this.keys[i] = key;
-    this.items[i] = item;
-  }
-
-  pop(): [number, number] {
-    const top: [number, number] = [this.keys[0] as number, this.items[0] as number];
-    const key = this.keys.pop() as number;
-    const item = this.items.pop() as number;
-    const n = this.keys.length;
-    if (n === 0) return top;
-    let i = 0;
-    for (;;) {
-      let child = 2 * i + 1;
-      if (child >= n) break;
-      if (child + 1 < n && (this.keys[child + 1] as number) < (this.keys[child] as number)) child += 1;
-      if ((this.keys[child] as number) >= key) break;
-      this.keys[i] = this.keys[child] as number;
-      this.items[i] = this.items[child] as number;
-      i = child;
-    }
-    this.keys[i] = key;
-    this.items[i] = item;
-    return top;
-  }
 }
 
 /**
@@ -270,7 +227,7 @@ export function routeWires(
       }
     }
     while (heap.size > 0) {
-      const [, state] = heap.pop();
+      const { item: state } = heap.pop();
       if (settled[state] === run) continue;
       settled[state] = run;
       if (state === states) break;

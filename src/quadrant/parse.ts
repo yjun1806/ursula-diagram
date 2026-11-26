@@ -1,5 +1,5 @@
 import type { FrontValue } from '../front-matter.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 
 export interface AxisLabels {
   /** Left end of the x axis, bottom end of the y axis. */
@@ -43,10 +43,6 @@ export interface QuadrantChart {
 
 const POINT = /^(.+?)(?::::([A-Za-z_][\w-]*))?\s*:\s*\[\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*,\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*\]\s*(.*)$/u;
 const STYLE_KEYS = new Set(['radius', 'color', 'stroke-color', 'stroke-width']);
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 function unquote(text: string): string {
   const t = text.trim();

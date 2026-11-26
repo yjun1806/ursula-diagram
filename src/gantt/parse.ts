@@ -1,5 +1,6 @@
 import { configSection } from '../front/options.ts';
 import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Gantt, GanttTask, TickUnit } from './model.ts';
 import { addDuration, compileDateFormat, DAY, floorDiv, lengthLabel, parseDuration, skipExcluded, stretchOverExcluded, weekdayIndex } from './time.ts';
 import type { DateFormat, Excludes } from './time.ts';
@@ -10,10 +11,6 @@ type Tag = (typeof TAGS)[number];
 const TICK_UNITS: Record<string, TickUnit> = { millisecond: 'ms', second: 's', minute: 'min', hour: 'h', day: 'd', week: 'w', month: 'M' };
 const TICK_INTERVAL = /^([1-9][0-9]*)(millisecond|second|minute|hour|day|week|month)$/;
 const KEYWORDS = new Set(['title', 'dateFormat', 'axisFormat', 'tickInterval', 'weekday', 'weekend', 'excludes', 'includes', 'section', 'todayMarker', 'inclusiveEndDates', 'topAxis', 'click', 'accTitle', 'accDescr']);
-
-function fail(message: string, line: number, code: string): never {
-  throw new UrsulaError(message, code, line);
-}
 
 type StartSpec = { kind: 'prev' } | { kind: 'after'; ids: string[] } | { kind: 'date'; text: string };
 type EndSpec = { kind: 'until'; ids: string[] } | { kind: 'text'; text: string };

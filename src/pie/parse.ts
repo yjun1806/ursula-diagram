@@ -1,14 +1,10 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Pie, PieSlice } from './model.ts';
 
 const SLICE = /^"([^"]*)"\s*:\s*(.+)$/u;
 const NUMBER = /^\d+(?:\.\d+)?$/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 /** Parses a Mermaid pie chart: `pie [showData] [title ...]`, then `"label" : value` lines. */
 /**

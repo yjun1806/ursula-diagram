@@ -5,12 +5,15 @@ export interface WrapOptions {
   longWord?: 'break' | 'keep';
   /** Text without a word gives one empty line instead of no line. */
   blank?: boolean;
+  /** Text that fits already is the one line, exactly as written (runs of spaces kept). */
+  keepIfFits?: boolean;
 }
 
 /**
  * Breaks `text` greedily into lines no wider than `limit` as `width` measures them, joining words with one space.
  */
 export function wrapWords(text: string, limit: number, width: (s: string) => number, opts: WrapOptions = {}): string[] {
+  if (opts.keepIfFits === true && (limit === Infinity || width(text) <= limit)) return [text];
   const words = (opts.split === 'space' ? text.split(' ') : text.split(/\s+/)).filter((w) => w !== '');
   const lines: string[] = [];
   let cur = '';

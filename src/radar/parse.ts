@@ -1,14 +1,10 @@
 import { nearestSeries } from '../chart/series-color.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Graticule, Radar, RadarAxis, RadarCurve } from './model.ts';
 
 const NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)$/u;
 const ID = /^[\w-]+/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 /** Removes a `%%` comment. */
 function stripComment(line: string): string {

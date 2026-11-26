@@ -1,6 +1,6 @@
 import type { FrontValue } from '../front-matter.ts';
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 
 export type Sourcing = 'build' | 'buy' | 'outsource' | 'market';
 
@@ -112,10 +112,6 @@ const PAIR = String.raw`\[\s*(${NUM})\s*,\s*(${NUM})\s*\]`;
 const DEFAULT_STAGES = ['Genesis', 'Custom Built', 'Product', 'Commodity'];
 
 const LINK_OP = /\s+(-\.->|-->|->|\+<>|\+<|\+>|\+'[^']*'>)\s+/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 function stripComment(line: string): string {
   const at = line.indexOf('%%');

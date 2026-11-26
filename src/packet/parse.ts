@@ -1,14 +1,10 @@
 import type { FrontValue } from '../front-matter.ts';
 import { configSection } from '../front/options.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { BitOrder, Packet, PacketField } from './model.ts';
 
 const MAX_ROWS = 2000;
 const FIELD = /^(\+\s*\d+|\d+(?:\s*-\s*\d+)?)\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*;?$/u;
-
-function fail(message: string, line: number): never {
-  throw new UrsulaError(message, 'syntax', line);
-}
 
 function unquote(value: string): string {
   const v = value.trim();

@@ -336,6 +336,8 @@ function shrinkToFit(text, room, width) {
 
 // src/text/wrap.ts
 function wrapWords(text, limit, width, opts = {}) {
+  if (opts.keepIfFits === true && (limit === Infinity || width(text) <= limit))
+    return [text];
   const words = (opts.split === "space" ? text.split(" ") : text.split(/\s+/)).filter((w) => w !== "");
   const lines = [];
   let cur = "";
@@ -8628,6 +8630,54 @@ function routeGlobally(input) {
   return results;
 }
 
+// src/layout/heap.ts
+class Heap {
+  costs = [];
+  items = [];
+  get size() {
+    return this.costs.length;
+  }
+  push(cost, item) {
+    let i = this.costs.length;
+    this.costs.push(cost);
+    this.items.push(item);
+    while (i > 0) {
+      const parent = i - 1 >> 1;
+      if (this.costs[parent] <= cost)
+        break;
+      this.costs[i] = this.costs[parent];
+      this.items[i] = this.items[parent];
+      i = parent;
+    }
+    this.costs[i] = cost;
+    this.items[i] = item;
+  }
+  pop() {
+    const top = { cost: this.costs[0], item: this.items[0] };
+    const cost = this.costs.pop();
+    const item = this.items.pop();
+    const n = this.costs.length;
+    if (n === 0)
+      return top;
+    let i = 0;
+    for (;; ) {
+      let child = 2 * i + 1;
+      if (child >= n)
+        break;
+      if (child + 1 < n && this.costs[child + 1] < this.costs[child])
+        child += 1;
+      if (this.costs[child] >= cost)
+        break;
+      this.costs[i] = this.costs[child];
+      this.items[i] = this.items[child];
+      i = child;
+    }
+    this.costs[i] = cost;
+    this.items[i] = item;
+    return top;
+  }
+}
+
 // src/layout/clusters.ts
 var CLUSTER_PAD = 24;
 var CLUSTER_NAME_ROW = 32;
@@ -9026,54 +9076,6 @@ function clash(a, b, drawn) {
       cost += CROSS_COST;
   }
   return cost;
-}
-
-class Heap {
-  cost = [];
-  item = [];
-  get size() {
-    return this.item.length;
-  }
-  push(cost, item) {
-    let i = this.item.length;
-    this.cost.push(cost);
-    this.item.push(item);
-    while (i > 0) {
-      const p = i - 1 >> 1;
-      if (this.cost[p] <= cost)
-        break;
-      this.swap(i, p);
-      i = p;
-    }
-  }
-  pop() {
-    const top = { cost: this.cost[0], item: this.item[0] };
-    const lastCost = this.cost.pop();
-    const lastItem = this.item.pop();
-    if (this.item.length > 0) {
-      this.cost[0] = lastCost;
-      this.item[0] = lastItem;
-      let i = 0;
-      for (;; ) {
-        const l = 2 * i + 1;
-        const r = l + 1;
-        let m = i;
-        if (l < this.item.length && this.cost[l] < this.cost[m])
-          m = l;
-        if (r < this.item.length && this.cost[r] < this.cost[m])
-          m = r;
-        if (m === i)
-          break;
-        this.swap(i, m);
-        i = m;
-      }
-    }
-    return top;
-  }
-  swap(i, j) {
-    [this.cost[i], this.cost[j]] = [this.cost[j], this.cost[i]];
-    [this.item[i], this.item[j]] = [this.item[j], this.item[i]];
-  }
 }
 var key2 = (p) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
 function candidates2(values, lo, hi, must) {
@@ -23250,14 +23252,16 @@ function diamondOutline(cx, cy) {
   return `M${cx - r} ${cy}L${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}Z`;
 }
 
+// src/errors/fail.ts
+function fail2(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
+
 // src/gantt/parse.ts
 var TAGS = ["active", "done", "crit", "milestone", "vert"];
 var TICK_UNITS = { millisecond: "ms", second: "s", minute: "min", hour: "h", day: "d", week: "w", month: "M" };
 var TICK_INTERVAL = /^([1-9][0-9]*)(millisecond|second|minute|hour|day|week|month)$/;
 var KEYWORDS = new Set(["title", "dateFormat", "axisFormat", "tickInterval", "weekday", "weekend", "excludes", "includes", "section", "todayMarker", "inclusiveEndDates", "topAxis", "click", "accTitle", "accDescr"]);
-function fail2(message, line, code) {
-  throw new UrsulaError(message, code, line);
-}
 function tickIntervalOf(text) {
   const m = TICK_INTERVAL.exec(text.trim());
   const unit = m === null ? undefined : TICK_UNITS[m[2] ?? ""];
@@ -24263,53 +24267,6 @@ function bitsOf(path, from, to) {
     return bits;
   });
 }
-
-class Heap3 {
-  keys = [];
-  items = [];
-  get size() {
-    return this.keys.length;
-  }
-  push(key, item) {
-    let i = this.keys.length;
-    this.keys.push(key);
-    this.items.push(item);
-    while (i > 0) {
-      const parent = i - 1 >> 1;
-      if (this.keys[parent] <= key)
-        break;
-      this.keys[i] = this.keys[parent];
-      this.items[i] = this.items[parent];
-      i = parent;
-    }
-    this.keys[i] = key;
-    this.items[i] = item;
-  }
-  pop() {
-    const top = [this.keys[0], this.items[0]];
-    const key = this.keys.pop();
-    const item = this.items.pop();
-    const n = this.keys.length;
-    if (n === 0)
-      return top;
-    let i = 0;
-    for (;; ) {
-      let child = 2 * i + 1;
-      if (child >= n)
-        break;
-      if (child + 1 < n && this.keys[child + 1] < this.keys[child])
-        child += 1;
-      if (this.keys[child] >= key)
-        break;
-      this.keys[i] = this.keys[child];
-      this.items[i] = this.items[child];
-      i = child;
-    }
-    this.keys[i] = key;
-    this.items[i] = item;
-    return top;
-  }
-}
 function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) {
   const height = rows.length;
   const blocked = new Uint8Array(width * height);
@@ -24386,7 +24343,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
       stopped = true;
       return;
     }
-    const heap = new Heap3;
+    const heap = new Heap;
     const pace = wires.some((w, i) => i !== index && paths[i] !== undefined && related(i, index)) ? SHARED : STEP5;
     const ahead = (state) => {
       if (state === states)
@@ -24423,7 +24380,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
       }
     }
     while (heap.size > 0) {
-      const [, state] = heap.pop();
+      const { item: state } = heap.pop();
       if (settled[state] === run)
         continue;
       settled[state] = run;
@@ -25457,9 +25414,6 @@ function layoutCynefin(model, ruler) {
 }
 
 // src/cynefin/parse.ts
-function fail4(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var ITEM = /^"([^"]*)"$/u;
 var TRANSITION = /^([A-Za-z]+)\s*-->\s*([A-Za-z]+)\s*(?::\s*(.*))?$/u;
 function domainOf(word) {
@@ -25473,7 +25427,7 @@ function labelOf(raw, line) {
   if (text.startsWith('"')) {
     const m = ITEM.exec(text);
     if (m === null)
-      fail4(`Cannot read the label ${text}; a label is written "text".`, line, "label");
+      fail2(`Cannot read the label ${text}; a label is written "text".`, line, "label");
     return m[1] === "" ? undefined : m[1];
   }
   return text;
@@ -25496,7 +25450,7 @@ function parseCynefin(src, heading) {
       continue;
     if (!headerSeen) {
       if (s !== "cynefin-beta")
-        fail4('A Cynefin diagram starts with "cynefin-beta".', lineNo, "header");
+        fail2('A Cynefin diagram starts with "cynefin-beta".', lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -25514,12 +25468,12 @@ function parseCynefin(src, heading) {
     const item = ITEM.exec(s);
     if (item !== null) {
       if (current === undefined)
-        fail4("An item belongs to a domain; write the domain name above it.", lineNo, "item");
+        fail2("An item belongs to a domain; write the domain name above it.", lineNo, "item");
       items[current].push(item[1] ?? "");
       continue;
     }
     if (s.startsWith('"'))
-      fail4(`Cannot read ${s}; an item is a quoted label on its own line.`, lineNo, "item");
+      fail2(`Cannot read ${s}; an item is a quoted label on its own line.`, lineNo, "item");
     const domain = domainOf(s);
     if (domain !== undefined) {
       current = domain;
@@ -25530,9 +25484,9 @@ function parseCynefin(src, heading) {
       const from = domainOf(tr[1] ?? "");
       const to = domainOf(tr[2] ?? "");
       if (from === undefined)
-        fail4(`"${tr[1] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
+        fail2(`"${tr[1] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
       if (to === undefined)
-        fail4(`"${tr[2] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
+        fail2(`"${tr[2] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
       current = undefined;
       if (from === to)
         continue;
@@ -25540,10 +25494,10 @@ function parseCynefin(src, heading) {
       transitions.push({ from, to, ...label === undefined ? {} : { label }, line: lineNo });
       continue;
     }
-    fail4(`Cannot read "${s}"; write a domain name, a quoted item, or "from --> to : \\"label\\"".`, lineNo);
+    fail2(`Cannot read "${s}"; write a domain name, a quoted item, or "from --> to : \\"label\\"".`, lineNo);
   }
   if (!headerSeen)
-    fail4('A Cynefin diagram starts with "cynefin-beta".', 1, "header");
+    fail2('A Cynefin diagram starts with "cynefin-beta".', 1, "header");
   if (!bodyTitle && heading !== undefined && heading !== "")
     title = heading;
   return { ...title === undefined ? {} : { title }, ...acc.title === undefined ? {} : { accTitle: acc.title }, items, transitions };
@@ -25928,9 +25882,6 @@ function buildGit(graph, ruler, delays) {
 }
 
 // src/git/parse.ts
-function fail5(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var HEADER = /^gitgraph(?:\s+(LR|TB|BT))?\s*:?\s*$/iu;
 var ATTR = /^\s*(id|type|tag|msg|parent|order)\s*:\s*(?:"([^"]*)"|(\S+))/iu;
 var NAME4 = /^\s*(?:"([^"]*)"|(\S+))/u;
@@ -25990,7 +25941,7 @@ function readAttrs(rest, line) {
   while (text.trim() !== "") {
     const m = ATTR.exec(text);
     if (m === null)
-      fail5(`Cannot read "${text.trim()}"; an attribute is written key: value, for example id: "a1".`, line);
+      fail2(`Cannot read "${text.trim()}"; an attribute is written key: value, for example id: "a1".`, line);
     const key = (m[1] ?? "").toLowerCase();
     const value = m[2] ?? m[3] ?? "";
     if (key === "id")
@@ -26002,12 +25953,12 @@ function readAttrs(rest, line) {
     else if (key === "order") {
       const n = Number(value);
       if (!Number.isFinite(n))
-        fail5(`"${value}" is not a number; order is a number.`, line, "value");
+        fail2(`"${value}" is not a number; order is a number.`, line, "value");
       out.order = n;
     } else if (key === "type") {
       const t = value.toUpperCase();
       if (t !== "NORMAL" && t !== "REVERSE" && t !== "HIGHLIGHT")
-        fail5(`Unknown commit type "${value}"; use NORMAL, REVERSE or HIGHLIGHT.`, line, "value");
+        fail2(`Unknown commit type "${value}"; use NORMAL, REVERSE or HIGHLIGHT.`, line, "value");
       out.type = t;
     }
     text = text.slice(m[0].length);
@@ -26017,7 +25968,7 @@ function readAttrs(rest, line) {
 function readName(rest, line, what) {
   const m = NAME4.exec(rest);
   if (m === null)
-    fail5(`${what} needs a branch name.`, line);
+    fail2(`${what} needs a branch name.`, line);
   return { name: m[1] ?? m[2] ?? "", rest: rest.slice(m[0].length) };
 }
 function parseGit(src, heading, config) {
@@ -26054,7 +26005,7 @@ function parseGit(src, heading, config) {
     if (!headerSeen) {
       const h = HEADER.exec(s);
       if (h === null)
-        fail5('A git graph starts with "gitGraph".', line, "header");
+        fail2('A git graph starts with "gitGraph".', line, "header");
       headerSeen = true;
       if (h[1] !== undefined)
         orientation = h[1].toUpperCase();
@@ -26077,7 +26028,7 @@ function parseGit(src, heading, config) {
     } else if (keyword === "branch") {
       const { name, rest: after } = readName(rest, line, "branch");
       if (exists(name))
-        fail5(`The branch "${name}" already exists; a branch name must be unique.`, line, "branch");
+        fail2(`The branch "${name}" already exists; a branch name must be unique.`, line, "branch");
       const a = readAttrs(after, line);
       branches.push({ name, ...a.order === undefined ? {} : { order: a.order }, ...head === undefined ? {} : { parent: head }, line });
       heads.set(name, head);
@@ -26085,40 +26036,40 @@ function parseGit(src, heading, config) {
     } else if (keyword === "checkout" || keyword === "switch") {
       const { name } = readName(rest, line, keyword);
       if (!exists(name))
-        fail5(`The branch "${name}" does not exist; create it with "branch ${name}" first.`, line, "branch");
+        fail2(`The branch "${name}" does not exist; create it with "branch ${name}" first.`, line, "branch");
       current = name;
     } else if (keyword === "merge") {
       const { name, rest: after } = readName(rest, line, "merge");
       if (!exists(name))
-        fail5(`Cannot merge "${name}"; the branch does not exist.`, line, "branch");
+        fail2(`Cannot merge "${name}"; the branch does not exist.`, line, "branch");
       if (name === current)
-        fail5(`Cannot merge "${name}" into itself.`, line, "merge");
+        fail2(`Cannot merge "${name}" into itself.`, line, "merge");
       const source = heads.get(name);
       if (head === undefined)
-        fail5(`Cannot merge into "${current}"; it has no commit yet.`, line, "merge");
+        fail2(`Cannot merge into "${current}"; it has no commit yet.`, line, "merge");
       if (source === undefined)
-        fail5(`Cannot merge "${name}"; it has no commit yet.`, line, "merge");
+        fail2(`Cannot merge "${name}"; it has no commit yet.`, line, "merge");
       if (source === head)
-        fail5(`Cannot merge "${name}"; both branches end in the same commit.`, line, "merge");
+        fail2(`Cannot merge "${name}"; both branches end in the same commit.`, line, "merge");
       const a = readAttrs(after, line);
       push({ branch: current, type: a.type ?? "NORMAL", ...a.tag === undefined ? {} : { tag: a.tag }, ...a.id === undefined ? {} : { id: a.id }, kind: "merge", parents: [head, source], mergedFrom: name, line });
     } else if (keyword === "cherry-pick") {
       const a = readAttrs(rest, line);
       if (a.id === undefined)
-        fail5('cherry-pick needs the id of the commit to copy, for example cherry-pick id: "a1".', line, "cherry-pick");
+        fail2('cherry-pick needs the id of the commit to copy, for example cherry-pick id: "a1".', line, "cherry-pick");
       if (head === undefined)
-        fail5(`Cannot cherry-pick onto "${current}"; it has no commit yet.`, line, "cherry-pick");
+        fail2(`Cannot cherry-pick onto "${current}"; it has no commit yet.`, line, "cherry-pick");
       const same = commits.filter((c) => c.id === a.id);
       if (same.length === 0)
-        fail5(`Cannot cherry-pick "${a.id}"; no commit has that id.`, line, "cherry-pick");
+        fail2(`Cannot cherry-pick "${a.id}"; no commit has that id.`, line, "cherry-pick");
       const found = [...same].reverse().find((c) => c.branch !== current);
       if (found === undefined)
-        fail5(`Cannot cherry-pick "${a.id}"; it is on the current branch "${current}".`, line, "cherry-pick");
+        fail2(`Cannot cherry-pick "${a.id}"; it is on the current branch "${current}".`, line, "cherry-pick");
       let parentNote = "";
       if (found.parents.length > 1) {
         const parent = a.parent === undefined ? undefined : found.parents.map((p) => commits[p]).find((c) => c?.id === a.parent);
         if (parent === undefined)
-          fail5(`Cannot cherry-pick the merge commit "${a.id}" without parent: "<id>" naming one of its parents.`, line, "cherry-pick");
+          fail2(`Cannot cherry-pick the merge commit "${a.id}" without parent: "<id>" naming one of its parents.`, line, "cherry-pick");
         parentNote = `|parent:${parent.id}`;
       }
       push({
@@ -26131,11 +26082,11 @@ function parseGit(src, heading, config) {
         line
       });
     } else {
-      fail5(`Cannot read "${s}"; a git graph line is commit, branch, checkout, merge or cherry-pick.`, line);
+      fail2(`Cannot read "${s}"; a git graph line is commit, branch, checkout, merge or cherry-pick.`, line);
     }
   }
   if (!headerSeen)
-    fail5('A git graph starts with "gitGraph".', 1, "header");
+    fail2('A git graph starts with "gitGraph".', 1, "header");
   const shownTitle = title ?? (heading === undefined || heading === "" ? undefined : heading);
   return { orientation, branches, commits, config: cfg, ...shownTitle === undefined ? {} : { title: shownTitle }, ...acc.title === undefined || acc.title === "" ? {} : { accTitle: acc.title } };
 }
@@ -26950,9 +26901,6 @@ function layoutMindmap(map, ruler, opts = {}) {
 }
 
 // src/mindmap/parse.ts
-function fail6(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var SHAPES3 = [
   ["circle", /^([^\s()[\]{}]*)\(\(([\s\S]*)\)\)$/u],
   ["bang", /^([^\s()[\]{}]*)\)\)([\s\S]*)\(\($/u],
@@ -27007,12 +26955,12 @@ function readNode2(content, line) {
       continue;
     const label = labelOf2(m[2] ?? "");
     if (label.paragraphs.length === 0)
-      fail6("A node needs text between its shape delimiters.", line, "empty");
+      fail2("A node needs text between its shape delimiters.", line, "empty");
     return { id: m[1] ?? "", ...label, shape };
   }
   const label = labelOf2(text);
   if (label.paragraphs.length === 0)
-    fail6("A node needs text.", line, "empty");
+    fail2("A node needs text.", line, "empty");
   return { id: text, ...label, shape: "default" };
 }
 function parseMindmap(src) {
@@ -27031,7 +26979,7 @@ function parseMindmap(src) {
       continue;
     if (!headerSeen) {
       if (s !== "mindmap")
-        fail6('A mindmap starts with "mindmap".', lineNo, "header");
+        fail2('A mindmap starts with "mindmap".', lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -27050,7 +26998,7 @@ ${(rows[m] ?? "").trim()}`;
           break;
       }
       if (m >= rows.length)
-        fail6("A markdown string is never closed.", lineNo, "string");
+        fail2("A markdown string is never closed.", lineNo, "string");
       n = m;
     }
     const indent = raw.length - raw.trimStart().length;
@@ -27061,7 +27009,7 @@ ${(rows[m] ?? "").trim()}`;
     const parent = stack[stack.length - 1];
     if (parent === undefined) {
       if (root !== undefined)
-        fail6("A mindmap has one root; this node is indented no deeper than it.", lineNo, "root");
+        fail2("A mindmap has one root; this node is indented no deeper than it.", lineNo, "root");
       root = node;
     } else {
       parent.node.children.push(node);
@@ -27069,9 +27017,9 @@ ${(rows[m] ?? "").trim()}`;
     stack.push({ indent, node });
   }
   if (!headerSeen)
-    fail6('A mindmap starts with "mindmap".', 1, "header");
+    fail2('A mindmap starts with "mindmap".', 1, "header");
   if (root === undefined)
-    fail6("A mindmap needs a root node.", rows.length, "empty");
+    fail2("A mindmap needs a root node.", rows.length, "empty");
   return { root, ...acc.title === undefined ? {} : { accTitle: acc.title } };
 }
 
@@ -27159,9 +27107,6 @@ function nearestSeries(hex, opts = {}) {
 // src/quadrant/parse.ts
 var POINT = /^(.+?)(?::::([A-Za-z_][\w-]*))?\s*:\s*\[\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*,\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*\]\s*(.*)$/u;
 var STYLE_KEYS = new Set(["radius", "color", "stroke-color", "stroke-width"]);
-function fail7(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function unquote4(text) {
   const t = text.trim();
   return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1).trim() : t;
@@ -27178,15 +27123,15 @@ function parseStyle(text, line) {
       continue;
     const at = piece.indexOf(":");
     if (at < 0)
-      fail7(`Expected "key: value" in a style, got "${piece}".`, line);
+      fail2(`Expected "key: value" in a style, got "${piece}".`, line);
     const key = piece.slice(0, at).trim();
     const value = piece.slice(at + 1).trim();
     if (!STYLE_KEYS.has(key))
-      fail7(`Unknown style "${key}"; use radius, color, stroke-color or stroke-width.`, line);
+      fail2(`Unknown style "${key}"; use radius, color, stroke-color or stroke-width.`, line);
     if (key === "radius") {
       const m = /^(\d+(?:\.\d+)?)(?:px)?$/u.exec(value);
       if (m === null)
-        fail7(`radius must be a number, got "${value}".`, line);
+        fail2(`radius must be a number, got "${value}".`, line);
       out.radius = Number(m[1]);
     } else if (key === "color" && /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(value)) {
       out.color = value;
@@ -27200,7 +27145,7 @@ function parseAxis(rest, what, line) {
   const at = rest.indexOf("-->");
   const low = unquote4(at < 0 ? rest : rest.slice(0, at));
   if (low === "")
-    fail7(`${what} needs a label.`, line);
+    fail2(`${what} needs a label.`, line);
   if (at < 0)
     return { low };
   const high = unquote4(rest.slice(at + 3));
@@ -27212,7 +27157,7 @@ function chartSize(text, key, line) {
     return;
   const v = Number(m[1]);
   if (v < 80)
-    fail7(`${key} must be at least 80, got ${v}.`, line);
+    fail2(`${key} must be at least 80, got ${v}.`, line);
   return v;
 }
 function parseQuadrant(src, opts = {}) {
@@ -27256,7 +27201,7 @@ function parseQuadrant(src, opts = {}) {
       continue;
     if (!headerSeen) {
       if (s !== "quadrantChart")
-        fail7(`Expected "quadrantChart" before "${s}".`, lineNo);
+        fail2(`Expected "quadrantChart" before "${s}".`, lineNo);
       headerSeen = true;
       continue;
     }
@@ -27270,7 +27215,7 @@ function parseQuadrant(src, opts = {}) {
       for (n++;n < rows.length && (rows[n] ?? "").trim() !== "}"; n++)
         body.push((rows[n] ?? "").trim());
       if (n >= rows.length)
-        fail7('accDescr block is not closed with "}".', lineNo);
+        fail2('accDescr block is not closed with "}".', lineNo);
       chart.accDescr = body.filter((l) => l !== "").join(" ");
     } else if ((m = /^title\s+(.+)$/u.exec(s)) !== null) {
       chart.title = unquote4(m[1] ?? "");
@@ -27290,7 +27235,7 @@ function parseQuadrant(src, opts = {}) {
       const x = Number(m[3]);
       const y = Number(m[4]);
       if (x < 0 || x > 1 || y < 0 || y > 1)
-        fail7(`Coordinates must be between 0 and 1, got [${m[3]}, ${m[4]}].`, lineNo);
+        fail2(`Coordinates must be between 0 and 1, got [${m[3]}, ${m[4]}].`, lineNo);
       const style = parseStyle(m[5] ?? "", lineNo);
       for (const k of style.ignoredKeys)
         ignored.add(`point ${k}`);
@@ -27302,11 +27247,11 @@ function parseQuadrant(src, opts = {}) {
       chart.points.push(point);
       pointClass.push(m[2]);
     } else {
-      fail7(`Unrecognised line "${s}".`, lineNo);
+      fail2(`Unrecognised line "${s}".`, lineNo);
     }
   }
   if (!headerSeen)
-    fail7('Missing "quadrantChart" header.', 1);
+    fail2('Missing "quadrantChart" header.', 1);
   chart.points.forEach((p, i) => {
     const cls = pointClass[i];
     if (p.radius === undefined && cls !== undefined) {
@@ -27766,9 +27711,6 @@ var HEADERS = {
   "railroad-abnf-beta": "abnf",
   "railroad-peg-beta": "peg"
 };
-function fail8(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var SYMBOLS2 = new Set([..."|/,()[]{}?*+!&.-;=:"]);
 var ID_START = /[A-Za-z_]/u;
 var ID2 = /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/uy;
@@ -27794,7 +27736,7 @@ function lex(text, notation, firstLine) {
 `)
       j += text[j] === "\\" ? 2 : 1;
     if (text[j] !== quote)
-      fail8("A string is not closed.", line);
+      fail2("A string is not closed.", line);
     const body = text.slice(start + 1, j);
     const raw = text.slice(start - prefix.length, j + 1);
     if (prefix === "")
@@ -27821,7 +27763,7 @@ function lex(text, notation, firstLine) {
       const close = text.startsWith("/*", i) ? "*/" : "*)";
       const end = text.indexOf(close, i + 2);
       if (end < 0)
-        fail8("A comment is not closed.", line);
+        fail2("A comment is not closed.", line);
       line += text.slice(i, end).split(`
 `).length - 1;
       i = end + 2;
@@ -27847,7 +27789,7 @@ function lex(text, notation, firstLine) {
       NUM_VAL.lastIndex = i;
       const m = NUM_VAL.exec(text);
       if (m === null)
-        fail8("A numeric value is written %x41, %d65 or %b1000001.", line);
+        fail2("A numeric value is written %x41, %d65 or %b1000001.", line);
       push("val", m[0], m[0], line);
       i += m[0].length;
       continue;
@@ -27856,7 +27798,7 @@ function lex(text, notation, firstLine) {
       const end = text.indexOf(">", i);
       if (end < 0 || text.slice(i, end).includes(`
 `))
-        fail8("A prose value is not closed.", line);
+        fail2("A prose value is not closed.", line);
       push("prose", text.slice(i, end + 1), text.slice(i, end + 1), line);
       i = end + 1;
       continue;
@@ -27867,7 +27809,7 @@ function lex(text, notation, firstLine) {
 `)
         j += text[j] === "\\" ? 2 : 1;
       if (text[j] !== "]")
-        fail8("A character class is not closed.", line);
+        fail2("A character class is not closed.", line);
       push("class", text.slice(i, j + 1), text.slice(i, j + 1), line);
       i = j + 1;
       continue;
@@ -27898,7 +27840,7 @@ function lex(text, notation, firstLine) {
       i++;
       continue;
     }
-    fail8(`Unexpected character "${ch}".`, line);
+    fail2(`Unexpected character "${ch}".`, line);
   }
   return toks;
 }
@@ -27926,7 +27868,7 @@ class Cursor {
   }
   expectSym(v, what) {
     if (!this.isSym(v))
-      fail8(`Expected "${v}" ${what}.`, this.line());
+      fail2(`Expected "${v}" ${what}.`, this.line());
     this.pos++;
   }
 }
@@ -27934,9 +27876,9 @@ var seqOf = (items) => items.length === 1 ? items[0] : { k: "seq", items };
 var choiceOf = (items) => items.length === 1 ? items[0] : { k: "choice", items };
 function counted2(item, min, max, line) {
   if (max !== null && max < min)
-    fail8(`The repeat count ${min}*${max} runs backwards.`, line);
+    fail2(`The repeat count ${min}*${max} runs backwards.`, line);
   if (max === 0)
-    fail8("A repeat of at most 0 times matches nothing.", line);
+    fail2("A repeat of at most 0 times matches nothing.", line);
   if (min === 1 && max === 1)
     return item;
   if (min === 0 && max === 1)
@@ -27964,7 +27906,7 @@ function group(c, close, inner) {
   const open = c.next();
   const node = inner();
   if (!c.isSym(close))
-    fail8(`"${open.v}" opened here is not closed with "${close}".`, c.line() === c.endLine ? open.line : c.line());
+    fail2(`"${open.v}" opened here is not closed with "${close}".`, c.line() === c.endLine ? open.line : c.line());
   c.pos++;
   return node;
 }
@@ -27990,14 +27932,14 @@ function ebnfSeq(c) {
     if (items.length > 0 && c.isSym(",")) {
       c.pos++;
       if (!ebnfStarts(c.peek()))
-        fail8('A "," must be followed by an element.', c.line());
+        fail2('A "," must be followed by an element.', c.line());
     }
     if (!ebnfStarts(c.peek()))
       break;
     items.push(ebnfExcept(c));
   }
   if (items.length === 0)
-    fail8("An empty alternative; write an element between the separators.", at);
+    fail2("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function ebnfExcept(c) {
@@ -28006,7 +27948,7 @@ function ebnfExcept(c) {
     return item;
   c.pos++;
   if (!ebnfStarts(c.peek()))
-    fail8('A "-" must be followed by the element to exclude.', c.line());
+    fail2('A "-" must be followed by the element to exclude.', c.line());
   return { k: "except", item, except: suffixes(c, ebnfPrimary(c), true) };
 }
 function ebnfPrimary(c) {
@@ -28030,7 +27972,7 @@ function ebnfPrimary(c) {
   while (c.peek() !== undefined && !c.isSym("?"))
     words.push(c.next());
   if (!c.isSym("?"))
-    fail8('A special sequence "? ... ?" is not closed.', t.line);
+    fail2('A special sequence "? ... ?" is not closed.', t.line);
   c.pos++;
   const text = words.map((w, i) => (i > 0 && w.sp ? " " : "") + w.raw).join("");
   return { k: "special", text };
@@ -28056,7 +27998,7 @@ function abnfConcat(c) {
   while (abnfStarts(c.peek()))
     items.push(abnfRepetition(c));
   if (items.length === 0)
-    fail8("An empty alternative; write an element between the separators.", at);
+    fail2("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function abnfRepetition(c) {
@@ -28081,7 +28023,7 @@ function abnfRepetition(c) {
     }
   }
   if (!abnfStarts(c.peek()) || c.peek()?.k === "num" || c.isSym("*"))
-    fail8("A repeat count must be followed by an element.", line);
+    fail2("A repeat count must be followed by an element.", line);
   return counted2(abnfElement(c), min, max, line);
 }
 function abnfElement(c) {
@@ -28123,7 +28065,7 @@ function pegSeq(c) {
   while (pegStarts(c.peek()))
     items.push(pegPrefix(c));
   if (items.length === 0)
-    fail8("An empty alternative; write an element between the separators.", at);
+    fail2("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function pegPrefix(c) {
@@ -28131,7 +28073,7 @@ function pegPrefix(c) {
   if (t.k === "sym" && (t.v === "!" || t.v === "&")) {
     c.pos++;
     if (!pegStarts(c.peek()))
-      fail8(`A "${t.v}" must be followed by an element.`, c.line());
+      fail2(`A "${t.v}" must be followed by an element.`, c.line());
     return { k: "predicate", op: t.v === "!" ? "not" : "and", item: pegPrefix(c) };
   }
   return suffixes(c, pegPrimary(c), false);
@@ -28158,16 +28100,16 @@ var IR_MANY = ["sequence", "choice"];
 function irCall(c) {
   const t = c.next();
   if (t === undefined || t.k !== "id")
-    fail8('Expected a constructor such as terminal("x") or sequence(a, b).', t?.line ?? c.endLine);
+    fail2('Expected a constructor such as terminal("x") or sequence(a, b).', t?.line ?? c.endLine);
   const name = t.v;
   if (![...IR_ONE, ...IR_TEXT, ...IR_MANY].includes(name))
-    fail8(`"${name}" is not a constructor; use terminal, nonterminal, special, sequence, choice, optional, zeroOrMore or oneOrMore.`, t.line);
+    fail2(`"${name}" is not a constructor; use terminal, nonterminal, special, sequence, choice, optional, zeroOrMore or oneOrMore.`, t.line);
   c.expectSym("(", `after ${name}`);
   let node;
   if (IR_TEXT.includes(name)) {
     const s = c.next();
     if (s === undefined || s.k !== "str")
-      fail8(`${name}( ) takes one quoted string.`, s?.line ?? t.line);
+      fail2(`${name}( ) takes one quoted string.`, s?.line ?? t.line);
     node = name === "terminal" ? { k: "terminal", text: s.v } : name === "nonterminal" ? { k: "nonterminal", name: s.v } : { k: "special", text: s.v };
   } else if (IR_ONE.includes(name)) {
     const item = irCall(c);
@@ -28197,7 +28139,7 @@ function parseRailroad(src, heading) {
   const word = headerAt < 0 ? "" : (rows[headerAt] ?? "").trim().split(/[\s;]+/)[0] ?? "";
   const notation = HEADERS[word];
   if (notation === undefined)
-    fail8("A railroad diagram starts with railroad-beta, railroad-ebnf-beta, railroad-abnf-beta or railroad-peg-beta.", headerAt + 1 || 1, "header");
+    fail2("A railroad diagram starts with railroad-beta, railroad-ebnf-beta, railroad-abnf-beta or railroad-peg-beta.", headerAt + 1 || 1, "header");
   let title;
   const acc = createAccessibilityReader();
   const body = rows.map(() => "");
@@ -28229,38 +28171,38 @@ function parseRailroad(src, heading) {
   while (c.peek() !== undefined) {
     const name = c.next();
     if (name.k !== "id")
-      fail8(`Expected a rule name, found "${name.raw}".`, name.line);
+      fail2(`Expected a rule name, found "${name.raw}".`, name.line);
     const op = c.next();
     if (op === undefined || op.k !== "sym" || !ASSIGN[notation].includes(op.v))
-      fail8(`Expected "${ASSIGN[notation].join('" or "')}" after the rule name "${name.v}".`, op?.line ?? name.line);
+      fail2(`Expected "${ASSIGN[notation].join('" or "')}" after the rule name "${name.v}".`, op?.line ?? name.line);
     let end = c.pos;
     while (end < toks.length && !(toks[end]?.k === "sym" && toks[end]?.v === ";"))
       end++;
     if (end >= toks.length)
-      fail8(`The rule "${name.v}" does not end with ";".`, name.line);
+      fail2(`The rule "${name.v}" does not end with ";".`, name.line);
     const inner = new Cursor(toks.slice(c.pos, end), toks[end]?.line ?? name.line);
     if (inner.peek() === undefined)
-      fail8(`The rule "${name.v}" has no definition.`, name.line);
+      fail2(`The rule "${name.v}" has no definition.`, name.line);
     const bodyNode = notation === "ir" ? irCall(inner) : notation === "ebnf" ? ebnfChoice(inner) : notation === "abnf" ? abnfAlt(inner) : pegChoice(inner);
     const extra = inner.peek();
     if (extra !== undefined)
-      fail8(`Unexpected "${extra.raw}" in the rule "${name.v}".`, extra.line);
+      fail2(`Unexpected "${extra.raw}" in the rule "${name.v}".`, extra.line);
     c.pos = end + 1;
     const known = rules.findIndex((r) => r.name === name.v);
     if (op.v === "=/") {
       const old = rules[known];
       if (old === undefined)
-        fail8(`"${name.v}" is extended with "=/" before it is defined.`, name.line);
+        fail2(`"${name.v}" is extended with "=/" before it is defined.`, name.line);
       const first = old.body.k === "choice" ? old.body.items : [old.body];
       rules[known] = { ...old, body: { k: "choice", items: [...first, ...bodyNode.k === "choice" ? bodyNode.items : [bodyNode]] } };
       continue;
     }
     if (known >= 0)
-      fail8(`The rule "${name.v}" is defined twice.`, name.line);
+      fail2(`The rule "${name.v}" is defined twice.`, name.line);
     rules.push({ name: name.v, body: bodyNode, line: name.line });
   }
   if (rules.length === 0)
-    fail8("A railroad diagram needs at least one rule.", rows.length, "empty");
+    fail2("A railroad diagram needs at least one rule.", rows.length, "empty");
   const final = title ?? (heading !== undefined && heading !== "" ? heading : undefined);
   const accTitle = acc.title;
   return { notation, ...final === undefined ? {} : { title: final }, ...accTitle === undefined || accTitle === "" ? {} : { accTitle }, rules };
@@ -29130,7 +29072,7 @@ function sceneItems(blocks, links, model, u) {
 }
 
 // src/block/parse.ts
-function fail9(message, line, code = "syntax", column) {
+function fail4(message, line, code = "syntax", column) {
   throw new UrsulaError(message, code, line, column === undefined ? {} : { column });
 }
 var BRACKETS = [
@@ -29193,7 +29135,7 @@ function readBracket(rest, line) {
   if (rest[at] === '"') {
     const end = rest.indexOf('"', at + 1);
     if (end < 0)
-      fail9("A label opened with a quote has no closing quote.", line);
+      fail4("A label opened with a quote has no closing quote.", line);
     body = rest.slice(at + 1, end);
     at = end + 1;
     while (rest[at] === " ")
@@ -29206,19 +29148,19 @@ function readBracket(rest, line) {
         end = found;
     }
     if (end < 0)
-      fail9(`"${first.open}" has no closing "${first.close}".`, line);
+      fail4(`"${first.open}" has no closing "${first.close}".`, line);
     body = rest.slice(at, end).trim();
     at = end;
   }
   const closer = candidates.find((c) => rest.startsWith(c.close, at));
   if (closer === undefined)
-    fail9(`"${first.open}" has no closing "${first.close}".`, line);
+    fail4(`"${first.open}" has no closing "${first.close}".`, line);
   return { shape: closer.shape, label: labelLines3(body), length: at + closer.close.length };
 }
 function readHeads(rest, line) {
   const m = /^\(([^)]*)\)/u.exec(rest);
   if (m === null)
-    return fail9('A block arrow names its direction: <["label"]>(right).', line, "arrow");
+    return fail4('A block arrow names its direction: <["label"]>(right).', line, "arrow");
   const heads = [];
   for (const word of (m[1] ?? "").split(",").map((w) => w.trim().toLowerCase())) {
     if (word === "x")
@@ -29228,7 +29170,7 @@ function readHeads(rest, line) {
     else if (DIRECTIONS.has(word))
       heads.push(word);
     else
-      fail9(`"${word}" is not a direction of a block arrow; use right, left, up, down, x or y.`, line, "arrow");
+      fail4(`"${word}" is not a direction of a block arrow; use right, left, up, down, x or y.`, line, "arrow");
   }
   return { heads: [...new Set(heads)], length: m[0].length };
 }
@@ -29251,7 +29193,7 @@ function tokenize(s, line) {
     }
     const id = ID3.exec(rest)?.[0];
     if (id === undefined)
-      fail9(`Cannot read "${rest.trim()}"; a block is an id, optionally followed by a bracket pair and ":width".`, line);
+      fail4(`Cannot read "${rest.trim()}"; a block is an id, optionally followed by a bracket pair and ":width".`, line);
     pos += id.length;
     const node = { t: "node", id, space: id === "space" };
     const bracket = readBracket(s.slice(pos), line);
@@ -29270,10 +29212,10 @@ function tokenize(s, line) {
       node.span = Number(width[1]);
       pos += width[0].length;
       if (node.span < 1)
-        fail9(`The width of "${id}" is ${node.span}; a width is at least 1.`, line, "width");
+        fail4(`The width of "${id}" is ${node.span}; a width is at least 1.`, line, "width");
     }
     if (pos < s.length && s[pos] !== " " && s[pos] !== "\t" && readLink(s.slice(pos)) === undefined) {
-      fail9(`Cannot read "${s.slice(pos).trim()}" after "${id}".`, line);
+      fail4(`Cannot read "${s.slice(pos).trim()}" after "${id}".`, line);
     }
     tokens.push(node);
   }
@@ -29329,7 +29271,7 @@ function parseBlock(src, heading) {
       continue;
     if (!headerSeen) {
       if (!/^block(?:-beta)?$/u.test(s))
-        fail9('A block diagram starts with "block".', line, "header");
+        fail4('A block diagram starts with "block".', line, "header");
       headerSeen = true;
       continue;
     }
@@ -29337,7 +29279,7 @@ function parseBlock(src, heading) {
       continue;
     if (s === "end") {
       if (stack.length === 1)
-        fail9('"end" closes a block that was never opened.', line, "block");
+        fail4('"end" closes a block that was never opened.', line, "block");
       stack.pop();
       continue;
     }
@@ -29349,7 +29291,7 @@ function parseBlock(src, heading) {
       else if (/^[1-9]\d*$/u.test(value))
         current().columns = Number(value);
       else
-        fail9(`"columns ${value}" needs a number of columns or "auto".`, line, "columns");
+        fail4(`"columns ${value}" needs a number of columns or "auto".`, line, "columns");
       continue;
     }
     if (IGNORED3.test(s)) {
@@ -29383,7 +29325,7 @@ function parseBlock(src, heading) {
       continue;
     }
     if (tokens.some((t, i) => i % 2 === 0 !== (t.t === "node")) || tokens[tokens.length - 1]?.t !== "node") {
-      fail9("A link joins two blocks: A --> B.", line, "link", (rows[n] ?? "").trimEnd().length + 1);
+      fail4("A link joins two blocks: A --> B.", line, "link", (rows[n] ?? "").trimEnd().length + 1);
     }
     for (const t of tokens)
       if (t.t === "node")
@@ -29403,13 +29345,13 @@ function parseBlock(src, heading) {
     }
   }
   if (!headerSeen)
-    fail9('A block diagram starts with "block".', 1, "header");
+    fail4('A block diagram starts with "block".', 1, "header");
   if (stack.length > 1)
-    fail9('A "block" is not closed by "end".', current().line, "block");
+    fail4('A "block" is not closed by "end".', current().line, "block");
   for (const link of links) {
     for (const end of [link.from, link.to]) {
       if (!byId.has(end))
-        fail9(`The link names "${end}", which is not a block.`, link.line, "link");
+        fail4(`The link names "${end}", which is not a block.`, link.line, "link");
     }
   }
   return {
@@ -29964,9 +29906,6 @@ function ringPath(cx, cy, outer, inner, a0, a1, gap, corner) {
 // src/pie/parse.ts
 var SLICE = /^"([^"]*)"\s*:\s*(.+)$/u;
 var NUMBER2 = /^\d+(?:\.\d+)?$/u;
-function fail10(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function parsePie(src, heading, config) {
   const rows = src.split(/\r?\n/);
   const slices = [];
@@ -29985,7 +29924,7 @@ function parsePie(src, heading, config) {
     if (!headerSeen) {
       const head = /^pie(?:\s+(.*))?$/u.exec(s);
       if (head === null)
-        fail10('A pie chart starts with "pie".', lineNo, "header");
+        fail2('A pie chart starts with "pie".', lineNo, "header");
       headerSeen = true;
       let rest = (head[1] ?? "").trim();
       for (;; ) {
@@ -30007,7 +29946,7 @@ function parsePie(src, heading, config) {
         break;
       }
       if (rest !== "")
-        fail10(`Unexpected "${rest}" after "pie".`, lineNo);
+        fail2(`Unexpected "${rest}" after "pie".`, lineNo);
       continue;
     }
     if (/^showData$/u.test(s)) {
@@ -30027,21 +29966,21 @@ function parsePie(src, heading, config) {
       continue;
     const m = SLICE.exec(s);
     if (m === null)
-      fail10(`Cannot read "${s}"; a slice is written "label" : value.`, lineNo);
+      fail2(`Cannot read "${s}"; a slice is written "label" : value.`, lineNo);
     const raw = (m[2] ?? "").trim();
     if (/^-\d/u.test(raw))
-      fail10(`"${m[1] ?? ""}" has the negative value ${raw}; values must be greater than zero.`, lineNo, "value");
+      fail2(`"${m[1] ?? ""}" has the negative value ${raw}; values must be greater than zero.`, lineNo, "value");
     if (!NUMBER2.test(raw))
-      fail10(`"${raw}" is not a number; a value is digits with an optional decimal part.`, lineNo, "value");
+      fail2(`"${raw}" is not a number; a value is digits with an optional decimal part.`, lineNo, "value");
     const value = Number(raw);
     if (value <= 0)
-      fail10(`"${m[1] ?? ""}" has the value ${raw}; values must be greater than zero.`, lineNo, "value");
+      fail2(`"${m[1] ?? ""}" has the value ${raw}; values must be greater than zero.`, lineNo, "value");
     slices.push({ label: m[1] ?? "", value, valueText: raw });
   }
   if (!headerSeen)
-    fail10('A pie chart starts with "pie".', 1, "header");
+    fail2('A pie chart starts with "pie".', 1, "header");
   if (slices.length === 0)
-    fail10("A pie chart needs at least one slice.", rows.length, "empty");
+    fail2("A pie chart needs at least one slice.", rows.length, "empty");
   if (!bodyTitle && heading !== undefined && heading !== "")
     title = heading;
   const hole = configSection(config, "pie")?.["donutHole"];
@@ -30212,9 +30151,6 @@ function layoutPacket(packet, ruler) {
 // src/packet/parse.ts
 var MAX_ROWS = 2000;
 var FIELD = /^(\+\s*\d+|\d+(?:\s*-\s*\d+)?)\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*;?$/u;
-function fail11(message, line) {
-  throw new UrsulaError(message, "syntax", line);
-}
 function unquote6(value) {
   const v = value.trim();
   const q = v[0];
@@ -30280,7 +30216,7 @@ function parsePacket(src, opts = {}) {
     }
     if (!seenHeader) {
       if (s !== "packet" && s !== "packet-beta")
-        fail11("expected a 'packet' header", line);
+        fail2("expected a 'packet' header", line);
       seenHeader = true;
       continue;
     }
@@ -30298,7 +30234,7 @@ function parsePacket(src, opts = {}) {
     }
     const m = FIELD.exec(s);
     if (!m)
-      fail11(`cannot read '${s}'; a field is written 0-15: "Name", 7: "Name" or +8: "Name"`, line);
+      fail2(`cannot read '${s}'; a field is written 0-15: "Name", 7: "Name" or +8: "Name"`, line);
     const spec = (m[1] ?? "").replace(/\s+/gu, "");
     const label = m[2] ?? m[3] ?? "";
     let start;
@@ -30306,7 +30242,7 @@ function parsePacket(src, opts = {}) {
     if (spec.startsWith("+")) {
       const count = Number(spec.slice(1));
       if (count === 0)
-        fail11("a field cannot have 0 bits", line);
+        fail2("a field cannot have 0 bits", line);
       start = lastBit + 1;
       end = start + count - 1;
     } else if (spec.includes("-")) {
@@ -30314,24 +30250,24 @@ function parsePacket(src, opts = {}) {
       start = Number(a);
       end = Number(b);
       if (end < start)
-        fail11(`bits ${start}-${end}: the end must not be smaller than the start`, line);
+        fail2(`bits ${start}-${end}: the end must not be smaller than the start`, line);
     } else {
       start = Number(spec);
       end = start;
     }
     if (start !== lastBit + 1)
-      fail11(`bits ${start}-${end} are not contiguous; the next field must start at bit ${lastBit + 1}`, line);
+      fail2(`bits ${start}-${end} are not contiguous; the next field must start at bit ${lastBit + 1}`, line);
     lastBit = end;
     fields.push({ start, end, label, line });
   }
   if (!seenHeader)
-    fail11("expected a 'packet' header", rows.length === 0 ? 1 : rows.length);
+    fail2("expected a 'packet' header", rows.length === 0 ? 1 : rows.length);
   if (fields.length === 0)
-    fail11("the packet has no fields", rows.length);
+    fail2("the packet has no fields", rows.length);
   const bitsPerRow = settings.bitsPerRow ?? 32;
   title ??= opts.heading;
   if (Math.ceil((lastBit + 1) / bitsPerRow) > MAX_ROWS)
-    fail11(`the packet needs more than ${MAX_ROWS} rows`, fields[fields.length - 1]?.line ?? 1);
+    fail2(`the packet needs more than ${MAX_ROWS} rows`, fields[fields.length - 1]?.line ?? 1);
   return {
     ...title === undefined || title === "" ? {} : { title },
     fields,
@@ -30757,9 +30693,6 @@ function layoutRadar(model, ruler) {
 // src/radar/parse.ts
 var NUMBER3 = /^[-+]?(?:\d+\.?\d*|\.\d+)$/u;
 var ID4 = /^[\w-]+/u;
-function fail12(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function stripComment5(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -30780,7 +30713,7 @@ function readEntries(text, withBody, line) {
     skip();
     const id = ID4.exec(text.slice(i))?.[0];
     if (id === undefined)
-      fail12(`expected an id, found "${text.slice(i, i + 12)}"`, line);
+      fail2(`expected an id, found "${text.slice(i, i + 12)}"`, line);
     i += id.length;
     const entry = { id };
     skip();
@@ -30792,17 +30725,17 @@ function readEntries(text, withBody, line) {
       if (q === '"' || q === "'") {
         const end = text.indexOf(q, i + 1);
         if (end < 0)
-          fail12(`unterminated label of "${id}"`, line);
+          fail2(`unterminated label of "${id}"`, line);
         label = text.slice(i + 1, end);
         i = end + 1;
         skip();
         if (text[i] !== "]")
-          fail12(`expected "]" after the label of "${id}"`, line);
+          fail2(`expected "]" after the label of "${id}"`, line);
         i++;
       } else {
         const end = text.indexOf("]", i);
         if (end < 0)
-          fail12(`unterminated label of "${id}"`, line);
+          fail2(`unterminated label of "${id}"`, line);
         label = text.slice(i, end).trim();
         i = end + 1;
       }
@@ -30811,10 +30744,10 @@ function readEntries(text, withBody, line) {
     }
     if (withBody) {
       if (text[i] !== "{")
-        fail12(`curve "${id}" needs its values in braces`, line);
+        fail2(`curve "${id}" needs its values in braces`, line);
       const end = text.indexOf("}", i);
       if (end < 0)
-        fail12(`unterminated values of "${id}"`, line);
+        fail2(`unterminated values of "${id}"`, line);
       entry.body = text.slice(i + 1, end);
       i = end + 1;
       skip();
@@ -30823,14 +30756,14 @@ function readEntries(text, withBody, line) {
     if (i >= text.length)
       return entries;
     if (text[i] !== ",")
-      fail12(`expected "," after "${id}", found "${text.slice(i, i + 12)}"`, line);
+      fail2(`expected "," after "${id}", found "${text.slice(i, i + 12)}"`, line);
     i++;
   }
 }
 function parseNumber(text, what, line) {
   const t = text.trim();
   if (!NUMBER3.test(t))
-    fail12(`${what} must be a number, found "${t}"`, line);
+    fail2(`${what} must be a number, found "${t}"`, line);
   return Number(t);
 }
 function readValues(entry, line) {
@@ -30843,12 +30776,12 @@ function readValues(entry, line) {
     } else {
       const key = part.slice(0, colon).trim();
       if (keyed.has(key))
-        fail12(`curve "${entry.id}" gives axis "${key}" twice`, line);
+        fail2(`curve "${entry.id}" gives axis "${key}" twice`, line);
       keyed.set(key, parseNumber(part.slice(colon + 1), `value of "${entry.id}" on "${key}"`, line));
     }
   }
   if (positional.length > 0 && keyed.size > 0)
-    fail12(`curve "${entry.id}" mixes plain and "axis: value" entries`, line);
+    fail2(`curve "${entry.id}" mixes plain and "axis: value" entries`, line);
   return { id: entry.id, label: entry.label ?? entry.id, positional, keyed, line };
 }
 function readThemeVariables(config) {
@@ -30888,7 +30821,7 @@ function parseRadar(src, heading, config) {
     }
     if (!headerSeen) {
       if (!/^radar(?:-beta)?$/u.test(s))
-        fail12(`a radar diagram starts with "radar-beta", found "${s}"`, lineNo, "header");
+        fail2(`a radar diagram starts with "radar-beta", found "${s}"`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -30898,7 +30831,7 @@ function parseRadar(src, heading, config) {
     switch (keyword) {
       case "title":
         if (rest === "")
-          fail12("title needs a text", lineNo);
+          fail2("title needs a text", lineNo);
         title = unquote7(rest);
         break;
       case "accTitle":
@@ -30910,14 +30843,14 @@ function parseRadar(src, heading, config) {
       case "axis":
         for (const e of readEntries(rest, false, lineNo)) {
           if (axes.some((a) => a.id === e.id))
-            fail12(`axis "${e.id}" is defined twice`, lineNo);
+            fail2(`axis "${e.id}" is defined twice`, lineNo);
           axes.push({ id: e.id, label: e.label ?? e.id });
         }
         break;
       case "curve":
         for (const e of readEntries(rest, true, lineNo)) {
           if (raws.some((c) => c.id === e.id))
-            fail12(`curve "${e.id}" is defined twice`, lineNo);
+            fail2(`curve "${e.id}" is defined twice`, lineNo);
           raws.push(readValues(e, lineNo));
         }
         break;
@@ -30930,43 +30863,43 @@ function parseRadar(src, heading, config) {
       case "ticks": {
         const t = parseNumber(rest, "ticks", lineNo);
         if (!Number.isInteger(t) || t < 1)
-          fail12(`ticks must be a whole number of at least 1, found "${rest}"`, lineNo);
+          fail2(`ticks must be a whole number of at least 1, found "${rest}"`, lineNo);
         ticks = t;
         break;
       }
       case "graticule":
         if (rest !== "circle" && rest !== "polygon")
-          fail12(`graticule is "circle" or "polygon", found "${rest}"`, lineNo);
+          fail2(`graticule is "circle" or "polygon", found "${rest}"`, lineNo);
         out.graticule = rest;
         break;
       case "showLegend":
         if (rest !== "true" && rest !== "false")
-          fail12(`showLegend is "true" or "false", found "${rest}"`, lineNo);
+          fail2(`showLegend is "true" or "false", found "${rest}"`, lineNo);
         out.showLegend = rest === "true";
         break;
       default:
-        fail12(`unknown statement "${s}"`, lineNo);
+        fail2(`unknown statement "${s}"`, lineNo);
     }
   }
   if (!headerSeen)
-    fail12('empty diagram; a radar diagram starts with "radar-beta"', Math.max(1, rows.length), "header");
+    fail2('empty diagram; a radar diagram starts with "radar-beta"', Math.max(1, rows.length), "header");
   if (axes.length === 0)
-    fail12("a radar diagram needs at least one axis", rows.length);
+    fail2("a radar diagram needs at least one axis", rows.length);
   const curves = raws.map((raw) => {
     if (raw.keyed.size > 0) {
       const values = axes.map((a) => {
         const v = raw.keyed.get(a.id);
         if (v === undefined)
-          fail12(`curve "${raw.id}" has no value for axis "${a.id}"`, raw.line);
+          fail2(`curve "${raw.id}" has no value for axis "${a.id}"`, raw.line);
         return v;
       });
       for (const key of raw.keyed.keys())
         if (!axes.some((a) => a.id === key))
-          fail12(`curve "${raw.id}" names the unknown axis "${key}"`, raw.line);
+          fail2(`curve "${raw.id}" names the unknown axis "${key}"`, raw.line);
       return { id: raw.id, label: raw.label, values };
     }
     if (raw.positional.length !== axes.length) {
-      fail12(`curve "${raw.id}" has ${raw.positional.length} values for ${axes.length} axes`, raw.line);
+      fail2(`curve "${raw.id}" has ${raw.positional.length} values for ${axes.length} axes`, raw.line);
     }
     return { id: raw.id, label: raw.label, values: raw.positional };
   });
@@ -31593,9 +31526,6 @@ function layoutSankey(map, ruler) {
 // src/sankey/parse.ts
 var HEADERS2 = new Set(["sankey-beta", "sankey"]);
 var NUMBER4 = /^(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/u;
-function fail13(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function readSankeyConfig(config) {
   const section = configSection(config, "sankey");
   if (section === undefined)
@@ -31646,7 +31576,7 @@ function csvFields(row, lineNo) {
       i++;
       for (;; ) {
         if (i >= row.length)
-          fail13("A quoted field is not closed.", lineNo, "quote");
+          fail2("A quoted field is not closed.", lineNo, "quote");
         if (row[i] === '"') {
           if (row[i + 1] === '"') {
             text += '"';
@@ -31662,7 +31592,7 @@ function csvFields(row, lineNo) {
       while (row[i] === " " || row[i] === "\t")
         i++;
       if (i < row.length && row[i] !== ",")
-        fail13(`Unexpected text after a quoted field: "${row.slice(i)}".`, lineNo, "quote");
+        fail2(`Unexpected text after a quoted field: "${row.slice(i)}".`, lineNo, "quote");
       fields.push(text);
     } else {
       const end = row.indexOf(",", i);
@@ -31720,7 +31650,7 @@ function parseSankey(src, heading, config) {
     }
     if (!headerSeen) {
       if (!HEADERS2.has(s))
-        fail13(`Expected "sankey-beta" or "sankey" but found "${s}".`, lineNo, "header");
+        fail2(`Expected "sankey-beta" or "sankey" but found "${s}".`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -31728,25 +31658,25 @@ function parseSankey(src, heading, config) {
       continue;
     const fields = csvFields(s, lineNo);
     if (fields.length !== 3)
-      fail13(`A row has three fields (source,target,value) but this one has ${fields.length}.`, lineNo, "fields");
+      fail2(`A row has three fields (source,target,value) but this one has ${fields.length}.`, lineNo, "fields");
     const [from = "", to = "", amount = ""] = fields;
     if (from === "" || to === "")
-      fail13("A row needs a source and a target name.", lineNo, "name");
+      fail2("A row needs a source and a target name.", lineNo, "name");
     if (!NUMBER4.test(amount))
-      fail13(`"${amount}" is not a number; the third field is the value.`, lineNo, "value");
+      fail2(`"${amount}" is not a number; the third field is the value.`, lineNo, "value");
     const value = Number(amount);
     if (value <= 0)
-      fail13(`The value ${amount} must be greater than zero.`, lineNo, "value");
+      fail2(`The value ${amount} must be greater than zero.`, lineNo, "value");
     if (from === to)
-      fail13(`"${from}" flows into itself.`, lineNo, "cycle");
+      fail2(`"${from}" flows into itself.`, lineNo, "cycle");
     const source = nodeOf(from, lineNo);
     const target = nodeOf(to, lineNo);
     links.push({ source, target, value, line: lineNo });
   }
   if (!headerSeen)
-    fail13('Expected "sankey-beta" or "sankey" as the first line.', 1, "header");
+    fail2('Expected "sankey-beta" or "sankey" as the first line.', 1, "header");
   if (links.length === 0)
-    fail13("A sankey needs at least one row source,target,value.", rows.length, "empty");
+    fail2("A sankey needs at least one row source,target,value.", rows.length, "empty");
   assertAcyclic(nodes, links);
   const settings = { ...readSankeyConfig(config), ...init };
   return {
@@ -31770,7 +31700,7 @@ function assertAcyclic(nodes, links) {
     state[i] = 1;
     for (const l of out[i] ?? []) {
       if (state[l.target] === 1)
-        fail13(`"${nodes[l.source]?.name}" to "${nodes[l.target]?.name}" closes a circle of flows; a sankey cannot loop.`, l.line, "cycle");
+        fail2(`"${nodes[l.source]?.name}" to "${nodes[l.target]?.name}" closes a circle of flows; a sankey cannot loop.`, l.line, "cycle");
       if (state[l.target] === 0)
         visit(l.target);
     }
@@ -32355,9 +32285,6 @@ var SERVICE = DECLARATION2("service");
 var JUNCTION2 = new RegExp(`^junction\\s+(${ID5})(?:\\s+in\\s+(${ID5}))?$`, "u");
 var EDGE = new RegExp(`^(${ID5})(\\{group\\})?:([TBLR])\\s*(<)?--(>)?\\s*([TBLR]):(${ID5})(\\{group\\})?$`, "u");
 var ALIGN = /^align\s+(row|column)\s+(.+)$/u;
-function fail14(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function parseArchitecture(src, heading) {
   const rows = src.split(/\r?\n/);
   const groups = [];
@@ -32371,24 +32298,24 @@ function parseArchitecture(src, heading) {
   const nodeById = (id) => nodes.find((n) => n.id === id);
   const claim = (id, line) => {
     if (groupById(id) !== undefined || nodeById(id) !== undefined)
-      fail14(`The id "${id}" is already used.`, line, "duplicate");
+      fail2(`The id "${id}" is already used.`, line, "duplicate");
   };
   const parentOf = (id, line) => {
     if (id === undefined)
       return;
     if (groupById(id) === undefined)
-      fail14(`"${id}" is not a group declared above; a service or group goes "in" a group.`, line, "parent");
+      fail2(`"${id}" is not a group declared above; a service or group goes "in" a group.`, line, "parent");
     return id;
   };
   const endpoint = (id, group, line) => {
     const node = nodeById(id);
     if (node === undefined) {
       if (groupById(id) !== undefined)
-        fail14(`"${id}" is a group; an edge names services or junctions.`, line, "edge");
-      fail14(`"${id}" is not declared above.`, line, "edge");
+        fail2(`"${id}" is a group; an edge names services or junctions.`, line, "edge");
+      fail2(`"${id}" is not declared above.`, line, "edge");
     }
     if (group && node.parent === undefined)
-      fail14(`"${id}" stands in no group, so "{group}" has nothing to name.`, line, "edge");
+      fail2(`"${id}" stands in no group, so "{group}" has nothing to name.`, line, "edge");
   };
   rows.forEach((raw, i) => {
     const line = i + 1;
@@ -32399,7 +32326,7 @@ function parseArchitecture(src, heading) {
       return;
     if (!headerSeen) {
       if (s !== "architecture-beta" && s !== "architecture")
-        fail14(`Expected "architecture-beta" but found "${s}".`, line, "header");
+        fail2(`Expected "architecture-beta" but found "${s}".`, line, "header");
       headerSeen = true;
       return;
     }
@@ -32456,19 +32383,19 @@ function parseArchitecture(src, heading) {
     if (a !== null) {
       const members = (a[2] ?? "").split(/\s+/u).filter((m) => m !== "");
       if (members.length < 2)
-        fail14('An "align" line needs at least two members.', line, "align");
+        fail2('An "align" line needs at least two members.', line, "align");
       for (const m of members)
         if (nodeById(m) === undefined)
-          fail14(`"${m}" is not a service or junction declared above.`, line, "align");
+          fail2(`"${m}" is not a service or junction declared above.`, line, "align");
       aligns.push({ axis: a[1] === "row" ? "row" : "column", members, line });
       return;
     }
-    fail14(`Cannot read "${s}"; use group, service, junction, an edge such as "a:R -- L:b", or align.`, line);
+    fail2(`Cannot read "${s}"; use group, service, junction, an edge such as "a:R -- L:b", or align.`, line);
   });
   if (!headerSeen)
-    fail14('Expected "architecture-beta" as the first line.', 1, "header");
+    fail2('Expected "architecture-beta" as the first line.', 1, "header");
   if (nodes.length === 0 && groups.length === 0)
-    fail14("An architecture diagram needs at least one service.", rows.length, "empty");
+    fail2("An architecture diagram needs at least one service.", rows.length, "empty");
   if (title === undefined && heading !== undefined && heading !== "")
     title = heading;
   return { ...title === undefined ? {} : { title }, ...acc.title === undefined || acc.title === "" ? {} : { accTitle: acc.title }, groups, nodes, edges, aligns };
@@ -32698,22 +32625,7 @@ function queuePath(x0, x1, y, h) {
   return `M${fmt4(x0 + rx)} ${fmt4(y)}H${fmt4(x1 - rx)}A${rx} ${ry} 0 0 1 ${fmt4(x1 - rx)} ${fmt4(y + h)}` + `H${fmt4(x0 + rx)}A${rx} ${ry} 0 0 1 ${fmt4(x0 + rx)} ${fmt4(y)}Z` + `M${fmt4(x1 - rx)} ${fmt4(y)}A${rx} ${ry} 0 0 0 ${fmt4(x1 - rx)} ${fmt4(y + h)}`;
 }
 function wrapLine(line, cap, measure) {
-  if (cap === Infinity || measure(line) <= cap)
-    return [line];
-  const out = [];
-  let cur = "";
-  for (const word of line.split(/\s+/).filter((w) => w !== "")) {
-    const next = cur === "" ? word : `${cur} ${word}`;
-    if (cur === "" || measure(next) <= cap)
-      cur = next;
-    else {
-      out.push(cur);
-      cur = word;
-    }
-  }
-  if (cur !== "")
-    out.push(cur);
-  return out;
+  return wrapWords(line, cap, measure, { keepIfFits: true, longWord: "keep" });
 }
 function wrappable(seq) {
   const out = [];
@@ -33669,35 +33581,8 @@ function spansOf2(row) {
 function joinSpans2(line) {
   return line.map((s) => s.text).join("");
 }
-function wrapWords2(text, cap, hard) {
-  if (cap === Infinity || cellWidth(text) <= cap)
-    return [text];
-  const out = [];
-  let cur = "";
-  const flush = () => {
-    if (cur !== "")
-      out.push(cur);
-    cur = "";
-  };
-  for (const word of text.split(/\s+/).filter((w) => w !== "")) {
-    const next = cur === "" ? word : `${cur} ${word}`;
-    if (cellWidth(next) <= cap) {
-      cur = next;
-      continue;
-    }
-    flush();
-    if (!hard || cellWidth(word) <= cap) {
-      cur = word;
-      continue;
-    }
-    for (const ch of word) {
-      if (cellWidth(cur) + cellWidthOf(ch.codePointAt(0) ?? 0) > cap)
-        flush();
-      cur += ch;
-    }
-  }
-  flush();
-  return out;
+function wrapCells2(text, cap, hard) {
+  return wrapWords(text, cap, cellWidth, { keepIfFits: true, longWord: hard ? "break" : "keep" });
 }
 var HEADS4 = {
   filled: ["▶", "◀"],
@@ -33740,7 +33625,7 @@ function prepare3(seq, R, limit, headWrap, list, legend, tagged) {
     return named.flatMap((l) => {
       const words = l.split(/\s+/).filter((w) => w !== "");
       const longest = Math.max(0, ...words.map((w) => cellWidth(w)));
-      return wrapWords2(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
+      return wrapCells2(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
     });
   });
   const boxW = headLines.map((lines) => {
@@ -34020,7 +33905,7 @@ function render2(c, gaps) {
       return;
     }
     const pad = T.noteBoxPad;
-    const lines = wrapWords2(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
+    const lines = wrapCells2(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
     const inner = Math.max(...lines.map(cellWidth)) + 2 * pad;
     const w = inner + 2 * R.nodeBorder;
     const x = place(w);
@@ -34054,7 +33939,7 @@ function render2(c, gaps) {
     const hi = bound();
     const lo = low();
     const act = (col) => (depth[col] ?? 0) > 0;
-    const lines = (cap) => wrapWords2(m.label, cap - m.numExtra, true);
+    const lines = (cap) => wrapCells2(m.label, cap - m.numExtra, true);
     const blockW = (ls) => m.numExtra + Math.max(0, ...ls.map(cellWidth));
     if (m.a === m.b) {
       const start = a + T.selfReach + 1 + T.selfGap;
@@ -34207,7 +34092,7 @@ function render2(c, gaps) {
     lines.push([]);
     for (const f of c.footnotes) {
       const numExtra = f.numText === "" ? 0 : cellWidth(f.numText) + 1;
-      wrapWords2(f.label, cap - numExtra, true).forEach((l, k) => {
+      wrapCells2(f.label, cap - numExtra, true).forEach((l, k) => {
         const row = [];
         if (pad !== "")
           row.push({ text: pad, tone: "normal" });
@@ -34363,9 +34248,6 @@ function groupLabel(rest) {
 function textLines(text) {
   return decodeEntities(text).trim().split(BREAK).map((l) => l.trim());
 }
-function fail15(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function stripComment6(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -34398,28 +34280,28 @@ function readDeclaration(rest, line) {
   const id = rest.slice(0, at).trim();
   const end = objectEnd(rest, at + 1);
   if (id === "")
-    fail15("'@{' needs a participant name before it", line);
+    fail2("'@{' needs a participant name before it", line);
   if (end < 0)
-    fail15("missing '}' after '@{'", line);
+    fail2("missing '}' after '@{'", line);
   let config;
   try {
     config = JSON.parse(rest.slice(at + 1, end + 1));
   } catch {
-    return fail15("the participant settings after the name are not valid JSON", line);
+    return fail2("the participant settings after the name are not valid JSON", line);
   }
   if (config === null || typeof config !== "object" || Array.isArray(config))
-    fail15("the participant settings must be an object", line);
+    fail2("the participant settings must be an object", line);
   const { type, alias } = config;
   let kind;
   if (type !== undefined) {
     const found = PARTICIPANT_KINDS.find((k) => k === type);
     if (!found)
-      fail15(`unknown participant type '${String(type)}'; use ${PARTICIPANT_KINDS.join(", ")}`, line);
+      fail2(`unknown participant type '${String(type)}'; use ${PARTICIPANT_KINDS.join(", ")}`, line);
     kind = found;
   }
   const tail = /^\s+as\s+(.+)$/i.exec(rest.slice(end + 1));
   if (rest.slice(end + 1).trim() !== "" && !tail)
-    fail15("expected 'as <label>' after the participant settings", line);
+    fail2("expected 'as <label>' after the participant settings", line);
   return { id, label: tail?.[1] ?? (typeof alias === "string" ? alias : undefined), kind };
 }
 function parseSequence(src) {
@@ -34455,7 +34337,7 @@ function parseSequence(src) {
       continue;
     if (!headerSeen) {
       if (s !== "sequenceDiagram")
-        fail15("expected a 'sequenceDiagram' header", lineNo);
+        fail2("expected a 'sequenceDiagram' header", lineNo);
       headerSeen = true;
       continue;
     }
@@ -34463,14 +34345,14 @@ function parseSequence(src) {
     const rest = s.slice(word.length).trim();
     if (word === "participant" || word === "actor") {
       if (rest === "")
-        fail15(`'${word}' needs a name`, lineNo);
+        fail2(`'${word}' needs a name`, lineNo);
       declareParticipant(readDeclaration(rest, lineNo), word);
       continue;
     }
     if (word === "create") {
       const m = /^(participant|actor)\s+(.+)$/i.exec(rest);
       if (!m)
-        fail15("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
+        fail2("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
       const d = readDeclaration(m[2] ?? "", lineNo);
       declareParticipant(d, (m[1] ?? "").toLowerCase() === "actor" ? "actor" : "participant");
       created.add(d.id);
@@ -34478,7 +34360,7 @@ function parseSequence(src) {
     }
     if (word === "destroy") {
       if (rest === "")
-        fail15("'destroy' needs a participant", lineNo);
+        fail2("'destroy' needs a participant", lineNo);
       destroyed.add(touch(rest));
       continue;
     }
@@ -34491,18 +34373,18 @@ function parseSequence(src) {
       } else {
         const nums = args.map(Number);
         if (nums.some((v) => !Number.isInteger(v)) || nums.length > 2)
-          fail15("invalid 'autonumber' arguments", lineNo);
+          fail2("invalid 'autonumber' arguments", lineNo);
         numbering = { next: nums[0] ?? 1, step: nums[1] ?? 1 };
       }
       continue;
     }
     if (word === "activate" || word === "deactivate") {
       if (rest === "")
-        fail15(`'${word}' needs a participant`, lineNo);
+        fail2(`'${word}' needs a participant`, lineNo);
       const who = touch(rest);
       const d = depth.get(who) ?? 0;
       if (word === "deactivate" && d === 0)
-        fail15(`'${rest}' is not active`, lineNo);
+        fail2(`'${rest}' is not active`, lineNo);
       depth.set(who, word === "activate" ? d + 1 : d - 1);
       statements.push({ kind: word, who, line: lineNo });
       continue;
@@ -34510,11 +34392,11 @@ function parseSequence(src) {
     if (word === "note") {
       const m = /^(left of|right of|over)\s+([^:]+?)\s*:\s*(.*)$/i.exec(rest);
       if (!m)
-        fail15("expected 'Note left of|right of|over <participant>: text'", lineNo);
+        fail2("expected 'Note left of|right of|over <participant>: text'", lineNo);
       const side = (m[1] ?? "").toLowerCase().startsWith("left") ? "left" : (m[1] ?? "").toLowerCase().startsWith("right") ? "right" : "over";
       const anchors = (m[2] ?? "").split(",").map((a) => a.trim());
       if (anchors.some((a) => a === "") || anchors.length > (side === "over" ? 2 : 1))
-        fail15("wrong number of participants in note", lineNo);
+        fail2("wrong number of participants in note", lineNo);
       statements.push({ kind: "note", side, anchors: anchors.map(touch), lines: textLines(m[3] ?? ""), line: lineNo });
       continue;
     }
@@ -34538,14 +34420,14 @@ function parseSequence(src) {
       const top = open[open.length - 1];
       const wanted = word === "else" ? "alt" : word === "option" ? "critical" : "par";
       if (top?.kind !== wanted)
-        fail15(`'${word}' outside '${wanted}'`, lineNo);
+        fail2(`'${word}' outside '${wanted}'`, lineNo);
       statements.push({ kind: "branch", lines: rest === "" ? [] : textLines(rest), line: lineNo });
       continue;
     }
     if (s === "end") {
       const top = open.pop();
       if (!top)
-        fail15("'end' without an open block", lineNo);
+        fail2("'end' without an open block", lineNo);
       if (top.kind === "zone")
         statements.push({ kind: "zoneClose", line: lineNo });
       else if (top.kind !== "ignored" && top.kind !== "group")
@@ -34556,10 +34438,10 @@ function parseSequence(src) {
     const head = colon < 0 ? s : s.slice(0, colon);
     const m = MESSAGE.exec(head);
     if (!m)
-      fail15(`unsupported syntax '${s.length > 24 ? `${s.slice(0, 24)}...` : s}'`, lineNo);
+      fail2(`unsupported syntax '${s.length > 24 ? `${s.slice(0, 24)}...` : s}'`, lineNo);
     const op = OPERATORS.find(([o]) => o === m[2]);
     if (!op)
-      fail15("unknown arrow", lineNo);
+      fail2("unknown arrow", lineNo);
     let from = (m[1] ?? "").trim();
     let to = (m[4] ?? "").trim();
     const centreFrom = from.endsWith(CENTRE);
@@ -34569,7 +34451,7 @@ function parseSequence(src) {
     if (centreTo)
       to = to.slice(CENTRE.length).trim();
     if (from === "" || to === "")
-      fail15("message needs a sender and a receiver", lineNo);
+      fail2("message needs a sender and a receiver", lineNo);
     const mark = m[3];
     touch(from);
     touch(to);
@@ -34607,16 +34489,16 @@ function parseSequence(src) {
     if (msg.deactivate) {
       const d = depth.get(from) ?? 0;
       if (d === 0)
-        fail15(`'${from}' is not active`, lineNo);
+        fail2(`'${from}' is not active`, lineNo);
       depth.set(from, d - 1);
     }
     statements.push(msg);
   }
   if (!headerSeen)
-    fail15("expected a 'sequenceDiagram' header", 1);
+    fail2("expected a 'sequenceDiagram' header", 1);
   const unclosed = open[open.length - 1];
   if (unclosed)
-    fail15(`'${unclosed.kind}' block is never closed`, unclosed.line);
+    fail2(`'${unclosed.kind}' block is never closed`, unclosed.line);
   return { participants: [...participants.values()], statements, ...groups.length > 0 ? { groups } : {} };
 }
 
@@ -35512,9 +35394,6 @@ var HEADERS3 = new Set(["treeView-beta", "treeView"]);
 var BRANCH = /[├└┣┗┠┖┝┕╠╚]/u;
 var RAIL = /[│┃║]/u;
 var DASHES = /^[─━═-]+/u;
-function fail16(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function bodyOf2(src) {
   const all = src.split(/\r?\n/).map((l) => l.replace(/\t/gu, "    "));
   let n = 0;
@@ -35537,14 +35416,14 @@ function bodyOf2(src) {
       continue;
     if (!header) {
       if (!HEADERS3.has(trimmed))
-        fail16(`Expected "treeView-beta" but found "${trimmed}".`, n + 1);
+        fail2(`Expected "treeView-beta" but found "${trimmed}".`, n + 1);
       header = true;
       continue;
     }
     rows.push({ no: n + 1, text: raw });
   }
   if (!header)
-    fail16('Expected "treeView-beta" but the source is empty.', Math.max(1, all.length));
+    fail2('Expected "treeView-beta" but the source is empty.', Math.max(1, all.length));
   return { rows };
 }
 function annotated(text, line) {
@@ -35554,7 +35433,7 @@ function annotated(text, line) {
   if (head.startsWith('"')) {
     const close = head.indexOf('"', 1);
     if (close < 0)
-      fail16("A quoted name is never closed.", line);
+      fail2("A quoted name is never closed.", line);
     label = head.slice(1, close).trim();
     head = head.slice(close + 1);
   } else {
@@ -35580,10 +35459,10 @@ function annotated(text, line) {
     else if (/^icon\([^()]*\)$/u.test(token))
       icon = token.slice(5, -1);
     else
-      fail16(`Cannot read "${token}" after the name.`, line);
+      fail2(`Cannot read "${token}" after the name.`, line);
   }
   if (label === "")
-    fail16("An item has no name.", line);
+    fail2("An item has no name.", line);
   return { label, classes, ...icon === undefined ? {} : { icon }, ...description === undefined || description === "" ? {} : { description } };
 }
 function boxRows(rows) {
@@ -35602,7 +35481,7 @@ function boxRows(rows) {
     if (BRANCH.test(rest[0] ?? ""))
       rest = rest.slice(1).replace(DASHES, "").trim();
     if (rest === "")
-      fail16("A branch has no name.", no);
+      fail2("A branch has no name.", no);
     out.push({ no, col, text: rest });
   }
   return out;
@@ -35615,7 +35494,7 @@ function parseTreeView(src) {
   const boxed = body.rows.some((r) => BRANCH.test(r.text));
   const located = boxed ? boxRows(body.rows) : indentRows(body.rows);
   if (located.length === 0)
-    fail16("The tree has no items.", 1, "empty");
+    fail2("The tree has no items.", 1, "empty");
   const items = [];
   const stack = [];
   let unit = 0;
@@ -35626,7 +35505,7 @@ function parseTreeView(src) {
       depth = Math.floor(row.col / 4);
       const above = items[items.length - 1];
       if (above === undefined ? depth !== 0 : depth > above.depth + 1)
-        fail16("This item is indented more than one level below the line above.", row.no, "indent");
+        fail2("This item is indented more than one level below the line above.", row.no, "indent");
     } else {
       const top = stack[stack.length - 1];
       if (top === undefined) {
@@ -35637,14 +35516,14 @@ function parseTreeView(src) {
         if (unit === 0)
           unit = step;
         else if (step >= 2 * unit)
-          fail16("This item is indented two levels or more below the line above.", row.no, "indent");
+          fail2("This item is indented two levels or more below the line above.", row.no, "indent");
         stack.push(row.col);
         depth = stack.length - 1;
       } else {
         while (stack.length > 0 && (stack[stack.length - 1] ?? 0) > row.col)
           stack.pop();
         if (stack[stack.length - 1] !== row.col)
-          fail16("This item lines up with no level above it.", row.no, "indent");
+          fail2("This item lines up with no level above it.", row.no, "indent");
         depth = stack.length - 1;
       }
     }
@@ -35976,7 +35855,7 @@ function jsonRows(text, line) {
 // src/usecase/parse.ts
 var ID7 = "[A-Za-z0-9_]+";
 var LANE10 = { id: "_", label: "" };
-function fail17(message, line) {
+function fail5(message, line) {
   throw new UrsulaError(message, "parse", line);
 }
 function decode(text) {
@@ -36050,7 +35929,7 @@ ${row}`;
           break;
         m++;
         if (m >= rows.length)
-          fail17("accDescr block is not closed", n + 1);
+          fail5("accDescr block is not closed", n + 1);
         rest = rows[m] ?? "";
       }
       accDescr = parts.join(" ");
@@ -36069,7 +35948,7 @@ ${row}`;
       items.push(st);
   }
   if (pending)
-    fail17("Unterminated string or brace", pending.line);
+    fail5("Unterminated string or brace", pending.line);
   return { items, ...accTitle === undefined ? {} : { accTitle }, ...accDescr === undefined ? {} : { accDescr } };
 }
 function closeBrace(s, from, line) {
@@ -36084,7 +35963,7 @@ function closeBrace(s, from, line) {
     else if (!quoted && c === "}" && --depth === 0)
       return i;
   }
-  return fail17("Metadata block is not closed", line);
+  return fail5("Metadata block is not closed", line);
 }
 function readMeta(body, line) {
   const out = {};
@@ -36106,7 +35985,7 @@ function readMeta(body, line) {
       continue;
     const m = /^\s*([A-Za-z_]+)\s*:\s*(.*?)\s*$/s.exec(part);
     if (!m)
-      fail17(`Cannot read metadata "${part.trim()}"`, line);
+      fail5(`Cannot read metadata "${part.trim()}"`, line);
     const value = (m?.[2] ?? "").replace(/^"(.*)"$/s, "$1");
     out[m?.[1] ?? ""] = value;
   }
@@ -36124,17 +36003,17 @@ function scan(s, line, quotedId) {
   let bracket;
   if (s[i] === '"') {
     if (!quotedId)
-      fail17("A quoted name is not allowed here", line);
+      fail5("A quoted name is not allowed here", line);
     const end = s.indexOf('"', i + 1);
     if (end < 0)
-      fail17("Unterminated string", line);
+      fail5("Unterminated string", line);
     label = labelLines4(s.slice(i, end + 1));
     id = joined(label).replace(/\W/g, "_");
     i = end + 1;
   } else {
     const m = new RegExp(`^${ID7}`).exec(s.slice(i));
     if (!m)
-      return fail17(`Expected an identifier, found "${s.slice(i, i + 12)}"`, line);
+      return fail5(`Expected an identifier, found "${s.slice(i, i + 12)}"`, line);
     id = m[0];
     i += id.length;
     skip();
@@ -36149,17 +36028,17 @@ function scan(s, line, quotedId) {
       if (s[j] === '"') {
         const end = s.indexOf('"', j + 1);
         if (end < 0)
-          fail17("Unterminated string", line);
+          fail5("Unterminated string", line);
         content = s.slice(j, end + 1);
         after = end + 1;
         while (s[after] === " " || s[after] === "\t")
           after++;
         if (s[after] !== close)
-          fail17(`Expected "${close}" after the label`, line);
+          fail5(`Expected "${close}" after the label`, line);
       } else {
         after = s.indexOf(close, j);
         if (after < 0)
-          fail17(`Expected "${close}" after the label`, line);
+          fail5(`Expected "${close}" after the label`, line);
         content = s.slice(j, after);
       }
       label = labelLines4(content);
@@ -36178,19 +36057,19 @@ function scan(s, line, quotedId) {
   if (s.startsWith("<<", i)) {
     const end = s.indexOf(">>", i + 2);
     if (end < 0)
-      fail17('Stereotype is not closed with ">>"', line);
+      fail5('Stereotype is not closed with ">>"', line);
     stereotype = s.slice(i + 2, end).trim();
     i = end + 2;
   }
   if (s.startsWith(":::", i)) {
     const m = /^:::[\w-]+(?:,[\w-]+)*/.exec(s.slice(i));
     if (!m)
-      fail17('Expected a class name after ":::"', line);
+      fail5('Expected a class name after ":::"', line);
     i += m?.[0].length ?? 0;
   }
   skip();
   if (i < s.length)
-    fail17(`Unexpected text "${s.slice(i, i + 20)}"`, line);
+    fail5(`Unexpected text "${s.slice(i, i + 20)}"`, line);
   return { id, ...label === undefined ? {} : { label }, ...bracket === undefined ? {} : { bracket }, meta, ...stereotype === undefined ? {} : { stereotype } };
 }
 function operatorOf(token) {
@@ -36219,7 +36098,7 @@ function parseUsecase(src) {
   const { items, accTitle, accDescr } = statements(src);
   const head = items[0];
   if (!head || head.text.split(/[\s;]+/)[0] !== "usecase-beta")
-    fail17('A usecase diagram starts with "usecase-beta"', head?.line ?? 1);
+    fail5('A usecase diagram starts with "usecase-beta"', head?.line ?? 1);
   const elements = new Map;
   const boundaries = new Map;
   const links = [];
@@ -36231,7 +36110,7 @@ function parseUsecase(src) {
   let mirror;
   const claim = (id, line) => {
     if (boundaries.has(id))
-      fail17(`"${id}" is already a system boundary`, line);
+      fail5(`"${id}" is already a system boundary`, line);
   };
   const ensure = (id, line) => {
     claim(id, line);
@@ -36246,9 +36125,9 @@ function parseUsecase(src) {
     const sc = scan(s, line, kind === "usecase");
     const e = ensure(sc.id, line);
     if (e.explicit && e.kind !== kind)
-      fail17(`"${sc.id}" is declared as both an actor and a use case`, line);
+      fail5(`"${sc.id}" is declared as both an actor and a use case`, line);
     if (e.explicit && e.cluster !== undefined && cluster !== undefined && e.cluster !== cluster)
-      fail17(`"${sc.id}" is in two system boundaries`, line);
+      fail5(`"${sc.id}" is in two system boundaries`, line);
     e.kind = kind;
     e.explicit = true;
     if (sc.label)
@@ -36265,22 +36144,22 @@ function parseUsecase(src) {
     for (const [key, value] of Object.entries(meta)) {
       if (key === "business") {
         if (value !== "true" && value !== "false")
-          fail17("business must be true or false", line);
+          fail5("business must be true or false", line);
         e.business = value === "true";
       } else if (key === "type" && e.kind === "actor") {
         if (value !== "normal" && value !== "hollow" && value !== "awesome")
-          fail17(`Unknown actor type "${value}"`, line);
+          fail5(`Unknown actor type "${value}"`, line);
         e.variant = value;
       } else if (key === "icon" && e.kind === "actor") {
         e.icon = value;
         e.variant = "icon";
       } else
-        fail17(`Metadata "${key}" is not allowed on ${e.kind === "actor" ? "an actor" : "a use case"}`, line);
+        fail5(`Metadata "${key}" is not allowed on ${e.kind === "actor" ? "an actor" : "a use case"}`, line);
     }
     if (e.variant === "icon" && (e.business || e.icon === undefined))
-      fail17("An icon actor cannot be a business element or have a type", line);
+      fail5("An icon actor cannot be a business element or have a type", line);
     if (e.business && (e.variant === "awesome" || e.kind === "usecase" && e.rect))
-      fail17("This element cannot be a business element", line);
+      fail5("This element cannot be a business element", line);
   };
   let inside;
   for (const st of items.slice(1)) {
@@ -36292,17 +36171,17 @@ function parseUsecase(src) {
       } else if (word === "actor" && /^actor\s/.test(text))
         addElement("actor", text.slice(5), line, inside);
       else if (/^(systemBoundary|note|json|direction|class|classDef|style)\b/.test(text) || PLAIN2.test(text) || INCLUDE.test(text)) {
-        fail17("A system boundary holds only actor and use case declarations", line);
+        fail5("A system boundary holds only actor and use case declarations", line);
       } else
         addElement("usecase", text, line, inside);
       continue;
     }
     if (text === "end")
-      fail17('"end" without a system boundary', line);
+      fail5('"end" without a system boundary', line);
     if (/^direction\s/.test(text)) {
       const d = /^direction\s+(TD|TB|BT|LR|RL)$/.exec(text)?.[1];
       if (!d)
-        fail17("direction takes TD, TB, BT, LR or RL", line);
+        fail5("direction takes TD, TB, BT, LR or RL", line);
       direction = d === "LR" || d === "RL" ? "LR" : "TD";
       mirror = d === "RL" || d === "BT" ? d : undefined;
     } else if (/^(classDef|class|style)\s/.test(text)) {
@@ -36311,10 +36190,10 @@ function parseUsecase(src) {
       const sc = scan(text.slice("systemBoundary".length), line, true);
       claim(sc.id, line);
       if (elements.has(sc.id) || boundaries.has(sc.id))
-        fail17(`"${sc.id}" is already used`, line);
+        fail5(`"${sc.id}" is already used`, line);
       for (const [k, v] of Object.entries(sc.meta)) {
         if (k !== "type" || v !== "rect" && v !== "package")
-          fail17(`Boundary metadata "${k}: ${v}" is not allowed`, line);
+          fail5(`Boundary metadata "${k}: ${v}" is not allowed`, line);
         if (v === "package")
           packages.add(sc.id);
       }
@@ -36325,21 +36204,21 @@ function parseUsecase(src) {
     } else if (/^note\s+for\s/.test(text)) {
       const m = new RegExp(`^note\\s+for\\s+(${ID7})\\s+("[\\s\\S]*")$`).exec(text);
       if (!m)
-        fail17('A note reads: note for <id> "<text>"', line);
+        fail5('A note reads: note for <id> "<text>"', line);
       notes.push({ target: m?.[1] ?? "", lines: labelLines4(m?.[2] ?? ""), line });
     } else if (/^json\s/.test(text)) {
       const m = new RegExp(`^json\\s+(${ID7})\\s*@\\{`).exec(text);
       if (!m)
-        fail17("A JSON table reads: json <id>@{ ... }", line);
+        fail5("A JSON table reads: json <id>@{ ... }", line);
       const id = m?.[1] ?? "";
       const open = text.indexOf("@{") + 1;
       const end = closeBrace(text, open, line);
       const rest = text.slice(end + 1).trim();
       if (rest !== "" && !/^:::[\w-]+(?:,[\w-]+)*$/.test(rest))
-        fail17(`Unexpected text "${rest.slice(0, 20)}"`, line);
+        fail5(`Unexpected text "${rest.slice(0, 20)}"`, line);
       const e = ensure(id, line);
       if (e.explicit)
-        fail17(`"${id}" is already declared`, line);
+        fail5(`"${id}" is already declared`, line);
       e.kind = "json";
       e.explicit = true;
       e.rows = jsonRows(text.slice(open, end + 1), line);
@@ -36348,7 +36227,7 @@ function parseUsecase(src) {
       const open = text.indexOf("@{") + 1;
       const end = closeBrace(text, open, line);
       if (text.slice(end + 1).trim() !== "")
-        fail17("Unexpected text after the metadata block", line);
+        fail5("Unexpected text after the metadata block", line);
       const body = text.slice(open + 1, end);
       if (edgeIds.has(id))
         continue;
@@ -36360,14 +36239,14 @@ function parseUsecase(src) {
         const meta = readMeta(body, line);
         for (const [k, v] of Object.entries(meta)) {
           if (k !== "type" || v !== "rect" && v !== "package")
-            fail17(`Boundary metadata "${k}: ${v}" is not allowed`, line);
+            fail5(`Boundary metadata "${k}: ${v}" is not allowed`, line);
           if (v === "package")
             packages.add(id);
           else
             packages.delete(id);
         }
       } else
-        fail17(`"${id}" is not declared`, line);
+        fail5(`"${id}" is not declared`, line);
     } else {
       const inc = INCLUDE.exec(text);
       const plain = PLAIN2.exec(text);
@@ -36408,7 +36287,7 @@ function parseUsecase(src) {
         }
         if (id !== undefined) {
           if (edgeIds.has(id) || elements.has(id) || boundaries.has(id))
-            fail17(`"${id}" is already used`, line);
+            fail5(`"${id}" is already used`, line);
           edgeIds.add(id);
           edge = { ...edge, id };
         }
@@ -36421,26 +36300,26 @@ function parseUsecase(src) {
     }
   }
   if (inside !== undefined)
-    fail17(`System boundary "${inside}" is not closed with "end"`, items.at(-1)?.line ?? 1);
+    fail5(`System boundary "${inside}" is not closed with "end"`, items.at(-1)?.line ?? 1);
   const kindOf = (id) => elements.get(id)?.kind ?? "usecase";
   const isUsecase = (id) => kindOf(id) === "usecase";
   for (const l of links) {
     const a = kindOf(l.from);
     const b = kindOf(l.to);
     if (a === "note" || b === "note")
-      fail17('A note is attached with "note for"', l.line);
+      fail5('A note is attached with "note for"', l.line);
     if ((l.kind === "include" || l.kind === "extend") && !(isUsecase(l.from) && isUsecase(l.to)))
-      fail17(`${l.kind} needs use cases at both ends`, l.line);
+      fail5(`${l.kind} needs use cases at both ends`, l.line);
     if (l.kind === "generalization" && a !== b)
-      fail17("Generalization joins two actors or two use cases", l.line);
+      fail5("Generalization joins two actors or two use cases", l.line);
     if ((a === "json" || b === "json") && (l.kind !== "association" || l.edge.end === "circle" || l.edge.end === "cross" || l.edge.startEnd !== undefined)) {
-      fail17("A JSON table takes only plain association lines", l.line);
+      fail5("A JSON table takes only plain association lines", l.line);
     }
   }
   for (const n of notes) {
     const t = elements.get(n.target);
     if (!t || t.kind !== "actor" && t.kind !== "usecase")
-      fail17(`A note can only target an actor or a use case, not "${n.target}"`, n.line);
+      fail5(`A note can only target an actor or a use case, not "${n.target}"`, n.line);
   }
   const nodes = [];
   const meta = new Map;
@@ -36958,9 +36837,6 @@ var HEADERS4 = new Set(["treemap-beta", "treemap"]);
 var NODE = /^(?:"([^"]*)"|'([^']*)')\s*(?::\s*(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*)?(?::::([A-Za-z_][\w-]*))?\s*;?$/u;
 var LOOSE = /^(?:"([^"]*)"|'([^']*)')\s*:\s*(.+?)\s*;?$/u;
 var CLASS_DEF = /^classDef\s+(\S+)\s+(.*?)\s*;?$/u;
-function fail18(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function readTreemapConfig(config) {
   const section = configSection(config, "treemap");
   if (section === undefined)
@@ -37023,7 +36899,7 @@ function parseTreemap(src, heading, config) {
     }
     if (!headerSeen) {
       if (!HEADERS4.has(s))
-        fail18(`Expected "treemap-beta" but found "${s}".`, lineNo, "header");
+        fail2(`Expected "treemap-beta" but found "${s}".`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -37043,15 +36919,15 @@ function parseTreemap(src, heading, config) {
     if (m === null) {
       const loose = LOOSE.exec(s);
       if (loose !== null)
-        fail18(`"${(loose[3] ?? "").replace(/:::.*$/u, "")}" is not a number; a leaf is written "name": value.`, lineNo, "value");
-      fail18(`Cannot read "${s}"; a node is written "name" or "name": value.`, lineNo);
+        fail2(`"${(loose[3] ?? "").replace(/:::.*$/u, "")}" is not a number; a leaf is written "name": value.`, lineNo, "value");
+      fail2(`Cannot read "${s}"; a node is written "name" or "name": value.`, lineNo);
     }
     const label = m[1] ?? m[2] ?? "";
     const node = { label, line: lineNo, children: [] };
     if (m[3] !== undefined) {
       const value = Number(m[3]);
       if (value <= 0)
-        fail18(`"${label}" has the value ${m[3]}; values must be greater than zero.`, lineNo, "value");
+        fail2(`"${label}" has the value ${m[3]}; values must be greater than zero.`, lineNo, "value");
       node.value = value;
     }
     if (m[4] !== undefined)
@@ -37064,23 +36940,23 @@ function parseTreemap(src, heading, config) {
       roots.push(node);
     else {
       if (parent.value !== undefined)
-        fail18(`"${parent.label}" has a value, so it cannot hold "${label}" below it.`, lineNo, "nesting");
+        fail2(`"${parent.label}" has a value, so it cannot hold "${label}" below it.`, lineNo, "nesting");
       parent.children.push(node);
     }
     stack.push({ indent, node });
   }
   if (!headerSeen)
-    fail18('Expected "treemap-beta" as the first line.', 1, "header");
+    fail2('Expected "treemap-beta" as the first line.', 1, "header");
   const check = (nodes) => {
     for (const nd of nodes) {
       if (nd.value === undefined && nd.children.length === 0)
-        fail18(`"${nd.label}" has nothing below it; give it a leaf "name": value.`, nd.line, "empty");
+        fail2(`"${nd.label}" has nothing below it; give it a leaf "name": value.`, nd.line, "empty");
       check(nd.children);
     }
   };
   check(roots);
   if (roots.length === 0)
-    fail18("A treemap needs at least one node.", rows.length, "empty");
+    fail2("A treemap needs at least one node.", rows.length, "empty");
   const settings = { ...readTreemapConfig(config), ...init };
   const shownTitle = title ?? (heading !== undefined && heading !== "" ? heading : undefined);
   return {
@@ -37538,9 +37414,6 @@ var UNION = new RegExp(String.raw`^union\s+((?:${ID8})(?:\s*,\s*(?:${ID8}))+)${L
 var TEXT = new RegExp(String.raw`^text\s+(${ID8})${LABEL}\s*$`, "u");
 var STYLE = new RegExp(String.raw`^style\s+((?:${ID8})(?:\s*,\s*(?:${ID8}))*)\s+(.+)$`, "u");
 var NUMBER5 = /^\d+(?:\.\d+)?$/u;
-function fail19(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var unquote8 = (id) => id.startsWith('"') ? id.slice(1, -1) : id;
 function splitIds(list) {
   return [...list.matchAll(new RegExp(ID8, "gu"))].map((m) => unquote8(m[0]));
@@ -37549,10 +37422,10 @@ function sizeOf3(raw, line) {
   if (raw === undefined)
     return {};
   if (!NUMBER5.test(raw))
-    fail19(`"${raw}" is not a size; a size is a number greater than zero.`, line, "value");
+    fail2(`"${raw}" is not a size; a size is a number greater than zero.`, line, "value");
   const size = Number(raw);
   if (size <= 0)
-    fail19(`The size ${raw} must be greater than zero.`, line, "value");
+    fail2(`The size ${raw} must be greater than zero.`, line, "value");
   return { size, sizeText: raw };
 }
 function parseVenn(src, heading) {
@@ -37574,7 +37447,7 @@ function parseVenn(src, heading) {
       continue;
     if (!headerSeen) {
       if (!/^venn-beta\s*$/u.test(s))
-        fail19('A Venn diagram starts with "venn-beta".', line, "header");
+        fail2('A Venn diagram starts with "venn-beta".', line, "header");
       headerSeen = true;
       continue;
     }
@@ -37591,7 +37464,7 @@ function parseVenn(src, heading) {
     if (set !== null) {
       const id = unquote8(set[1] ?? "");
       if (sets.some((x) => x.id === id))
-        fail19(`The set "${id}" is defined twice.`, line, "duplicate");
+        fail2(`The set "${id}" is defined twice.`, line, "duplicate");
       const label = set[2] ?? set[3];
       current = { id, label: label === undefined || label === "" ? id : label, ...sizeOf3(set[4], line), texts: [], line };
       sets.push(current);
@@ -37602,12 +37475,12 @@ function parseVenn(src, heading) {
       const ids = splitIds(union[1] ?? "");
       for (const id of ids)
         if (!sets.some((x) => x.id === id))
-          fail19(`The union uses "${id}", which no earlier set defines.`, line, "reference");
+          fail2(`The union uses "${id}", which no earlier set defines.`, line, "reference");
       if (new Set(ids).size !== ids.length)
-        fail19("A union names each set once.", line);
+        fail2("A union names each set once.", line);
       const key = [...ids].sort().join("\x00");
       if (unions.some((u) => [...u.ids].sort().join("\x00") === key))
-        fail19(`The union ${ids.join(",")} is defined twice.`, line, "duplicate");
+        fail2(`The union ${ids.join(",")} is defined twice.`, line, "duplicate");
       const label = union[2] ?? union[3];
       current = { ids, ...label === undefined ? {} : { label }, ...sizeOf3(union[4], line), texts: [], line };
       unions.push(current);
@@ -37616,10 +37489,10 @@ function parseVenn(src, heading) {
     const text = TEXT.exec(s);
     if (text !== null) {
       if (current === undefined)
-        fail19("A text node belongs to the set or union above it.", line, "reference");
+        fail2("A text node belongs to the set or union above it.", line, "reference");
       const id = unquote8(text[1] ?? "");
       if (texts.has(id))
-        fail19(`The text node "${id}" is defined twice.`, line, "duplicate");
+        fail2(`The text node "${id}" is defined twice.`, line, "duplicate");
       const label = text[2] ?? text[3];
       const node = { id, label: label === undefined || label === "" ? id : label, line };
       texts.set(id, node);
@@ -37631,17 +37504,17 @@ function parseVenn(src, heading) {
       styleLines.push({ ids: splitIds(style[1] ?? ""), props: style[2] ?? "", line });
       continue;
     }
-    fail19(`Cannot read "${s}"; a line is title, set, union, text or style.`, line);
+    fail2(`Cannot read "${s}"; a line is title, set, union, text or style.`, line);
   }
   if (!headerSeen)
-    fail19('A Venn diagram starts with "venn-beta".', 1, "header");
+    fail2('A Venn diagram starts with "venn-beta".', 1, "header");
   if (sets.length === 0)
-    fail19("A Venn diagram needs at least one set.", rows.length, "empty");
+    fail2("A Venn diagram needs at least one set.", rows.length, "empty");
   const ignored = [];
   for (const { ids, props, line } of styleLines) {
     for (const id of ids) {
       if (!sets.some((x) => x.id === id) && !texts.has(id) && ids.length === 1)
-        fail19(`The style names "${id}", which is no set, union or text node.`, line, "reference");
+        fail2(`The style names "${id}", which is no set, union or text node.`, line, "reference");
     }
     ignored.push(`style ${ids.join(",")} ${props.trim()}`);
   }
@@ -37694,13 +37567,13 @@ registerFrontEnd(vennFrontEnd);
 // src/c4/graph.ts
 var WRAP_PX = 200;
 var WRAP_CELLS = 26;
-var wrapCells2 = WRAP_CELLS;
+var wrapCells3 = WRAP_CELLS;
 var MAX_ROW = 4;
 var LANE11 = { id: "_", label: "" };
 var TECH_SEPARATOR = " ";
 function wrap4(text, ruler) {
   const width = (s) => ruler.textWidth(s, "line");
-  const limit = ruler.terminal === true ? wrapCells2 : WRAP_PX;
+  const limit = ruler.terminal === true ? wrapCells3 : WRAP_PX;
   return text.split(`
 `).flatMap((paragraph) => wrapWords(paragraph, limit, width));
 }
@@ -37717,7 +37590,7 @@ function boundaryKindOf(kind) {
   return m[1] === undefined ? "Boundary" : `${m[1]} boundary`;
 }
 function compartmentsOf2(e, ruler) {
-  const narrow = ruler.terminal === true && wrapCells2 < WRAP_CELLS;
+  const narrow = ruler.terminal === true && wrapCells3 < WRAP_CELLS;
   const name = e.label.split(`
 `).map((l) => l.trim()).flatMap((l) => narrow ? wrap4(l, ruler) : [l]);
   const tech = e.tech === undefined ? [] : wrap4(e.tech, ruler);
@@ -37755,11 +37628,11 @@ function clusterLabel(label, kind, descr) {
   return [label, kind, descr].filter((p) => p !== undefined && p !== "").map((p) => p.replace(/\s*\n\s*/g, " ")).join(" · ");
 }
 function c4Graph(model, ruler, cells = WRAP_CELLS) {
-  wrapCells2 = cells;
+  wrapCells3 = cells;
   try {
     return graphOf(model, ruler);
   } finally {
-    wrapCells2 = WRAP_CELLS;
+    wrapCells3 = WRAP_CELLS;
   }
 }
 function graphOf(model, ruler) {
@@ -37827,9 +37700,6 @@ var LAY = /^Lay_(Up|Down|Left|Right|U|D|L|R)$/;
 var HINTS2 = { U: "up", Up: "up", D: "down", Down: "down", L: "left", Left: "left", R: "right", Right: "right", Neighbor: "right" };
 var IGNORED5 = /^(Update[A-Za-z]*|Add[A-Za-z]*|Rewrite[A-Za-z]*|Lay_[A-Za-z]+|SHOW_[A-Z_]+|HIDE_[A-Z_]+|LAYOUT_[A-Z_]+|Legend[A-Za-z]*|SetPropertyHeader|WithoutPropertyHeader)$/;
 var BREAK3 = /<br\s*\/?>/gi;
-var fail20 = (message, line) => {
-  throw new UrsulaError(message, "syntax", line);
-};
 function splitArgs(text, line) {
   const args = [];
   let cur = "";
@@ -37844,7 +37714,7 @@ function splitArgs(text, line) {
       cur += ch;
   }
   if (quoted)
-    fail20("unclosed quote", line);
+    fail2("unclosed quote", line);
   if (cur.trim() !== "" || args.length > 0)
     args.push(cur.trim());
   return args;
@@ -37878,9 +37748,9 @@ function parseC4(src) {
   let steps = 0;
   const claim = (alias, line) => {
     if (alias === "")
-      fail20("an element needs an alias", line);
+      fail2("an element needs an alias", line);
     if (aliases.has(alias))
-      fail20(`'${alias}' is defined twice`, line);
+      fail2(`'${alias}' is defined twice`, line);
     aliases.add(alias);
   };
   rows.forEach((raw, i) => {
@@ -37895,14 +37765,14 @@ function parseC4(src) {
     if (!headed) {
       const type = HEADERS5[text.split(/[\s;]+/)[0] ?? ""];
       if (type === undefined)
-        fail20(`expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment, got '${text}'`, line);
+        fail2(`expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment, got '${text}'`, line);
       model.type = type;
       headed = true;
       return;
     }
     if (text === "}") {
       if (open.pop() === undefined)
-        fail20("'}' has no boundary to close", line);
+        fail2("'}' has no boundary to close", line);
       return;
     }
     const title = /^title(?:\s*:\s*|\s+)(.*)$/.exec(text);
@@ -37912,7 +37782,7 @@ function parseC4(src) {
     }
     const call = readCall(text, line);
     if (call === undefined)
-      return fail20(`cannot read '${text}'`, line);
+      return fail2(`cannot read '${text}'`, line);
     const { name } = call;
     const parent = open.at(-1)?.alias;
     const place = parent === undefined ? {} : { boundary: parent };
@@ -37937,12 +37807,12 @@ function parseC4(src) {
         line
       });
       if (call.opens)
-        fail20(`'${name}' does not open a boundary`, line);
+        fail2(`'${name}' does not open a boundary`, line);
       return;
     }
     if (BOUNDARY_KINDS.has(name) || NODE2.test(name)) {
       if (!call.opens)
-        fail20(`'${name}' needs a '{' after its arguments`, line);
+        fail2(`'${name}' needs a '{' after its arguments`, line);
       const deployment = NODE2.test(name);
       const [alias = "", label = "", second, third] = positional(call.args);
       claim(alias, line);
@@ -37970,7 +37840,7 @@ function parseC4(src) {
       const [from = "", to = "", label = "", tech] = args;
       for (const end of [from, to])
         if (!aliases.has(end))
-          fail20(`'${end}' is not defined`, line);
+          fail2(`'${end}' is not defined`, line);
       steps += 1;
       const suffix = rel?.[2];
       const heads = rel?.[1] === "BiRel" ? "both" : suffix === "_Back" ? "start" : "end";
@@ -37986,7 +37856,7 @@ function parseC4(src) {
         line
       });
       if (call.opens)
-        fail20(`'${name}' does not open a block`, line);
+        fail2(`'${name}' does not open a block`, line);
       return;
     }
     const lay = LAY.exec(name);
@@ -37994,7 +37864,7 @@ function parseC4(src) {
       const [from = "", to = ""] = positional(call.args);
       for (const end of [from, to])
         if (!aliases.has(end))
-          fail20(`'${end}' is not defined`, line);
+          fail2(`'${end}' is not defined`, line);
       model.lays.push({ from, to, hint: HINTS2[lay[1]], line });
       return;
     }
@@ -38014,7 +37884,7 @@ function parseC4(src) {
       model.ignored.push(name);
       return;
     }
-    fail20(`unknown statement '${name}'`, line);
+    fail2(`unknown statement '${name}'`, line);
   });
   if (!headed)
     throw new UrsulaError("expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment", "syntax", 1);
@@ -38464,9 +38334,6 @@ var NUM = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)`;
 var PAIR = String.raw`\[\s*(${NUM})\s*,\s*(${NUM})\s*\]`;
 var DEFAULT_STAGES = ["Genesis", "Custom Built", "Product", "Commodity"];
 var LINK_OP = /\s+(-\.->|-->|->|\+<>|\+<|\+>|\+'[^']*'>)\s+/u;
-function fail21(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 function stripComment8(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -38478,7 +38345,7 @@ function unquote10(text) {
 function unit2(text, what, line) {
   const v = Number(text);
   if (v < 0 || v > 1)
-    fail21(`${what} must be between 0 and 1, got ${text}.`, line);
+    fail2(`${what} must be between 0 and 1, got ${text}.`, line);
   return v;
 }
 function takeName(text, stop, line) {
@@ -38486,26 +38353,26 @@ function takeName(text, stop, line) {
   if (t.startsWith('"')) {
     const end = t.indexOf('"', 1);
     if (end < 0)
-      fail21("A quoted name is not closed.", line);
+      fail2("A quoted name is not closed.", line);
     return { name: t.slice(1, end), rest: t.slice(end + 1) };
   }
   const m = stop.exec(t);
   if (m === null)
-    fail21(`Cannot find where the name ends in "${text.trim()}".`, line);
+    fail2(`Cannot find where the name ends in "${text.trim()}".`, line);
   return { name: t.slice(0, m.index).trim(), rest: t.slice(m.index) };
 }
 function parseStages(rest, line) {
   const parts = rest.split("->").map((p) => p.trim());
   if (parts.length < 2 || parts.some((p) => p === ""))
-    fail21('evolution needs at least two stages joined by "->".', line);
+    fail2('evolution needs at least two stages joined by "->".', line);
   const raw = parts.map((p) => {
     const at = p.lastIndexOf("@");
     const label = (at < 0 ? p : p.slice(0, at)).trim();
     const end = at < 0 ? undefined : Number(p.slice(at + 1));
     if (end !== undefined && (!Number.isFinite(end) || end <= 0 || end > 1))
-      fail21(`A stage boundary must be above 0 and at most 1, got "${p.slice(at + 1)}".`, line);
+      fail2(`A stage boundary must be above 0 and at most 1, got "${p.slice(at + 1)}".`, line);
     if (label === "")
-      fail21("A stage needs a name.", line);
+      fail2("A stage needs a name.", line);
     return { names: label.split("/").map((s) => s.trim()).filter((s) => s !== ""), end };
   });
   const ends = [];
@@ -38516,7 +38383,7 @@ function parseStages(rest, line) {
       j++;
     const stop = j < raw.length ? raw[j]?.end ?? 1 : 1;
     if (stop <= from)
-      fail21("Stage boundaries must increase.", line);
+      fail2("Stage boundaries must increase.", line);
     const gap = j < raw.length ? j - i + 1 : j - i;
     for (let k = 0;k < gap; k++)
       ends.push(from + (stop - from) * (k + 1) / gap);
@@ -38555,7 +38422,7 @@ function parseWardley(src, opts = {}) {
   const find = (name) => map.nodes.find((n) => n.name === name);
   const addNode = (node) => {
     if (find(node.name) !== undefined)
-      fail21(`"${node.name}" is declared twice.`, node.line);
+      fail2(`"${node.name}" is declared twice.`, node.line);
     map.nodes.push(node);
   };
   rows.forEach((raw, index) => {
@@ -38577,7 +38444,7 @@ function parseWardley(src, opts = {}) {
       return;
     if (!headerSeen) {
       if (s !== "wardley-beta" && s !== "wardley")
-        fail21(`Expected "wardley-beta" before "${s}".`, lineNo);
+        fail2(`Expected "wardley-beta" before "${s}".`, lineNo);
       headerSeen = true;
       return;
     }
@@ -38607,11 +38474,11 @@ function parseWardley(src, opts = {}) {
       const child = /^component\s+(.+)$/u.exec(s);
       const parent = find(pipeline.name);
       if (child === null || parent === undefined)
-        fail21(`Expected a "component" inside the pipeline, got "${s}".`, lineNo);
+        fail2(`Expected a "component" inside the pipeline, got "${s}".`, lineNo);
       const { name, rest } = takeName(child[1] ?? "", /\s\[|\[/u, lineNo);
       const m = new RegExp(String.raw`^\s*\[\s*(${NUM})\s*\]\s*$`, "u").exec(rest);
       if (m === null)
-        fail21(`A pipeline component takes only its evolution, like [0.25]; got "${rest.trim()}".`, lineNo);
+        fail2(`A pipeline component takes only its evolution, like [0.25]; got "${rest.trim()}".`, lineNo);
       addNode({
         name,
         kind: "component",
@@ -38638,7 +38505,7 @@ function parseWardley(src, opts = {}) {
       const { name, rest } = takeName(m[2] ?? "", /\s\[|\[/u, lineNo);
       const at = new RegExp(String.raw`^\s*${PAIR}(.*)$`, "u").exec(rest);
       if (at === null)
-        fail21(`Expected "[visibility, evolution]" after "${name}".`, lineNo);
+        fail2(`Expected "[visibility, evolution]" after "${name}".`, lineNo);
       const node = {
         name,
         kind,
@@ -38661,9 +38528,9 @@ function parseWardley(src, opts = {}) {
           else if (word === "build" || word === "buy" || word === "outsource" || word === "market")
             node.sourcing = word;
           else
-            fail21(`Unknown decorator "(${word})"; use inertia, build, buy, outsource or market.`, lineNo);
+            fail2(`Unknown decorator "(${word})"; use inertia, build, buy, outsource or market.`, lineNo);
         } else {
-          fail21(`Unexpected "${tail}" after the position of "${name}".`, lineNo);
+          fail2(`Unexpected "${tail}" after the position of "${name}".`, lineNo);
         }
         tail = tail.slice(t[0].length).trim();
       }
@@ -38671,7 +38538,7 @@ function parseWardley(src, opts = {}) {
     } else if ((m = /^pipeline\s+(.+?)\s*\{\s*$/u.exec(s)) !== null) {
       const name = unquote10(m[1] ?? "");
       if (find(name) === undefined)
-        fail21(`pipeline "${name}" needs a component of that name declared before it.`, lineNo);
+        fail2(`pipeline "${name}" needs a component of that name declared before it.`, lineNo);
       pipeline = { name, children: [], line: lineNo };
       map.pipelines.push(pipeline);
     } else if ((m = new RegExp(String.raw`^evolve\s+(.+?)\s+(${NUM})$`, "u").exec(s)) !== null) {
@@ -38716,25 +38583,25 @@ function parseWardley(src, opts = {}) {
         link.label = label;
       map.links.push(link);
     } else {
-      fail21(`Unrecognised line "${s}".`, lineNo);
+      fail2(`Unrecognised line "${s}".`, lineNo);
     }
   });
   if (!headerSeen)
-    fail21('Missing "wardley-beta" header.', 1);
+    fail2('Missing "wardley-beta" header.', 1);
   if (pipeline !== undefined)
-    fail21(`pipeline "${pipeline.name}" is not closed with "}".`, pipeline.line);
+    fail2(`pipeline "${pipeline.name}" is not closed with "}".`, pipeline.line);
   for (const link of map.links) {
     if (find(link.from) === undefined)
-      fail21(`Unknown component "${link.from}" in a link.`, link.line);
+      fail2(`Unknown component "${link.from}" in a link.`, link.line);
     if (find(link.to) === undefined)
-      fail21(`Unknown component "${link.to}" in a link.`, link.line);
+      fail2(`Unknown component "${link.to}" in a link.`, link.line);
   }
   for (const e of map.evolves)
     if (find(e.name) === undefined)
-      fail21(`Unknown component "${e.name}" in evolve.`, e.line);
+      fail2(`Unknown component "${e.name}" in evolve.`, e.line);
   for (const t of map.trends)
     if (find(t.name) === undefined)
-      fail21(`Unknown component "${t.name}" in a trend.`, t.line);
+      fail2(`Unknown component "${t.name}" in a trend.`, t.line);
   if (acc.title !== undefined && acc.title !== "")
     map.accTitle = acc.title;
   if (accDescr.length > 0)
@@ -39251,9 +39118,6 @@ var NUMBER6 = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)`;
 var RANGE = new RegExp(String.raw`^(${NUMBER6})\s*-->\s*(${NUMBER6})$`);
 var VALUE = new RegExp(String.raw`^(${NUMBER6})\s*(?:"([^"]*)")?$`);
 var HEADER2 = /^(xychart-beta|xychart)(?:\s+(horizontal|vertical))?$/;
-function fail22(message, line) {
-  throw new UrsulaError(message, "syntax", line);
-}
 function stripComment9(row) {
   let quoted = false;
   for (let i = 0;i < row.length; i++) {
@@ -39332,7 +39196,7 @@ function readName2(text, line) {
   if (t.startsWith('"')) {
     const close = t.indexOf('"', 1);
     if (close < 0)
-      fail22("A quoted text is not closed.", line);
+      fail2("A quoted text is not closed.", line);
     return { name: t.slice(1, close), rest: t.slice(close + 1) };
   }
   const m = /^[^\s[\]"]+/.exec(t);
@@ -39343,11 +39207,11 @@ function readName2(text, line) {
 function parseRange(text, line) {
   const m = RANGE.exec(text.trim());
   if (!m)
-    fail22(`Expected a range such as "0 --> 100", got "${text.trim()}".`, line);
+    fail2(`Expected a range such as "0 --> 100", got "${text.trim()}".`, line);
   const min = Number(m[1]);
   const max = Number(m[2]);
   if (!(max > min))
-    fail22("The end of an axis range must be greater than its start.", line);
+    fail2("The end of an axis range must be greater than its start.", line);
   return { min, max };
 }
 function parseAxis2(rest, line, categorical) {
@@ -39368,12 +39232,12 @@ function parseAxis2(rest, line, categorical) {
   }
   if (text.startsWith("[")) {
     if (!categorical)
-      fail22("The y-axis takes a range, not a list of names.", line);
+      fail2("The y-axis takes a range, not a list of names.", line);
     if (!text.endsWith("]"))
-      fail22('A list of names is not closed with "]".', line);
+      fail2('A list of names is not closed with "]".', line);
     const items = splitList(text.slice(1, -1)).map(unquote11);
     if (items.some((c) => c === ""))
-      fail22("A list of names has an empty entry.", line);
+      fail2("A list of names has an empty entry.", line);
     out.categories = items;
   } else if (text !== "") {
     out.range = parseRange(text, line);
@@ -39386,24 +39250,24 @@ function parseSeries(kind, rest, line) {
   if (!text.startsWith("[")) {
     const read = readName2(text, line);
     if (!read)
-      fail22(`Expected a list of values after "${kind}".`, line);
+      fail2(`Expected a list of values after "${kind}".`, line);
     name = read.name;
     text = read.rest.trim();
   }
   if (!text.startsWith("[") || !text.endsWith("]"))
-    fail22(`Expected a list of values in brackets after "${kind}".`, line);
+    fail2(`Expected a list of values in brackets after "${kind}".`, line);
   const points = [];
   for (const item of splitList(text.slice(1, -1))) {
     const m = VALUE.exec(item);
     if (!m)
-      fail22(`"${item}" is not a number with an optional quoted label.`, line);
+      fail2(`"${item}" is not a number with an optional quoted label.`, line);
     const point = { value: Number(m[1]), raw: m[1] ?? "" };
     if (m[2] !== undefined)
       point.label = m[2];
     points.push(point);
   }
   if (points.length === 0)
-    fail22(`The ${kind} has no values.`, line);
+    fail2(`The ${kind} has no values.`, line);
   const series = { kind, points, line };
   if (name !== undefined)
     series.name = name;
@@ -39422,7 +39286,7 @@ function parseXychart(src, config, heading) {
     if (!headerSeen) {
       const m = HEADER2.exec(text);
       if (!m)
-        fail22(`Expected "xychart" as the first statement, got "${text}".`, line);
+        fail2(`Expected "xychart" as the first statement, got "${text}".`, line);
       headerSeen = true;
       if (m[2] === "horizontal")
         chart.horizontal = true;
@@ -39433,12 +39297,12 @@ function parseXychart(src, config, heading) {
     const word = /^[A-Za-z-]+/.exec(text)?.[0] ?? "";
     const rest = text.slice(word.length);
     if (rest !== "" && !/^\s/.test(rest) && !rest.startsWith("[") && !rest.startsWith('"'))
-      fail22(`Unknown statement "${text}".`, line);
+      fail2(`Unknown statement "${text}".`, line);
     switch (word) {
       case "title": {
         const title = unquote11(rest.trim());
         if (title === "")
-          fail22("The title is empty.", line);
+          fail2("The title is empty.", line);
         chart.title = title;
         return;
       }
@@ -39465,7 +39329,7 @@ function parseXychart(src, config, heading) {
         chart.series.push(parseSeries(word, rest, line));
         return;
       default:
-        fail22(`Unknown statement "${text}".`, line);
+        fail2(`Unknown statement "${text}".`, line);
     }
   };
   for (let n = 0;n < rows.length; n++) {
@@ -39481,15 +39345,15 @@ function parseXychart(src, config, heading) {
     buffer = "";
   }
   if (buffer !== "")
-    fail22('A list is not closed with "]".', bufferLine);
+    fail2('A list is not closed with "]".', bufferLine);
   if (!headerSeen)
-    fail22('Expected "xychart" as the first statement.', 1);
+    fail2('Expected "xychart" as the first statement.', 1);
   if (chart.series.length === 0)
-    fail22("The chart needs at least one bar or line.", bufferLine || rows.length);
+    fail2("The chart needs at least one bar or line.", bufferLine || rows.length);
   if (chart.categories) {
     for (const s of chart.series) {
       if (s.points.length > chart.categories.length)
-        fail22(`The ${s.kind} has ${s.points.length} values for ${chart.categories.length} names.`, s.line);
+        fail2(`The ${s.kind} has ${s.points.length} values for ${chart.categories.length} names.`, s.line);
     }
   }
   return chart;
@@ -39762,9 +39626,6 @@ var CATCH_HEADER = /^catch\b\s*(\(.*\))?\s*\{$/i;
 var FINALLY_HEADER = /^finally\s*\{$/i;
 var IDENT = String.raw`"[^"]+"|[A-Za-z_$][\w$-]*`;
 var DECLARATION3 = new RegExp(String.raw`^(${IDENT})(?:\s+as\s+(.+))?$`, "u");
-function fail23(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
 var unquote12 = (id) => id.startsWith('"') && id.endsWith('"') && id.length >= 2 ? id.slice(1, -1) : id;
 function commentText(raw) {
   return raw.trim().replace(/\*\*(.+?)\*\*/gu, "$1").replace(/`([^`]+)`/gu, "$1").replace(/(^|\s)\*(\S[^*]*?)\*(?=\s|$)/gu, "$1$2");
@@ -39844,7 +39705,7 @@ function parseZenuml(src, heading) {
     flushHeld();
     const top = stack.pop();
     if (!top)
-      fail23("'}' without an open block", line);
+      fail2("'}' without an open block", line);
     if (top.kind === "call")
       closeCall(top, line);
     else {
@@ -39874,7 +39735,7 @@ function parseZenuml(src, heading) {
       continue;
     if (!headerSeen) {
       if (s !== "zenuml")
-        fail23("expected a 'zenuml' header", lineNo, "header");
+        fail2("expected a 'zenuml' header", lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -39899,7 +39760,7 @@ function parseZenuml(src, heading) {
     if (elseM || catchM || FINALLY_HEADER.test(s)) {
       const want = elseM ? "if" : "try";
       if (held?.family !== want)
-        fail23(`'${s.split(/[\s({]/u)[0] ?? s}' without a matching '${want === "if" ? "if" : "try"}'`, lineNo);
+        fail2(`'${s.split(/[\s({]/u)[0] ?? s}' without a matching '${want === "if" ? "if" : "try"}'`, lineNo);
       const text = elseM ? elseM[1] === undefined ? "else" : inner(elseM[1]) : catchM ? `catch${inner(catchM[1]) === "" ? "" : ` (${inner(catchM[1])})`}` : "finally";
       stack.push(held);
       held = undefined;
@@ -39934,7 +39795,7 @@ function parseZenuml(src, heading) {
       const word = (annotated[1] ?? "").toLowerCase();
       const decl = DECLARATION3.exec((annotated[2] ?? "").trim());
       if (!decl)
-        fail23(`expected a participant name after '@${annotated[1] ?? ""}'`, lineNo);
+        fail2(`expected a participant name after '@${annotated[1] ?? ""}'`, lineNo);
       const core = CORE_KINDS[word];
       const near = NEAREST_KINDS[word];
       place(decl[1] ?? "", decl[2], core ?? near ?? "participant", core ? undefined : `«${annotated[1] ?? ""}»`);
@@ -39948,7 +39809,7 @@ function parseZenuml(src, heading) {
         at--;
       const entry = stack[at];
       if (entry?.kind !== "call")
-        fail23("'return' outside a call", lineNo);
+        fail2("'return' outside a call", lineNo);
       const index = message(entry.owner, entry.caller, (ret[1] ?? "").trim(), { dashed: true, head: "filled" }, false, lineNo);
       entry.returned = true;
       entry.lastReply = at === stack.length - 1 ? index : undefined;
@@ -39981,7 +39842,7 @@ function parseZenuml(src, heading) {
       const body = (create[1] ?? "").trim();
       const target = unquote12(/^(?:"[^"]+"|[^\s(]+)/u.exec(body)?.[0] ?? "");
       if (target === "")
-        fail23("'new' needs a class name", lineNo);
+        fail2("'new' needs a class name", lineNo);
       const from = sender ?? callerFor();
       const label = `${variable === undefined ? "" : `${variable} = `}new ${body}`;
       message(from, target, label, { dashed: false, head: "filled" }, braced, lineNo);
@@ -39996,7 +39857,7 @@ function parseZenuml(src, heading) {
       const to = dot > 0 ? unquote12(head.slice(0, dot)) : owner() ?? callerFor();
       const label = dot > 0 ? call.slice(dot + 1) : call;
       if (label === "" || to === "")
-        fail23(`unsupported syntax '${s}'`, lineNo);
+        fail2(`unsupported syntax '${s}'`, lineNo);
       const from = sender ?? callerFor();
       message(from, to, label, { dashed: false, head: "filled" }, braced, lineNo);
       replyNext = false;
@@ -40016,20 +39877,20 @@ function parseZenuml(src, heading) {
       }
     }
     const shown = s.length > 24 ? `${s.slice(0, 24)}...` : s;
-    fail23(`unsupported syntax '${shown}'`, lineNo);
+    fail2(`unsupported syntax '${shown}'`, lineNo);
   }
   if (!headerSeen)
-    fail23("expected a 'zenuml' header", 1, "header");
+    fail2("expected a 'zenuml' header", 1, "header");
   flushHeld();
   const unclosed = stack[stack.length - 1];
   if (unclosed)
-    fail23(unclosed.kind === "frame" ? "a block is never closed" : "a call block is never closed", unclosed.line);
+    fail2(unclosed.kind === "frame" ? "a block is never closed" : "a call block is never closed", unclosed.line);
   title ??= heading;
   const anchor = [...participants.keys()][0];
   const order = implicitStarter ? [STARTER_ID, ...[...participants.keys()].filter((k) => k !== STARTER_ID)] : [...participants.keys()];
   const first = order[0] ?? anchor;
   if (first === undefined)
-    fail23("the diagram has no participants", 1, "empty");
+    fail2("the diagram has no participants", 1, "empty");
   const resolved = statements.map((st) => st.kind === "note" ? { ...st, anchors: st.anchors.map((a) => a === "" ? first : a) } : st);
   const list = order.map((id) => participants.get(id)).filter((p) => p !== undefined);
   return {

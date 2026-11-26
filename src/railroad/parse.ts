@@ -1,5 +1,5 @@
 import { createAccessibilityReader } from '../front/accessibility.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 import type { Node, Notation, Railroad, Rule } from './model.ts';
 
 const HEADERS: Record<string, Notation> = {
@@ -8,10 +8,6 @@ const HEADERS: Record<string, Notation> = {
   'railroad-abnf-beta': 'abnf',
   'railroad-peg-beta': 'peg',
 };
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 interface Tok {
   k: 'str' | 'id' | 'num' | 'val' | 'prose' | 'class' | 'sym';

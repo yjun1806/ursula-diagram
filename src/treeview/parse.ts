@@ -1,5 +1,5 @@
 import { cellWidth } from '../metrics.ts';
-import { UrsulaError } from '../types.ts';
+import { fail } from '../errors/fail.ts';
 
 export interface TreeItem {
   /** Zero for a top-level item; one more than the parent otherwise. */
@@ -38,10 +38,6 @@ const HEADERS = new Set(['treeView-beta', 'treeView']);
 const BRANCH = /[├└┣┗┠┖┝┕╠╚]/u;
 const RAIL = /[│┃║]/u;
 const DASHES = /^[─━═-]+/u;
-
-function fail(message: string, line: number, code = 'syntax'): never {
-  throw new UrsulaError(message, code, line);
-}
 
 /** Removes a `%%` comment. */
 function stripComment(line: string): string {
