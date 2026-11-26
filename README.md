@@ -38,14 +38,14 @@ flowchart LR
 ```
 
 ```
-                                         ┌────────────┐   ┌────────────┐
+                                         ╭────────────╮   ╭────────────╮
                                 ┌─ yes ─▶│ Pick items │──▶│    Ship    │
-┌────────────┐   ┌────────────┐ │        └────────────┘   └────────────┘
+╭────────────╮   ╭────────────╮ │        ╰────────────╯   ╰────────────╯
 │   Order    │──▶│   Paid?    │─┤
-│   placed   │   └────────────┘ │        ┌────────────┐
-└────────────┘          ▲       └─ no ──▶│    Send    │
+│   placed   │   ╰────────────╯ │        ╭────────────╮
+╰────────────╯          ▲       └─ no ──▶│    Send    │
                         │                │  reminder  │
-                        │                └────────────┘
+                        │                ╰────────────╯
                         │                       │
                         └───────────────────────┘
 ```
@@ -338,9 +338,9 @@ never cut off. These are the gallery's sequence, Gantt and mindmap texts, drawn 
 `ursula-diagram <file> --format text --width 80`.
 
 ```
-┌───────────────┐   ┌─────┐       ┌───────────┐     ┌─────┐
+╭───────────────╮   ╭─────╮       ╭───────────╮     ╭─────╮
 │ [actor] User  │   │ Web │       │ Auth API  │     │ DB  │
-└───────────────┘   └─────┘       └───────────┘     └─────┘
+╰───────────────╯   ╰─────╯       ╰───────────╯     ╰─────╯
         ├── Log in ───▶┆                ┆              ┆
         ┆              ├─ POST /login ─▶┆              ┆
         ┆              ┆                ├─ Find user ─▶┆
@@ -448,7 +448,8 @@ There are two ways out:
 | | `unicode` (default) | `ascii` |
 | --- | --- | --- |
 | Line, heavy line, dashed line | `─ │` `━ ┃` `┄ ┆` | `- \|` `= #` `. :` |
-| Corner, tee, crossing; rounded corner | `┌ ├ ┼`; `╭ ╮ ╰ ╯` | `+`; `/ \ \ /` |
+| Corner of a box or a line, tee, crossing | `╭ ┌ ├ ┼` | `+` |
+| Rounded bend of a git branch, kanban card or block shape | `╭ ╮ ╰ ╯` | `/ \ \ /` |
 | Arrowhead; hollow arrowhead | `▶ ◀ ▼ ▲`; `──▷` | `> < v ^`; `--\|>` |
 | Filled and open diamond, dots, bar | `◆ ◇` `● ◉` `█` | `@ o` `* @` `#` |
 | Cut-off text | `…` | `~` |

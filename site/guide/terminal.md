@@ -6,9 +6,9 @@ never cut off. These are the [examples page](/examples/)'s sequence, Gantt and m
 `ursula-diagram <file> --format text --width 80`.
 
 ```
-┌───────────────┐   ┌─────┐       ┌───────────┐     ┌─────┐
+╭───────────────╮   ╭─────╮       ╭───────────╮     ╭─────╮
 │ [actor] User  │   │ Web │       │ Auth API  │     │ DB  │
-└───────────────┘   └─────┘       └───────────┘     └─────┘
+╰───────────────╯   ╰─────╯       ╰───────────╯     ╰─────╯
         ├── Log in ───▶┆                ┆              ┆
         ┆              ├─ POST /login ─▶┆              ┆
         ┆              ┆                ├─ Find user ─▶┆
@@ -98,7 +98,8 @@ There are two ways out:
 | | `unicode` (default) | `ascii` |
 | --- | --- | --- |
 | Line, heavy line, dashed line | `─ │` `━ ┃` `┄ ┆` | `- \|` `= #` `. :` |
-| Corner, tee, crossing; rounded corner | `┌ ├ ┼`; `╭ ╮ ╰ ╯` | `+`; `/ \ \ /` |
+| Corner of a box or a line, tee, crossing | `╭ ┌ ├ ┼` | `+` |
+| Rounded bend of a git branch, kanban card or block shape | `╭ ╮ ╰ ╯` | `/ \ \ /` |
 | Arrowhead; hollow arrowhead | `▶ ◀ ▼ ▲`; `──▷` | `> < v ^`; `--\|>` |
 | Filled and open diamond, dots, bar | `◆ ◇` `● ◉` `█` | `@ o` `* @` `#` |
 | Cut-off text | `…` | `~` |
