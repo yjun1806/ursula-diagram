@@ -47,10 +47,12 @@ function compartmentsOf(e: C4Element, ruler: Ruler): Compartment[] {
   const name = e.label.split('\n').map((l) => l.trim()).flatMap((l) => (narrow ? wrap(l, ruler) : [l]));
   const tech = e.tech === undefined ? [] : wrap(e.tech, ruler);
   const descr = e.descr === undefined ? [] : wrap(e.descr, ruler);
+  // The kind is wrapped with the name: `Database · external` would otherwise keep a narrowed box wide.
+  const kind = narrow ? wrap(kindOf(e), ruler) : [kindOf(e)];
   return [
     {
-      lines: [kindOf(e), ...name, ...tech, ...descr],
-      lineEmphasis: ['tag', ...name.map((): 'title' => 'title'), ...tech.map((): 'tag' => 'tag'), ...descr.map((): 'body' => 'body')],
+      lines: [...kind, ...name, ...tech, ...descr],
+      lineEmphasis: [...kind.map((): 'tag' => 'tag'), ...name.map((): 'title' => 'title'), ...tech.map((): 'tag' => 'tag'), ...descr.map((): 'body' => 'body')],
       align: 'center',
       emphasis: 'body',
       face: true,
