@@ -6,6 +6,7 @@ import { HOME_STRINGS } from './strings.js';
 import { CARDS, MEASURE, MEASURE_SCALE } from './agents.js';
 import { langOf } from '../playground/strings.js';
 import CopyButton from './CopyButton.vue';
+import CodeBlock from './CodeBlock.vue';
 
 const { lang } = useData();
 const code = langOf(lang.value);
@@ -41,7 +42,7 @@ const rows = MEASURE.map((m, i) => ({
             <code><span class="ag-prompt" aria-hidden="true">$ </span>{{ cmd }}</code>
             <CopyButton :text="cmd" />
           </div>
-          <pre v-if="c.output"><code>{{ c.output }}</code></pre>
+          <CodeBlock v-if="c.output" class="ag-out" :text="c.output" />
           <p v-if="c.exit" class="ag-exit">{{ t.exitCode }} {{ c.exit }}</p>
         </div>
       </article>
@@ -186,12 +187,8 @@ const rows = MEASURE.map((m, i) => ({
   color: var(--vp-c-text-3);
   user-select: none;
 }
-.ag-code pre {
-  margin: 0;
-  padding: 10px 12px;
+.ag-out {
   border-top: 1px solid var(--vp-c-divider);
-  overflow-x: auto;
-  font-family: var(--vp-font-family-mono);
   font-size: 12px;
   line-height: 1.5;
   color: var(--vp-c-text-2);
