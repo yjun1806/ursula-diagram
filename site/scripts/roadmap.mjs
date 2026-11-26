@@ -1,5 +1,5 @@
 // The roadmap pages list the open GitHub issues labelled `roadmap` under Planned and In progress. This reads the issue
-// numbers each page lists there and asks GitHub which roadmap issues are open, so the check can say when they drift.
+// numbers each page lists there (not under Done, which links closed issues) and asks GitHub which roadmap issues are open, so the check can say when they drift.
 const REPO = 'yjun1806/ursula-diagram';
 const LISTED = new Set(['Planned', 'In progress', '계획', '진행 중']);
 

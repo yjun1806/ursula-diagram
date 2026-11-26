@@ -96,7 +96,7 @@ Docs never paste what the command prints; they show what it prints now:
 - Every command a page, a README or a skill names is run by `npm test` (`test/docs.test.ts`) and by the site check against the built command, and must end with 0, or with N given by an `<!-- exit N -->` line above its fence. A command that installs, needs the network or works on the checkout itself is listed in `ALLOWED` of `scripts/docs/commands.mjs` with the reason; a command that neither runs ursula nor is listed fails.
 - The same test fails when Output formats misses a `--format`, Agent skill misses an MCP tool or argument, or a page imports a name the package does not export.
 
-The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest. The one exception is the release headings under "Recently shipped" on the roadmap pages.
+The READMEs stay short: a tagline, one example, install, and links into the site. Details go on a site page, not in a README. Also keep English and Korean in step (README.md and README.ko.md, `site/` and `site/ko/`), write diagram type names in English in both, and never write a version number in docs; the install commands take the latest. The one exception is the release headings under "Done" on the roadmap pages.
 
 ## The bundled command
 
@@ -123,7 +123,8 @@ Treat these as the public interface and update the site pages (en and ko) and te
 `site/roadmap.md` and `site/ko/roadmap.md` list the open issues labelled `roadmap`, one line and a link each. GitHub issues are the source of truth; the page follows them.
 
 - New planned work: open an issue with the `roadmap` label, then add one line to Planned on both pages.
-- When a pull request ships a roadmap item: in the same pull request, move its line to "Recently shipped" under `### Unreleased` (`### 출시 예정` on the Korean page; add the heading if it is missing, and the release pull request renames it to the version), with the pull request link (keep about ten lines there), and write `Fixes #<n>` so merging closes the issue.
+- When a pull request ships a roadmap item: in the same pull request, move its line to "Done" ("완료" on the Korean page), struck through with `~~…~~` around the text and the links left outside, under `### Unreleased` (`### 출시 예정`; add the heading if it is missing, and the release pull request renames it to the version), with the issue and pull request links (keep about ten lines there), and write `Fixes #<n>` so merging closes the issue.
+- When a pull request ships only part of a roadmap item: keep the item under Planned with its issue link, list its parts as sub-points, and strike through the finished parts with the pull request link. Link only pull requests there, not issues: the check reads every issue link under Planned and In progress as open.
 - When an issue closes or changes without such a pull request (closed by hand, scope narrowed), update both pages in a pull request of their own.
 - `npm run check` in `site/` fails when the two pages list different issues, and, when it can reach GitHub, when Planned and In progress differ from the open `roadmap` issues. Without network it prints `skip the roadmap against GitHub` and the rules above are the only guard.
 
