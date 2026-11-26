@@ -19,10 +19,10 @@
   <a href="#에이전트-스킬">에이전트 스킬</a>
 </p>
 
-ursula는 코딩 에이전트를 위한 다이어그램 도구입니다. 에이전트가 Mermaid 글 몇 줄을 쓰면 엔진이 상자·선·라벨의 자리를
-계산해 SVG나 에이전트 터미널용 글자 그림으로 그립니다. SVG 한 장에 드는 시간은 중앙값 0.36ms입니다. Mermaid 문서에 있는
-유형 35가지를 모두 읽습니다. 같은 글은 언제나 같은 그림이 됩니다. Node만 있으면 돌고, 브라우저나 DOM이 필요 없으며,
-실행할 때 설치할 것도 없습니다.
+ursula는 코딩 에이전트가 쓰도록 만든 다이어그램 도구입니다. 에이전트가 Mermaid 글 몇 줄을 쓰면 엔진이 상자·선·라벨의 자리를
+계산해 SVG나 터미널 글자 그림으로 그립니다. SVG 한 장은 중앙값 0.36ms에 그립니다. Mermaid 문서에 있는 35가지 유형을
+모두 읽습니다. 같은 글에서는 언제나 같은 그림이 나옵니다. Node만 있으면 돌아가고 브라우저나 DOM은 필요 없으며, 실행할 때
+따로 설치할 것도 없습니다.
 
 **Mermaid 판.** 문법은 2026년 11월 12일에 공개된 Mermaid 문서(`develop` 브랜치, 커밋 `ddb4c118`)를 따릅니다. 그날
 기준 Mermaid의 최신 정식판은 12.3.0, 최신 미리보기판은 13.0.0-alpha.3입니다. 그 뒤에 Mermaid에 추가된 문법은 아직 읽지
@@ -52,23 +52,23 @@ flowchart LR
 
 <p align="center"><img src="assets/hero.svg" alt="같은 flowchart를 ursula가 SVG로 그린 그림" width="760"></p>
 
-첫 블록이 입력입니다. 그 아래 글자 그림과 그림은 ursula가 같은 글에서 그린 결과로, 각각 `--format text --width 80`과
-`--format svg`로 그렸습니다. 이 문서의 글자 그림은 모두 영문입니다. 까닭은 [줄이 맞지 않을 때](#줄이-맞지-않을-때)에
-적었습니다.
+첫 블록이 입력입니다. 그 아래 글자 그림과 SVG 그림은 ursula가 이 글로 그린 결과입니다. 글자 그림은
+`--format text --width 80`으로, SVG는 `--format svg`로 그렸습니다. 이 문서의 글자 그림은 모두 영문으로 그렸고, 그 까닭은
+[줄이 맞지 않을 때](#줄이-맞지-않을-때)에 적었습니다.
 
 ## 에이전트를 위해
 
-에이전트는 Mermaid를 쓰고, 그리고 점검하고, 고칠 곳을 읽고, 다시 씁니다. 그려질 때까지 이 루프를 돕니다. 루프의
-단계마다 에이전트를 위해 만들었습니다.
+에이전트는 그림이 나올 때까지 같은 루프를 돕니다. Mermaid를 쓰고, 그려서 점검하고, 고칠 곳을 읽고, 다시 씁니다.
+ursula는 이 루프의 단계마다 에이전트가 쓰기 좋게 만들었습니다.
 
-- **에이전트가 스스로 고칠 수 있게 알려 주는 오류.** 오류는 줄과 칸을 `^`로 짚고, 의도했을 낱말과 맞는 예시 줄을
-  함께 보여 줍니다. 에이전트는 그걸 읽고 고쳐 다시 그립니다. 일부러 틀린 글 93개에서 오류가 준 예시 줄로 바꾸면
-  93개 모두 그려졌습니다.
-- **호출 한 번에 그리고 점검합니다.** `--check`를 주면 그림은 표준 출력으로, 점검 결과는 표준 오류로 나옵니다. 겹치는
-  선은 원본 줄 번호로 알려 줍니다([터미널에서](#터미널에서)).
-- **문법은 필요할 때 묻습니다.** `ursula-diagram syntax <유형>`은 그 유형의 짧은 예시와 규칙을 출력합니다. `--width`에
-  들어가지 않는 그림은 종료 코드 3으로 끝나고 들어가는 폭을 알려 줍니다.
-- **MCP 서버.** 셸이 없는 에이전트에게는 `ursula-diagram mcp`가 `render`, `check`, `syntax`를 제공합니다
+- **고치는 법까지 알려 주는 오류.** 오류는 틀린 줄과 칸을 `^`로 가리키고, 의도했을 법한 낱말과 맞는 예시 줄을
+  함께 보여 줍니다. 에이전트는 이것을 읽고 고쳐 다시 그립니다. 일부러 틀리게 쓴 글 93개에서 틀린 줄을 오류가 준
+  예시 줄로 바꾸자 93개 모두 그려졌습니다.
+- **호출 한 번으로 그림과 점검 결과를 함께 받습니다.** `--check`를 주면 그림은 표준 출력으로, 점검 결과는 표준 오류로
+  나옵니다. 교차하는 선은 원본의 줄 번호로 알려 줍니다([터미널에서](#터미널에서)). `--width`에 들어가지 않는 그림은
+  종료 코드 3으로 끝나며 들어가는 폭을 알려 줍니다.
+- **문법은 필요할 때 묻습니다.** `ursula-diagram syntax <유형>`은 그 유형의 짧은 예시와 규칙을 출력합니다.
+- **MCP 서버.** 셸을 쓸 수 없는 에이전트는 `ursula-diagram mcp`가 여는 `render`, `check`, `syntax` 도구를 씁니다
   ([MCP로](#mcp로)).
 - **스킬은 한 줄로 설치합니다.** `npx skills add yjun1806/ursula-diagram`([에이전트 스킬](#에이전트-스킬)).
 
@@ -105,8 +105,8 @@ flowchart 한 장을 명령으로 여섯 번씩 실행해 잰 값입니다.
 
 ## 다른 도구와 비교
 
-Mermaid 문서의 예시 531개를 SVG와 터미널 글 양쪽으로 모두 그리는 도구는 여기서 ursula 하나입니다. 명령 한 번으로 그리면
-mermaid-cli보다 약 6배 빠르고, 네이티브 글자 그림 도구보다 약 10배 느립니다.
+여기서 비교한 도구 가운데 Mermaid 문서의 예시 531개를 SVG와 터미널 글로 모두 그리는 것은 ursula 하나입니다. 그림 한 장을
+명령 한 번으로 그리면 mermaid-cli보다 약 6배 빠르고, 네이티브 글자 그림 도구보다는 약 10배 느립니다.
 
 ursula 스킬을 쓴 에이전트는 같은 그림 세 장을 [diagram-design](https://github.com/cathrynlavery/diagram-design)보다
 5~13배 빨리 그렸습니다. diagram-design은 모델이 배치를 정하고 SVG를 직접 쓰는 스킬입니다.
@@ -117,8 +117,8 @@ ursula 스킬을 쓴 에이전트는 같은 그림 세 장을 [diagram-design](h
 | C4, 요소 7 | 164 | 18 | 525k | 55k |
 | sequence, 메시지 10 | 152 | 12 | 529k | 38k |
 
-그림마다 스킬별로 두 번씩, 매번 새로 띄운 headless Claude Code 세션이 그렸고 표는 그 평균입니다(Claude Opus 5.5, 같은
-지시문, 시험하는 스킬 하나만 설치, MCP 서버 없음). 토큰에는 Claude Code가 턴마다 다시 보내는 캐시가 들어 있습니다.
+그림마다 스킬별로 두 번씩 그렸고, 매번 headless Claude Code 세션을 새로 띄웠습니다. 표는 두 번의 평균입니다(Claude Opus
+5.5, 같은 지시문, 시험하는 스킬 하나만 설치, MCP 서버 없음). 토큰에는 Claude Code가 턴마다 다시 보내는 캐시가 들어 있습니다.
 
 | 도구 | SVG | 터미널 | flowchart 한 장 ms | 실행 의존성 |
 | --- | ---: | ---: | ---: | ---: |
@@ -131,22 +131,22 @@ ursula 스킬을 쓴 에이전트는 같은 그림 세 장을 [diagram-design](h
 | mermaid-ascii 1.6.2 | — | 160 | 9 | 0 |
 
 앞의 두 열은 Mermaid 문서의 예시 531개(35개 유형) 가운데 그린 수입니다. 명령이 0으로 끝나고 무언가를 출력하면 그린 것으로
-셉니다. 시간은 모든 도구가 그리는 flowchart 예시 103개를 그림마다 새 프로세스로 그려, 파일마다 3번 잰 중앙값입니다.
-SVG를 쓰는 도구는 SVG로 잰 값입니다.
+셉니다. 시간 열은 모든 도구가 그리는 flowchart 예시 103개를 그림마다 새 프로세스로 그리며 파일마다 3번 잰 중앙값입니다.
+SVG를 내는 도구는 SVG를 그리는 시간을 쟀습니다.
 2026-11-26, Apple M2 Max, Node 26.12.1에서 쟀습니다.
 
 ![flowchart 한 장을 명령 한 번으로 그리는 시간](assets/compare/speed-chart.svg)
 
 ### 다른 도구가 더 맞는 경우
 
-- **명령줄에서 PNG가 필요할 때.** mermaid-cli가 PNG를 씁니다. 대신 한 장에 630ms와 Chromium이 듭니다. ursula는 한 파일
-  HTML 페이지에서만 PNG로 저장합니다.
-- **그림마다 새 프로세스를 띄울 때.** mmdflux와 mermaid-ascii는 9~11ms가 걸립니다. ursula는 103ms가 걸리고, 그중
-  59ms는 빈 Node 스크립트도 쓰는 시간입니다.
-- **한 프로그램 안에서 라이브러리를 여러 번 부를 때.** flowchart 한 장에 Pele(0.015ms)와 beautiful-mermaid의 글자
-  출력(0.009ms)이 ursula(0.6ms)보다 빠릅니다.
-- **터미널로 보낼 그림의 라벨에 이모지가 있을 때.** ursula는 이모지를 한 칸으로 세어, 이모지 그림에서 끊김이 18개
-  늘었습니다. mmdflux, mermaid-ascii, termaid는 0개였습니다.
+- **명령줄에서 PNG가 필요할 때.** mermaid-cli는 PNG를 바로 씁니다. 대신 한 장에 630ms가 걸리고 Chromium이 필요합니다.
+  ursula에서는 한 파일 HTML 페이지의 버튼으로만 PNG를 저장할 수 있습니다.
+- **그림마다 새 프로세스를 띄울 때.** mmdflux와 mermaid-ascii는 9~11ms가 걸립니다. ursula는 103ms가 걸리는데, 그중
+  59ms는 빈 Node 스크립트를 실행해도 드는 시간입니다.
+- **한 프로그램 안에서 라이브러리를 여러 번 부를 때.** flowchart 한 장을 그리는 데 Pele는 0.015ms,
+  beautiful-mermaid의 글자 출력은 0.009ms로 ursula(0.6ms)보다 빠릅니다.
+- **터미널로 보낼 그림의 라벨에 이모지가 있을 때.** ursula는 이모지를 한 칸으로 세기 때문에 이모지가 든 그림에서
+  선 끊김이 18개 늘었습니다. mmdflux, mermaid-ascii, termaid는 늘어난 끊김이 0개였습니다.
 
 한글, 출력 형식, 한 프로세스 안의 라이브러리 속도, 같은 예시를 나란히 그린 그림은
 [비교 페이지](https://yjun1806.github.io/ursula-diagram/ko/guide/compared)에 있습니다.
@@ -176,8 +176,8 @@ ursula-diagram order.mmd --format svg > order.svg   # 위의 그림
 
 ## 그림 모음
 
-아래 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. SVG는 글자를 정한 자리에
-놓으므로 한글 라벨도 그대로 씁니다.
+아래 그림은 모두 `ursula-diagram <파일> --format svg`가 낸 결과를 고치지 않고 실었습니다. SVG는 글자를 정해진 좌표에
+놓으므로 한글 라벨도 그대로 들어갑니다.
 
 <table>
   <tr>
@@ -201,7 +201,7 @@ ursula-diagram order.mmd --format svg > order.svg   # 위의 그림
 </table>
 
 <details>
-<summary>그림마다의 Mermaid 글</summary>
+<summary>그림별 Mermaid 글</summary>
 
 ```
 flowchart LR
@@ -312,7 +312,7 @@ mindmap
 
 ### 그리는 유형
 
-유형은 Mermaid와 같이 글의 첫 줄에서 읽습니다. 35가지 모두입니다.
+ursula는 Mermaid처럼 글의 첫 줄을 보고 유형을 정합니다. 35가지 모두 그립니다.
 
 Architecture, Block, C4, Class, Cynefin, Entity Relationship, Event Modeling, Flowchart, Gantt, Git Graph, Ishikawa,
 Kanban, Mindmap, Packet, Pie, Quadrant, Radar, Railroad(IR, ABNF, EBNF, PEG), Requirement, Sankey, Sequence, State,

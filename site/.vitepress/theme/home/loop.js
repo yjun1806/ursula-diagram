@@ -8,7 +8,7 @@ export const LOOP = {
   draw -->|error| fix[Read what to fix]
   fix -->|write again| write`,
   ko: `flowchart LR
-  write[Mermaid 쓰기] --> draw[그리고 점검]
+  write[Mermaid 쓰기] --> draw[그려서 점검]
   draw -->|그려짐| done([그림 보여 주기])
   draw -->|오류| fix[고칠 곳 읽기]
   fix -->|다시 쓰기| write`,

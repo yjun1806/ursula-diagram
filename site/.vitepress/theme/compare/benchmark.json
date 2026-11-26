@@ -3,11 +3,11 @@
     "skill": {
       "title": {
         "en": "Seconds per drawing, from the request to the saved file",
-        "ko": "그림 한 장에 걸린 초, 요청부터 파일 저장까지"
+        "ko": "그림 한 장에 걸린 시간(초), 요청부터 파일 저장까지"
       },
       "conditions": {
         "en": "Three drawings, each made twice per skill by a fresh headless Claude Code session: Claude Opus 5.5, the same prompt, only the named skill installed, no MCP servers, the same five tools. Mean of the two runs. 2026-11-26.",
-        "ko": "그림 세 장을 스킬마다 두 번씩, 매번 새로 띄운 headless Claude Code 세션이 그렸습니다. Claude Opus 5.5, 같은 지시문, 시험하는 스킬 하나만 설치, MCP 서버 없음, 같은 도구 다섯 개. 두 번의 평균입니다. 2026-11-26."
+        "ko": "그림 세 장을 스킬마다 두 번씩 그렸고, 매번 headless Claude Code 세션을 새로 띄웠습니다. Claude Opus 5.5, 같은 지시문, 시험하는 스킬 하나만 설치, MCP 서버 없음, 같은 도구 다섯 개. 두 번의 평균입니다. 2026-11-26."
       },
       "unit": "s",
       "lowerIsBetter": true,
@@ -63,7 +63,7 @@
     "speed": {
       "title": {
         "en": "Milliseconds per flowchart, one command per drawing",
-        "ko": "flowchart 한 장에 걸린 ms, 그림마다 명령 한 번"
+        "ko": "flowchart 한 장에 걸린 시간(ms), 그림마다 명령 한 번"
       },
       "conditions": {
         "en": "The 103 flowchart examples from the Mermaid documentation that every tool draws. A new process per drawing, median of 3 runs per file, then the median over files. Apple M2 Max, macOS 26.6, Node 26.12.1, 2026-11-26. An empty Node script takes 59 ms on the same machine. * No command of its own: timed through a ten-line Node script that calls the library.",
