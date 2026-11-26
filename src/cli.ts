@@ -7,6 +7,7 @@ import { runCommand } from './command/run.ts';
 import { lineSplitter, messageLine } from './mcp/lines.ts';
 import { answerLine } from './mcp/server.ts';
 import { extraFontDirs } from './node/font-dirs.ts';
+import { pngFonts } from './node/png-fonts.ts';
 import type { ResvgModule } from './render/png.ts';
 import { PNG_RENDERER } from './render/png.ts';
 
@@ -41,10 +42,13 @@ function loadPng(): ResvgModule | undefined {
   return undefined;
 }
 
+/** The fonts of a PNG: only the system fonts its text needs. */
+const fontsFor = (svg: string) => pngFonts(svg, extraFontDirs());
+
 const args = process.argv.slice(2);
 if (args[0] === 'mcp' && args.length === 1) {
   // MCP over standard input and output: everything written to standard output is a protocol message.
-  const host = { loadPng, fontDirs: extraFontDirs() };
+  const host = { loadPng, pngFonts: fontsFor };
   const lines = lineSplitter((line) => {
     if (line.trim() === '') return;
     const out = answerLine(line, host);
@@ -54,7 +58,7 @@ if (args[0] === 'mcp' && args.length === 1) {
   process.stdin.on('data', (chunk: string) => lines.push(chunk));
   process.stdin.on('end', () => lines.end());
 } else {
-  const out = runCommand(args, (file) => readFileSync(file ?? 0, 'utf8'), { loadPng, fontDirs: extraFontDirs(), stdoutIsTty: process.stdout.isTTY === true });
+  const out = runCommand(args, (file) => readFileSync(file ?? 0, 'utf8'), { loadPng, pngFonts: fontsFor, stdoutIsTty: process.stdout.isTTY === true });
   if (out.bytes !== undefined) process.stdout.write(out.bytes);
   else if (out.stdout !== '') process.stdout.write(out.stdout);
   if (out.stderr !== '') process.stderr.write(out.stderr);

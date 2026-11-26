@@ -39,6 +39,16 @@ const png = await renderPng(src, { theme: 'dark', scale: 2 }); // Uint8Array
 
 Without the package the promise rejects with `PngRendererMissing`, whose message is the command that installs it.
 
+A missing font does not reject the promise. When the machine has no font at all, or none with the Korean, Chinese or
+Japanese characters of the drawing, the PNG is drawn without that text and `onWarning` is called with one line that
+says so:
+
+```ts
+const png = await renderPng(src, { onWarning: (message) => console.warn(message) });
+```
+
+`fontDirs` names more folders of fonts besides those of the system.
+
 ## Options
 
 `renderText`, `renderTextSpans` and `renderTextSvg` take the options of the command as a third argument: `charset`

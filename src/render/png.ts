@@ -22,7 +22,7 @@ export interface ResvgModule {
     options: {
       fitTo: { mode: 'zoom'; value: number };
       background: string;
-      font: { loadSystemFonts: boolean; fontDirs?: string[] };
+      font: { loadSystemFonts: boolean; fontDirs?: string[]; fontFiles?: string[]; defaultFontFamily?: string };
     },
   ) => { render(): { asPng(): Uint8Array } };
 }
@@ -34,6 +34,18 @@ export interface PngOptions {
   theme?: PngTheme;
   /** Folders of fonts to load besides the system fonts the renderer finds by itself. */
   fontDirs?: readonly string[];
+}
+
+/**
+ * The fonts the renderer loads: every system font (and `dirs`), which it reads again on every call, or only `files`,
+ * with `defaultFamily` for text whose families match none of them.
+ */
+export type PngFonts = { system: true; dirs?: readonly string[] } | { files: readonly string[]; defaultFamily?: string };
+
+/** The font options of the renderer for `fonts`. */
+function fontOptions(fonts: PngFonts): { loadSystemFonts: boolean; fontDirs?: string[]; fontFiles?: string[]; defaultFontFamily?: string } {
+  if ('system' in fonts) return { loadSystemFonts: true, ...(fonts.dirs === undefined || fonts.dirs.length === 0 ? {} : { fontDirs: [...fonts.dirs] }) };
+  return { loadSystemFonts: false, fontFiles: [...fonts.files], ...(fonts.defaultFamily === undefined ? {} : { defaultFontFamily: fonts.defaultFamily }) };
 }
 
 const DARK_RULES = /\n@media \(prefers-color-scheme: dark\)\{\n[\s\S]*?\n\}(?=<\/style>)/g;
@@ -84,15 +96,18 @@ export function validScale(scale: number): boolean {
   return Number.isFinite(scale) && scale > 0 && scale <= MAX_SCALE;
 }
 
-/** Draws an SVG of the engine as PNG bytes on the page colour of the theme, with the system fonts. */
-export function svgToPng(svg: string, resvg: ResvgModule, opts: PngOptions = {}): Uint8Array {
+/**
+ * Draws an SVG of the engine as PNG bytes on the page colour of the theme, with `fonts` (every system font when not
+ * given).
+ */
+export function svgToPng(svg: string, resvg: ResvgModule, opts: PngOptions & { fonts?: PngFonts } = {}): Uint8Array {
   const theme = opts.theme ?? 'light';
   const scale = opts.scale ?? DEFAULT_SCALE;
   if (!validScale(scale)) throw new RangeError(`scale must be above 0 and at most ${MAX_SCALE}; got ${scale}`);
   const drawn = new resvg.Resvg(bakeSvg(svg, theme), {
     fitTo: { mode: 'zoom', value: scale },
     background: PAPER[theme === 'dark' ? 1 : 0],
-    font: { loadSystemFonts: true, ...(opts.fontDirs === undefined || opts.fontDirs.length === 0 ? {} : { fontDirs: [...opts.fontDirs] }) },
+    font: fontOptions(opts.fonts ?? { system: true, ...(opts.fontDirs === undefined ? {} : { dirs: opts.fontDirs }) }),
   });
   return drawn.render().asPng();
 }

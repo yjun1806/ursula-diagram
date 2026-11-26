@@ -40,7 +40,8 @@ three tools: `render` (with `format`, `width`, `charset`, `check` for the report
 `syntax`. `render` draws `text` at a `width` of 100 unless told otherwise; its `format` is one of `text`, `text-svg`,
 `svg`, `html` and `png`. With `fix: true` the result ends with the fixes and the fixed source. `format: "png"`
 (with `theme` light or dark) returns the picture as image content, for a client that shows images; it needs
-`@resvg/resvg-js`, and without it the result is an error that names the command to install it.
+`@resvg/resvg-js`, and without it the result is an error that names the command to install it. When a font is
+missing, the image comes back with one more text line, `warning: …`, that says which text it lacks.
 
 In Claude Code:
 
