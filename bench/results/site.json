@@ -1,0 +1,218 @@
+{
+  "charts": {
+    "speed": {
+      "files": 103,
+      "emptyNodeMs": 59,
+      "bars": [
+        {
+          "name": {
+            "en": "mmdflux (SVG)",
+            "ko": "mmdflux (SVG)"
+          },
+          "value": 9
+        },
+        {
+          "name": {
+            "en": "mermaid-ascii (text)",
+            "ko": "mermaid-ascii (글자)"
+          },
+          "value": 9.2
+        },
+        {
+          "name": {
+            "en": "mmdflux (text)",
+            "ko": "mmdflux (글자)"
+          },
+          "value": 10.9
+        },
+        {
+          "name": {
+            "en": "termaid (text)",
+            "ko": "termaid (글자)"
+          },
+          "value": 69
+        },
+        {
+          "name": {
+            "en": "Pele* (SVG)",
+            "ko": "Pele* (SVG)"
+          },
+          "value": 84.7
+        },
+        {
+          "name": {
+            "en": "ursula (SVG)",
+            "ko": "ursula (SVG)"
+          },
+          "value": 102.9,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "ursula (text)",
+            "ko": "ursula (글자)"
+          },
+          "value": 103.9,
+          "highlight": true
+        },
+        {
+          "name": {
+            "en": "beautiful-mermaid* (text)",
+            "ko": "beautiful-mermaid* (글자)"
+          },
+          "value": 108
+        },
+        {
+          "name": {
+            "en": "beautiful-mermaid* (SVG)",
+            "ko": "beautiful-mermaid* (SVG)"
+          },
+          "value": 163.4
+        },
+        {
+          "name": {
+            "en": "mermaid-cli (SVG)",
+            "ko": "mermaid-cli (SVG)"
+          },
+          "value": 629.9
+        }
+      ]
+    }
+  },
+  "tables": {
+    "coverage": {
+      "examples": 531,
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            531,
+            531,
+            35
+          ],
+          "highlight": true
+        },
+        {
+          "name": "mermaid-cli",
+          "values": [
+            531,
+            false,
+            35
+          ]
+        },
+        {
+          "name": "Pele",
+          "values": [
+            515,
+            false,
+            34
+          ]
+        },
+        {
+          "name": "termaid",
+          "values": [
+            false,
+            366,
+            18
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            226,
+            213,
+            6
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            206,
+            205,
+            4
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            false,
+            160,
+            3
+          ]
+        }
+      ]
+    },
+    "inProcess": {
+      "files": 103,
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            0.615,
+            0.596
+          ],
+          "highlight": true
+        },
+        {
+          "name": "Pele",
+          "values": [
+            0.015,
+            false
+          ]
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            0.34,
+            0.009
+          ]
+        }
+      ]
+    },
+    "wide": {
+      "rows": [
+        {
+          "name": "ursula",
+          "values": [
+            13,
+            0,
+            18
+          ],
+          "highlight": true
+        },
+        {
+          "name": "beautiful-mermaid",
+          "values": [
+            13,
+            13,
+            16
+          ]
+        },
+        {
+          "name": "mmdflux",
+          "values": [
+            11,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "mermaid-ascii",
+          "values": [
+            10,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "termaid",
+          "values": [
+            13,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  }
+}

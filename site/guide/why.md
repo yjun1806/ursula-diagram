@@ -131,3 +131,18 @@ Claude Code with claude-opus-5-5, a fresh session and the same prompt for each r
 runs each. One run of the command is the median over 103 flowchart examples of the Mermaid documentation. Browser
 speed is the median over 116 flowchart examples drawn as SVG by both in one page of headless Chrome 158. Tool
 versions: mermaid-cli 12.2.0, Mermaid 12.3.0, mmdflux 2.6.1, mermaid-ascii 1.6.2, termaid 0.14.0.
+
+The scripts are in the repository under `bench/`. In a clone, this measures the other tools and the command:
+
+```bash
+npm run bench:tools
+```
+
+This measures the speed in the browser:
+
+```bash
+npm run bench:browser
+```
+
+[bench/README.md](https://github.com/yjun1806/ursula-diagram/blob/main/bench/README.md) has the details, including the skill comparison. If a number is wrong or a tool has a newer
+version, [open an issue](https://github.com/yjun1806/ursula-diagram/issues/new).

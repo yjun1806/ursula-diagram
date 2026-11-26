@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant App
+    participant PayAPI
+    participant Bank
+    App->>PayAPI: Pay request 30k
+    PayAPI->>Bank: Auth lookup
+    Bank-->>PayAPI: Auth number
+    PayAPI-->>App: Paid

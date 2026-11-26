@@ -1,0 +1,29 @@
+sequenceDiagram
+  autonumber
+  actor Shopper as 구매자
+  participant Shop as Web Shop
+  participant Pay as Payment Gateway
+  participant Stock as Inventory
+
+  Shopper->>+Shop: 장바구니 결제 요청
+  par Reserve stock
+    Shop->>+Stock: Reserve the selected items
+    Stock-->>-Shop: Reserved
+  and Authorize payment
+    Shop->>+Pay: Authorize card
+    Pay-->>-Shop: Approved
+  end
+  Note over Shop,Pay: Charges are captured after shipping
+  opt Coupon applied
+    loop For every coupon
+      Shop->>Shop: Validate coupon
+      Shop-)Stock: 쿠폰 사용 기록
+    end
+  end
+  alt Payment approved
+    Shop-->>Shopper: 주문이 접수되었습니다
+  else Card declined
+    Pay--xShop: 402 Declined
+    Shop-->>-Shopper: 결제에 실패했습니다
+  end
+  Note right of Stock: 재고 예약은 15분 뒤 만료됩니다

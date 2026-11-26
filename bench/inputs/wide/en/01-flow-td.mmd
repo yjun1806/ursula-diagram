@@ -1,0 +1,6 @@
+flowchart TD
+    A[Order in] --> B{Stock check}
+    B -->|yes| C[Pay request]
+    B -->|no| D[Restock note]
+    C --> E[Ship prep]
+    D --> E

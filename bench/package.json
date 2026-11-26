@@ -1,0 +1,10 @@
+{
+  "name": "ursula-diagram-bench",
+  "private": true,
+  "description": "Benchmark-only dependencies; the ursula-diagram package itself has none.",
+  "type": "module",
+  "devDependencies": {
+    "mermaid": "12.3.0",
+    "puppeteer": "25.18.1"
+  }
+}

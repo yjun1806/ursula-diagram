@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant 앱
+    participant 결제API
+    participant 은행
+    앱->>결제API: 결제 요청 3만원
+    결제API->>은행: 승인 조회
+    은행-->>결제API: 승인 번호
+    결제API-->>앱: 결제 완료

@@ -1,0 +1,8 @@
+flowchart TD
+    subgraph Frontend
+        A[Render view] --> B[State store]
+    end
+    subgraph Backend
+        C[Auth server] --> D[(User DB)]
+    end
+    B --> C

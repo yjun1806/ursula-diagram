@@ -123,3 +123,18 @@ claude-opus-5-5로, 판마다 새 세션을 열고 같은 지시문으로 공개
 시간은 Mermaid 문서의 flowchart 예시 103개의 중앙값입니다. 브라우저 속도는 헤드리스 Chrome 158의 한 페이지에서
 flowchart 예시 116장을 둘 다 SVG로 그린 중앙값입니다. 도구 버전은 mermaid-cli 12.2.0, Mermaid 12.3.0, mmdflux 2.6.1,
 mermaid-ascii 1.6.2, termaid 0.14.0입니다.
+
+측정 스크립트는 저장소의 `bench/`에 있습니다. 저장소를 클론한 폴더에서 아래 명령은 다른 도구와 명령 한 번의 시간을 잽니다.
+
+```bash
+npm run bench:tools
+```
+
+아래 명령은 브라우저에서의 속도를 잽니다.
+
+```bash
+npm run bench:browser
+```
+
+스킬 비교를 포함한 자세한 방법은 [bench/README.md](https://github.com/yjun1806/ursula-diagram/blob/main/bench/README.md)에 있습니다. 수치가 틀렸거나 도구의 새 버전이 나왔으면
+[이슈를 열어 주세요](https://github.com/yjun1806/ursula-diagram/issues/new).

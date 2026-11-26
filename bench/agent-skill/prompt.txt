@@ -1,0 +1,7 @@
+Use the {SKILL} skill. Draw the following diagram and save the final drawing in the current folder as out.svg. If the skill's native output is an HTML page, save that page as out.html instead. Keep every node, edge and label from the input. Do not ask questions: no one will answer, so choose any defaults yourself.
+
+Content (Mermaid):
+
+```mermaid
+{CONTENT}
+```

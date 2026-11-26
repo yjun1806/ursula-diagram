@@ -1,0 +1,7 @@
+{
+  "name": "bench-pele",
+  "private": true,
+  "dependencies": {
+    "pele": "1.13.0"
+  }
+}

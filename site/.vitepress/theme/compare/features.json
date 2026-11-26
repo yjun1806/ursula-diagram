@@ -134,7 +134,7 @@
           "name": "beautiful-mermaid",
           "values": [
             226,
-            225,
+            213,
             6
           ]
         },
@@ -156,8 +156,8 @@
         }
       ],
       "note": {
-        "en": "Out of the 531 examples in the Mermaid documentation. An example counts as drawn when the command exits 0 and writes something; whether the picture is right is not judged. Terminal text at 100 columns where the tool has a width option. ¹ Mermaid 12.3.0 in headless Chrome without the ZenUML plugin that mermaid-cli bundles, on 2026-11-12; Pele also skips the 16 ZenUML examples.",
-        "ko": "Mermaid 문서의 예시 531개 가운데 그린 수입니다. 명령이 0으로 끝나고 무언가를 출력하면 그린 것으로 셉니다. 그림이 맞는지는 판정하지 않았습니다. 터미널 글은 폭 옵션이 있는 도구에 모두 100칸을 줬습니다. ¹ 2026-11-12에 헤드리스 Chrome에서 Mermaid 12.3.0으로 그렸고, mermaid-cli에 들어 있는 ZenUML 플러그인은 없습니다. Pele도 ZenUML 예시 16개를 그리지 않습니다."
+        "en": "Out of the 531 examples in the Mermaid documentation. An example counts as drawn when the command exits 0 and writes a drawing: text with a visible character, or an SVG that is not an error picture; whether the picture is right is not judged. Terminal text at 100 columns where the tool has a width option. ¹ Mermaid 12.3.0 in headless Chrome without the ZenUML plugin that mermaid-cli bundles, on 2026-11-12; Pele also skips the 16 ZenUML examples.",
+        "ko": "Mermaid 문서의 예시 531개 가운데 그린 수입니다. 명령이 0으로 끝나고 그림을 출력하면 그린 것으로 셉니다. 그림은 보이는 글자가 하나라도 있는 글이거나 오류 그림이 아닌 SVG입니다. 그림이 맞는지는 판정하지 않았습니다. 터미널 글은 폭 옵션이 있는 도구에 모두 100칸을 줬습니다. ¹ 2026-11-12에 헤드리스 Chrome에서 Mermaid 12.3.0으로 그렸고, mermaid-cli에 들어 있는 ZenUML 플러그인은 없습니다. Pele도 ZenUML 예시 16개를 그리지 않습니다."
       }
     },
     "inProcess": {

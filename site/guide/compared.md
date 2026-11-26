@@ -84,3 +84,22 @@ and Pele drew them in headless Chrome. One row per example, one column per tool;
   draw a flowchart faster than ursula (0.6 ms).
 - **Your labels have emoji and the drawing goes to a terminal.** ursula counts an emoji as one cell, which left 18
   extra breaks in the emoji drawing; mmdflux, mermaid-ascii and termaid left none.
+
+## Run it yourself
+
+The scripts that measured these numbers are in the repository under `bench/`. In a clone, this installs the other
+tools into `bench/.cache` and measures what each tool draws, the time per command and per library call, and the wide
+characters. It takes about half an hour, and mermaid-cli downloads Chromium:
+
+```bash
+npm run bench:tools
+```
+
+This times ursula and Mermaid.js in one page of headless Chrome:
+
+```bash
+npm run bench:browser
+```
+
+[bench/README.md](https://github.com/yjun1806/ursula-diagram/blob/main/bench/README.md) says what each one measures, what it needs, and how to rerun the skill comparison, which
+runs Claude Code and costs money. If a number is wrong or a tool has a newer version, [open an issue](https://github.com/yjun1806/ursula-diagram/issues/new).

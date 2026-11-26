@@ -55,7 +55,9 @@
     "test": "vitest run --exclude 'test/*-rewrite.test.ts' --exclude 'test/rewrite.test.ts'",
     "dev": "bun src/cli.ts",
     "compare": "node scripts/compare-outputs.ts",
-    "test:rewrite": "vitest run test/rewrite.test.ts test/route-rewrite.test.ts test/choose-rewrite.test.ts test/rows-rewrite.test.ts"
+    "test:rewrite": "vitest run test/rewrite.test.ts test/route-rewrite.test.ts test/choose-rewrite.test.ts test/rows-rewrite.test.ts",
+    "bench:tools": "node bench/tools/run.mjs",
+    "bench:browser": "npm ci --prefix bench --no-audit --no-fund && node bench/browser/run.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

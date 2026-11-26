@@ -1,0 +1,12 @@
+classDiagram
+    class Member {
+        +name string
+        +email string
+        +signUp()
+    }
+    class Order {
+        +orderNo int
+        +total int
+        +cancel()
+    }
+    Member "1" --> "*" Order : places

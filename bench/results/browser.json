@@ -1,0 +1,28 @@
+{
+ "files": 116,
+ "ursula": {
+  "drawn": 116,
+  "notDrawn": 0,
+  "median": 0.6999999284744263,
+  "p10": 0.40000009536743164,
+  "p90": 2.4000000953674316,
+  "min": 0.2999999523162842,
+  "max": 21.40000009536743
+ },
+ "mermaid": {
+  "drawn": 116,
+  "notDrawn": 0,
+  "median": 20.600000023841858,
+  "p10": 18.899999976158142,
+  "p90": 27.199999928474426,
+  "min": 9.699999928474426,
+  "max": 41
+ },
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+ "browser": "HeadlessChrome/158",
+ "date": "2026-11-26",
+ "bundleGzipBytes": {
+  "ursula": 330071,
+  "mermaid": 1580028
+ }
+}
