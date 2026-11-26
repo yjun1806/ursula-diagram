@@ -7,7 +7,8 @@ compatibility: Requires Node.js 22 or later. Needs no network and installs nothi
 # ursula
 
 Write the diagram as Mermaid text and let the bundled command draw it. `URSULA` below stands for
-`node <the folder of this file>/scripts/ursula.mjs`; it needs Node 22 or later and nothing else.
+`node <the folder of this file>/scripts/ursula.mjs`; it needs Node 22 or later and nothing else. Write that full
+command in each call and never put it in a shell variable or alias: zsh does not split a variable into words.
 
 ## Steps
 
