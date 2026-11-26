@@ -3,7 +3,7 @@ import type { Ruler, SequenceTextMetrics } from '../metrics.ts';
 import { wrapWords } from '../text/wrap.ts';
 import { UrsulaError } from '../types.ts';
 import type { TextSpan, TextTone } from '../types.ts';
-import { kindOf } from './model.ts';
+import { kindOf, legendCaptions } from './model.ts';
 import type { LegendKind, MessageKind, MessageStmt, NoteStmt, ParticipantKind, Sequence, SequenceLegendOption } from './model.ts';
 
 interface Cell {
@@ -81,7 +81,6 @@ const HEADS: Record<MessageStmt['head'], readonly [string, string]> = {
   none: ['', ''],
 };
 const LEGEND_KINDS: readonly LegendKind[] = ['call', 'reply', 'async', 'failed'];
-const LEGEND_CAPTIONS: Record<LegendKind, string> = { call: 'Call', reply: 'Reply', async: 'Async', failed: 'Failed' };
 const LEGEND_SAMPLES: Record<LegendKind, string> = { call: '─▶', reply: '┄▶', async: '┄▷', failed: '┄×' };
 
 function toneOf(kind: MessageKind, dashed: boolean): TextTone {
@@ -633,8 +632,9 @@ function render(c: Ctx, gaps: number[]): Rendered {
       if (cur !== '') lines.push([{ text: pad + cur, tone: 'dim' }]);
       cur = '';
     };
+    const words = legendCaptions(c.seq);
     for (const k of used) {
-      const item = `${LEGEND_SAMPLES[k]} ${c.legend?.[k] ?? LEGEND_CAPTIONS[k]}`;
+      const item = `${LEGEND_SAMPLES[k]} ${c.legend?.[k] ?? words[k]}`;
       const next = cur === '' ? item : `${cur}${' '.repeat(T.legendGap)}${item}`;
       if (cur !== '' && cellWidth(pad + next) > limit) {
         flush();

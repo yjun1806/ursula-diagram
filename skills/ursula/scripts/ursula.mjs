@@ -104,8 +104,38 @@ function fillColors(rule, mode) {
   return rule.replace(/\$([a-z][a-z0-9-]*)/g, (_, name) => `var(--ursula-${name},${COLORS[name]?.[mode] ?? "inherit"})`);
 }
 
+// src/text/language.ts
+var HANGUL = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-힯ힰ-퟿]/u;
+var LATIN = /[A-Za-z]/;
+function languageOf(texts) {
+  let hangul = 0;
+  let latin = 0;
+  for (const t of texts) {
+    if (t === undefined)
+      continue;
+    for (const word of t.split(/\s+/)) {
+      if (HANGUL.test(word))
+        hangul++;
+      else if (LATIN.test(word))
+        latin++;
+    }
+  }
+  return hangul > latin ? "ko" : "en";
+}
+
 // src/layout/legend.ts
-var LEGEND_CAPTIONS = { normal: "Flow", thick: "Request", dotted: "Pending" };
+var LEGEND_CAPTIONS = {
+  en: { normal: "Flow", thick: "Request", dotted: "Pending" },
+  ko: { normal: "흐름", thick: "요청", dotted: "대기" }
+};
+function textsOf(layout) {
+  return [
+    ...layout.nodes.flatMap((n) => [n.title, ...n.lines, ...(n.compartments ?? []).flatMap((c) => c.lines)]),
+    ...layout.edges.flatMap((e) => [e.label?.text ?? "", e.startLabel?.text ?? "", e.endLabel?.text ?? ""]),
+    ...layout.lanes.map((l) => l.label),
+    ...(layout.clusters ?? []).map((c) => c.label)
+  ];
+}
 var ORDER = ["normal", "thick", "dotted"];
 var tidy = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
@@ -125,8 +155,9 @@ function withLegend(layout, ruler, option) {
   const lead = ruler.uniform ? 1 : 0;
   const rowY = y + lead + h / 2;
   let cursor = x0;
+  const words = LEGEND_CAPTIONS[languageOf(textsOf(bare))];
   const items = used.map((style) => {
-    const caption = option?.[style] ?? LEGEND_CAPTIONS[style];
+    const caption = option?.[style] ?? words[style];
     const w = ruler.legendSample + ruler.legendCaptionGap + ruler.textWidth(caption, "edge");
     const item = {
       style,
@@ -13563,7 +13594,7 @@ function cellsAlong(e, nodes) {
   }
   return out;
 }
-function textsOf(l, names) {
+function textsOf2(l, names) {
   const onLines = l.edges.flatMap((e) => e.invisible ? [] : [e.label, e.startLabel, e.endLabel]).filter((t) => t !== undefined);
   return names ? [...onLines, ...l.lanes.filter((lane) => lane.label !== "").map((lane) => lane.labelBox)] : onLines;
 }
@@ -13574,7 +13605,7 @@ function namesOverLines(l) {
   const nodes = new Map(l.nodes.map((n) => [n.id, n]));
   const shown = l.edges.filter((e) => !e.invisible && e.points.length >= 2);
   const lines = new Set(shown.flatMap((e) => cellsAlong(e, nodes).map((c) => `${c[0]},${c[1]}`)));
-  const texts = textsOf(l, false);
+  const texts = textsOf2(l, false);
   return named.flatMap((lane) => {
     const [x0, y] = [Math.floor(lane.x), Math.floor(lane.y)];
     const bare = (x) => !lines.has(`${x},${y}`) && !texts.some((t) => covers(t, [x, y]));
@@ -13828,7 +13859,7 @@ function opened(given, asked) {
   };
   for (let turn = 0, most = 6 * given.nodes.length + 24;turn < most; turn++) {
     const rules = new Set(bars.map((r) => Math.round(r.y)));
-    const texts = [...textsOf(l, asked.names), ...fixed, ...bars.length > 0 ? namesOverLines(l) : []];
+    const texts = [...textsOf2(l, asked.names), ...fixed, ...bars.length > 0 ? namesOverLines(l) : []];
     const lacking = (joins) => rowsLacking(l, rules, texts, joins, asked.least).filter((lack) => !left.has(key(lack)));
     const marks = lacking(false);
     const lacks = marks.length > 0 ? marks : lacking(true);
@@ -13921,7 +13952,7 @@ function closeSpareRows(given, keeps = () => true) {
       const c = cells(r);
       return y >= c.y && y < c.y + c.h;
     };
-    if (now.nodes.some(on) || textsOf(now, false).some(on) || now.lanes.some((lane) => lane.label !== "" && (Math.floor(lane.y) === y || Math.floor(lane.labelBox.y) === y)))
+    if (now.nodes.some(on) || textsOf2(now, false).some(on) || now.lanes.some((lane) => lane.label !== "" && (Math.floor(lane.y) === y || Math.floor(lane.labelBox.y) === y)))
       continue;
     if ((now.legend?.items ?? []).some((item) => Math.floor(item.y) >= y - 1 && Math.floor(item.y) <= y + 1))
       continue;
@@ -13929,7 +13960,7 @@ function closeSpareRows(given, keeps = () => true) {
       const c = cells(r);
       return at >= c.y && at < c.y + c.h;
     };
-    const texts = textsOf(now, false);
+    const texts = textsOf2(now, false);
     if (now.nodes.some((n) => texts.some((t) => row(t, y - 1) && row(n, y + 1) || row(t, y + 1) && row(n, y - 1))))
       continue;
     const rules = now.lanes.filter((lane) => lane.label !== "").map((lane) => Math.floor(lane.y));
@@ -29813,6 +29844,18 @@ registerFrontEnd({
 });
 
 // src/sequence/model.ts
+var LEGEND_CAPTIONS2 = {
+  en: { call: "Call", reply: "Reply", async: "Async", failed: "Failed" },
+  ko: { call: "호출", reply: "응답", async: "비동기", failed: "실패" }
+};
+function legendCaptions(seq) {
+  const texts = [
+    ...seq.participants.flatMap((p) => p.lines),
+    ...seq.statements.flatMap((s) => ("lines" in s) ? s.lines : []),
+    ...(seq.groups ?? []).map((g) => g.label)
+  ];
+  return LEGEND_CAPTIONS2[languageOf(texts)];
+}
 var PARTICIPANT_KINDS = ["participant", "actor", "boundary", "control", "entity", "database", "collections", "queue"];
 function kindOf(m) {
   if (m.head === "filled")
@@ -29828,7 +29871,6 @@ function kindOf(m) {
 var PORT_R6 = 3.25;
 var TAG_INSET = 8;
 var LEGEND_KINDS = ["call", "reply", "async", "failed"];
-var LEGEND_CAPTIONS2 = { call: "Call", reply: "Reply", async: "Async", failed: "Failed" };
 var LEGEND_LOOKS = {
   call: { dash: false, arrow: "filled" },
   reply: { dash: true, arrow: "filled" },
@@ -30723,8 +30765,9 @@ function build3(source, R, cap, tight, legendOption) {
   if (legendOption !== false) {
     const used = LEGEND_KINDS.filter((k) => kindsUsed.has(k));
     if (used.length >= 2) {
+      const words = legendCaptions(source);
       for (const k of used)
-        legend.push({ kind: k, caption: legendOption?.[k] ?? LEGEND_CAPTIONS2[k] });
+        legend.push({ kind: k, caption: legendOption?.[k] ?? words[k] });
     }
   }
   const sceneItems = items.map((it) => {
@@ -30908,7 +30951,6 @@ var HEADS4 = {
   none: ["", ""]
 };
 var LEGEND_KINDS2 = ["call", "reply", "async", "failed"];
-var LEGEND_CAPTIONS3 = { call: "Call", reply: "Reply", async: "Async", failed: "Failed" };
 var LEGEND_SAMPLES = { call: "─▶", reply: "┄▶", async: "┄▷", failed: "┄×" };
 function toneOf2(kind, dashed) {
   if (kind === "call")
@@ -31431,8 +31473,9 @@ function render2(c, gaps) {
         lines.push([{ text: pad + cur, tone: "dim" }]);
       cur = "";
     };
+    const words = legendCaptions(c.seq);
     for (const k of used) {
-      const item = `${LEGEND_SAMPLES[k]} ${c.legend?.[k] ?? LEGEND_CAPTIONS3[k]}`;
+      const item = `${LEGEND_SAMPLES[k]} ${c.legend?.[k] ?? words[k]}`;
       const next = cur === "" ? item : `${cur}${" ".repeat(T.legendGap)}${item}`;
       if (cur !== "" && cellWidth(pad + next) > limit) {
         flush();
