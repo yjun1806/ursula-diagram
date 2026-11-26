@@ -7,24 +7,13 @@ All open roadmap items: [issues labelled `roadmap`](https://github.com/yjun1806/
 
 ## Planned
 
-### Features
-
 - Apply Mermaid styling (`classDef`, `class`, `style`, `linkStyle`, `:::`, `themeVariables`) to SVG and terminal drawings; today it is read and ignored. [#24](https://github.com/yjun1806/ursula-diagram/issues/24)
-- Fix `A:::hot-->B` (a class name directly followed by an arrow), which Mermaid accepts and ursula rejects. [#25](https://github.com/yjun1806/ursula-diagram/issues/25)
 - Docs build plugins for markdown-it (VitePress) and remark/rehype (Docusaurus, Astro, Next.js MDX) that draw Mermaid blocks at build time. [#26](https://github.com/yjun1806/ursula-diagram/issues/26)
 - A GitHub Action that renders Mermaid in pull requests and READMEs. [#27](https://github.com/yjun1806/ursula-diagram/issues/27)
 - A scheduled job that draws the examples in the Mermaid docs and opens an issue for any that fail. [#28](https://github.com/yjun1806/ursula-diagram/issues/28)
 - A shorter agent loop: a wider `--fix`, smaller skill instructions, and a check that counts the terminal drawing. [#29](https://github.com/yjun1806/ursula-diagram/issues/29)
 - Tidier terminal drawings: boxes sized to their text, no adjacent arrowheads or lines, emoji counted as two cells. [#30](https://github.com/yjun1806/ursula-diagram/issues/30)
 - Theme presets as CSS-variable sets, such as `monochrome` and `blueprint`. [#31](https://github.com/yjun1806/ursula-diagram/issues/31)
-
-### Drawing quality
-
-- Draw thick links (`==>`) thicker than normal links in SVG, and show each link kind with its own line in the legend. [#34](https://github.com/yjun1806/ursula-diagram/issues/34)
-- Show readable kinds in C4 box tags ("Database, external") instead of macro names such as `ContainerDb_Ext`. [#35](https://github.com/yjun1806/ursula-diagram/issues/35)
-- Keep label text readable on wide SVG drawings, such as ER, when they are fitted to a column. [#36](https://github.com/yjun1806/ursula-diagram/issues/36)
-- Draw flowchart subgraphs as grouped boxes in the terminal; in `101-flowcharts` they show as a bare header line. [#37](https://github.com/yjun1806/ursula-diagram/issues/37)
-- Emit colour codes for flowcharts with `--color`, as sequence diagrams already do. [#38](https://github.com/yjun1806/ursula-diagram/issues/38)
 
 ## In progress
 
