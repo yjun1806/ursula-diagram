@@ -20,29 +20,29 @@ function cells(line: string): string[] {
 describe('renderText', () => {
   it('draws a small LR graph', () => {
     expect(lines('flowchart LR\nA[Start] -->|go| B[Finish]').join('\n')).toMatchInlineSnapshot(`
-      "┌─────────┐       ┌─────────┐
+      "╭─────────╮       ╭─────────╮
       │  Start  │─ go ─▶│ Finish  │
-      └─────────┘       └─────────┘"
+      ╰─────────╯       ╰─────────╯"
     `);
   });
 
   it('draws a small TD graph', () => {
     expect(lines('flowchart TD\nA[Start] --> B[Mid]\nA --> C[Side]\nB --> D[End]\nC --> D').join('\n')).toMatchInlineSnapshot(`
-      "      ┌───────┐
+      "      ╭───────╮
             │ Start │
-            └───────┘
+            ╰───────╯
                 │
           ┌─────┴─────┐
           ▼           ▼
-      ┌───────┐   ┌───────┐
+      ╭───────╮   ╭───────╮
       │  Mid  │   │ Side  │
-      └───────┘   └───────┘
+      ╰───────╯   ╰───────╯
           │           │
           └─────┬─────┘
                 ▼
-            ┌───────┐
+            ╭───────╮
             │  End  │
-            └───────┘"
+            ╰───────╯"
     `);
   });
 
@@ -55,8 +55,8 @@ describe('renderText', () => {
       expect(mid[Math.round(n.x)]).toBe('│');
       expect(mid[Math.round(n.x + n.w) - 1]).toBe('│');
       const top = cells(out[Math.round(n.y)] ?? '');
-      expect(top[Math.round(n.x)]).toBe('┌');
-      expect(top[Math.round(n.x + n.w) - 1]).toBe('┐');
+      expect(top[Math.round(n.x)]).toBe('╭');
+      expect(top[Math.round(n.x + n.w) - 1]).toBe('╮');
     }
     expect(out.some((s) => s.includes('주문 접수'))).toBe(true);
   });

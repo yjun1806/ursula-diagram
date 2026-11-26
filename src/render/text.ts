@@ -1,6 +1,7 @@
 import { cellWidth, cellWidthOf, cellRuler } from '../metrics.ts';
 import { placeLaneName } from '../layout/lane-names.ts';
 import { columnStarts, compartmentHeights, hasCompartments } from '../layout/records.ts';
+import { cornersOf } from '../text/corners.ts';
 import type { EdgeEnd, EdgeStyle, EndLabel, Layout, LayoutEdge, LayoutNode, TextSpan, TextTone } from '../types.ts';
 
 const N = 1;
@@ -282,13 +283,6 @@ function drawEndLabels(c: Canvas, layout: Layout): void {
   }
 }
 
-/** The corners of a box: square, or rounded for the shapes that are not square. */
-const CORNERS: Record<string, readonly [string, string, string, string]> = {
-  square: ['┌', '┐', '└', '┘'],
-  round: ['╭', '╮', '╰', '╯'],
-  note: ['┌', '┒', '└', '┘'],
-};
-
 /** The rules between the compartments, and the lines of each, of a box divided into compartments. */
 function drawCompartments(c: Canvas, n: LayoutNode, x0: number, y0: number, w: number): void {
   const cells = n.compartments ?? [];
@@ -321,7 +315,7 @@ function drawNode(c: Canvas, n: LayoutNode): void {
     c.put(x0, y0, n.shape === 'start-dot' ? '●' : '◉');
     return;
   }
-  const [tl, tr, bl, br] = CORNERS[n.shape === 'ellipse' || n.shape === 'actor' ? 'round' : n.shape === 'note' ? 'note' : 'square'] as readonly [string, string, string, string];
+  const [tl, tr, bl, br] = cornersOf(n.shape);
   const solid = n.shape === 'bar';
   for (let y = y0; y < y0 + h; y++) {
     for (let x = x0; x < x0 + w; x++) {

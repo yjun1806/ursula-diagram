@@ -93,10 +93,10 @@ describe('boxes divided into compartments: drawing', () => {
     const lines = renderTextLayout(layout(lone, cells, { maxWidth: 100 }));
     // A border, the head, a rule, two lines, a rule, one line and a border: the rules run from side to side.
     expect(lines).toHaveLength(8);
-    expect(lines[0]).toMatch(/^┌─+┐$/);
+    expect(lines[0]).toMatch(/^╭─+╮$/);
     expect(lines[2]).toMatch(/^├─+┤$/);
     expect(lines[5]).toMatch(/^├─+┤$/);
-    expect(lines[7]).toMatch(/^└─+┘$/);
+    expect(lines[7]).toMatch(/^╰─+╯$/);
     expect(new Set(lines.map((line) => line.length)).size).toBe(1);
     expect(lines[1]).toMatch(/^│ +Animal +│$/);
     expect(lines[3]).toMatch(/^│ \+int age +│$/);

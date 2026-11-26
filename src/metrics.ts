@@ -59,6 +59,11 @@ export interface Ruler {
   linePitch?: number;
   /** Set by the layered engine on the ruler it derives for a terminal: every box has the width of the widest. */
   uniform?: boolean;
+  /**
+   * A terminal drawing whose line ends on a side of a box, and lines that pass a gap, stand a blank cell apart (see
+   * `layout`); 'wide' also pads every box by a cell more on either side, for a label beside the lines.
+   */
+  spaced?: 'ports' | 'wide';
   /** Canvas width of this medium when the caller gives none; absent when there is no natural width. */
   defaultWidth?: number;
   /** How much wider a bold run is than the same run in the regular weight; 1 when absent. */

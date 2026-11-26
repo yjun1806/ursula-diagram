@@ -7525,7 +7525,8 @@ function layeredRuler(r, gap, share = true) {
   return { ...r, commonWithin: COMMON_WITHIN, ...sharing, nodeGrid: half, rankGapMin: Math.max(half, Math.floor(r.rankGap / 2 / half) * half) };
 }
 function terminalRuler(r, gap = 3) {
-  return { ...r, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: 1, rankGap: gap, rankGapMin: gap, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: 1 };
+  const pitch = r.spaced === undefined ? 1 : 2;
+  return { ...r, ...r.spaced === "wide" ? { nodePadX: r.nodePadX + 1 } : {}, uniform: true, nodeGrid: 1, edgeGrid: 1, portPitch: pitch, rankGap: gap, rankGapMin: gap, rowGap: 0, laneGap: 0, lanePad: 0, laneLabelGap: 0, trackGap: pitch };
 }
 function gapLines(ruler, gap) {
   if (ruler.uniform)
@@ -13225,6 +13226,13 @@ function closeSpareRows(given, keeps = () => true) {
   return l;
 }
 
+// src/text/corners.ts
+var ROUND2 = ["╭", "╮", "╰", "╯"];
+var NOTE = ["┌", "┒", "└", "┘"];
+function cornersOf(shape) {
+  return shape === "note" ? NOTE : ROUND2;
+}
+
 // src/render/text.ts
 var N = 1;
 var E = 2;
@@ -13519,11 +13527,6 @@ function drawEndLabels(c, layout) {
     put(edge.endLabel);
   }
 }
-var CORNERS = {
-  square: ["┌", "┐", "└", "┘"],
-  round: ["╭", "╮", "╰", "╯"],
-  note: ["┌", "┒", "└", "┘"]
-};
 function drawCompartments(c, n, x0, y0, w) {
   const cells = n.compartments ?? [];
   const heights = compartmentHeights(cells, cellRuler());
@@ -13557,7 +13560,7 @@ function drawNode(c, n) {
     c.put(x0, y0, n.shape === "start-dot" ? "●" : "◉");
     return;
   }
-  const [tl, tr, bl, br] = CORNERS[n.shape === "ellipse" || n.shape === "actor" ? "round" : n.shape === "note" ? "note" : "square"];
+  const [tl, tr, bl, br] = cornersOf(n.shape);
   const solid = n.shape === "bar";
   for (let y = y0;y < y0 + h; y++) {
     for (let x = x0;x < x0 + w; x++) {
@@ -15663,11 +15666,6 @@ var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
 var UPRIGHT_HEADS = new Set(["▼", "▲", "▽", "△"]);
 var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
 var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
-var CORNERS2 = {
-  square: ["┌", "┐", "└", "┘"],
-  round: ["╭", "╮", "╰", "╯"],
-  note: ["┌", "┒", "└", "┘"]
-};
 var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging", "overwritten"];
 function runsOf2(edge, nodes) {
   const cellAt = (index) => {
@@ -15782,7 +15780,7 @@ function breaksOf(layout, lines, labels, notes) {
     if (n.shape === "bar") {
       whole = [at(x0, y0), at(x1, y0), at(x0, y1), at(x1, y1)].every((c) => c === "█");
     } else {
-      const [tl, tr, bl, br] = CORNERS2[n.shape === "ellipse" || n.shape === "actor" ? "round" : n.shape === "note" ? "note" : "square"];
+      const [tl, tr, bl, br] = cornersOf(n.shape);
       whole = at(x0, y0) === tl && at(x1, y0) === tr && at(x0, y1) === bl && at(x1, y1) === br;
       for (let x = x0 + 1;whole && x < x1; x++)
         whole = at(x, y0) === "─" && at(x, y1) === "─";
@@ -16035,6 +16033,38 @@ function breaksOf(layout, lines, labels, notes) {
       }
     }
   });
+  let adjacentLines = 0;
+  const beside = new Set;
+  runs.forEach((run, i) => {
+    for (const [x, y] of run?.cells ?? []) {
+      const b = run?.bits.get(`${x},${y}`) ?? 0;
+      if (b !== LEVEL && b !== UPRIGHT2 || RUNS2[at(x, y)] !== b)
+        continue;
+      const [dx, dy] = b === LEVEL ? [0, 1] : [1, 0];
+      const [ax, ay] = b === LEVEL ? [1, 0] : [0, 1];
+      for (const j of byCell.get(`${x + dx},${y + dy}`) ?? []) {
+        const pair = i < j ? `${i}|${j}` : `${j}|${i}`;
+        if (j === i || beside.has(pair) || hugged.has(pair))
+          continue;
+        const other = runs[j];
+        const straight = (r, cx, cy) => r?.bits.get(`${cx},${cy}`) === b;
+        if (!straight(other, x + dx, y + dy) || RUNS2[at(x + dx, y + dy)] !== b || !straight(run, x + ax, y + ay) || !straight(other, x + dx + ax, y + dy + ay))
+          continue;
+        if (other?.bits.has(`${x},${y}`) === true || run?.bits.has(`${x + dx},${y + dy}`) === true)
+          continue;
+        beside.add(pair);
+        adjacentLines++;
+        note(`lines ${drawn[i]?.from}->${drawn[i]?.to} and ${drawn[j]?.from}->${drawn[j]?.to} run in neighbouring cells`);
+      }
+    }
+  });
+  let adjacentHeads = 0;
+  grid.forEach((row, y) => row.forEach((ch, x) => {
+    if (UPRIGHT_HEADS.has(ch) && at(x + 1, y) === ch || LEVEL_HEADS.has(ch) && at(x, y + 1) === ch) {
+      adjacentHeads++;
+      note(`arrowheads ${ch} side by side at ${x},${y}`);
+    }
+  }));
   let overwritten = 0;
   const textAt = new Set;
   runs.forEach((run, i) => {
@@ -16071,9 +16101,12 @@ function breaksOf(layout, lines, labels, notes) {
     crossMarks,
     mixedNets,
     hugging,
-    overwritten
+    overwritten,
+    adjacentHeads,
+    adjacentLines
   };
 }
+var adjacentOf = (b) => b.adjacentHeads + b.adjacentLines;
 var breaksMore = (a, b) => BREAK_KINDS.some((k) => a[k] > b[k]);
 
 // src/layout/plan.ts
@@ -17436,6 +17469,24 @@ function layoutMirrored(graph, how, ruler, opts) {
 }
 function layout(graph, given, opts = {}) {
   const out = (drawn) => opts.room === false ? drawn.closed : drawn.opened();
+  const picked = layoutPicked(graph, given, opts);
+  if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined)
+    return picked;
+  const labels = labelsOf(graph);
+  const limit = opts.maxWidth ?? given.defaultWidth;
+  const crowded = adjacentOf(breaksIn(picked, labels, limit));
+  if (crowded === 0)
+    return picked;
+  for (const how of ["ports", "wide"]) {
+    const spaced = out(layoutShared(graph, { ...given, spaced: how }, opts));
+    const fits = limit === undefined || !Number.isFinite(limit) || Math.max(spaced.width, textCost(spaced).width) <= limit;
+    if (fits && adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit))
+      return spaced;
+  }
+  return picked;
+}
+function layoutPicked(graph, given, opts) {
+  const out = (drawn) => opts.room === false ? drawn.closed : drawn.opened();
   if (given.terminal !== true || opts.nested === true || opts.quick === true || opts.bare === true)
     return out(layoutShared(graph, given, opts));
   const plain = opts.room === false || opts.engine === "grid" || (opts.composition ?? "auto") !== "auto" || opts.sharePorts !== undefined;
@@ -17456,6 +17507,7 @@ function layout(graph, given, opts = {}) {
   const fits = limit === undefined || !Number.isFinite(limit) || Math.max(alongside.width, textCost(alongside).width) <= limit;
   return fits && onward(alongside) > onward(flow) && worthIt(alongside, flow, labels, limit) ? alongside : flow;
 }
+var labelsOf = (graph) => graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
 function onward(l) {
   const nodes = new Map(l.nodes.map((n) => [n.id, n]));
   const down = l.direction === "TD" || l.direction === "BT";
@@ -18495,6 +18547,7 @@ function asciiOf(ch) {
     return ARROWS[cp] ?? ">";
   return OTHERS[cp] ?? ch;
 }
+var ROUND3 = new Set(["╭", "╮", "╰", "╯"]);
 function isLine(ch) {
   const cp = ch?.codePointAt(0) ?? 0;
   return cp >= 9472 && cp <= 9584;
@@ -18515,8 +18568,8 @@ function indexAt(row, column) {
   }
   return -1;
 }
-function asciiRows(rows, countBars) {
-  const out = rows.map((row) => row.map(asciiOf));
+function asciiRows(rows, countBars, roundAsPlus) {
+  const out = rows.map((row) => row.map((ch) => roundAsPlus && ROUND3.has(ch) ? "+" : asciiOf(ch)));
   const bar = (r, i, ch) => {
     const target = out[r];
     if (target !== undefined && i >= 0 && isLine(rows[r]?.[i]))
@@ -18556,10 +18609,10 @@ function asciiRows(rows, countBars) {
   return out;
 }
 function toAscii(lines, opts = {}) {
-  return asciiRows(lines.map((line) => [...line]), opts.countBars === true).map((row) => row.join(""));
+  return asciiRows(lines.map((line) => [...line]), opts.countBars === true, opts.roundAsPlus === true).map((row) => row.join(""));
 }
 function spansToAscii(lines, opts = {}) {
-  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true);
+  const rows = asciiRows(lines.map((line) => line.flatMap((span) => [...span.text])), opts.countBars === true, opts.roundAsPlus === true);
   return lines.map((line, r) => {
     let at = 0;
     return line.map((span) => {
@@ -19523,6 +19576,7 @@ function explain(err, src, ctx) {
 }
 
 // src/registry.ts
+var ROUND_BENDS = new Set(["block", "git", "kanban"]);
 var frontEnds = [];
 function registerFrontEnd(frontEnd) {
   frontEnds.push(frontEnd);
@@ -19563,7 +19617,7 @@ function selectFrontEnd(src) {
     }
   };
   const spans = found.textSpans;
-  const ascii = { countBars: found.name === "er" };
+  const ascii = { countBars: found.name === "er", roundAsPlus: !ROUND_BENDS.has(found.name) };
   const head = (s, o) => {
     const front = readFrontMatter(s);
     const title = front["title"];
@@ -20841,7 +20895,7 @@ var ANNOTATION_LINE = /^<<\s*([^>]*?)\s*>>\s*(\S.*)?$/u;
 var MEMBER = new RegExp(`^(${NAME2})\\s*:(?!:)\\s*(.+)$`, "u");
 var NAMESPACE = /^namespace\s+([^\s["{]+)\s*(?:\[\s*"([^"]*)"\s*\])?\s*\{\s*(\})?\s*$/u;
 var NOTE_FOR = new RegExp(`^note\\s+for\\s+(${NAME2})\\s+"(.*)"\\s*$`, "u");
-var NOTE = /^note\s+"(.*)"\s*$/u;
+var NOTE2 = /^note\s+"(.*)"\s*$/u;
 var DIRECTION = /^direction\s+(LR|RL|TB|TD|BT)\s*$/u;
 var IGNORED2 = /^(click|link|callback|style|classDef|cssClass)(\s|$)/u;
 var START_ENDS = { "<|": "triangle-open", "*": "diamond-filled", o: "diamond-open", "<": "arrow-open" };
@@ -21032,7 +21086,7 @@ function parseClass(src, config = DEFAULT_CLASS_CONFIG) {
       edges.push({ from: id, to: target.id, style: "dotted", end: "none" });
       return;
     }
-    const note = NOTE.exec(text);
+    const note = NOTE2.exec(text);
     if (note) {
       const lines = splitNote(note[1] ?? "");
       notes.push({ id: `__note${notes.length + 1}`, title: lines[0] ?? "", lines: lines.slice(1), shape: "note", lane: LANE3 });
@@ -33640,13 +33694,13 @@ function render2(c, gaps) {
         const edgeX = x === left || x === right;
         let ch = " ";
         if (top && x === left)
-          ch = "┌";
+          ch = "╭";
         else if (top && x === right)
-          ch = "┐";
+          ch = "╮";
         else if (bottom && x === left)
-          ch = "└";
+          ch = "╰";
         else if (bottom && x === right)
-          ch = "┘";
+          ch = "╯";
         else if (top || bottom)
           ch = "─";
         else if (edgeX)

@@ -54,20 +54,20 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
     expect(text(src)).toEqual([
       '── Storefront ───────────────────────────────────────────',
       '',
-      '┌───────────────┐   ┌───────────────┐',
+      '╭───────────────╮   ╭───────────────╮',
       '│  Take order   │──▶│ Check payment │',
-      '└───────────────┘   └───────────────┘',
+      '╰───────────────╯   ╰───────────────╯',
       '                            │',
       '── Warehouse ───────────────┼─ paid ─────────────────────',
       '                            ▼',
-      '                    ┌───────────────┐   ┌───────────────┐',
+      '                    ╭───────────────╮   ╭───────────────╮',
       '                    │     Pack      │──▶│    Restock    │',
-      '                    └───────────────┘   └───────────────┘',
+      '                    ╰───────────────╯   ╰───────────────╯',
     ]);
   });
 
   it('leave two rows between two boxes one above the other: a cell of line, then the arrowhead', () => {
-    expect(text('flowchart TD\n  a[Pack] --> b[Restock]')).toEqual(['┌─────────┐', '│  Pack   │', '└─────────┘', '     │', '     ▼', '┌─────────┐', '│ Restock │', '└─────────┘']);
+    expect(text('flowchart TD\n  a[Pack] --> b[Restock]')).toEqual(['╭─────────╮', '│  Pack   │', '╰─────────╯', '     │', '     ▼', '╭─────────╮', '│ Restock │', '╰─────────╯']);
   });
 
   it('leave two rows for a line without an arrowhead as well', () => {
@@ -77,15 +77,15 @@ describe('the rows a terminal drawing opens for its bands and arrowheads', () =>
   it('turn a line that came along the row under a box, so that its arrowhead points into the box', () => {
     const src = 'flowchart LR\n  n0[Alpha]\n  n1[Beta]\n  n2[Gamma]\n  n3[Delta]\n  n3 --> n1\n  n0 --> n3\n  n1 --> n3\n  n1 --> n3\n  n2 --> n1\n  n0 --> n3';
     expect(text(src)).toEqual([
-      '┌───────┐   ┌───────┐   ┌───────┐',
-      '│ Alpha │──▶│ Delta │──▶│ Beta  │',
-      '└───────┘   └───────┘   └───────┘',
-      '    │          ▲▲▲        ││▲',
-      '    └──────────┘└┼────────┘││',
-      '                 └─────────┘│',
-      '                        ┌───────┐',
-      '                        │ Gamma │',
-      '                        └───────┘',
+      '╭─────────╮   ╭─────────╮   ╭─────────╮',
+      '│  Alpha  │──▶│  Delta  │──▶│  Beta   │',
+      '╰─────────╯   ╰─────────╯   ╰─────────╯',
+      '     │           ▲ ▲ ▲        ││ ▲',
+      '     └───────────┘ └─┼────────┘│ │',
+      '                     └─────────┘ │',
+      '                            ╭─────────╮',
+      '                            │  Gamma  │',
+      '                            ╰─────────╯',
     ]);
   });
 
