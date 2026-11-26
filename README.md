@@ -570,9 +570,6 @@ own and follows a page that sets the variables. Each has a light and a dark valu
 }
 ```
 
-<details>
-<summary>All colour variables</summary>
-
 | Variable | What it colours | Light | Dark |
 | --- | --- | --- | --- |
 | `--ursula-fg` | Names and body text | `#201f1e` | `#efeeec` |
@@ -594,10 +591,22 @@ own and follows a page that sets the variables. Each has a light and a dark valu
 | `--ursula-tint-outer` | The outermost boundary of a C4 drawing | `#f4f3f1` | `#1e1d1b` |
 | `--ursula-tint-inner` | The innermost boundary of a C4 drawing | `#f6f5f3` | `#1c1b19` |
 | `--ursula-tint-chip` | A label chip on a boundary fill | `#ebeae8` | `#262523` |
-| `--ursula-s1` … `--ursula-s8` | The eight series of a chart | | |
-| `--ursula-s1-tint` … `--ursula-s8-tint` | The pale area fill of each series | | |
-
-</details>
+| `--ursula-s1` | Series 1 of a chart | `#82641c` | `#cdad69` |
+| `--ursula-s1-tint` | The pale area fill of series 1 | `#f1e7d2` | `#3f3112` |
+| `--ursula-s2` | Series 2 of a chart | `#007883` | `#5ec3ce` |
+| `--ursula-s2-tint` | The pale area fill of series 2 | `#d2eef1` | `#093a3f` |
+| `--ursula-s3` | Series 3 of a chart | `#98524d` | `#e79a93` |
+| `--ursula-s3-tint` | The pale area fill of series 3 | `#fce1de` | `#492826` |
+| `--ursula-s4` | Series 4 of a chart | `#437746` | `#8bc18c` |
+| `--ursula-s4-tint` | The pale area fill of series 4 | `#dceedc` | `#223a23` |
+| `--ursula-s5` | Series 5 of a chart | `#878685` | `#757472` |
+| `--ursula-s5-tint` | The pale area fill of series 5 | `#efeeed` | `#252422` |
+| `--ursula-s6` | Series 6 of a chart | `#a5a4a3` | `#6a6967` |
+| `--ursula-s6-tint` | The pale area fill of series 6 | `#efeeed` | `#252422` |
+| `--ursula-s7` | Series 7 of a chart | `#5b5b59` | `#b2b1af` |
+| `--ursula-s7-tint` | The pale area fill of series 7 | `#efeeed` | `#252422` |
+| `--ursula-s8` | Series 8 of a chart | `#c8c7c6` | `#434241` |
+| `--ursula-s8-tint` | The pale area fill of series 8 | `#efeeed` | `#252422` |
 
 ## Agent skill
 

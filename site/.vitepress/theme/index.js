@@ -12,6 +12,7 @@ import FeatureTable from './compare/FeatureTable.vue';
 import ExampleJump from './examples/ExampleJump.vue';
 import ExampleTypes from './examples/ExampleTypes.vue';
 import ExampleView from './examples/ExampleView.vue';
+import ColourTable from './colours/ColourTable.vue';
 import { watchLanguageChoice } from './language-choice.js';
 import { watchSectionLinks } from './section-link.js';
 import './theme.css';
@@ -36,6 +37,7 @@ export default {
     app.component('ExampleJump', ExampleJump);
     app.component('ExampleTypes', ExampleTypes);
     app.component('ExampleView', ExampleView);
+    app.component('ColourTable', ColourTable);
     if (inBrowser) {
       watchLanguageChoice(siteData.value.base);
       watchSectionLinks();
