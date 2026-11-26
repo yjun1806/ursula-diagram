@@ -160,7 +160,7 @@ export default defineConfig({
                 resetButtonTitle: '검색어 지우기',
                 backButtonTitle: '검색 닫기',
                 noResultsText: '결과가 없습니다',
-                footer: { selectText: '고르기', navigateText: '옮기기', closeText: '닫기' },
+                footer: { selectText: '선택', navigateText: '이동', closeText: '닫기' },
               },
             },
           },
