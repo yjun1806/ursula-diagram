@@ -189,8 +189,13 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0xffe0, 0xffe6],
 ];
 
+/** The first code point of the wide ranges: everything before it is one cell. */
+const FIRST_WIDE = 0x1100;
+
 function isWide(cp: number): boolean {
-  return WIDE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
+  if (cp < FIRST_WIDE) return false;
+  for (const [lo, hi] of WIDE_RANGES) if (cp >= lo && cp <= hi) return true;
+  return false;
 }
 
 /** Display width in terminal cells of one code point. */
@@ -199,6 +204,10 @@ export function cellWidthOf(cp: number): number {
 }
 
 export function cellWidth(text: string): number {
+  // Most text has no wide character: it is as wide as it is long. A surrogate (0xd800 and up) is past the first wide code point.
+  let narrow = true;
+  for (let i = 0; narrow && i < text.length; i++) narrow = text.charCodeAt(i) < FIRST_WIDE;
+  if (narrow) return text.length;
   let total = 0;
   for (const ch of text) total += cellWidthOf(ch.codePointAt(0) ?? 0);
   return total;

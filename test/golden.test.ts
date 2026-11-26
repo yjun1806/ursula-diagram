@@ -61,11 +61,14 @@ const fanOut = 'flowchart LR\n  subgraph early[Early]\n    hub[Source]\n  end\n 
 const fanIn = 'flowchart LR\n  subgraph top[Top]\n    s1[One]\n    s2[Two]\n    s3[Three]\n    s4[Four]\n    s5[Five]\n  end\n  subgraph bottom[Bottom]\n    sink[Target]\n  end\n  s1 --> sink\n  s2 --> sink\n  s3 --> sink\n  s4 --> sink\n  s5 --> sink';
 
 const examples = ['order-flow', 'checkout-sequence', 'login-sequence'];
+const c4 = ['02-c4-system-context-diagram', '03-c4-container-diagram'];
 
 function outputs(): Record<string, string> {
   const graphs: Record<string, string> = { fanOut, fanIn };
   for (let seed = 1; seed <= 40; seed++) graphs[`generated-${seed}`] = generate(seed);
   for (const name of examples) graphs[name] = readFileSync(join(import.meta.dirname, '..', 'examples', `${name}.mmd`), 'utf8');
+  // C4 drawings too wide at 80 columns are drawn again with narrower descriptions, and their arrowheads spaced once they fit.
+  for (const name of c4) graphs[name] = readFileSync(join(import.meta.dirname, 'fixtures-c4', `${name}.mmd`), 'utf8');
   // The same drawings as bands: the header decides whether a subgraph is a box or a band.
   graphs['lanes-fanOut'] = fanOut.replace('flowchart', 'swimlane-beta');
   graphs['lanes-fanIn'] = fanIn.replace('flowchart', 'swimlane-beta');

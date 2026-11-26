@@ -200,11 +200,19 @@ const identity = (o: object): number => {
 };
 const keyPart = (_: string, v: unknown): unknown => (typeof v === 'function' ? `#f${identity(v)}` : v instanceof Map ? ['#M', [...v]] : v instanceof Set ? ['#S', [...v]] : v);
 
+/** The part of a placement's key that spells out its ruler, made once for every ruler. */
+const rulerKeys = new WeakMap<Ruler, string>();
+const rulerKey = (ruler: Ruler): string => {
+  let key = rulerKeys.get(ruler);
+  if (key === undefined) rulerKeys.set(ruler, (key = JSON.stringify(ruler, keyPart)));
+  return key;
+};
+
 /** Placements already made for a graph, by the key of their inputs: candidates and refinements ask for one placement more than once. */
 const placedFor = new WeakMap<Graph, Map<string, Placed>>();
 
 function place(graph: Graph, ruler: Ruler, units: number[], capacity: number | number[], reduction: number[], unit: number, gap: number, td: boolean, limit: number, dummyShift: number, apart: boolean, variant: Variant, squeeze = false, given?: Rows): Placed {
-  const key = `${identity(graph)}|${JSON.stringify([ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given], keyPart)}`;
+  const key = `${identity(graph)}|${rulerKey(ruler)}|${JSON.stringify([units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given], keyPart)}`;
   let made = placedFor.get(graph);
   if (made === undefined) placedFor.set(graph, (made = new Map()));
   const hit = made.get(key);

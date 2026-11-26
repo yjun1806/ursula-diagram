@@ -66,13 +66,24 @@ var WIDE_RANGES = [
   [65280, 65376],
   [65504, 65510]
 ];
+var FIRST_WIDE = 4352;
 function isWide(cp) {
-  return WIDE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
+  if (cp < FIRST_WIDE)
+    return false;
+  for (const [lo, hi] of WIDE_RANGES)
+    if (cp >= lo && cp <= hi)
+      return true;
+  return false;
 }
 function cellWidthOf(cp) {
   return isWide(cp) ? 2 : 1;
 }
 function cellWidth(text) {
+  let narrow = true;
+  for (let i = 0;narrow && i < text.length; i++)
+    narrow = text.charCodeAt(i) < FIRST_WIDE;
+  if (narrow)
+    return text.length;
   let total = 0;
   for (const ch of text)
     total += cellWidthOf(ch.codePointAt(0) ?? 0);
@@ -7569,9 +7580,16 @@ var identity = (o) => {
   return id;
 };
 var keyPart = (_, v) => typeof v === "function" ? `#f${identity(v)}` : v instanceof Map ? ["#M", [...v]] : v instanceof Set ? ["#S", [...v]] : v;
+var rulerKeys = new WeakMap;
+var rulerKey = (ruler) => {
+  let key = rulerKeys.get(ruler);
+  if (key === undefined)
+    rulerKeys.set(ruler, key = JSON.stringify(ruler, keyPart));
+  return key;
+};
 var placedFor = new WeakMap;
 function place(graph, ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze = false, given) {
-  const key = `${identity(graph)}|${JSON.stringify([ruler, units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given], keyPart)}`;
+  const key = `${identity(graph)}|${rulerKey(ruler)}|${JSON.stringify([units, capacity, reduction, unit, gap, td, limit, dummyShift, apart, variant, squeeze, given], keyPart)}`;
   let made = placedFor.get(graph);
   if (made === undefined)
     placedFor.set(graph, made = new Map);
@@ -17468,19 +17486,22 @@ function layoutMirrored(graph, how, ruler, opts) {
   return withLegend(mirrorLayout(bare, how, { width: bare.width, height: bare.height }), ruler, opts.legend);
 }
 function layout(graph, given, opts = {}) {
-  const out = (drawn) => opts.room === false ? drawn.closed : drawn.opened();
   const picked = layoutPicked(graph, given, opts);
   if (given.terminal !== true || given.spaced !== undefined || opts.nested === true || opts.quick === true || opts.bare === true || opts.room === false || opts.sharePorts !== undefined)
     return picked;
   const labels = labelsOf(graph);
   const limit = opts.maxWidth ?? given.defaultWidth;
+  const fits = (l) => limit === undefined || !Number.isFinite(limit) || l.width <= limit && textCost(l).width <= limit;
+  if (!fits(picked))
+    return picked;
   const crowded = adjacentOf(breaksIn(picked, labels, limit));
   if (crowded === 0)
     return picked;
   for (const how of ["ports", "wide"]) {
-    const spaced = out(layoutShared(graph, { ...given, spaced: how }, opts));
-    const fits = limit === undefined || !Number.isFinite(limit) || Math.max(spaced.width, textCost(spaced).width) <= limit;
-    if (fits && adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit))
+    const spaced = layoutShared(graph, { ...given, spaced: how }, opts).opened();
+    if (!fits(spaced))
+      return picked;
+    if (adjacentOf(breaksIn(spaced, labels, limit)) < crowded && keeps(spaced, picked, labels, limit))
       return spaced;
   }
   return picked;
@@ -17495,7 +17516,7 @@ function layoutPicked(graph, given, opts) {
   const ranked = ranks === undefined ? undefined : withLegend(ranks, layeredRuler(given), opts.legend);
   if (ranked !== undefined && opts.ranked === true)
     return ranked;
-  const labels = graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
+  const labels = labelsOf(graph);
   const usual = out(layoutShared(graph, given, { ...opts, bare: true }));
   const tidied = out(layoutShared(graph, given, opts));
   const flow = tidied === usual || sameRows(tidied, usual, limit) || keeps(tidied, usual, labels, limit) ? tidied : usual;
@@ -17597,7 +17618,7 @@ function layoutOnce(graph, given, opts, turned) {
   const drawn = turned === undefined ? arranged(graph, graph, "as given", given, opts) : arranged(turned, graph, "turned", given, opts);
   const limit = opts.maxWidth ?? given.defaultWidth;
   const over = (l) => opts.squeeze !== false && limit !== undefined && Number.isFinite(limit) && l.width > limit;
-  const labels = graph.edges.flatMap((e) => e.label === undefined || e.label === "" ? [] : [e.label]);
+  const labels = labelsOf(graph);
   const intact = (after, before) => !breaksMore(breaksIn(after, labels, limit), breaksIn(before, labels, limit));
   const spare = (l) => {
     if (bare)
