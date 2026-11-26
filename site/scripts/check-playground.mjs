@@ -318,7 +318,7 @@ console.log(`ok   errors: "${bad.error}" / "${narrow.error}"`);
 const commands = await checkCommands();
 for (const p of commands.problems) fail(p);
 const reasons = [...new Set(commands.allowed.map((a) => a.why))];
-console.log(`ok   ${commands.ran.length - commands.problems.length} of ${commands.ran.length} commands in the docs ran with their exit code; ${commands.allowed.length} not run:`);
+console.log(`ok   ${commands.ran.filter((r) => r.ok).length} of ${commands.ran.length} commands in the docs ran with their exit code; ${commands.allowed.length} not run:`);
 for (const why of reasons) {
   const which = [...new Set(commands.allowed.filter((a) => a.why === why).map((a) => a.command))];
   console.log(`     ${why}: ${which.join(' | ')}`);

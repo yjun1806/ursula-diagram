@@ -30,6 +30,7 @@ export const ALLOWED = [
   { pattern: /^URSULA_UPDATE_GOLDEN=1 npx vitest /, why: 'rewrites the golden hashes of the checkout' },
   { pattern: /^cd site && /, why: 'installs, builds or serves the docs site; CI builds and checks it' },
   { pattern: /^npm run bench:(tools|browser)\b|^bash bench\//, why: 'benchmarks: downloads other tools and runs for minutes' },
+  { pattern: /^python3 -I bench\//, why: 'benchmarks: reads the output of a benchmark run' },
   { pattern: /^git /, why: 'changes the branches of a checkout' },
 ];
 
@@ -174,7 +175,7 @@ export async function checkCommands() {
             continue;
           }
           const out = runShell(c.command.replace(/\bURSULA\b/g, 'ursula'), { cwd, bin, sample: c.sample ?? SOURCE });
-          ran.push({ where, command: c.command, code: out.code });
+          ran.push({ where, command: c.command, code: out.code, ok: out.code === c.exit });
           if (out.code !== c.exit) problems.push(`${where}: \`${c.command}\` ended with ${out.code}, not ${c.exit}\n${out.stderr.trim()}`);
         }
       } finally {
