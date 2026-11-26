@@ -518,6 +518,23 @@ describe('er: layout', () => {
   });
 });
 
+describe('er: width', () => {
+  const viewBox = (svg: string): number[] => (/viewBox="([^"]+)"/.exec(svg)?.[1] ?? '').split(' ').map(Number);
+  const KEYS = new URL('../site/examples/official/er/12-attribute-keys-and-comments.mmd', import.meta.url);
+
+  it('stands a chain of wide entities in rows when one row would pass the default width of 1280 pixels', async () => {
+    const { readFileSync } = await import('node:fs');
+    const [, , w = 0, h = 0] = viewBox(render(readFileSync(KEYS, 'utf8')));
+    expect(w).toBeLessThanOrEqual(1280);
+    expect(w / h).toBeLessThan(3);
+  });
+
+  it('keeps a narrow chain across', () => {
+    const [, , w = 0, h = 0] = viewBox(render('erDiagram\n  A ||--o{ B : has\n  B ||--o{ C : has'));
+    expect(w).toBeGreaterThan(h);
+  });
+});
+
 describe('er: errors', () => {
   it('names the line of a row it cannot read', () => {
     const bad = 'erDiagram\n  A ||--o{ B : has\n  A {\n    oops\n  }';
