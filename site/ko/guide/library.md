@@ -1,3 +1,7 @@
+---
+description: 'ursula를 라이브러리로 씁니다. Node와 브라우저에서 render, renderText, renderTextSvg, renderHtml로 Mermaid를 SVG나 터미널 글자 그림으로 바꿉니다.'
+---
+
 # 라이브러리
 
 ```ts

@@ -1,4 +1,7 @@
 ---
+title: 'ursula-diagram: Mermaid to SVG and terminal text, no browser'
+titleTemplate: false
+description: 'ursula-diagram is a Mermaid CLI and library that renders Mermaid to SVG and terminal text without a browser. Its errors tell AI coding agents how to fix it.'
 layout: home
 
 hero:

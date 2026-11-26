@@ -1,3 +1,7 @@
+---
+description: 'Use ursula as a library: render Mermaid to SVG or terminal text in Node or the browser with render, renderText, renderTextSvg and renderHtml.'
+---
+
 # Library
 
 ```ts

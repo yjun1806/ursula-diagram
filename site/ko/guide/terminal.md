@@ -1,3 +1,7 @@
+---
+description: '터미널에서 Mermaid 그리기: ursula --format text는 상자 그리기 글자로 --width에 맞춰 다이어그램을 그리고, 차트는 표나 목록으로 보여 줍니다.'
+---
+
 # 터미널에서
 
 `--format text`는 상자 그리기 글자로 그리고, `--width`에 맞춰 그림을 배치합니다. [첫 화면](/ko/)의 주문 flowchart는

@@ -1,3 +1,7 @@
+---
+description: 'Every --format of the ursula Mermaid CLI: SVG, terminal text, text-svg, HTML, PNG, the JSON layout, the check report and the fixed text, one command each.'
+---
+
 # Output formats
 
 | `--format` | What you get |

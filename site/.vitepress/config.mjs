@@ -5,6 +5,8 @@ import { TYPES } from './examples/types.mjs';
 import { glanceFences } from './examples/glance.mjs';
 import { mermaidFences } from './mermaid-fence.mjs';
 import { ursulaOutputs } from './ursula-output.mjs';
+import { pageDataFromParams, seoHead, sitemap } from './seo.mjs';
+import { verificationHead } from './verification.mjs';
 
 const repo = 'https://github.com/yjun1806/ursula-diagram';
 const base = '/ursula-diagram/';
@@ -102,6 +104,7 @@ function nav(prefix, t) {
 
 export default defineConfig({
   title: name,
+  // A page's title becomes "<title> | ursula-diagram"; the home pages set their own title and titleTemplate: false.
   titleTemplate: `:title | ${name}`,
   base,
   cleanUrls: true,
@@ -112,12 +115,16 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}icon-16.png` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}icon-180.png` }],
     ['script', {}, languageRedirect],
+    ...verificationHead(),
   ],
+  sitemap: sitemap(fileURLToPath(new URL('..', import.meta.url))),
+  transformPageData: pageDataFromParams,
+  transformHead: seoHead,
   locales: {
     root: {
       label: 'English',
       lang: 'en-US',
-      description: 'Draws Mermaid text as SVG and as terminal text. No browser, no runtime dependencies.',
+      description: 'A Mermaid CLI and library that renders Mermaid to SVG and terminal text without a browser, with errors an AI coding agent can fix alone.',
       themeConfig: {
         nav: nav('', en),
         sidebar: sidebar('', en),
@@ -129,7 +136,7 @@ export default defineConfig({
       label: '한국어',
       lang: 'ko-KR',
       link: '/ko/',
-      description: 'Mermaid 글을 SVG와 터미널 글자 그림으로 그립니다. 브라우저도, 실행 의존성도 필요 없습니다.',
+      description: 'Mermaid 글을 브라우저 없이 SVG와 터미널 글자 그림으로 그리는 Mermaid CLI이자 라이브러리입니다. AI 코딩 에이전트가 오류를 보고 스스로 고칩니다.',
       themeConfig: {
         nav: nav('/ko', ko),
         sidebar: sidebar('/ko', ko),

@@ -1,3 +1,7 @@
+---
+description: 'Mermaid CLI ursula의 --format 전체: SVG, 터미널 글자, text-svg, HTML, PNG, JSON 배치, check 점검 결과, fixed 고친 글. 형식마다 명령을 하나씩 싣습니다.'
+---
+
 # 출력 형식
 
 | `--format` | 받는 것 |

@@ -1,3 +1,7 @@
+---
+description: 'Claude Code, Codex, Cursor 같은 AI 코딩 에이전트용 ursula 스킬입니다. Mermaid를 쓰고 한 번의 호출로 점검하며 그립니다. npx skills add로 설치합니다.'
+---
+
 # 에이전트 스킬
 
 `skills/ursula`는 코딩 에이전트용 스킬입니다. `SKILL.md`는 에이전트에게 Mermaid 글을 쓰는 법, `--check`를

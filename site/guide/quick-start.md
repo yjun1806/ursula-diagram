@@ -1,3 +1,7 @@
+---
+description: 'Install the ursula-diagram Mermaid CLI with npm, pnpm or bun (Node 22 or later), or run it with npx, and draw a Mermaid diagram as SVG or terminal text.'
+---
+
 # Quick start
 
 Install the `ursula-diagram` command with your package manager (Node 22 or later; `ud` and `ursula` are short names

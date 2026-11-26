@@ -1,3 +1,7 @@
+---
+description: 'Mermaid 문서의 C4 예시 두 장(container, deployment)을 ursula가 교차 없이 SVG로 그린 결과와 각 그림의 --format check 점검 결과입니다.'
+---
+
 # 큰 그림
 
 아래는 Mermaid 문서에 있는 C4 예시 두 장을 고치지 않고 그린 그림입니다. container 그림은 요소 10개, 관계 13개, 경계 하나로

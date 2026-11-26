@@ -1,4 +1,5 @@
 ---
+description: 'ursula를 mermaid-cli, beautiful-mermaid, mermaid-ascii 같은 Mermaid 렌더러와 비교합니다. 예시 531개 중 그린 수, 명령 한 번의 속도, 에이전트가 쓴 시간을 쟀습니다.'
 aside: false
 pageClass: compare-page
 ---

@@ -1,4 +1,5 @@
 ---
+description: 'Mermaid 문서의 예시 531개를 ursula가 SVG와 터미널 글자 그림으로 그렸습니다. 고치지 않은 그림을 다이어그램 유형별로 묶었습니다.'
 aside: false
 pageClass: examples-index
 ---

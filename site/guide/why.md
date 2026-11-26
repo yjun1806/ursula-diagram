@@ -1,3 +1,7 @@
+---
+description: 'Why ursula: Mermaid for AI coding agents. It renders Mermaid without a browser, names the fix in every error and gives the same drawing every time.'
+---
+
 # Why ursula
 
 ursula is built for a situation where the four statements below hold. Check them against your own case first.

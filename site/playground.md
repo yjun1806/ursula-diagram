@@ -1,4 +1,5 @@
 ---
+description: 'Mermaid to SVG in your browser: write Mermaid text and ursula draws it as SVG and terminal text as you type. Copy the result, download it or share a link.'
 layout: page
 title: Playground
 sidebar: false
