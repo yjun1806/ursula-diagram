@@ -1,5 +1,5 @@
 import type { Layout } from '../types.ts';
-import { COLORS, PAPER } from './colors.ts';
+import { COLORS } from './colors.ts';
 import { escapeXml, FONT_STACK } from './svg.ts';
 
 export type Theme = 'auto' | 'light' | 'dark';
@@ -10,6 +10,9 @@ export interface HtmlOptions {
   /** Light or dark of the page; `auto` follows the viewer's system setting. */
   theme?: Theme;
 }
+
+/** The page behind a drawing, light and dark; a PNG paints it too. */
+export const PAPER: readonly [string, string] = ['#ffffff', '#16181d'];
 
 /**
  * Declarations of one colour scheme: every colour of a drawing and the page background. The background of a drawing

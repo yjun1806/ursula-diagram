@@ -46,109 +46,54 @@ var COLORS = {
   s8: ["#c8c7c6", "#434241"],
   "s8-tint": ["#efeeed", "#252422"]
 };
-var PAPER = ["#ffffff", "#16181d"];
 function fillColors(rule, mode) {
   return rule.replace(/\$([a-z][a-z0-9-]*)/g, (_, name) => `var(--ursula-${name},${COLORS[name]?.[mode] ?? "inherit"})`);
 }
 
-// src/render/png.ts
-var PNG_RENDERER = "@resvg/resvg-js";
-var PNG_HINT = `install ${PNG_RENDERER} to write PNG: npm i -g ${PNG_RENDERER}`;
-var DEFAULT_SCALE = 2;
-var MAX_SCALE = 8;
-var DARK_RULES = /\n@media \(prefers-color-scheme: dark\)\{\n[\s\S]*?\n\}(?=<\/style>)/g;
-var VARIABLE = /var\(--ursula-([a-z0-9-]+)\s*(?:,([^)]*))?\)/g;
-var FONT_FAMILY = /font-family:([^;}"]*)/g;
-var REVERSED_MARKER = /<marker id="([^"]+)"([^>]*?) orient="auto-start-reverse"([^>]*)>([\s\S]*?)<\/marker>/g;
-function turnStartMarkers(svg) {
-  const ids = [];
-  const fixed = svg.replace(REVERSED_MARKER, (_, id, before, after, body) => {
-    const attrs = `${before}${after}`;
-    const refX = /refX="([^"]+)"/.exec(attrs)?.[1] ?? "0";
-    const refY = /refY="([^"]+)"/.exec(attrs)?.[1] ?? "0";
-    const twinAttrs = attrs.includes("overflow=") ? attrs : `${attrs} overflow="visible"`;
-    ids.push(id);
-    return `<marker id="${id}"${before} orient="auto"${after}>${body}</marker>` + `<marker id="${id}-start-turned"${twinAttrs} orient="auto"><g transform="rotate(180 ${refX} ${refY})">${body}</g></marker>`;
+// src/layout/legend.ts
+var LEGEND_CAPTIONS = { normal: "Flow", thick: "Request", dotted: "Pending" };
+var ORDER = ["normal", "thick", "dotted"];
+var tidy = (v) => {
+  const r = Math.round(v * 1e6) / 1e6;
+  return r === 0 ? 0 : r;
+};
+function withLegend(layout, ruler, option) {
+  const { legend: previous, ...rest } = layout;
+  const bare = previous ? { ...rest, width: previous.base.width, height: previous.base.height } : rest;
+  if (option === false)
+    return bare;
+  const used = ORDER.filter((s) => bare.edges.some((e) => e.style === s && !e.invisible));
+  if (used.length < 2)
+    return bare;
+  const x0 = Math.min(...bare.lanes.map((l) => l.x), ...bare.nodes.map((n) => n.x), bare.width);
+  const y = bare.height;
+  const h = ruler.legendHeight;
+  const lead = ruler.uniform ? 1 : 0;
+  const rowY = y + lead + h / 2;
+  let cursor = x0;
+  const items = used.map((style) => {
+    const caption = option?.[style] ?? LEGEND_CAPTIONS[style];
+    const w = ruler.legendSample + ruler.legendCaptionGap + ruler.textWidth(caption, "edge");
+    const item = {
+      style,
+      caption,
+      x: tidy(cursor),
+      y: tidy(rowY),
+      w: tidy(w),
+      sampleW: ruler.legendSample,
+      captionX: tidy(cursor + ruler.legendSample + ruler.legendCaptionGap)
+    };
+    cursor += w + ruler.legendGap;
+    return item;
   });
-  return ids.reduce((text, id) => text.split(`marker-start="url(#${id})"`).join(`marker-start="url(#${id}-start-turned)"`), fixed);
-}
-function bakeSvg(svg, theme) {
-  const mode = theme === "dark" ? 1 : 0;
-  return turnStartMarkers(svg).replace(DARK_RULES, "").replace(VARIABLE, (whole, name, fallback) => COLORS[name]?.[mode] ?? fallback?.trim() ?? whole).replace(FONT_FAMILY, (_, list) => `font-family:${list.replace(/'/g, "")}`);
-}
-function validScale(scale) {
-  return Number.isFinite(scale) && scale > 0 && scale <= MAX_SCALE;
-}
-function svgToPng(svg, resvg, opts = {}) {
-  const theme = opts.theme ?? "light";
-  const scale = opts.scale ?? DEFAULT_SCALE;
-  if (!validScale(scale))
-    throw new RangeError(`scale must be above 0 and at most ${MAX_SCALE}; got ${scale}`);
-  const drawn = new resvg.Resvg(bakeSvg(svg, theme), {
-    fitTo: { mode: "zoom", value: scale },
-    background: PAPER[theme === "dark" ? 1 : 0],
-    font: { loadSystemFonts: true, ...opts.fontDirs === undefined || opts.fontDirs.length === 0 ? {} : { fontDirs: [...opts.fontDirs] } }
-  });
-  return drawn.render().asPng();
-}
-
-// src/command/args.ts
-var FORMATS = ["svg", "text", "text-svg", "json", "check", "html", "png", "fixed"];
-var choice = (key, choices) => (req, v) => choices.includes(v) ? { ...req, [key]: v } : undefined;
-var OPTIONS = [
-  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, png, json, check or fixed", apply: choice("format", FORMATS) },
-  {
-    name: "--width",
-    value: "N",
-    help: "columns for text and text-svg; fails with code 3 when the drawing cannot fit",
-    apply: (req, v) => v.trim() !== "" && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined
-  },
-  { name: "--fix", help: "fix a misspelt header or keyword and a flowchart ->, draw, and name each fix on stderr", apply: (req) => ({ ...req, fix: true }) },
-  { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)", apply: (req) => ({ ...req, check: true }) },
-  { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
-  { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
-  { name: "--title", value: "TEXT", help: "the page title of html", apply: (req, v) => ({ ...req, title: v }) },
-  { name: "--theme", value: "T", choices: ["auto", "light", "dark"], help: "the starting theme of html, or the colours of png (auto is light): auto, light, dark", apply: choice("theme", ["auto", "light", "dark"]) },
-  {
-    name: "--scale",
-    value: "N",
-    help: `pixels per SVG unit of png: 2 by default, at most ${MAX_SCALE}`,
-    apply: (req, v) => v.trim() !== "" && validScale(Number(v)) ? { ...req, scale: Number(v) } : undefined
-  },
-  { name: "--detail", value: "D", choices: ["auto", "full", "narrow", "title"], help: "how much of each box text keeps: auto (the fullest that fits), full, narrow, title", apply: choice("detail", ["auto", "full", "narrow", "title"]) },
-  { name: "--quality", value: "Q", choices: ["fast", "best"], help: "layout effort, fast or best; pictures draw best and text fast unless told", apply: choice("quality", ["fast", "best"]) },
-  { name: "--engine", value: "E", choices: ["layered", "grid"], help: "the flowchart layout engine: layered (the default) or grid", apply: choice("engine", ["grid", "layered"]) },
-  { name: "--composition", value: "C", choices: ["auto", "lanes", "stages"], help: "swimlanes along the flow (lanes), across it (stages), or auto", apply: choice("composition", ["auto", "lanes", "stages"]) },
-  { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) },
-  { name: "--no-questions", help: "no questions in the check report", apply: (req) => ({ ...req, questions: false }) },
-  { name: "--no-elbows", help: "no one-bend lines out of the side of a box", apply: (req) => ({ ...req, elbows: false }) }
-];
-var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
-function parseDrawArgs(args) {
-  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
-  for (let i = 0;i < args.length; i++) {
-    const a = args[i];
-    if (a === "--help" || a === "-h")
-      return { kind: "help" };
-    const spec = OPTIONS.find((o) => o.name === a);
-    if (spec) {
-      let value = "";
-      if (spec.value !== undefined) {
-        const next = args[++i];
-        if (next === undefined)
-          return { kind: "usage" };
-        value = next;
-      }
-      const applied = spec.apply(req, value);
-      if (!applied)
-        return { kind: "usage" };
-      req = applied;
-    } else if (!a.startsWith("-") && req.file === undefined)
-      req = { ...req, file: a };
-    else
-      return { kind: "usage" };
-  }
-  return { kind: "draw", request: req };
+  const contentEnd = cursor - ruler.legendGap;
+  const width = tidy(Math.max(bare.width, ruler.uniform ? contentEnd + x0 : Math.ceil(contentEnd + x0 - 0.000000001)));
+  return {
+    ...bare,
+    width,
+    height: tidy(y + lead + h),
+    legend: { x: 0, y: tidy(y), w: width, h: h + lead, base: { width: bare.width, height: bare.height }, items }
+  };
 }
 
 // src/metrics.ts
@@ -403,520 +348,6 @@ function cellRuler() {
   };
 }
 
-// src/text/fit.ts
-function clip(text, limit, width = cellWidth) {
-  if (width(text) <= limit)
-    return text;
-  let out = "";
-  for (const ch of text) {
-    if (width(`${out}${ch}…`) > limit)
-      break;
-    out += ch;
-  }
-  return `${out}…`;
-}
-function shrinkToFit(text, room, width) {
-  if (width(text) <= room)
-    return text;
-  const chars = [...text];
-  while (chars.length > 0) {
-    chars.pop();
-    const cut = `${chars.join("").trimEnd()}…`;
-    if (width(cut) <= room)
-      return cut;
-  }
-  return width("…") <= room ? "…" : undefined;
-}
-
-// src/text/wrap.ts
-function wrapWords(text, limit, width, opts = {}) {
-  if (opts.keepIfFits === true && (limit === Infinity || width(text) <= limit))
-    return [text];
-  const words = (opts.split === "space" ? text.split(" ") : text.split(/\s+/)).filter((w) => w !== "");
-  const lines = [];
-  let cur = "";
-  for (const word of words) {
-    const joined = cur === "" ? word : `${cur} ${word}`;
-    if (width(joined) <= limit) {
-      cur = joined;
-      continue;
-    }
-    if (cur !== "") {
-      lines.push(cur);
-      cur = "";
-    }
-    if (opts.longWord === "keep" || width(word) <= limit) {
-      cur = word;
-      continue;
-    }
-    for (const ch of word) {
-      if (cur !== "" && width(cur + ch) > limit) {
-        lines.push(cur);
-        cur = "";
-      }
-      cur += ch;
-    }
-  }
-  if (cur !== "")
-    lines.push(cur);
-  return lines.length === 0 && opts.blank === true ? [""] : lines;
-}
-function wrapParagraphs(parts, limit, width, opts = {}) {
-  return parts.flatMap((p) => wrapWords(p, limit, width, opts));
-}
-
-// src/layout/estimate.ts
-var WEIGHT = { crossing: 1000, bend: 10 };
-var side = (a, b, c) => Math.sign((b.flow - a.flow) * (c.cross - a.cross) - (b.cross - a.cross) * (c.flow - a.flow));
-function cross(a, b, c, d) {
-  const s1 = side(a, b, c);
-  const s2 = side(a, b, d);
-  const s3 = side(c, d, a);
-  const s4 = side(c, d, b);
-  if (s1 === 0 && s2 === 0 && s3 === 0 && s4 === 0) {
-    const key = (p) => a.flow === b.flow && c.flow === d.flow ? p.cross : p.flow;
-    return Math.max(Math.min(key(a), key(b)), Math.min(key(c), key(d))) < Math.min(Math.max(key(a), key(b)), Math.max(key(c), key(d)));
-  }
-  return s1 * s2 < 0 && s3 * s4 < 0;
-}
-function blocked(a, b, all) {
-  const alongFlow = a.cross === b.cross;
-  const lo = Math.min(alongFlow ? a.flow : a.cross, alongFlow ? b.flow : b.cross);
-  const hi = Math.max(alongFlow ? a.flow : a.cross, alongFlow ? b.flow : b.cross);
-  for (const p of all) {
-    if (p === a || p === b)
-      continue;
-    if (alongFlow ? p.cross === a.cross && p.flow > lo && p.flow < hi : p.flow === a.flow && p.cross > lo && p.cross < hi)
-      return true;
-  }
-  return false;
-}
-function structuralEstimate(edges, slots) {
-  const segments = [];
-  let bends = 0;
-  for (const e of edges) {
-    const a = slots.get(e.from);
-    const b = slots.get(e.to);
-    if (!a || !b || e.from === e.to)
-      continue;
-    segments.push([e.from, e.to, a, b]);
-    const aligned = a.flow === b.flow || a.cross === b.cross;
-    if (!aligned)
-      bends += 2;
-    else if (blocked(a, b, slots.values()))
-      bends += 4;
-  }
-  let crossings = 0;
-  for (let i = 0;i < segments.length; i++) {
-    for (let j = i + 1;j < segments.length; j++) {
-      const s = segments[i];
-      const t = segments[j];
-      if (!s || !t || s[0] === t[0] || s[0] === t[1] || s[1] === t[0] || s[1] === t[1])
-        continue;
-      if (cross(s[2], s[3], t[2], t[3]))
-        crossings++;
-    }
-  }
-  return WEIGHT.crossing * crossings + WEIGHT.bend * bends;
-}
-
-// src/layout/along.ts
-var ALONG_RATIO = 3;
-var SWEEPS = 6;
-function edgeKinds(graph) {
-  const laneOf = new Map(graph.nodes.map((n) => [n.id, n.lane]));
-  const within = [];
-  const between = [];
-  for (const e of graph.edges) {
-    const a = laneOf.get(e.from);
-    const b = laneOf.get(e.to);
-    if (a === undefined || b === undefined)
-      continue;
-    (a === b ? within : between).push(e);
-  }
-  return { within, between };
-}
-function considerAlong(graph) {
-  if (graph.lanes.filter((l) => l.label !== "").length < 2)
-    return false;
-  const { within, between } = edgeKinds(graph);
-  return between.length >= 2 && between.length >= ALONG_RATIO * within.length;
-}
-function laneColumns(ids, edges) {
-  const index = new Map(ids.map((id, i) => [id, i]));
-  const out = ids.map(() => []);
-  for (const e of edges) {
-    const a = index.get(e.from);
-    const b = index.get(e.to);
-    if (a !== undefined && b !== undefined && a !== b)
-      out[a]?.push(b);
-  }
-  const state = new Array(ids.length).fill(0);
-  const back = new Set;
-  const visit = (u) => {
-    state[u] = 1;
-    for (const v of out[u] ?? []) {
-      if (state[v] === 1)
-        back.add(`${u}>${v}`);
-      else if (state[v] === 0)
-        visit(v);
-    }
-    state[u] = 2;
-  };
-  ids.forEach((_, i) => {
-    if (state[i] === 0)
-      visit(i);
-  });
-  const next = ids.map(() => []);
-  const pending = new Array(ids.length).fill(0);
-  out.forEach((targets, u) => {
-    for (const v of targets) {
-      const [a, b] = back.has(`${u}>${v}`) ? [v, u] : [u, v];
-      next[a]?.push(b);
-      pending[b] = (pending[b] ?? 0) + 1;
-    }
-  });
-  const col = new Array(ids.length).fill(0);
-  const queue = [];
-  pending.forEach((p, i) => {
-    if (p === 0)
-      queue.push(i);
-  });
-  for (let head = 0;head < queue.length; head++) {
-    const u = queue[head] ?? 0;
-    for (const v of next[u] ?? []) {
-      col[v] = Math.max(col[v] ?? 0, (col[u] ?? 0) + 1);
-      pending[v] = (pending[v] ?? 0) - 1;
-      if (pending[v] === 0)
-        queue.push(v);
-    }
-  }
-  return new Map(ids.map((id, i) => [id, col[i] ?? 0]));
-}
-function orderLanes(graph) {
-  const laneOf = new Map(graph.nodes.map((n) => [n.id, n.lane]));
-  const net = new Map(graph.lanes.map((l) => [l.id, 0]));
-  for (const e of edgeKinds(graph).between) {
-    const a = laneOf.get(e.from) ?? "";
-    const b = laneOf.get(e.to) ?? "";
-    net.set(a, (net.get(a) ?? 0) + 1);
-    net.set(b, (net.get(b) ?? 0) - 1);
-  }
-  return graph.lanes.map((l, i) => ({ l, i })).sort((x, y) => (net.get(y.l.id) ?? 0) - (net.get(x.l.id) ?? 0) || x.i - y.i).map((x) => x.l);
-}
-var median = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 === 1 ? s[m] ?? 0 : ((s[m - 1] ?? 0) + (s[m] ?? 0)) / 2;
-};
-var dense = (values) => {
-  const used = [...new Set(values.values())].sort((a, b) => a - b);
-  const at = new Map(used.map((v, i) => [v, i]));
-  return new Map([...values].map(([id, v]) => [id, at.get(v) ?? 0]));
-};
-function assemble(source, lanes, colIn, rowIn) {
-  const col = new Map;
-  const rank = new Map;
-  const starts = [];
-  let offset = 0;
-  for (const lane of lanes) {
-    const ids = source.nodes.filter((n) => n.lane === lane.id).map((n) => n.id);
-    const own = dense(new Map(ids.map((id) => [id, colIn.get(id) ?? 0])));
-    starts.push(offset);
-    for (const id of ids) {
-      col.set(id, own.get(id) ?? 0);
-      rank.set(id, offset + (own.get(id) ?? 0));
-    }
-    offset += ids.length === 0 ? 0 : Math.max(...own.values()) + 1;
-  }
-  const laneOf = new Map(source.nodes.map((n) => [n.id, n.lane]));
-  const single = { id: "__along", label: "" };
-  return {
-    graph: { ...source, lanes: [single], nodes: source.nodes.map((n) => ({ ...n, lane: single.id })) },
-    rank,
-    row: dense(rowIn),
-    spec: { lanes: lanes.map((l) => ({ id: l.id, label: l.label })), starts, laneOf },
-    lanes,
-    col,
-    source
-  };
-}
-function arrangeAlong(graph) {
-  const lanes = orderLanes(graph);
-  const { within } = edgeKinds(graph);
-  const col = new Map;
-  for (const lane of lanes) {
-    const ids = graph.nodes.filter((n) => n.lane === lane.id).map((n) => n.id);
-    const set = new Set(ids);
-    for (const [id, c] of laneColumns(ids, within.filter((e) => set.has(e.from) && set.has(e.to))))
-      col.set(id, c);
-  }
-  const rank = assemble(graph, lanes, col, new Map).rank;
-  const ranks = Math.max(0, ...rank.values()) + 1;
-  const layers = Array.from({ length: ranks }, () => []);
-  for (const n of graph.nodes)
-    layers[rank.get(n.id) ?? 0]?.push(n.id);
-  const edges = graph.edges.filter((e) => e.from !== e.to && rank.has(e.from) && rank.has(e.to) && rank.get(e.from) !== rank.get(e.to));
-  const nbrs = new Map(graph.nodes.map((n) => [n.id, []]));
-  for (const e of edges) {
-    nbrs.get(e.from)?.push(e.to);
-    nbrs.get(e.to)?.push(e.from);
-  }
-  const posOf = () => {
-    const pos = new Map;
-    for (const layer of layers)
-      layer.forEach((id, i) => pos.set(id, (i + 0.5) / layer.length));
-    return pos;
-  };
-  const crossingsOf = () => {
-    const pos = new Map;
-    for (const layer of layers)
-      layer.forEach((id, i) => pos.set(id, i));
-    let total = 0;
-    for (let i = 0;i < edges.length; i++) {
-      for (let j = i + 1;j < edges.length; j++) {
-        const a = edges[i];
-        const b = edges[j];
-        if (!a || !b)
-          continue;
-        const [a0, a1] = (rank.get(a.from) ?? 0) <= (rank.get(a.to) ?? 0) ? [a.from, a.to] : [a.to, a.from];
-        const [b0, b1] = (rank.get(b.from) ?? 0) <= (rank.get(b.to) ?? 0) ? [b.from, b.to] : [b.to, b.from];
-        if (rank.get(a0) !== rank.get(b0) || rank.get(a1) !== rank.get(b1))
-          continue;
-        const d = ((pos.get(a0) ?? 0) - (pos.get(b0) ?? 0)) * ((pos.get(a1) ?? 0) - (pos.get(b1) ?? 0));
-        if (d < 0)
-          total++;
-      }
-    }
-    return total;
-  };
-  const sweep = (order) => {
-    for (const r of order) {
-      const layer = layers[r];
-      if (!layer || layer.length < 2)
-        continue;
-      const pos = posOf();
-      const keyed = layer.map((id, i) => {
-        const near = nbrs.get(id) ?? [];
-        return { id, i, key: near.length === 0 ? pos.get(id) ?? 0 : median(near.map((o) => pos.get(o) ?? 0)) };
-      });
-      keyed.sort((a, b) => a.key - b.key || a.i - b.i);
-      layers[r] = keyed.map((k) => k.id);
-    }
-  };
-  const upRanks = Array.from({ length: ranks }, (_, i) => i);
-  let best = layers.map((l) => [...l]);
-  let bestCross = crossingsOf();
-  for (let pass = 0;pass < SWEEPS; pass++) {
-    if (pass % 2 === 0)
-      sweep(upRanks);
-    else
-      sweep([...upRanks].reverse());
-    const c = crossingsOf();
-    if (c < bestCross) {
-      bestCross = c;
-      best = layers.map((l) => [...l]);
-    }
-  }
-  best.forEach((l, i) => {
-    layers[i] = l;
-  });
-  const row = new Map;
-  const anchor = layers.reduce((b, l, i) => l.length > (layers[b]?.length ?? 0) ? i : b, 0);
-  (layers[anchor] ?? []).forEach((id, i) => row.set(id, i));
-  const place = (r) => {
-    const layer = layers[r] ?? [];
-    let prev = -1;
-    for (const id of layer) {
-      const rows = (nbrs.get(id) ?? []).flatMap((o) => row.has(o) ? [row.get(o) ?? 0] : []);
-      const want = rows.length === 0 ? prev + 1 : Math.round(median(rows));
-      const at = Math.max(want, prev + 1);
-      row.set(id, at);
-      prev = at;
-    }
-  };
-  for (let r = anchor - 1;r >= 0; r--)
-    place(r);
-  for (let r = anchor + 1;r < ranks; r++)
-    place(r);
-  return assemble(graph, lanes, col, row);
-}
-var ALONG_REFINE = 6;
-function alongEstimate(a) {
-  const slots = new Map(a.source.nodes.map((n) => [n.id, { flow: a.rank.get(n.id) ?? 0, cross: a.row.get(n.id) ?? 0 }]));
-  return structuralEstimate(a.source.edges, slots);
-}
-function neighbours(best, columns) {
-  const ids = best.source.nodes.map((n) => n.id);
-  const laneOf = new Map(best.source.nodes.map((n) => [n.id, n.lane]));
-  const top = Math.max(...best.row.values());
-  const out = [];
-  for (const id of ids) {
-    const c0 = best.col.get(id) ?? 0;
-    const r0 = best.row.get(id) ?? 0;
-    const laneCols = Math.max(...ids.filter((o) => laneOf.get(o) === laneOf.get(id)).map((o) => best.col.get(o) ?? 0)) + 1;
-    for (let c = columns ? -1 : c0;c <= (columns ? laneCols : c0); c++) {
-      for (let r = -1;r <= top + 1; r++) {
-        if (c === c0 && r === r0)
-          continue;
-        const col = new Map(best.col);
-        const row = new Map(best.row);
-        const other = ids.find((o) => o !== id && laneOf.get(o) === laneOf.get(id) && best.col.get(o) === c && best.row.get(o) === r);
-        col.set(id, c);
-        row.set(id, r);
-        if (other !== undefined) {
-          col.set(other, c0);
-          row.set(other, r0);
-        }
-        out.push(assemble(best.source, best.lanes, col, row));
-      }
-    }
-  }
-  for (const column of new Set(best.rank.values())) {
-    for (const shift of [-2, -1, 1, 2]) {
-      const row = new Map(best.row);
-      for (const id of ids)
-        if (best.rank.get(id) === column)
-          row.set(id, (best.row.get(id) ?? 0) + shift);
-      out.push(assemble(best.source, best.lanes, best.col, row));
-    }
-  }
-  return out;
-}
-var POLISH_ROUNDS = 4;
-var CROSSING_ESTIMATE = 1000;
-function polishAlong(start) {
-  let best = start;
-  let bestEstimate = alongEstimate(best);
-  if (bestEstimate === 0)
-    return best;
-  for (let round = 0;round < POLISH_ROUNDS; round++) {
-    let next = best;
-    let nextEstimate = bestEstimate;
-    for (const a of neighbours(best, bestEstimate >= CROSSING_ESTIMATE)) {
-      const est = alongEstimate(a);
-      if (est < nextEstimate) {
-        next = a;
-        nextEstimate = est;
-      }
-    }
-    if (next === best)
-      break;
-    best = next;
-    bestEstimate = nextEstimate;
-  }
-  return best;
-}
-function refineAlong(start, startScore, score) {
-  const base = alongEstimate(start);
-  const seen = new Set([JSON.stringify([...start.rank, ...start.row])]);
-  const ranked = [];
-  neighbours(start, true).forEach((a, at) => {
-    const key = JSON.stringify([...a.rank, ...a.row]);
-    if (seen.has(key))
-      return;
-    seen.add(key);
-    const est = alongEstimate(a);
-    if (est <= base)
-      ranked.push({ a, est, at });
-  });
-  ranked.sort((x, y) => x.est - y.est || x.at - y.at);
-  let best = start;
-  let bestScore = startScore;
-  for (const { a } of ranked.slice(0, ALONG_REFINE)) {
-    const s = score(a);
-    if (s < bestScore - 0.000000001) {
-      best = a;
-      bestScore = s;
-    }
-  }
-  return best;
-}
-
-// src/layered/clearance.ts
-var PASS_CLEAR = 24;
-function tightPasses(l) {
-  let count = 0;
-  for (const e of l.edges) {
-    for (let i = 0;i + 1 < e.points.length; i++) {
-      const a = e.points[i];
-      const b = e.points[i + 1];
-      const vertical = Math.abs(a.x - b.x) < 0.5;
-      if (!vertical && Math.abs(a.y - b.y) >= 0.5)
-        continue;
-      for (const n of l.nodes) {
-        if (n.id === e.from || n.id === e.to)
-          continue;
-        if (vertical) {
-          const along = Math.min(Math.max(a.y, b.y), n.y + n.h) - Math.max(Math.min(a.y, b.y), n.y);
-          const away = Math.max(n.x - a.x, a.x - (n.x + n.w));
-          if (along > 0 && away >= 0 && away < PASS_CLEAR - 0.5)
-            count++;
-        } else {
-          const along = Math.min(Math.max(a.x, b.x), n.x + n.w) - Math.max(Math.min(a.x, b.x), n.x);
-          const away = Math.max(n.y - a.y, a.y - (n.y + n.h));
-          if (along > 0 && away >= 0 && away < PASS_CLEAR - 0.5)
-            count++;
-        }
-      }
-    }
-  }
-  return count;
-}
-
-// src/layout/diamond.ts
-var DIAMOND_OVERHANG = 8;
-var PAD = 16;
-var STEP = 8;
-var EPS = 1;
-var hasOutline = (shape, ruler) => shape === "diamond" && ruler.terminal !== true;
-var diamondHeight = (boxH) => boxH + 2 * DIAMOND_OVERHANG;
-function diamondWidth(ruler, node, height) {
-  const textW = Math.max(ruler.textWidth(node.title, "title"), ...node.lines.map((l) => ruler.textWidth(l, "line")));
-  const textH = ruler.lineHeight("title") + node.lines.length * ruler.lineHeight("line");
-  return Math.ceil((textW / (1 - textH / height) + PAD) / STEP - 0.000000001) * STEP;
-}
-function withOutline(node, ruler, least = 0) {
-  if (!hasOutline(node.shape, ruler))
-    return node;
-  const h = diamondHeight(node.h);
-  const w = Math.max(diamondWidth(ruler, node, h), least);
-  return { ...node, outline: { x: node.x + node.w / 2 - w / 2, y: node.y - DIAMOND_OVERHANG, w, h } };
-}
-function diamondSides(l) {
-  const out = [];
-  for (const n of l.nodes) {
-    if (!n.outline)
-      continue;
-    const count = { top: 0, bottom: 0, left: 0, right: 0 };
-    for (const e of l.edges) {
-      for (const [id, p] of [[e.from, e.points[0]], [e.to, e.points[e.points.length - 1]]]) {
-        if (id !== n.id || !p)
-          continue;
-        const inX = p.x > n.x - EPS && p.x < n.x + n.w + EPS;
-        const inY = p.y > n.y - EPS && p.y < n.y + n.h + EPS;
-        if (inX && Math.abs(p.y - n.y) < EPS)
-          count.top++;
-        else if (inX && Math.abs(p.y - n.y - n.h) < EPS)
-          count.bottom++;
-        else if (inY && Math.abs(p.x - n.x) < EPS)
-          count.left++;
-        else if (inY && Math.abs(p.x - n.x - n.w) < EPS)
-          count.right++;
-      }
-    }
-    const crowded = Object.entries(count).filter(([, c]) => c >= 2);
-    if (crowded.length === 0)
-      continue;
-    out.push({
-      kind: "shared-port",
-      nodes: [n.id],
-      message: `${crowded.map(([side, c]) => `${c} edges end on the ${side}`).join(" and ")} of the diamond ${n.id}; they meet its slanted sides.`
-    });
-  }
-  return out;
-}
-
 // src/layout/records.ts
 var COMPARTMENT_LINE = 20;
 var HEAD_PAD = 20;
@@ -1021,6 +452,506 @@ function ownSize(n, td, ruler) {
   return;
 }
 
+// src/render/shapes.ts
+var SLANT = 12;
+var EPS = 0.000001;
+function hexagonPoints(b) {
+  const cy = b.y + b.h / 2;
+  return [
+    { x: b.x + SLANT, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y },
+    { x: b.x + b.w, y: cy },
+    { x: b.x + b.w - SLANT, y: b.y + b.h },
+    { x: b.x + SLANT, y: b.y + b.h },
+    { x: b.x, y: cy }
+  ];
+}
+function diamondPoints(o) {
+  const cx = o.x + o.w / 2;
+  const cy = o.y + o.h / 2;
+  return [
+    { x: cx, y: o.y },
+    { x: o.x + o.w, y: cy },
+    { x: cx, y: o.y + o.h },
+    { x: o.x, y: cy }
+  ];
+}
+var ARROW = 8;
+function parallelogramPoints(b) {
+  return [
+    { x: b.x + SLANT, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h }
+  ];
+}
+function leanLeftPoints(b) {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x + SLANT, y: b.y + b.h }
+  ];
+}
+function trapBottomPoints(b) {
+  return [
+    { x: b.x + SLANT, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h }
+  ];
+}
+function trapTopPoints(b) {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w - SLANT, y: b.y + b.h },
+    { x: b.x + SLANT, y: b.y + b.h }
+  ];
+}
+function asymPoints(b) {
+  return [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h },
+    { x: b.x + b.h / 4, y: b.y + b.h / 2 }
+  ];
+}
+var RING_GAP = 4;
+function enterPolygon(poly, p, d) {
+  const mx = poly.reduce((s, q) => s + q.x, 0) / poly.length;
+  const my = poly.reduce((s, q) => s + q.y, 0) / poly.length;
+  let tin = -Infinity;
+  let tout = Infinity;
+  for (let i = 0;i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    let nx = b.y - a.y;
+    let ny = a.x - b.x;
+    if (nx * (mx - a.x) + ny * (my - a.y) > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const side = nx * (p.x - a.x) + ny * (p.y - a.y);
+    const along = nx * d.x + ny * d.y;
+    if (Math.abs(along) < EPS) {
+      if (side > EPS)
+        return;
+    } else if (along > 0) {
+      tout = Math.min(tout, -side / along);
+    } else {
+      tin = Math.max(tin, -side / along);
+    }
+  }
+  return tin <= tout && tout >= 0 ? tin : undefined;
+}
+function enterSimplePolygon(poly, p, d) {
+  let area = 0;
+  for (let i = 0;i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  let best;
+  for (let i = 0;i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const [nx, ny] = area > 0 ? [ey, -ex] : [-ey, ex];
+    if (nx * d.x + ny * d.y >= -EPS)
+      continue;
+    const denom = d.x * ey - d.y * ex;
+    if (Math.abs(denom) < EPS)
+      continue;
+    const t = ((a.x - p.x) * ey - (a.y - p.y) * ex) / denom;
+    const u = ((a.x - p.x) * d.y - (a.y - p.y) * d.x) / denom;
+    if (u < -EPS || u > 1 + EPS || t < -EPS)
+      continue;
+    if (best === undefined || t < best)
+      best = t;
+  }
+  return best;
+}
+function enterEllipse(cx, cy, rx, ry, p, d) {
+  const px = (p.x - cx) / rx;
+  const py = (p.y - cy) / ry;
+  const dx = d.x / rx;
+  const dy = d.y / ry;
+  const a = dx * dx + dy * dy;
+  const b = 2 * (px * dx + py * dy);
+  const c = px * px + py * py - 1;
+  const disc = b * b - 4 * a * c;
+  if (a < EPS || disc < 0)
+    return;
+  const root = Math.sqrt(disc);
+  const t1 = (-b - root) / (2 * a);
+  const t2 = (-b + root) / (2 * a);
+  return t2 < 0 ? undefined : t1;
+}
+function earliest(ts) {
+  const found = ts.filter((t) => t !== undefined);
+  return found.length === 0 ? undefined : Math.min(...found);
+}
+function entry(b, p, d) {
+  const cx = b.x + b.w / 2;
+  const cy = b.y + b.h / 2;
+  switch (b.shape) {
+    case "circle":
+    case "dbl-circle":
+    case "ellipse":
+    case "start-dot":
+    case "end-dot":
+      return enterEllipse(cx, cy, b.w / 2, b.h / 2, p, d);
+    case "hexagon":
+      return enterPolygon(hexagonPoints(b), p, d);
+    case "parallelogram":
+      return enterPolygon(parallelogramPoints(b), p, d);
+    case "lean-l":
+      return enterPolygon(leanLeftPoints(b), p, d);
+    case "trap-b":
+      return enterPolygon(trapBottomPoints(b), p, d);
+    case "trap-t":
+      return enterPolygon(trapTopPoints(b), p, d);
+    case "asym":
+      return enterSimplePolygon(asymPoints(b), p, d);
+    case "stadium": {
+      const r = b.h / 2;
+      const middle = [
+        { x: b.x + r, y: b.y },
+        { x: b.x + b.w - r, y: b.y },
+        { x: b.x + b.w - r, y: b.y + b.h },
+        { x: b.x + r, y: b.y + b.h }
+      ];
+      return earliest([
+        enterPolygon(middle, p, d),
+        enterEllipse(b.x + r, cy, r, r, p, d),
+        enterEllipse(b.x + b.w - r, cy, r, r, p, d)
+      ]);
+    }
+    default:
+      return;
+  }
+}
+function trimToOutline(node, end, next) {
+  const len = Math.hypot(next.x - end.x, next.y - end.y);
+  if (len < EPS)
+    return end;
+  const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
+  if (node.shape === "diamond" && node.outline)
+    return fitToDiamond(node.outline, end, next, len, d);
+  const t = entry(node, end, d);
+  if (t === undefined || t < EPS || t > len / 2)
+    return end;
+  return { x: end.x + d.x * t, y: end.y + d.y * t };
+}
+function fitToDiamond(outline, end, next, len, d) {
+  const t = enterPolygon(diamondPoints(outline), end, d);
+  if (t === undefined || len + t < ARROW - EPS)
+    return end;
+  return { x: end.x + d.x * t, y: end.y + d.y * t };
+}
+var tidy2 = (v) => String(Math.round(v * 100) / 100 || 0);
+var MOST_PULLED_IN = 8;
+function roundCorners(points, radius) {
+  const n = points.length;
+  return points.map((c, i) => {
+    const p = points[(i + n - 1) % n];
+    const q = points[(i + 1) % n];
+    const lenIn = Math.hypot(c.x - p.x, c.y - p.y);
+    const lenOut = Math.hypot(q.x - c.x, q.y - c.y);
+    const u = { x: (p.x - c.x) / lenIn, y: (p.y - c.y) / lenIn };
+    const v = { x: (q.x - c.x) / lenOut, y: (q.y - c.y) / lenOut };
+    const half = Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))) / 2;
+    const pull = 1 / Math.sin(half) - 1;
+    const wanted = pull <= 0 ? radius : Math.min(radius, MOST_PULLED_IN / pull);
+    const reach = Math.min(wanted / Math.tan(half), Math.min(lenIn, lenOut) / 3);
+    const r = reach * Math.tan(half);
+    const cross = -u.x * v.y + u.y * v.x;
+    const bx = u.x + v.x;
+    const by = u.y + v.y;
+    const bl = Math.hypot(bx, by) || 1;
+    return {
+      from: { x: c.x + u.x * reach, y: c.y + u.y * reach },
+      to: { x: c.x + v.x * reach, y: c.y + v.y * reach },
+      r,
+      sweep: cross > 0 ? 1 : 0,
+      retreat: r * pull,
+      inward: { x: bx / bl, y: by / bl }
+    };
+  });
+}
+function roundedPolygonPath(points, radius) {
+  if (points.length < 3)
+    return "";
+  const corners = roundCorners(points, radius);
+  const at = (q) => `${tidy2(q.x)} ${tidy2(q.y)}`;
+  const arc = (k) => `A${tidy2(k.r)} ${tidy2(k.r)} 0 0 ${k.sweep} ${at(k.to)}`;
+  const first = corners[0];
+  return `M${at(first.to)}${corners.slice(1).map((k) => ` L${at(k.from)} ${arc(k)}`).join("")} L${at(first.from)} ${arc(first)}Z`;
+}
+function reachRoundedCorner(points, radius, end, next) {
+  const corners = roundCorners(points, radius);
+  const i = points.findIndex((c) => Math.hypot(c.x - end.x, c.y - end.y) < 1);
+  const corner = corners[i];
+  if (!corner || corner.retreat <= 0)
+    return end;
+  const len = Math.hypot(end.x - next.x, end.y - next.y);
+  if (len < EPS)
+    return end;
+  const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
+  const along = d.x * corner.inward.x + d.y * corner.inward.y;
+  if (along < EPS)
+    return end;
+  const t = corner.retreat / along;
+  return { x: end.x + d.x * t, y: end.y + d.y * t };
+}
+
+// src/render/scene-theme.ts
+var SCENE_THEME = {
+  metrics: {
+    "box-w": "1.5",
+    "start-w": "1.5",
+    "decision-w": "1.5",
+    "active-w": "1.5",
+    "note-w": "1",
+    "rule-w": "1",
+    "edge-w": "1.5",
+    dash: "5 4",
+    "dash-msg": "5 4",
+    "lifeline-w": "1",
+    "guide-w": "1",
+    "chip-w": "1",
+    "zone-w": "1",
+    "zone-plain-w": "1",
+    "zone-dash-w": "1.5",
+    "frame-w": "1",
+    "grid-w": "1",
+    "grid-dash": "none",
+    "data-w": "1.5",
+    "dot-w": "1.5",
+    "value-weight": "500",
+    "tint-stroke-w": "0",
+    overlap: "0.24",
+    "overlap-w": "0"
+  },
+  boxRadius: 10,
+  roundRadius: 18,
+  zoneRadius: 18,
+  bend: 8,
+  barWidth: 40,
+  barTop: 14,
+  dotRadius: 3.5,
+  neutralDotRadius: 4,
+  portRadius: 4,
+  arrow: { length: 9, width: 9, stroke: 1.5 }
+};
+
+// src/text/fit.ts
+function clip(text, limit, width = cellWidth) {
+  if (width(text) <= limit)
+    return text;
+  let out = "";
+  for (const ch of text) {
+    if (width(`${out}${ch}…`) > limit)
+      break;
+    out += ch;
+  }
+  return `${out}…`;
+}
+function shrinkToFit(text, room, width) {
+  if (width(text) <= room)
+    return text;
+  const chars = [...text];
+  while (chars.length > 0) {
+    chars.pop();
+    const cut = `${chars.join("").trimEnd()}…`;
+    if (width(cut) <= room)
+      return cut;
+  }
+  return width("…") <= room ? "…" : undefined;
+}
+
+// src/front/title.ts
+var TITLE_ROW = 40;
+var TITLE_CENTRE = 33;
+var TITLE_FONT = 15;
+var TITLE_MARGIN = 24;
+function titleWidth(text) {
+  return pixelRuler().textWidth(text, "title") * TITLE_FONT / 13;
+}
+function widthWithTitle(width, left, text) {
+  return Math.max(width, Math.ceil(left + titleWidth(text) + TITLE_MARGIN));
+}
+function titledLines(lines, title, maxWidth) {
+  if (title === undefined || title === "")
+    return lines;
+  return [maxWidth === undefined ? title : clip(title, maxWidth), "", ...lines];
+}
+function titledSpans(rows, title, maxWidth) {
+  if (title === undefined || title === "")
+    return rows;
+  return [[{ text: maxWidth === undefined ? title : clip(title, maxWidth), tone: "bold" }], [], ...rows];
+}
+
+// src/render/theme.ts
+var THEME = {
+  boxRadius: 10,
+  boxBorder: 1.5,
+  lineWidth: 1.5,
+  dash: "5 4",
+  bend: 8,
+  arrow: { length: 9, width: 9 }
+};
+var { lineWidth } = THEME;
+function flowRules(font) {
+  const w = lineWidth;
+  return [
+    `.ursula{background:$bg;font-family:${font};font-size:12px}`,
+    ".ursula-lane{fill:$surface;stroke:$hair;stroke-width:1}",
+    ".ursula-lane--tint{fill:$lane}",
+    ".ursula-lane-label{fill:$fg;font-size:13px;font-weight:600}",
+    `.ursula-node-box{fill:$surface;stroke:$border;stroke-width:${THEME.boxBorder}}`,
+    ".ursula-node--on-lane .ursula-node-box{fill:$surface}",
+    '[data-role="start"] .ursula-node-box{fill:$start-fill}',
+    '[data-role="decision"] .ursula-node-box{fill:$surface}',
+    ".ursula-node-title{fill:$fg;font-size:13px;font-weight:600}",
+    ".ursula-node-line{fill:$muted;font-size:12px;font-weight:400}",
+    '[data-role="start"] .ursula-node-title{fill:$on-accent}',
+    '[data-role="start"] .ursula-node-line{fill:$on-accent;fill-opacity:.8}',
+    '[data-role="decision"] .ursula-node-title{fill:$fg}',
+    '[data-role="decision"] .ursula-node-line{fill:$fg;fill-opacity:.8}',
+    `.ursula-edge{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round;stroke-linejoin:round}`,
+    `.ursula-edge--dotted{stroke-dasharray:${THEME.dash}}`,
+    ".ursula-arrow{fill:$line}",
+    ".ursula-arrow--accent{fill:$line}",
+    ".ursula-edge-label-bg{fill:$chip-fill}",
+    ".ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}",
+    `.ursula-port{fill:$surface;stroke:$line;stroke-width:${w}}`,
+    ".ursula-legend-rule{stroke:$hair;stroke-width:1}",
+    ".ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}"
+  ];
+}
+function recordRules() {
+  const w = lineWidth;
+  const stroke = (colour) => `fill:none;stroke:${colour};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round`;
+  const noteLine = "stroke:$border;stroke-width:1;stroke-linejoin:round";
+  return [
+    ".ursula-rule{fill:none;stroke:$hair;stroke-width:1}",
+    ".ursula-node--on-lane .ursula-rule{stroke:$hair;stroke-width:1}",
+    ".ursula-head-band{fill:$lane}",
+    ".ursula-cell-title{fill:$fg;font-size:13px;font-weight:600}",
+    ".ursula-cell-tag{fill:$muted;font-size:11px;font-weight:500}",
+    ".ursula-cell-body{fill:$fg;font-size:12px;font-weight:400}",
+    ".ursula-start-dot{fill:$accent}",
+    `.ursula-end-ring{fill:$surface;stroke:$fg;stroke-width:${w}}`,
+    ".ursula-end-core{fill:$fg}",
+    ".ursula-bar{fill:$fg}",
+    `.ursula-note{fill:$lane;${noteLine}}`,
+    `.ursula-note-fold{fill:none;${noteLine}}`,
+    `.ursula-actor{${stroke("$line")}}`,
+    ".ursula-actor-name{fill:$muted;font-size:12px;font-weight:500}",
+    `.ursula-end-stroke{${stroke("$line")}}`,
+    ".ursula-end-stroke--accent{stroke:$accent}",
+    `.ursula-end-hollow{fill:$surface;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
+    ".ursula-end-hollow--accent{stroke:$accent}",
+    `.ursula-end-solid{fill:$line;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
+    ".ursula-end-solid--accent{fill:$accent;stroke:$accent}",
+    ".ursula-end-label{fill:$fg;font-size:11px;font-weight:500}"
+  ];
+}
+var ARROW_TRIM = THEME.arrow.length - 1;
+function flowMarker(id, cls) {
+  const { length, width } = THEME.arrow;
+  const cy = width / 2;
+  return `<marker id="${id}" viewBox="0 0 ${length} ${width}" refX="1" refY="${cy}" markerWidth="${length}" markerHeight="${width}" markerUnits="userSpaceOnUse" orient="auto">` + `<path class="${cls}" d="M0 0L${length} ${cy}L0 ${width}z"/></marker>`;
+}
+
+// src/layered/clearance.ts
+var PASS_CLEAR = 24;
+function tightPasses(l) {
+  let count = 0;
+  for (const e of l.edges) {
+    for (let i = 0;i + 1 < e.points.length; i++) {
+      const a = e.points[i];
+      const b = e.points[i + 1];
+      const vertical = Math.abs(a.x - b.x) < 0.5;
+      if (!vertical && Math.abs(a.y - b.y) >= 0.5)
+        continue;
+      for (const n of l.nodes) {
+        if (n.id === e.from || n.id === e.to)
+          continue;
+        if (vertical) {
+          const along = Math.min(Math.max(a.y, b.y), n.y + n.h) - Math.max(Math.min(a.y, b.y), n.y);
+          const away = Math.max(n.x - a.x, a.x - (n.x + n.w));
+          if (along > 0 && away >= 0 && away < PASS_CLEAR - 0.5)
+            count++;
+        } else {
+          const along = Math.min(Math.max(a.x, b.x), n.x + n.w) - Math.max(Math.min(a.x, b.x), n.x);
+          const away = Math.max(n.y - a.y, a.y - (n.y + n.h));
+          if (along > 0 && away >= 0 && away < PASS_CLEAR - 0.5)
+            count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+// src/layout/diamond.ts
+var DIAMOND_OVERHANG = 8;
+var PAD = 16;
+var STEP = 8;
+var EPS2 = 1;
+var hasOutline = (shape, ruler) => shape === "diamond" && ruler.terminal !== true;
+var diamondHeight = (boxH) => boxH + 2 * DIAMOND_OVERHANG;
+function diamondWidth(ruler, node, height) {
+  const textW = Math.max(ruler.textWidth(node.title, "title"), ...node.lines.map((l) => ruler.textWidth(l, "line")));
+  const textH = ruler.lineHeight("title") + node.lines.length * ruler.lineHeight("line");
+  return Math.ceil((textW / (1 - textH / height) + PAD) / STEP - 0.000000001) * STEP;
+}
+function withOutline(node, ruler, least = 0) {
+  if (!hasOutline(node.shape, ruler))
+    return node;
+  const h = diamondHeight(node.h);
+  const w = Math.max(diamondWidth(ruler, node, h), least);
+  return { ...node, outline: { x: node.x + node.w / 2 - w / 2, y: node.y - DIAMOND_OVERHANG, w, h } };
+}
+function diamondSides(l) {
+  const out = [];
+  for (const n of l.nodes) {
+    if (!n.outline)
+      continue;
+    const count = { top: 0, bottom: 0, left: 0, right: 0 };
+    for (const e of l.edges) {
+      for (const [id, p] of [[e.from, e.points[0]], [e.to, e.points[e.points.length - 1]]]) {
+        if (id !== n.id || !p)
+          continue;
+        const inX = p.x > n.x - EPS2 && p.x < n.x + n.w + EPS2;
+        const inY = p.y > n.y - EPS2 && p.y < n.y + n.h + EPS2;
+        if (inX && Math.abs(p.y - n.y) < EPS2)
+          count.top++;
+        else if (inX && Math.abs(p.y - n.y - n.h) < EPS2)
+          count.bottom++;
+        else if (inY && Math.abs(p.x - n.x) < EPS2)
+          count.left++;
+        else if (inY && Math.abs(p.x - n.x - n.w) < EPS2)
+          count.right++;
+      }
+    }
+    const crowded = Object.entries(count).filter(([, c]) => c >= 2);
+    if (crowded.length === 0)
+      continue;
+    out.push({
+      kind: "shared-port",
+      nodes: [n.id],
+      message: `${crowded.map(([side, c]) => `${c} edges end on the ${side}`).join(" and ")} of the diamond ${n.id}; they meet its slanted sides.`
+    });
+  }
+  return out;
+}
+
 // src/layout/place.ts
 function buildTopology(graph, rank, row, span = new Map) {
   const lanes = [];
@@ -1083,22 +1014,7 @@ function sharedWidths(w, nodes, ruler) {
   }
   return out;
 }
-var measured = new WeakMap;
 function measureNodes(nodes, lanes, ruler, td) {
-  let byRuler = measured.get(nodes);
-  if (byRuler === undefined)
-    measured.set(nodes, byRuler = new WeakMap);
-  let byDirection = byRuler.get(ruler);
-  if (byDirection === undefined)
-    byRuler.set(ruler, byDirection = new Map);
-  const known = byDirection.get(td);
-  if (known !== undefined && known.lanes === lanes)
-    return known.measure;
-  const measure = measureAfresh(nodes, lanes, ruler, td);
-  byDirection.set(td, { lanes, measure });
-  return measure;
-}
-function measureAfresh(nodes, lanes, ruler, td) {
   const border = ruler.nodeBorder;
   const snapW = (v) => gridUp(ruler, ruler.snap(Math.ceil(v / ruler.widthStep - 0.000000001) * ruler.widthStep));
   const fit = (v, minimum = ruler.nodeGrid) => {
@@ -1271,52 +1187,6 @@ function origin(sk, geo, ruler, s) {
   };
 }
 
-// src/layout/legend.ts
-var LEGEND_CAPTIONS = { normal: "Flow", thick: "Request", dotted: "Pending" };
-var ORDER = ["normal", "thick", "dotted"];
-var tidy = (v) => {
-  const r = Math.round(v * 1e6) / 1e6;
-  return r === 0 ? 0 : r;
-};
-function withLegend(layout, ruler, option) {
-  const { legend: previous, ...rest } = layout;
-  const bare = previous ? { ...rest, width: previous.base.width, height: previous.base.height } : rest;
-  if (option === false)
-    return bare;
-  const used = ORDER.filter((s) => bare.edges.some((e) => e.style === s && !e.invisible));
-  if (used.length < 2)
-    return bare;
-  const x0 = Math.min(...bare.lanes.map((l) => l.x), ...bare.nodes.map((n) => n.x), bare.width);
-  const y = bare.height;
-  const h = ruler.legendHeight;
-  const lead = ruler.uniform ? 1 : 0;
-  const rowY = y + lead + h / 2;
-  let cursor = x0;
-  const items = used.map((style) => {
-    const caption = option?.[style] ?? LEGEND_CAPTIONS[style];
-    const w = ruler.legendSample + ruler.legendCaptionGap + ruler.textWidth(caption, "edge");
-    const item = {
-      style,
-      caption,
-      x: tidy(cursor),
-      y: tidy(rowY),
-      w: tidy(w),
-      sampleW: ruler.legendSample,
-      captionX: tidy(cursor + ruler.legendSample + ruler.legendCaptionGap)
-    };
-    cursor += w + ruler.legendGap;
-    return item;
-  });
-  const contentEnd = cursor - ruler.legendGap;
-  const width = tidy(Math.max(bare.width, ruler.uniform ? contentEnd + x0 : Math.ceil(contentEnd + x0 - 0.000000001)));
-  return {
-    ...bare,
-    width,
-    height: tidy(y + lead + h),
-    legend: { x: 0, y: tidy(y), w: width, h: h + lead, base: { width: bare.width, height: bare.height }, items }
-  };
-}
-
 // src/layered/model.ts
 function pieces(l) {
   const out = [];
@@ -1336,7 +1206,7 @@ function pieces(l) {
 
 // src/layered/align.ts
 var DEFAULT_PORTS = { steps: 4, reach: (units) => units / 2 - 0.375 };
-var EPS2 = 0.000001;
+var EPS3 = 0.000001;
 function align(l, layers, extra = () => 0, opts = {}) {
   const limit = opts.limit ?? Infinity;
   const geom = opts.ports ?? DEFAULT_PORTS;
@@ -1501,24 +1371,24 @@ function align(l, layers, extra = () => 0, opts = {}) {
     const ra = real[a] === 1;
     const rb = real[b] === 1;
     if (!ra && !rb)
-      return Math.abs(ca - cb) < EPS2;
+      return Math.abs(ca - cb) < EPS3;
     if (!ra || !rb) {
       const r = ra ? a : b;
       const d = ra ? cb : ca;
       const reach = (ra ? singleDown[r] : singleUp[r]) ? 0 : portReach[r];
-      return Math.abs(d - ((ra ? sa : sb) + centreOff[r])) <= reach + EPS2;
+      return Math.abs(d - ((ra ? sa : sb) + centreOff[r])) <= reach + EPS3;
     }
     if (geom.centred)
-      return Math.abs(ca - cb) < EPS2;
+      return Math.abs(ca - cb) < EPS3;
     const oneA = singleDown[a] === 1;
     const oneB = singleUp[b] === 1;
     if (oneA && oneB)
-      return Math.abs(ca - cb) < EPS2;
+      return Math.abs(ca - cb) < EPS3;
     if (oneA || oneB)
-      return Math.abs(ca - cb) <= portInner[oneA ? b : a] + EPS2;
+      return Math.abs(ca - cb) <= portInner[oneA ? b : a] + EPS3;
     const lo = Math.max(ca - portReach[a], cb - portReach[b]);
     const hi = Math.min(ca + portReach[a], cb + portReach[b]);
-    return Math.ceil(lo * geom.steps - EPS2) <= Math.floor(hi * geom.steps + EPS2);
+    return Math.ceil(lo * geom.steps - EPS3) <= Math.floor(hi * geom.steps + EPS3);
   };
   const countStraight = (st) => {
     let n = 0;
@@ -2339,7 +2209,7 @@ function components(graph) {
   }
   return graph.nodes.map((_, i) => find(i));
 }
-var SWEEPS2 = 12;
+var SWEEPS = 12;
 function orderLayers(graph, l, rows, free = false, stage, loose = false, holdStart = true) {
   const adj = adjacency(l, loose ? new Set : free ? new Set(rows.main.map((n) => l.nodes[n]?.layer ?? -1)) : undefined);
   const startNode = holdStart ? graph.nodes.findIndex((n) => n.id === graph.edges[0]?.from) : -1;
@@ -2521,7 +2391,7 @@ function orderLayers(graph, l, rows, free = false, stage, loose = false, holdSta
   };
   let best = order.map((r) => [...r]);
   let bestCost = total();
-  for (let pass = 0;pass < SWEEPS2 && bestCost > 0; pass++) {
+  for (let pass = 0;pass < SWEEPS && bestCost > 0; pass++) {
     if (pass % 2 === 0)
       for (let i = 1;i < count; i++)
         reorder(i, upCsr);
@@ -2979,9 +2849,9 @@ function placeLabel(segment, size, nodes, placed, ruler, foreign = [], beside = 
 }
 
 // src/layered/label-room.ts
-var ARROW = 8;
+var ARROW2 = 8;
 var lineBeside = (style) => style === "dotted" ? 24 : 16;
-var roomAround = (style) => 2 * lineBeside(style) + ARROW;
+var roomAround = (style) => 2 * lineBeside(style) + ARROW2;
 function labelBox(lines, ruler) {
   return {
     w: Math.max(0, ...lines.map((l) => ruler.textWidth(l, "edge"))) + 2 * ruler.labelPadX,
@@ -3104,26 +2974,26 @@ function directionsOf(l) {
 }
 
 // src/layered/elbows.ts
-var EPS3 = 0.000001;
+var EPS4 = 0.000001;
 var MIN_LEG = 24;
 var segs = (points) => points.slice(1).map((q, i) => ({ ax: points[i].x, ay: points[i].y, bx: q.x, by: q.y }));
 function overlap(s, t) {
-  const sh = Math.abs(s.ay - s.by) < EPS3;
-  const th = Math.abs(t.ay - t.by) < EPS3;
+  const sh = Math.abs(s.ay - s.by) < EPS4;
+  const th = Math.abs(t.ay - t.by) < EPS4;
   if (sh !== th)
     return false;
   if (sh)
-    return Math.abs(s.ay - t.ay) < EPS3 && Math.min(Math.max(s.ax, s.bx), Math.max(t.ax, t.bx)) - Math.max(Math.min(s.ax, s.bx), Math.min(t.ax, t.bx)) > EPS3;
-  return Math.abs(s.ax - t.ax) < EPS3 && Math.min(Math.max(s.ay, s.by), Math.max(t.ay, t.by)) - Math.max(Math.min(s.ay, s.by), Math.min(t.ay, t.by)) > EPS3;
+    return Math.abs(s.ay - t.ay) < EPS4 && Math.min(Math.max(s.ax, s.bx), Math.max(t.ax, t.bx)) - Math.max(Math.min(s.ax, s.bx), Math.min(t.ax, t.bx)) > EPS4;
+  return Math.abs(s.ax - t.ax) < EPS4 && Math.min(Math.max(s.ay, s.by), Math.max(t.ay, t.by)) - Math.max(Math.min(s.ay, s.by), Math.min(t.ay, t.by)) > EPS4;
 }
-var hits = (s, r) => Math.min(s.ax, s.bx) < r.x + r.w - EPS3 && Math.max(s.ax, s.bx) > r.x + EPS3 && Math.min(s.ay, s.by) < r.y + r.h - EPS3 && Math.max(s.ay, s.by) > r.y + EPS3;
+var hits = (s, r) => Math.min(s.ax, s.bx) < r.x + r.w - EPS4 && Math.max(s.ax, s.bx) > r.x + EPS4 && Math.min(s.ay, s.by) < r.y + r.h - EPS4 && Math.max(s.ay, s.by) > r.y + EPS4;
 function properCross(a, b) {
-  const ah = Math.abs(a.ay - a.by) < EPS3;
-  const bh = Math.abs(b.ay - b.by) < EPS3;
+  const ah = Math.abs(a.ay - a.by) < EPS4;
+  const bh = Math.abs(b.ay - b.by) < EPS4;
   if (ah === bh)
     return false;
   const [h, v] = ah ? [a, b] : [b, a];
-  return v.ax > Math.min(h.ax, h.bx) + EPS3 && v.ax < Math.max(h.ax, h.bx) - EPS3 && h.ay > Math.min(v.ay, v.by) + EPS3 && h.ay < Math.max(v.ay, v.by) - EPS3;
+  return v.ax > Math.min(h.ax, h.bx) + EPS4 && v.ax < Math.max(h.ax, h.bx) - EPS4 && h.ay > Math.min(v.ay, v.by) + EPS4 && h.ay < Math.max(v.ay, v.by) - EPS4;
 }
 var crossings = (mine, others) => others.reduce((n, o) => n + mine.reduce((m, s) => m + o.filter((t) => properCross(s, t)).length, 0), 0);
 var length = (points) => segs(points).reduce((n, s) => n + Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay), 0);
@@ -3142,15 +3012,15 @@ function useElbows(edges, nodes, ruler, td, directions) {
       return;
     const p = edge.points.map(abstract);
     const [p0, p1, p2, p3] = p;
-    if (Math.abs(p0.o - p1.o) > EPS3 || Math.abs(p1.l - p2.l) > EPS3 || Math.abs(p2.o - p3.o) > EPS3 || Math.abs(p1.o - p2.o) < EPS3)
+    if (Math.abs(p0.o - p1.o) > EPS4 || Math.abs(p1.l - p2.l) > EPS4 || Math.abs(p2.o - p3.o) > EPS4 || Math.abs(p1.o - p2.o) < EPS4)
       return;
     return { u, v, p };
   };
-  const stepsOut = (b, o) => o > b.o1 + EPS3 || o < b.o0 - EPS3;
+  const stepsOut = (b, o) => o > b.o1 + EPS4 || o < b.o0 - EPS4;
   const apart = (u, v) => {
     const bu = box(u);
     const bv = box(v);
-    return bv.o0 >= bu.o1 - EPS3 || bv.o1 <= bu.o0 + EPS3;
+    return bv.o0 >= bu.o1 - EPS4 || bv.o1 <= bu.o0 + EPS4;
   };
   const ends = edges.map((edge) => {
     const jog = jogOf(edge);
@@ -3222,7 +3092,7 @@ function useElbows(edges, nodes, ruler, td, directions) {
           if (!q || id !== node.id)
             continue;
           const a = abstract(q);
-          if (Math.abs(a.o - border) < EPS3 && a.l >= b.l0 - EPS3 && a.l <= b.l1 + EPS3) {
+          if (Math.abs(a.o - border) < EPS4 && a.l >= b.l0 - EPS4 && a.l <= b.l1 + EPS4) {
             if (leaves)
               leaving++;
             else
@@ -3237,7 +3107,7 @@ function useElbows(edges, nodes, ruler, td, directions) {
         return false;
       const a = abstract(q);
       const b = box(node);
-      return Math.abs(a.o - border) < EPS3 && a.l >= b.l0 - EPS3 && a.l <= b.l1 + EPS3;
+      return Math.abs(a.o - border) < EPS4 && a.l >= b.l0 - EPS4 && a.l <= b.l1 + EPS4;
     }));
     const ports = (b, toward, from, alone) => {
       if (alone)
@@ -3268,7 +3138,7 @@ function useElbows(edges, nodes, ruler, td, directions) {
     }
     const others = edges.filter((_, i) => i !== index);
     const otherSegs = others.map((e) => segs(e.points));
-    const taken = (point) => others.some((e) => [e.points[0], e.points[e.points.length - 1]].some((q) => q !== undefined && Math.abs(q.x - point.x) < EPS3 && Math.abs(q.y - point.y) < EPS3));
+    const taken = (point) => others.some((e) => [e.points[0], e.points[e.points.length - 1]].some((q) => q !== undefined && Math.abs(q.x - point.x) < EPS4 && Math.abs(q.y - point.y) < EPS4));
     const before = crossings(segs(edge.points), otherSegs);
     const tightBefore = !fresh ? 0 : tightPasses({ nodes, edges: [edge] });
     let best;
@@ -3286,7 +3156,7 @@ function useElbows(edges, nodes, ruler, td, directions) {
         continue;
       if (fresh && tightPasses({ nodes, edges: [{ ...edge, points: path }] }) > tightBefore)
         continue;
-      if (!best || length(path) < length(best) - EPS3)
+      if (!best || length(path) < length(best) - EPS4)
         best = path;
     }
     return best;
@@ -3332,17 +3202,17 @@ function useElbows(edges, nodes, ruler, td, directions) {
 }
 
 // src/layered/two-way.ts
-var EPS4 = 0.000001;
+var EPS5 = 0.000001;
 var AWAY = 24;
 var straight = (e) => e.points.length === 2;
-var vertical = (e) => Math.abs(e.points[0].x - e.points[1].x) < EPS4;
+var vertical = (e) => Math.abs(e.points[0].x - e.points[1].x) < EPS5;
 function onFace(p, n, face) {
   if (face === "left" || face === "right") {
     const x = face === "left" ? n.x : n.x + n.w;
-    return Math.abs(p.x - x) < EPS4 && p.y > n.y - EPS4 && p.y < n.y + n.h + EPS4;
+    return Math.abs(p.x - x) < EPS5 && p.y > n.y - EPS5 && p.y < n.y + n.h + EPS5;
   }
   const y = face === "top" ? n.y : n.y + n.h;
-  return Math.abs(p.y - y) < EPS4 && p.x > n.x - EPS4 && p.x < n.x + n.w + EPS4;
+  return Math.abs(p.y - y) < EPS5 && p.x > n.x - EPS5 && p.x < n.x + n.w + EPS5;
 }
 function around(u, v, face) {
   const cy = (n) => n.y + n.h / 2;
@@ -3367,7 +3237,7 @@ function around(u, v, face) {
   }
 }
 function goesBack(u, v, direction) {
-  return direction === "TD" ? v.y + v.h < u.y + EPS4 : v.x + v.w < u.x + EPS4;
+  return direction === "TD" ? v.y + v.h < u.y + EPS5 : v.x + v.w < u.x + EPS5;
 }
 function separateTwoWay(layout, ruler) {
   if (ruler.uniform)
@@ -3398,7 +3268,7 @@ function separateTwoWay(layout, ruler) {
       if (taken)
         continue;
       const pts = around(u, v, face);
-      if (pts.some((p) => p.x < room.x0 - EPS4 || p.x > room.x1 + EPS4 || p.y < room.y0 - EPS4 || p.y > room.y1 + EPS4))
+      if (pts.some((p) => p.x < room.x0 - EPS5 || p.x > room.x1 + EPS5 || p.y < room.y0 - EPS5 || p.y > room.y1 + EPS5))
         continue;
       const mine = segs(pts);
       if (nodes.some((n) => mine.some((s) => hits(s, n))))
@@ -3415,7 +3285,7 @@ function separateTwoWay(layout, ruler) {
 }
 
 // src/layered/lane-gaps.ts
-var EPS5 = 0.000001;
+var EPS6 = 0.000001;
 var LANE_NAME_INSET = 16;
 var BORDER_CLEAR = 8;
 function stackAxis(lanes) {
@@ -3423,14 +3293,14 @@ function stackAxis(lanes) {
     const [p, s, q] = axis === "y" ? ["y", "h", "x"] : ["x", "w", "y"];
     return lanes.every((b, i) => {
       const a = lanes[i - 1];
-      return a === undefined || b[p] >= a[p] + a[s] - EPS5 && Math.abs(b[q] - a[q]) < EPS5;
+      return a === undefined || b[p] >= a[p] + a[s] - EPS6 && Math.abs(b[q] - a[q]) < EPS6;
     });
   };
   return along("y") ? "y" : along("x") ? "x" : undefined;
 }
 function nameBox(lane) {
   const box = lane.labelBox;
-  if (box.w + 2 * LANE_NAME_INSET > lane.w + EPS5)
+  if (box.w + 2 * LANE_NAME_INSET > lane.w + EPS6)
     return box;
   return { ...box, x: lane.x + LANE_NAME_INSET, y: lane.y + LANE_NAME_INSET };
 }
@@ -3451,7 +3321,7 @@ function evenLaneGaps(layout, ruler) {
     for (const e of layout.edges) {
       e.points.slice(1).forEach((q, k) => {
         const r = e.points[k];
-        if (Math.abs(r[p] - q[p]) < EPS5 && r[p] > from + EPS5 && r[p] < to - EPS5)
+        if (Math.abs(r[p] - q[p]) < EPS6 && r[p] > from + EPS6 && r[p] < to - EPS6)
           at.add(r[p]);
       });
     }
@@ -3461,13 +3331,13 @@ function evenLaneGaps(layout, ruler) {
   const gap = Math.max(...runs.map((r) => need(r.at.length)));
   const borders = [];
   for (const r of runs) {
-    if (gap > r.to - r.from + EPS5)
+    if (gap > r.to - r.from + EPS6)
       return layout;
     const lo = r.at[0];
     const hi = r.at.at(-1);
     const centre = lo === undefined || hi === undefined ? (r.from + r.to) / 2 : (lo + hi) / 2;
-    const from = Math.min(r.to - gap, Math.max(r.from, r.from + Math.floor((centre - gap / 2 - r.from) / grid + EPS5) * grid));
-    if (lo !== undefined && hi !== undefined && (lo < from + ruler.trackGap - EPS5 || hi > from + gap - ruler.trackGap + EPS5))
+    const from = Math.min(r.to - gap, Math.max(r.from, r.from + Math.floor((centre - gap / 2 - r.from) / grid + EPS6) * grid));
+    if (lo !== undefined && hi !== undefined && (lo < from + ruler.trackGap - EPS6 || hi > from + gap - ruler.trackGap + EPS6))
       return layout;
     borders.push({ from, to: from + gap });
   }
@@ -3503,7 +3373,7 @@ var SLIDE = 8;
 var MARK_CLEAR = 8;
 var CHIP_GROW_X = 6;
 var CHIP_GROW_Y = 2;
-var EPS6 = 0.000001;
+var EPS7 = 0.000001;
 var gapOf = (a, b) => Math.hypot(Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0), Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0));
 function pointToSegment(p, s) {
   const [a, b] = s;
@@ -3519,7 +3389,7 @@ function crossesEdges(a, b, c, d) {
 }
 function segmentToRect(s, r) {
   const [a, b] = s;
-  const inside = (p) => p.x >= r.x - EPS6 && p.x <= r.x + r.w + EPS6 && p.y >= r.y - EPS6 && p.y <= r.y + r.h + EPS6;
+  const inside = (p) => p.x >= r.x - EPS7 && p.x <= r.x + r.w + EPS7 && p.y >= r.y - EPS7 && p.y <= r.y + r.h + EPS7;
   if (inside(a) || inside(b))
     return 0;
   const corners = [
@@ -3543,19 +3413,19 @@ var chipOf = (r, q) => q.ruler.uniform ? r : chipOfLabel(r);
 function measure(r, q) {
   const line = nearestLine(r, q.foreign);
   const chip = chipOf(r, q);
-  const overlap = q.nodes.some((n) => overlaps(chip, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS6;
-  const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS6);
-  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS6 && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS6);
+  const overlap = q.nodes.some((n) => overlaps(chip, n)) || (q.avoid ?? []).some((a) => overlaps(r, a)) || q.placed.some((o) => overlaps(r, o)) || line < EPS7;
+  const marked = (q.marks ?? []).some((m) => gapOf(r, { x: m.x, y: m.y, w: 0, h: 0 }) < MARK_CLEAR - EPS7);
+  const clean = !overlap && !marked && line >= LINE_CLEAR - EPS7 && q.placed.every((o) => gapOf(r, o) >= LABEL_CLEAR - EPS7);
   return { line, clean, overlap, marked };
 }
 function sideOf(seg, r) {
   const [p, q] = seg;
   if (p.y === q.y) {
     const d = r.y + r.h / 2 - p.y;
-    return Math.abs(d) < EPS6 ? 0 : Math.sign(d);
+    return Math.abs(d) < EPS7 ? 0 : Math.sign(d);
   }
   const d = r.x + r.w / 2 - p.x;
-  return Math.abs(d) < EPS6 ? 0 : Math.sign(d);
+  return Math.abs(d) < EPS7 ? 0 : Math.sign(d);
 }
 function slideRange(seg, si, count, size, style) {
   const [p, z] = seg;
@@ -3566,13 +3436,13 @@ function slideRange(seg, si, count, size, style) {
   const dim = horizontal ? size.w : size.h;
   const lo = horizontal ? Math.min(p.x, z.x) : Math.min(p.y, z.y);
   const hi = horizontal ? Math.max(p.x, z.x) : Math.max(p.y, z.y);
-  if (hi - lo < dim + 2 * beside - EPS6)
+  if (hi - lo < dim + 2 * beside - EPS7)
     return;
   const headHigh = horizontal ? z.x > p.x : z.y > p.y;
-  const head = si === count - 1 ? ARROW : 0;
+  const head = si === count - 1 ? ARROW2 : 0;
   const from = lo + beside + dim / 2 + (head && !headHigh ? head : 0);
   const to = hi - beside - dim / 2 - (head && headHigh ? head : 0);
-  return to < from - EPS6 ? undefined : { from, to, horizontal };
+  return to < from - EPS7 ? undefined : { from, to, horizontal };
 }
 function candidates(q) {
   const { own, size, ruler } = q;
@@ -3584,7 +3454,7 @@ function candidates(q) {
     const { from, to, horizontal } = range;
     const [p] = seg;
     const mid = (from + to) / 2;
-    const reach = Math.floor((to - from) / 2 / SLIDE + EPS6);
+    const reach = Math.floor((to - from) / 2 / SLIDE + EPS7);
     const gap = (horizontal ? size.h : size.w) / 2 + (horizontal ? ruler.labelPadY : ruler.labelPadX);
     for (const side of horizontal ? [0] : [0, 1, -1]) {
       for (let k = 0;k <= reach; k++) {
@@ -3620,7 +3490,7 @@ function chooseSpot(q) {
     if (s.overlap || s.marked)
       continue;
     const next = { rect: s.c.rect, line: s.line, overlap: s.overlap, away: away(s.c.rect) };
-    if (next.line > best.line + EPS6 || Math.abs(next.line - best.line) <= EPS6 && next.away < best.away - EPS6)
+    if (next.line > best.line + EPS7 || Math.abs(next.line - best.line) <= EPS7 && next.away < best.away - EPS7)
       best = next;
   }
   return { rect: best.rect, moved: best.rect !== q.basic, overlap: best.overlap };
@@ -3697,11 +3567,11 @@ function levelSiblings(layout, edges, all, nodes, ruler, avoid) {
       continue;
     const low = Math.max(...spans.map((s) => s.from));
     const high = Math.min(...spans.map((s) => s.to));
-    if (high < low - EPS6)
+    if (high < low - EPS7)
       continue;
     const moved = (s, at) => ({ ...s.rect, ...flowsDown ? { y: edgeNear(ruler, at - s.rect.h / 2) } : { x: edgeNear(ruler, at - s.rect.w / 2) } });
     const middle = (low + high) / 2;
-    const reach = Math.floor((high - low) / 2 / SLIDE + EPS6);
+    const reach = Math.floor((high - low) / 2 / SLIDE + EPS7);
     const levels = Array.from({ length: reach + 1 }, (_, k) => k === 0 ? [middle] : [middle - k * SLIDE, middle + k * SLIDE]).flat();
     for (const at of levels) {
       const rects = spans.map((s) => moved(s, at));
@@ -3855,7 +3725,7 @@ function crossings2(edges) {
 // src/layered/head-room.ts
 var HEAD_LEG = 32;
 var BEND_CLEAR = 16;
-var EPS7 = 0.000001;
+var EPS8 = 0.000001;
 var NEAR = 0.01;
 var TRIES = 64;
 var marked = (edge, first) => first ? (edge.startEnd ?? "none") !== "none" : (edge.end ?? "arrow") !== "none";
@@ -3870,11 +3740,11 @@ function shortLegs(layout) {
         continue;
       const a = first ? pts[0] : pts[pts.length - 1];
       const b = first ? pts[1] : pts[pts.length - 2];
-      const axis = Math.abs(a.y - b.y) < EPS7 ? "x" : "y";
-      if (axis === "y" && Math.abs(a.x - b.x) > EPS7)
+      const axis = Math.abs(a.y - b.y) < EPS8 ? "x" : "y";
+      if (axis === "y" && Math.abs(a.x - b.x) > EPS8)
         continue;
       const len = Math.abs(a[axis] - b[axis]);
-      if (len > EPS7 && len < HEAD_LEG - EPS7)
+      if (len > EPS8 && len < HEAD_LEG - EPS8)
         out.push({ edge: index, first, axis, lo: Math.min(a[axis], b[axis]), hi: Math.max(a[axis], b[axis]), lack: HEAD_LEG - len });
     }
   }
@@ -3931,14 +3801,14 @@ function pullApart(layout, axis, at, by) {
 var within2 = (b, p) => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
 var holds = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 var touches = (p, q, b) => Math.min(p.x, q.x) <= b.x + b.w && Math.max(p.x, q.x) >= b.x && Math.min(p.y, q.y) <= b.y + b.h && Math.max(p.y, q.y) >= b.y;
-var meets = (a, b) => a.x < b.x + b.w - EPS7 && b.x < a.x + a.w - EPS7 && a.y < b.y + b.h - EPS7 && b.y < a.y + a.h - EPS7;
+var meets = (a, b) => a.x < b.x + b.w - EPS8 && b.x < a.x + a.w - EPS8 && a.y < b.y + b.h - EPS8 && b.y < a.y + a.h - EPS8;
 var grown = (b, by) => ({ x: b.x - by, y: b.y - by, w: b.w + 2 * by, h: b.h + 2 * by });
 function sideBySide(layout, index) {
   const own = layout.edges[index].points;
   const out = [];
   for (let k = 0;k + 1 < own.length; k++) {
     const [p, q] = [own[k], own[k + 1]];
-    const axis = Math.abs(p.y - q.y) < EPS7 ? "x" : Math.abs(p.x - q.x) < EPS7 ? "y" : undefined;
+    const axis = Math.abs(p.y - q.y) < EPS8 ? "x" : Math.abs(p.x - q.x) < EPS8 ? "y" : undefined;
     for (const [i, e] of layout.edges.entries()) {
       if (i === index || e.invisible)
         continue;
@@ -3949,7 +3819,7 @@ function sideBySide(layout, index) {
           continue;
         }
         const across = axis === "x" ? "y" : "x";
-        const level = Math.abs(r[across] - t[across]) < EPS7 && Math.abs(r[across] - p[across]) < LINE_CLEAR - EPS7;
+        const level = Math.abs(r[across] - t[across]) < EPS8 && Math.abs(r[across] - p[across]) < LINE_CLEAR - EPS8;
         out.push(level ? Math.max(0, Math.min(Math.max(p[axis], q[axis]), Math.max(r[axis], t[axis])) - Math.max(Math.min(p[axis], q[axis]), Math.min(r[axis], t[axis]))) : 0);
       }
     }
@@ -3962,7 +3832,7 @@ function noWorse(before, after, index) {
   if (crossingCount(after.edges) > crossingCount(before.edges))
     return false;
   const was = sideBySide(before, index);
-  return sideBySide(after, index).every((run, k) => run <= (was[k] ?? 0) + EPS7);
+  return sideBySide(after, index).every((run, k) => run <= (was[k] ?? 0) + EPS8);
 }
 function bendBack(layout, s) {
   const edge = layout.edges[s.edge];
@@ -3974,15 +3844,15 @@ function bendBack(layout, s) {
     return;
   const along = s.axis;
   const across = along === "x" ? "y" : "x";
-  if (Math.abs(a[across] - b[across]) > EPS7 || Math.abs(b[along] - c[along]) > EPS7 || Math.abs(c[across] - d[across]) > EPS7)
+  if (Math.abs(a[across] - b[across]) > EPS8 || Math.abs(b[along] - c[along]) > EPS8 || Math.abs(c[across] - d[across]) > EPS8)
     return;
   const dir = Math.sign(b[along] - a[along]);
   const to = a[along] + dir * HEAD_LEG;
-  if ((to - b[along]) * dir < EPS7)
+  if ((to - b[along]) * dir < EPS8)
     return;
   if (Math.sign(d[along] - c[along]) === dir) {
     const keep = pts.length === 4 && marked(edge, !s.first) ? HEAD_LEG : BEND_CLEAR;
-    if ((d[along] - to) * dir < keep - EPS7)
+    if ((d[along] - to) * dir < keep - EPS8)
       return;
   }
   const from = b[along] + dir * NEAR;
@@ -4025,7 +3895,7 @@ function headRoom(layout, step, maxWidth) {
   for (let i = 0;i < TRIES; i++) {
     let next;
     for (const s of shortLegs(out)) {
-      const by = Math.ceil((s.lack - EPS7) / step) * step;
+      const by = Math.ceil((s.lack - EPS8) / step) * step;
       if (s.axis === "x" && maxWidth !== undefined && Number.isFinite(maxWidth) && out.width + by > maxWidth)
         continue;
       const at = [s.hi - NEAR, s.lo + NEAR, (s.lo + s.hi) / 2].find((c) => open(out, s.axis, c));
@@ -4129,7 +3999,7 @@ function cleared(layout, i, ruler, step, avoidOf, most, maxWidth) {
 }
 
 // src/layered/centre.ts
-var EPS8 = 1;
+var EPS9 = 1;
 var SIDES2 = ["top", "bottom", "left", "right"];
 function offCentreEnds(l) {
   const nodeAt = new Map(l.nodes.map((n, i) => [n.id, i]));
@@ -4141,7 +4011,7 @@ function offCentreEnds(l) {
       if (at === undefined || !p)
         continue;
       const n = l.nodes[at];
-      const side = Math.abs(p.y - n.y) < EPS8 ? "top" : Math.abs(p.y - n.y - n.h) < EPS8 ? "bottom" : Math.abs(p.x - n.x) < EPS8 ? "left" : "right";
+      const side = Math.abs(p.y - n.y) < EPS9 ? "top" : Math.abs(p.y - n.y - n.h) < EPS9 ? "bottom" : Math.abs(p.x - n.x) < EPS9 ? "left" : "right";
       const off = side === "top" || side === "bottom" ? Math.abs(p.x - (n.x + n.w / 2)) : Math.abs(p.y - (n.y + n.h / 2));
       const k = at * SIDES2.length + SIDES2.indexOf(side);
       const g = groupAt[k];
@@ -4154,7 +4024,7 @@ function offCentreEnds(l) {
   });
   const out = [];
   for (const { node, side, count, off, edge } of sides) {
-    if (count !== 1 || off <= EPS8)
+    if (count !== 1 || off <= EPS9)
       continue;
     const id = l.nodes[node].id;
     const e = l.edges[edge];
@@ -4179,7 +4049,7 @@ var stats = {
 };
 
 // src/layered/vertex.ts
-var EPS9 = 0.000001;
+var EPS10 = 0.000001;
 var ON_FACE = 0.5;
 var LEG = 16;
 var PORT_APART = 8;
@@ -4190,7 +4060,7 @@ var OPPOSITE = { top: "bottom", bottom: "top", left: "right", right: "left" };
 var horizontal = (face) => face === "top" || face === "bottom";
 var centreX = (n) => n.x + n.w / 2;
 var centreY = (n) => n.y + n.h / 2;
-var tidy2 = (v) => Math.round(v * 1e6) / 1e6;
+var tidy3 = (v) => Math.round(v * 1e6) / 1e6;
 function faceAt(n, p) {
   const inX = p.x > n.x - ON_FACE && p.x < n.x + n.w + ON_FACE;
   const inY = p.y > n.y - ON_FACE && p.y < n.y + n.h + ON_FACE;
@@ -4237,8 +4107,8 @@ function kit(edges, nodes, ruler, step) {
     return out;
   };
   const lines = (axis, c, n, q, m, near) => {
-    const down = (v) => Math.floor(v / grid + EPS9) * grid;
-    const up = (v) => Math.ceil(v / grid - EPS9) * grid;
+    const down = (v) => Math.floor(v / grid + EPS10) * grid;
+    const up = (v) => Math.ceil(v / grid - EPS10) * grid;
     const vals = new Set;
     const edgesOf = [];
     for (const b of nodes) {
@@ -4268,7 +4138,7 @@ function kit(edges, nodes, ruler, step) {
     const sameAxis = n.x * m.x + n.y * m.y !== 0;
     const out = [];
     if (bends === 0) {
-      if (sameAxis && (n.y !== 0 ? Math.abs(c.x - q.x) < EPS9 : Math.abs(c.y - q.y) < EPS9))
+      if (sameAxis && (n.y !== 0 ? Math.abs(c.x - q.x) < EPS10 : Math.abs(c.y - q.y) < EPS10))
         out.push([c, q]);
     } else if (bends === 1 && !sameAxis) {
       out.push([c, n.y === 0 ? { x: q.x, y: c.y } : { x: c.x, y: q.y }, q]);
@@ -4305,8 +4175,8 @@ function kit(edges, nodes, ruler, step) {
     for (const e of edges)
       if (e !== end.edge)
         for (const t of segs(e.points))
-          (Math.abs(t.ay - t.by) < EPS9 ? levels : uprights).push(t);
-    const level = (s) => Math.abs(s.ay - s.by) < EPS9;
+          (Math.abs(t.ay - t.by) < EPS10 ? levels : uprights).push(t);
+    const level = (s) => Math.abs(s.ay - s.by) < EPS10;
     const walls = nodes.map((b) => b === end.node || b === end.other ? b : { ...b, x: b.x - clear, y: b.y - clear, w: b.w + 2 * clear, h: b.h + 2 * clear });
     const run = (s) => Math.abs(s.bx - s.ax) + Math.abs(s.by - s.ay);
     const sound = (path) => {
@@ -4314,13 +4184,13 @@ function kit(edges, nodes, ruler, step) {
       const p1 = path[1];
       const pe = path[path.length - 1];
       const pd = path[path.length - 2];
-      if (Math.abs(p1.x - p0.x) + Math.abs(p1.y - p0.y) < LEG - EPS9 || (p1.x - p0.x) * n.x + (p1.y - p0.y) * n.y <= 0)
+      if (Math.abs(p1.x - p0.x) + Math.abs(p1.y - p0.y) < LEG - EPS10 || (p1.x - p0.x) * n.x + (p1.y - p0.y) * n.y <= 0)
         return false;
-      if (Math.abs(pe.x - pd.x) + Math.abs(pe.y - pd.y) < LEG - EPS9 || (pe.x - pd.x) * m.x + (pe.y - pd.y) * m.y >= 0)
+      if (Math.abs(pe.x - pd.x) + Math.abs(pe.y - pd.y) < LEG - EPS10 || (pe.x - pd.x) * m.x + (pe.y - pd.y) * m.y >= 0)
         return false;
       const mine = segs(path);
       for (const s of mine) {
-        if (run(s) < grid - EPS9)
+        if (run(s) < grid - EPS10)
           return false;
         for (const b of walls)
           if (hits(s, b))
@@ -4356,7 +4226,7 @@ function kit(edges, nodes, ruler, step) {
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const run = Math.abs(dx) + Math.abs(dy);
-        if (run < LEG - EPS9 || run < grid - EPS9 || (dx * normal.x + dy * normal.y) * sign <= 0)
+        if (run < LEG - EPS10 || run < grid - EPS10 || (dx * normal.x + dy * normal.y) * sign <= 0)
           return false;
         const s = { ax: from.x, ay: from.y, bx: to.x, by: to.y };
         return !walls.some((b) => hits(s, b));
@@ -4368,7 +4238,7 @@ function kit(edges, nodes, ruler, step) {
         for (const path of shapes(bends, c, n, q, m, pxs, pys)) {
           if (!sound(path))
             continue;
-          const tidied = path.map((p) => ({ x: tidy2(p.x), y: tidy2(p.y) }));
+          const tidied = path.map((p) => ({ x: tidy3(p.x), y: tidy3(p.y) }));
           const crossed = crossings(tidied);
           cap = Math.min(cap, crossed);
           found.push({ path: tidied, crossings: crossed, bends, length: length(path) });
@@ -4384,7 +4254,7 @@ function kit(edges, nodes, ruler, step) {
   const pathFor = (end, face, c) => {
     let best;
     for (const way of waysFor(end, face, c))
-      if (!best || way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9)
+      if (!best || way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS10)
         best = way;
     return best?.path;
   };
@@ -4406,7 +4276,7 @@ function kit(edges, nodes, ruler, step) {
     if (here.some((e) => e.first !== end.first))
       return;
     const [length, across, origin] = horizontal(face) ? [node.w, node.h, node.x] : [node.h, node.w, node.y];
-    const slots = faceOffsets(node.shape, face, length, across, step, here.length + 1, false).map((o) => origin + o).filter((at) => here.every((e) => Math.abs((horizontal(face) ? pointOf(e).x : pointOf(e).y) - at) >= PORT_APART - EPS9)).sort((a, b) => Math.abs(a - origin - length / 2) - Math.abs(b - origin - length / 2) || a - b);
+    const slots = faceOffsets(node.shape, face, length, across, step, here.length + 1, false).map((o) => origin + o).filter((at) => here.every((e) => Math.abs((horizontal(face) ? pointOf(e).x : pointOf(e).y) - at) >= PORT_APART - EPS10)).sort((a, b) => Math.abs(a - origin - length / 2) - Math.abs(b - origin - length / 2) || a - b);
     const at = slots[0];
     if (at === undefined)
       return;
@@ -4416,7 +4286,7 @@ function kit(edges, nodes, ruler, step) {
   const targets = (end) => {
     const d = horizontal(end.face) ? centreX(end.other) - centreX(end.node) : centreY(end.other) - centreY(end.node);
     const [toward, away] = horizontal(end.face) ? ["right", "left"] : ["bottom", "top"];
-    return d < -EPS9 ? [away, toward, OPPOSITE[end.face]] : [toward, away, OPPOSITE[end.face]];
+    return d < -EPS10 ? [away, toward, OPPOSITE[end.face]] : [toward, away, OPPOSITE[end.face]];
   };
   const bestWay = (end, limit = Infinity) => {
     let best;
@@ -4425,7 +4295,7 @@ function kit(edges, nodes, ruler, step) {
       if (!c)
         continue;
       for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity))) {
-        if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9))
+        if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS10))
           best = way;
       }
     }
@@ -4450,7 +4320,7 @@ function kit(edges, nodes, ruler, step) {
         if (!at)
           continue;
         for (const way of waysFor(end, face, c, Math.min(limit, best?.crossings ?? Infinity), { at, face: farFace })) {
-          if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS9))
+          if (!best || way.crossings < best.crossings || way.crossings === best.crossings && (way.bends < best.bends || way.bends === best.bends && way.length < best.length - EPS10))
             best = way;
         }
       }
@@ -4533,7 +4403,6 @@ function settleMixedSides(edges, nodes, ruler, step) {
 }
 
 // src/edge-ends.ts
-var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
 function endFields(e) {
   return {
     ...e.id === undefined ? {} : { id: e.id },
@@ -4544,8 +4413,8 @@ function endFields(e) {
 }
 
 // src/layered/bodies.ts
-var EPS10 = 0.000001;
-var tidy3 = (v) => {
+var EPS11 = 0.000001;
+var tidy4 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -4556,20 +4425,20 @@ function bodyOf(node, td, ruler) {
   const body = node.shape === "ellipse" ? td ? { w: own.w, h: node.h } : { w: node.w, h: own.h } : own;
   const w = Math.min(node.w, body.w);
   const h = Math.min(node.h, body.h);
-  return { x: tidy3(node.x + (node.w - w) / 2), y: tidy3(node.y + (node.h - h) / 2), w: tidy3(w), h: tidy3(h) };
+  return { x: tidy4(node.x + (node.w - w) / 2), y: tidy4(node.y + (node.h - h) / 2), w: tidy4(w), h: tidy4(h) };
 }
 function reach(slot, body, end, next, below = 0) {
   const dx = end.x - next.x;
   const dy = end.y - next.y;
-  if (Math.abs(dx) < EPS10 && Math.abs(dy) > EPS10) {
-    if (dy > 0 && Math.abs(end.y - slot.y) < EPS10)
+  if (Math.abs(dx) < EPS11 && Math.abs(dy) > EPS11) {
+    if (dy > 0 && Math.abs(end.y - slot.y) < EPS11)
       return { x: end.x, y: body.y };
-    if (dy < 0 && Math.abs(end.y - (slot.y + slot.h)) < EPS10)
+    if (dy < 0 && Math.abs(end.y - (slot.y + slot.h)) < EPS11)
       return { x: end.x, y: body.y + body.h + below };
-  } else if (Math.abs(dy) < EPS10 && Math.abs(dx) > EPS10) {
-    if (dx > 0 && Math.abs(end.x - slot.x) < EPS10)
+  } else if (Math.abs(dy) < EPS11 && Math.abs(dx) > EPS11) {
+    if (dx > 0 && Math.abs(end.x - slot.x) < EPS11)
       return { x: body.x, y: end.y };
-    if (dx < 0 && Math.abs(end.x - (slot.x + slot.w)) < EPS10)
+    if (dx < 0 && Math.abs(end.x - (slot.x + slot.w)) < EPS11)
       return { x: body.x + body.w, y: end.y };
   }
   return end;
@@ -4598,7 +4467,7 @@ function settleBodies(nodes, edges, td, ruler) {
       out[0] = reach(first.slot, first.body, pts[0], pts[1], first.below);
     if (last)
       out[pts.length - 1] = reach(last.slot, last.body, pts[pts.length - 1], pts[pts.length - 2], last.below);
-    edge.points = out.map((p) => ({ x: tidy3(p.x), y: tidy3(p.y) }));
+    edge.points = out.map((p) => ({ x: tidy4(p.x), y: tidy4(p.y) }));
   }
   return settled;
 }
@@ -4728,10 +4597,10 @@ function placeEndLabels(edges, texts, nodes, ruler) {
 }
 
 // src/layered/route.ts
-var EPS11 = 0.000001;
+var EPS12 = 0.000001;
 var PORT_APART2 = 8;
 var marginOf = (ruler) => ruler.uniform ? 0 : gridUp(ruler, ruler.trackGap);
-var tidy4 = (v) => {
+var tidy5 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -4740,19 +4609,19 @@ var rk = (x) => Math.round(x * 1000);
 function pickPorts(free, count, centre) {
   const byDistance = [...free].sort((x, y) => Math.abs(x - centre) - Math.abs(y - centre) || x - y);
   let pool = byDistance;
-  const off = byDistance.filter((x) => Math.abs(x - centre) > EPS11);
+  const off = byDistance.filter((x) => Math.abs(x - centre) > EPS12);
   if (count % 2 === 0 && off.length >= count)
     pool = off;
   return pool.slice(0, count).sort((x, y) => x - y);
 }
 function hardPairs(items) {
   const out = [];
-  const clash = (a, b) => a.bot.some((x) => b.top.some((t) => Math.abs(t - x) < EPS11));
+  const clash = (a, b) => a.bot.some((x) => b.top.some((t) => Math.abs(t - x) < EPS12));
   for (let i = 0;i < items.length; i++) {
     for (let j = i + 1;j < items.length; j++) {
       const a = items[i];
       const b = items[j];
-      if (a.lo > b.hi + EPS11 || b.lo > a.hi + EPS11)
+      if (a.lo > b.hi + EPS12 || b.lo > a.hi + EPS12)
         continue;
       if (clash(a, b) && clash(b, a))
         out.push([i, j]);
@@ -4762,11 +4631,11 @@ function hardPairs(items) {
 }
 function assignTracks(items) {
   const n = items.length;
-  const inside = (x, it) => x > it.lo + EPS11 && x < it.hi - EPS11 ? 1 : 0;
+  const inside = (x, it) => x > it.lo + EPS12 && x < it.hi - EPS12 ? 1 : 0;
   const cost = (a, b) => {
     let c = 0;
     for (const x of a.bot)
-      c += inside(x, b) + (b.top.some((t) => Math.abs(t - x) < EPS11) ? 1000 : 0);
+      c += inside(x, b) + (b.top.some((t) => Math.abs(t - x) < EPS12) ? 1000 : 0);
     for (const x of b.top)
       c += inside(x, a);
     return c;
@@ -4778,9 +4647,9 @@ function assignTracks(items) {
     for (let j = i + 1;j < n; j++) {
       const a = items[i];
       const b = items[j];
-      if (a.lo > b.hi + EPS11 || b.lo > a.hi + EPS11)
+      if (a.lo > b.hi + EPS12 || b.lo > a.hi + EPS12)
         continue;
-      if (a.pair !== undefined && a.pair === b.pair && (a.lo > b.hi - EPS11 || b.lo > a.hi - EPS11))
+      if (a.pair !== undefined && a.pair === b.pair && (a.lo > b.hi - EPS12 || b.lo > a.hi - EPS12))
         continue;
       overlap[i * n + j] = overlap[j * n + i] = 1;
       const ab = cost(a, b);
@@ -4871,7 +4740,7 @@ function prepare(f, l, layers, start, plan, bundles) {
   const step = portStep(unit, ruler);
   const shapeOf = (n) => f.graph.nodes[n]?.shape;
   const acrossOf = (n) => f.layerExt[n] ?? 0;
-  const reaches = (n, side, x) => Math.abs(x - (nodeO(n) + len(n) / 2)) <= faceReach(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), ruler.uniform === true) + EPS11;
+  const reaches = (n, side, x) => Math.abs(x - (nodeO(n) + len(n) / 2)) <= faceReach(shapeOf(n), faceOf(side, f.td), len(n), acrossOf(n), ruler.uniform === true) + EPS12;
   const items = [];
   for (const [ci, c] of l.chains.entries()) {
     if (c.kind === "span") {
@@ -4918,7 +4787,7 @@ function prepare(f, l, layers, start, plan, bundles) {
       const x = origin + o;
       if (set?.includes(rk(x)))
         continue;
-      if (near?.some((c) => Math.abs(c - x) < PORT_APART2 - EPS11))
+      if (near?.some((c) => Math.abs(c - x) < PORT_APART2 - EPS12))
         continue;
       out.push(x);
     }
@@ -4974,11 +4843,11 @@ function prepare(f, l, layers, start, plan, bundles) {
     const [one, many, manySide] = sa ? [it.a, it.b, "up"] : [it.b, it.a, "down"];
     let x;
     if (sa && sb)
-      x = Math.abs(centre(it.a) - centre(it.b)) < EPS11 ? centre(it.a) : undefined;
+      x = Math.abs(centre(it.a) - centre(it.b)) < EPS12 ? centre(it.a) : undefined;
     else {
       const c = centre(one);
-      const near = (taken[key(many, manySide)] ?? []).some((t) => Math.abs(t / 1000 - c) < PORT_APART2 - EPS11);
-      x = c >= nodeO(many) + CORNER_CLEAR - EPS11 && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS11 && !near && reaches(many, manySide, c) ? c : undefined;
+      const near = (taken[key(many, manySide)] ?? []).some((t) => Math.abs(t / 1000 - c) < PORT_APART2 - EPS12);
+      x = c >= nodeO(many) + CORNER_CLEAR - EPS12 && c <= nodeO(many) + len(many) - CORNER_CLEAR + EPS12 && !near && reaches(many, manySide, c) ? c : undefined;
       if (x !== undefined)
         (custom[key(many, manySide)] ??= []).push(x);
     }
@@ -5003,7 +4872,7 @@ function prepare(f, l, layers, start, plan, bundles) {
       const [a, b] = [first.a, first.b];
       const c = len(a) === len(b) ? (centre(a) + centre(b)) / 2 : centre(len(a) < len(b) ? a : b);
       const xs = group.map((_, i) => c + (i - (group.length - 1) / 2) * step);
-      const clear = (n, side) => xs.every((x) => x >= nodeO(n) + CORNER_CLEAR - EPS11 && x <= nodeO(n) + len(n) - CORNER_CLEAR + EPS11 && reaches(n, side, x) && !(taken[key(n, side)] ?? []).some((t) => Math.abs(t / 1000 - x) < PORT_APART2 - EPS11));
+      const clear = (n, side) => xs.every((x) => x >= nodeO(n) + CORNER_CLEAR - EPS12 && x <= nodeO(n) + len(n) - CORNER_CLEAR + EPS12 && reaches(n, side, x) && !(taken[key(n, side)] ?? []).some((t) => Math.abs(t / 1000 - x) < PORT_APART2 - EPS12));
       if (!clear(a, "down") || !clear(b, "up"))
         continue;
       const mid = (centre(a) + centre(b)) / 2;
@@ -5027,9 +4896,9 @@ function prepare(f, l, layers, start, plan, bundles) {
     const [ea, eb] = [endOf(it, "a"), endOf(it, "b")];
     const [heldA, heldB] = [shared(ea), shared(eb)];
     const fb = heldB === undefined ? free(it.b, "up") : [heldB];
-    if (ruler.uniform && Math.abs(centre(it.a) - centre(it.b)) > EPS11)
+    if (ruler.uniform && Math.abs(centre(it.a) - centre(it.b)) > EPS12)
       continue;
-    const common = (heldA === undefined ? free(it.a, "down") : [heldA]).filter((x) => fb.some((y) => Math.abs(x - y) < EPS11));
+    const common = (heldA === undefined ? free(it.a, "down") : [heldA]).filter((x) => fb.some((y) => Math.abs(x - y) < EPS12));
     const mid = (centre(it.a) + centre(it.b)) / 2;
     common.sort((x, y) => Math.abs(x - mid) - Math.abs(y - mid) || x - y);
     const x = common[0];
@@ -5050,16 +4919,16 @@ function prepare(f, l, layers, start, plan, bundles) {
     const others = ends.filter((o) => o.node === e.node && o.side === e.side && bundleOf(o) !== bundleOf(e) && peers(o)[0] === o);
     const [before, after] = [others.filter((o) => aim(o) < mine), others.filter((o) => aim(o) >= mine)];
     const at = (o) => o.which === "a" ? o.item.xa : o.item.xb;
-    if (before.some((o) => done(o) && at(o) > x - EPS11) || after.some((o) => done(o) && at(o) < x + EPS11))
+    if (before.some((o) => done(o) && at(o) > x - EPS12) || after.some((o) => done(o) && at(o) < x + EPS12))
       return false;
     const ports = free(e.node, e.side);
-    return ports.filter((p) => p < x - EPS11).length >= before.filter((o) => !done(o)).length && ports.filter((p) => p > x + EPS11).length >= after.filter((o) => !done(o)).length;
+    return ports.filter((p) => p < x - EPS12).length >= before.filter((o) => !done(o)).length && ports.filter((p) => p > x + EPS12).length >= after.filter((o) => !done(o)).length;
   };
   for (const e of ends) {
     if (done(e) || e.item.kind !== "piece" || real(e.other) || single(e.node, e.side))
       continue;
     const x = centre(e.other);
-    if (!free(e.node, e.side).some((p) => Math.abs(p - x) < EPS11))
+    if (!free(e.node, e.side).some((p) => Math.abs(p - x) < EPS12))
       continue;
     if (bundleOf(e) >= 0 && !inOrder(e, x))
       continue;
@@ -5075,10 +4944,10 @@ function prepare(f, l, layers, start, plan, bundles) {
     for (let k = 0;k + 1 < ports.length; k++) {
       const p = ports[k];
       const q = ports[k + 1];
-      if (Math.abs(q - p - step) > EPS11)
+      if (Math.abs(q - p - step) > EPS12)
         continue;
       const d = Math.abs((p + q) / 2 - centre(it.a));
-      if (!best || d < Math.abs((best[0] + best[1]) / 2 - centre(it.a)) - EPS11)
+      if (!best || d < Math.abs((best[0] + best[1]) / 2 - centre(it.a)) - EPS12)
         best = [p, q];
     }
     const [p, q] = best ?? [ports[0] ?? centre(it.a), ports[1] ?? centre(it.a)];
@@ -5121,12 +4990,12 @@ function prepare(f, l, layers, start, plan, bundles) {
       continue;
     }
     for (let seg = 0;seg <= fixed.length; seg++) {
-      const members = loose.filter((e) => fixed.filter((fx) => fx < aim(e) - EPS11).length === seg);
+      const members = loose.filter((e) => fixed.filter((fx) => fx < aim(e) - EPS12).length === seg);
       if (members.length === 0)
         continue;
       const lo = seg === 0 ? -Infinity : fixed[seg - 1];
       const hi = seg === fixed.length ? Infinity : fixed[seg];
-      const room = free(first.node, first.side).filter((x) => x > lo + EPS11 && x < hi - EPS11);
+      const room = free(first.node, first.side).filter((x) => x > lo + EPS12 && x < hi - EPS12);
       const near = seg === 0 ? room.slice(-members.length) : room.slice(0, members.length);
       const rest = free(first.node, first.side).filter((x) => !near.includes(x));
       assign(members, near.length === members.length ? near : [...near, ...rest].slice(0, members.length).sort((x, y) => x - y));
@@ -5153,7 +5022,7 @@ function prepare(f, l, layers, start, plan, bundles) {
   const specsOf = (members) => {
     const horizontal = members.filter((i) => {
       const it = items[i];
-      return it.kind !== "piece" || Math.abs(it.xa - it.xb) > EPS11;
+      return it.kind !== "piece" || Math.abs(it.xa - it.xb) > EPS12;
     });
     const specs = horizontal.map((i) => {
       const it = items[i];
@@ -5173,10 +5042,10 @@ function prepare(f, l, layers, start, plan, bundles) {
       const { specs } = specsOf(members);
       for (const [p, q] of hardPairs(specs)) {
         const pair = [items[specs[p]?.order ?? 0], items[specs[q]?.order ?? 0]];
-        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS11 && !single(e.node, e.side) && bundleOf(e) < 0);
+        const candidates = ends.filter((e) => pair.includes(e.item) && Math.abs(e.item.xa - e.item.xb) > EPS12 && !single(e.node, e.side) && bundleOf(e) < 0);
         for (const e of candidates) {
           const now = e.which === "a" ? e.item.xa : e.item.xb;
-          const others = free(e.node, e.side).filter((x) => Math.abs(x - now) > EPS11).sort((x, y) => Math.abs(x - now) - Math.abs(y - now));
+          const others = free(e.node, e.side).filter((x) => Math.abs(x - now) > EPS12).sort((x, y) => Math.abs(x - now) - Math.abs(y - now));
           const x = others[0];
           if (x === undefined)
             continue;
@@ -5219,17 +5088,17 @@ function tightLabels(edges) {
     for (let i = 1;i < edge.points.length; i++) {
       const a = edge.points[i - 1];
       const b = edge.points[i];
-      if (Math.abs(a.y - b.y) > EPS11 || a.y < l.y - EPS11 || a.y > l.y + l.h + EPS11)
+      if (Math.abs(a.y - b.y) > EPS12 || a.y < l.y - EPS12 || a.y > l.y + l.h + EPS12)
         continue;
       const lo = Math.min(a.x, b.x);
       const hi = Math.max(a.x, b.x);
-      if (l.x < lo - EPS11 || l.x + l.w > hi + EPS11)
+      if (l.x < lo - EPS12 || l.x + l.w > hi + EPS12)
         continue;
       const toRight = b.x >= a.x;
       const last = i === edge.points.length - 1;
       const keep = straight ? lineBeside(edge.style) : lineBeside("normal");
       const [tail, head] = toRight ? [l.x - lo, hi - (l.x + l.w)] : [hi - (l.x + l.w), l.x - lo];
-      if (tail < keep - 0.5 || head < keep + (last ? ARROW : 0) - 0.5) {
+      if (tail < keep - 0.5 || head < keep + (last ? ARROW2 : 0) - 0.5) {
         out.push({ kind: "label-tight", nodes: [edge.from, edge.to], message: `Label of ${edge.from} -> ${edge.to} leaves only ${Math.round(Math.min(tail, head))}px of line beside it.` });
         break;
       }
@@ -5244,7 +5113,7 @@ function simplify(xy) {
     const x = xy[i];
     const y = xy[i + 1];
     const k = dx.length - 1;
-    if (k < 0 || Math.abs(dx[k] - x) > EPS11 || Math.abs(dy[k] - y) > EPS11) {
+    if (k < 0 || Math.abs(dx[k] - x) > EPS12 || Math.abs(dy[k] - y) > EPS12) {
       dx.push(x);
       dy.push(y);
     }
@@ -5262,7 +5131,7 @@ function simplify(xy) {
       const ay = oy[m - 1];
       const bx = ox[m];
       const by = oy[m];
-      const collinear = Math.abs(ax - bx) < EPS11 && Math.abs(bx - x) < EPS11 || Math.abs(ay - by) < EPS11 && Math.abs(by - y) < EPS11;
+      const collinear = Math.abs(ax - bx) < EPS12 && Math.abs(bx - x) < EPS12 || Math.abs(ay - by) < EPS12 && Math.abs(by - y) < EPS12;
       if (!collinear)
         break;
       ox.pop();
@@ -5370,7 +5239,7 @@ function build(f, l, layers, start, plan, prep, demand) {
     }
   }
   const totalL = cursor + margin;
-  const order = (o, c) => td ? { x: tidy4(c), y: tidy4(o) } : { x: tidy4(o), y: tidy4(c) };
+  const order = (o, c) => td ? { x: tidy5(c), y: tidy5(o) } : { x: tidy5(o), y: tidy5(c) };
   const trackY = (it) => {
     if (ruler.uniform)
       return (bandStart[it.band] ?? 0) + (td ? 1 + 2 * it.track : it.track);
@@ -5427,10 +5296,10 @@ function build(f, l, layers, start, plan, prep, demand) {
       rank: Math.floor((start[i] ?? 0) / 2),
       span: ln.units / 2,
       row: l.layerRow[ln.layer] ?? 0,
-      x: tidy4(x),
-      y: tidy4(y),
-      w: tidy4(w),
-      h: tidy4(h),
+      x: tidy5(x),
+      y: tidy5(y),
+      w: tidy5(w),
+      h: tidy5(h),
       title: n.title,
       lines: n.lines,
       shape: n.shape,
@@ -5447,9 +5316,9 @@ function build(f, l, layers, start, plan, prep, demand) {
   const xy = [];
   const put = (o, c) => {
     if (td)
-      xy.push(tidy4(c), tidy4(o));
+      xy.push(tidy5(c), tidy5(o));
     else
-      xy.push(tidy4(o), tidy4(c));
+      xy.push(tidy5(o), tidy5(c));
   };
   l.chains.forEach((c, ci) => {
     const e = graph.edges[c.edge];
@@ -5540,7 +5409,7 @@ function build(f, l, layers, start, plan, prep, demand) {
           foreign.push(s);
     });
     let mine = edgeSegs[ei].slice().sort((p, q) => Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) - Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y));
-    const roomy = (s) => ruler.uniform || Math.abs(s[1].x - s[0].x) + Math.abs(s[1].y - s[0].y) >= (s[0].y === s[1].y ? size.w : size.h) + 2 * lineBeside(edge.style) + ARROW;
+    const roomy = (s) => ruler.uniform || Math.abs(s[1].x - s[0].x) + Math.abs(s[1].y - s[0].y) >= (s[0].y === s[1].y ? size.w : size.h) + 2 * lineBeside(edge.style) + ARROW2;
     if (!ruler.uniform)
       mine = [...mine.filter(roomy), ...mine.filter((s) => !roomy(s))];
     let best;
@@ -5556,7 +5425,7 @@ function build(f, l, layers, start, plan, prep, demand) {
       for (const s of mine) {
         const got = placeLabel(s, size, obstacles, placed, ruler, []);
         const [from, to] = td ? [got.rect.x, got.rect.x + got.rect.w] : [got.rect.y, got.rect.y + got.rect.h];
-        if (!got.overlap && from >= 0 && to <= totalL + EPS11 && (td ? got.rect.y : got.rect.x) >= 0) {
+        if (!got.overlap && from >= 0 && to <= totalL + EPS12 && (td ? got.rect.y : got.rect.x) >= 0) {
           best = got;
           break;
         }
@@ -5568,13 +5437,13 @@ function build(f, l, layers, start, plan, prep, demand) {
     let labelX = best.rect.x;
     if (straightFlat && edge.points.length === 2) {
       const [a, z] = edge.points;
-      labelX = edgeNear(ruler, labelX - (z.x >= a.x ? ARROW : -ARROW) / 2);
+      labelX = edgeNear(ruler, labelX - (z.x >= a.x ? ARROW2 : -ARROW2) / 2);
     }
-    edge.label = { text, x: tidy4(labelX), y: tidy4(best.rect.y), w: size.w, h: size.h, ...lines.length > 1 ? { lines } : {} };
+    edge.label = { text, x: tidy5(labelX), y: tidy5(best.rect.y), w: size.w, h: size.h, ...lines.length > 1 ? { lines } : {} };
     if (best.overlap) {
       failed.push(ei);
       const centre = td ? best.rect.x + best.rect.w / 2 : best.rect.y + best.rect.h / 2;
-      failedBand.push(bandStart.findIndex((b, i) => centre >= b - EPS11 && centre < b + (bandSize[i] ?? 0) - EPS11));
+      failedBand.push(bandStart.findIndex((b, i) => centre >= b - EPS12 && centre < b + (bandSize[i] ?? 0) - EPS12));
       diagnostics.push({ kind: "label-overlap", nodes: [edge.from, edge.to], message: `Label of ${edge.from} -> ${edge.to} overlaps a node, another label or another edge.` });
     }
   });
@@ -5599,19 +5468,19 @@ function build(f, l, layers, start, plan, prep, demand) {
     const labelH = ruler.lineHeight("lane");
     const contentO = totalO - margin;
     if (ruler.uniform && td) {
-      lanes.push({ id: lane.id, label: lane.label, x: tidy4(top), y: tidy4(margin), w: tidy4(bottom - top), h: tidy4(contentO - margin), labelBox: { x: tidy4(top), y: tidy4(margin), w: labelW, h: labelH }, bare: true });
+      lanes.push({ id: lane.id, label: lane.label, x: tidy5(top), y: tidy5(margin), w: tidy5(bottom - top), h: tidy5(contentO - margin), labelBox: { x: tidy5(top), y: tidy5(margin), w: labelW, h: labelH }, bare: true });
       return;
     }
     if (ruler.uniform && !td) {
       const lineRow = (bandStart[first] ?? 0) + (bandSize[first] ?? 0) - 1;
-      lanes.push({ id: lane.id, label: lane.label, x: tidy4(margin), y: tidy4(lineRow), w: tidy4(contentO - margin), h: tidy4(bottom - lineRow), labelBox: { x: tidy4(margin + 3), y: tidy4(lineRow), w: labelW, h: labelH }, bare: true });
+      lanes.push({ id: lane.id, label: lane.label, x: tidy5(margin), y: tidy5(lineRow), w: tidy5(contentO - margin), h: tidy5(bottom - lineRow), labelBox: { x: tidy5(margin + 3), y: tidy5(lineRow), w: labelW, h: labelH }, bare: true });
       return;
     }
-    lanes.push(td ? { id: lane.id, label: lane.label, x: tidy4(top), y: tidy4(margin), w: tidy4(bottom - top), h: tidy4(contentO - margin), labelBox: { x: tidy4(top + ruler.laneLabelGap), y: tidy4(margin + ruler.laneLabelGap), w: labelW, h: labelH } } : { id: lane.id, label: lane.label, x: tidy4(margin), y: tidy4(top), w: tidy4(contentO - margin), h: tidy4(bottom - top), labelBox: { x: tidy4(margin + ruler.laneLabelGap), y: tidy4(layerStart[first] ?? top), w: labelW, h: labelH } });
+    lanes.push(td ? { id: lane.id, label: lane.label, x: tidy5(top), y: tidy5(margin), w: tidy5(bottom - top), h: tidy5(contentO - margin), labelBox: { x: tidy5(top + ruler.laneLabelGap), y: tidy5(margin + ruler.laneLabelGap), w: labelW, h: labelH } } : { id: lane.id, label: lane.label, x: tidy5(margin), y: tidy5(top), w: tidy5(contentO - margin), h: tidy5(bottom - top), labelBox: { x: tidy5(margin + ruler.laneLabelGap), y: tidy5(layerStart[first] ?? top), w: labelW, h: labelH } });
   });
-  const whole = (v) => ruler.uniform ? Math.ceil(v - EPS11) : v;
+  const whole = (v) => ruler.uniform ? Math.ceil(v - EPS12) : v;
   const [width, height] = td ? [whole(totalL), whole(totalO)] : [whole(totalO), whole(totalL)];
-  const layout = { pitch: 2 * f.unit, width: tidy4(width), height: tidy4(height), direction: graph.direction, laneAxis: "across", lanes, nodes: drawn, edges, diagnostics };
+  const layout = { pitch: 2 * f.unit, width: tidy5(width), height: tidy5(height), direction: graph.direction, laneAxis: "across", lanes, nodes: drawn, edges, diagnostics };
   return { layout, failed: failed.map((ei) => ei), failedBand };
 }
 function prepWidth(f, l, start, nodeO, centre) {
@@ -5659,7 +5528,7 @@ function routeOnce(given, l, layers, start, plan, bundles) {
   };
   const across = (text, style) => {
     const s = labelSize(text, ruler);
-    return (td ? s.w : s.h) + 2 * lineBeside(style) + 2 * ARROW;
+    return (td ? s.w : s.h) + 2 * lineBeside(style) + 2 * ARROW2;
   };
   const named = f.graph.lanes.some((lane) => lane.label !== "");
   l.chains.forEach((c, ci) => {
@@ -6323,7 +6192,7 @@ var unzoned = (graph) => graph.lanes.length === 1 && graph.lanes[0]?.label === "
 
 // src/layered/shelves.ts
 var PIECE_GAP = 48;
-var tidy5 = (v) => {
+var tidy6 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -6373,17 +6242,17 @@ function contentBox(l) {
   }
   return box;
 }
-var move = (p, dx, dy) => ({ x: tidy5(p.x + dx), y: tidy5(p.y + dy) });
+var move = (p, dx, dy) => ({ x: tidy6(p.x + dx), y: tidy6(p.y + dy) });
 function shiftNode(n, dx, dy) {
-  return { ...n, x: tidy5(n.x + dx), y: tidy5(n.y + dy), ...n.outline ? { outline: { ...n.outline, x: tidy5(n.outline.x + dx), y: tidy5(n.outline.y + dy) } } : {} };
+  return { ...n, x: tidy6(n.x + dx), y: tidy6(n.y + dy), ...n.outline ? { outline: { ...n.outline, x: tidy6(n.outline.x + dx), y: tidy6(n.outline.y + dy) } } : {} };
 }
 function shiftEdge(e, dx, dy) {
   const { label, startLabel, endLabel, ...rest } = e;
-  const at = (t) => ({ ...t, x: tidy5(t.x + dx), y: tidy5(t.y + dy) });
+  const at = (t) => ({ ...t, x: tidy6(t.x + dx), y: tidy6(t.y + dy) });
   return {
     ...rest,
     points: e.points.map((p) => move(p, dx, dy)),
-    ...label ? { label: { ...label, x: tidy5(label.x + dx), y: tidy5(label.y + dy) } } : {},
+    ...label ? { label: { ...label, x: tidy6(label.x + dx), y: tidy6(label.y + dy) } } : {},
     ...startLabel ? { startLabel: at(startLabel) } : {},
     ...endLabel ? { endLabel: at(endLabel) } : {}
   };
@@ -6436,9 +6305,9 @@ function packPieces(parts, td, limit) {
   const lane = first.lanes[0];
   return {
     ...first,
-    width: tidy5(lead.x + cw + tail.x),
-    height: tidy5(lead.y + ch + tail.y),
-    lanes: lane ? [{ ...lane, x: tidy5(lead.x), y: tidy5(lead.y), w: tidy5(cw), h: tidy5(ch), labelBox: { x: tidy5(lead.x), y: tidy5(lead.y), w: 0, h: 0 } }] : [],
+    width: tidy6(lead.x + cw + tail.x),
+    height: tidy6(lead.y + ch + tail.y),
+    lanes: lane ? [{ ...lane, x: tidy6(lead.x), y: tidy6(lead.y), w: tidy6(cw), h: tidy6(ch), labelBox: { x: tidy6(lead.x), y: tidy6(lead.y), w: 0, h: 0 } }] : [],
     nodes,
     edges,
     diagnostics
@@ -6569,7 +6438,7 @@ var FOLDED = [
   { name: "free-head", free: true, loose: false, stage: false, start: true, fold: "head" },
   { name: "free-head-tail", free: true, loose: false, stage: false, start: true, fold: "headTail" }
 ];
-var EPS12 = 0.000001;
+var EPS13 = 0.000001;
 function segsOf(l) {
   let total = 0;
   for (const e of l.edges)
@@ -6604,7 +6473,7 @@ function segsOf(l) {
       x1 = Math.max(x1, v[o + 5]);
       y0 = Math.min(y0, v[o + 6]);
       y1 = Math.max(y1, v[o + 7]);
-      (Math.abs(a.y - b.y) < EPS12 ? hs : vs).push(k);
+      (Math.abs(a.y - b.y) < EPS13 ? hs : vs).push(k);
       k++;
     }
     box[4 * i] = x0;
@@ -6625,11 +6494,11 @@ function violationsOf(l, g) {
   const nodes = l.nodes;
   for (let i = 0;i < nodes.length; i++) {
     const a = nodes[i];
-    if (a.x < -EPS12 || a.y < -EPS12 || a.x + a.w > l.width + EPS12 || a.y + a.h > l.height + EPS12)
+    if (a.x < -EPS13 || a.y < -EPS13 || a.x + a.w > l.width + EPS13 || a.y + a.h > l.height + EPS13)
       n++;
     for (let j = i + 1;j < nodes.length; j++) {
       const b = nodes[j];
-      if (a.x < b.x + b.w - EPS12 && b.x < a.x + a.w - EPS12 && a.y < b.y + b.h - EPS12 && b.y < a.y + a.h - EPS12)
+      if (a.x < b.x + b.w - EPS13 && b.x < a.x + a.w - EPS13 && a.y < b.y + b.h - EPS13 && b.y < a.y + a.h - EPS13)
         n++;
     }
   }
@@ -6637,22 +6506,22 @@ function violationsOf(l, g) {
     const t = e.label;
     if (!t)
       continue;
-    if (t.x < -EPS12 || t.y < -EPS12 || t.x + t.w > l.width + EPS12 || t.y + t.h > l.height + EPS12)
+    if (t.x < -EPS13 || t.y < -EPS13 || t.x + t.w > l.width + EPS13 || t.y + t.h > l.height + EPS13)
       n++;
     for (const b of nodes)
-      if (t.x < b.x + b.w - EPS12 && b.x < t.x + t.w - EPS12 && t.y < b.y + b.h - EPS12 && b.y < t.y + t.h - EPS12)
+      if (t.x < b.x + b.w - EPS13 && b.x < t.x + t.w - EPS13 && t.y < b.y + b.h - EPS13 && b.y < t.y + t.h - EPS13)
         n++;
   }
   const S = g.v;
-  const nx0 = nodes.map((b) => b.x + EPS12);
-  const nx1 = nodes.map((b) => b.x + b.w - EPS12);
-  const ny0 = nodes.map((b) => b.y + EPS12);
-  const ny1 = nodes.map((b) => b.y + b.h - EPS12);
+  const nx0 = nodes.map((b) => b.x + EPS13);
+  const nx1 = nodes.map((b) => b.x + b.w - EPS13);
+  const ny0 = nodes.map((b) => b.y + EPS13);
+  const ny1 = nodes.map((b) => b.y + b.h - EPS13);
   const m = l.edges.length;
   for (let i = 0;i < m; i++) {
     for (let s = g.at[i];s < g.at[i + 1]; s++) {
       const o = s * 8;
-      if (Math.abs(S[o] - S[o + 2]) > EPS12 && Math.abs(S[o + 1] - S[o + 3]) > EPS12)
+      if (Math.abs(S[o] - S[o + 2]) > EPS13 && Math.abs(S[o + 1] - S[o + 3]) > EPS13)
         n++;
       for (let b = 0;b < nodes.length; b++) {
         if (S[o + 4] < nx1[b] && S[o + 5] > nx0[b] && S[o + 6] < ny1[b] && S[o + 7] > ny0[b])
@@ -6660,7 +6529,7 @@ function violationsOf(l, g) {
       }
     }
   }
-  const apart = 2 * EPS12;
+  const apart = 2 * EPS13;
   const stub = l.edges.map((e, i) => e.sharedPort === undefined || g.at[i] === g.at[i + 1] ? -1 : e.sharedPort.at === "start" ? g.at[i] : g.at[i + 1] - 1);
   const portOf = (i) => {
     const o = stub[i] * 8 + (l.edges[i]?.sharedPort?.at === "start" ? 0 : 2);
@@ -6670,7 +6539,7 @@ function violationsOf(l, g) {
     if (stub[i] < 0 || stub[j] < 0 || l.edges[i]?.sharedPort?.id !== l.edges[j]?.sharedPort?.id)
       return false;
     const [a, b] = [portOf(i), portOf(j)];
-    return Math.abs(a[0] - b[0]) < EPS12 && Math.abs(a[1] - b[1]) < EPS12;
+    return Math.abs(a[0] - b[0]) < EPS13 && Math.abs(a[1] - b[1]) < EPS13;
   };
   for (let i = 0;i < m; i++) {
     for (let j = i + 1;j < m; j++) {
@@ -6683,7 +6552,7 @@ function violationsOf(l, g) {
         for (const t of g.horizontal[j]) {
           if (s === si && t === sj)
             continue;
-          if (Math.abs(S[s * 8 + 1] - S[t * 8 + 1]) < EPS12 && Math.min(S[s * 8 + 5], S[t * 8 + 5]) - Math.max(S[s * 8 + 4], S[t * 8 + 4]) > EPS12)
+          if (Math.abs(S[s * 8 + 1] - S[t * 8 + 1]) < EPS13 && Math.min(S[s * 8 + 5], S[t * 8 + 5]) - Math.max(S[s * 8 + 4], S[t * 8 + 4]) > EPS13)
             n++;
         }
       }
@@ -6691,7 +6560,7 @@ function violationsOf(l, g) {
         for (const t of g.vertical[j]) {
           if (s === si && t === sj)
             continue;
-          if (Math.abs(S[s * 8] - S[t * 8]) < EPS12 && Math.min(S[s * 8 + 7], S[t * 8 + 7]) - Math.max(S[s * 8 + 6], S[t * 8 + 6]) > EPS12)
+          if (Math.abs(S[s * 8] - S[t * 8]) < EPS13 && Math.min(S[s * 8 + 7], S[t * 8 + 7]) - Math.max(S[s * 8 + 6], S[t * 8 + 6]) > EPS13)
             n++;
         }
       }
@@ -6700,7 +6569,7 @@ function violationsOf(l, g) {
   return n;
 }
 var WEIGHTS = { bend: 1, bendMain: 3, crossing: 2, crossingMain: 5, extraRow: 2, back: 2, backChain: 2, far: 1, start: 2, branch: 2, upward: 100, secondRow: 1, tight: 3, labelTight: 2, offCentre: 3, mixedSide: 3, heavyBack: 1 };
-var crosses = (S, h, v) => S[v * 8] > S[h * 8 + 4] + EPS12 && S[v * 8] < S[h * 8 + 5] - EPS12 && S[h * 8 + 1] > S[v * 8 + 6] + EPS12 && S[h * 8 + 1] < S[v * 8 + 7] - EPS12;
+var crosses = (S, h, v) => S[v * 8] > S[h * 8 + 4] + EPS13 && S[v * 8] < S[h * 8 + 5] - EPS13 && S[h * 8 + 1] > S[v * 8 + 6] + EPS13 && S[h * 8 + 1] < S[v * 8 + 7] - EPS13;
 function crossingsFrom(l, g) {
   const S = g.v;
   let onMain = 0;
@@ -6777,7 +6646,7 @@ function offCentre2(l) {
     const cs = partners.map(centre).sort((x, y) => x - y);
     const mid = (cs[0] + cs[cs.length - 1]) / 2;
     const odd = cs.length % 2 === 1 && Math.abs(centre(mine) - cs[(cs.length - 1) / 2]) < 0.5;
-    if (!odd && Math.abs(centre(mine) - mid) > l.pitch / 4 + EPS12)
+    if (!odd && Math.abs(centre(mine) - mid) > l.pitch / 4 + EPS13)
       found.push({ id: g.id, mid });
   }
   return found;
@@ -6955,7 +6824,7 @@ function spreadWins(spread, usual, room = { width: Infinity, height: Infinity },
     }
     return run;
   };
-  const cleaner = backRun(spread) <= backRun(usual) + EPS12 && ["crossing", "mixed-side", "shared-port", "label-overlap"].every((k) => noted(spread, k) <= noted(usual, k));
+  const cleaner = backRun(spread) <= backRun(usual) + EPS13 && ["crossing", "mixed-side", "shared-port", "label-overlap"].every((k) => noted(spread, k) <= noted(usual, k));
   if (unfolding && folds(usual) && !folds(spread) && !turns && cleaner && affordable && spread.width <= room.width && spread.height <= room.height && violations(spread) <= violations(usual))
     return true;
   const [b, c, s] = [bendsOf(spread) - bendsOf(usual), crossingsRecorded(spread) - crossingsRecorded(usual), sharedPorts(spread) - sharedPorts(usual)];
@@ -6965,16 +6834,16 @@ function spreadWins(spread, usual, room = { width: Infinity, height: Infinity },
 }
 
 // src/layered/refine.ts
-var EPS13 = 0.000001;
+var EPS14 = 0.000001;
 var MAX_DRAWS = 200;
 var segs2 = (e) => e.points.slice(1).map((q, i) => ({ ax: e.points[i].x, ay: e.points[i].y, bx: q.x, by: q.y }));
-function cross2(a, b) {
-  const ah = Math.abs(a.ay - a.by) < EPS13;
-  const bh = Math.abs(b.ay - b.by) < EPS13;
+function cross(a, b) {
+  const ah = Math.abs(a.ay - a.by) < EPS14;
+  const bh = Math.abs(b.ay - b.by) < EPS14;
   if (ah === bh)
     return false;
   const [h, v] = ah ? [a, b] : [b, a];
-  return v.ax > Math.min(h.ax, h.bx) + EPS13 && v.ax < Math.max(h.ax, h.bx) - EPS13 && h.ay > Math.min(v.ay, v.by) + EPS13 && h.ay < Math.max(v.ay, v.by) - EPS13;
+  return v.ax > Math.min(h.ax, h.bx) + EPS14 && v.ax < Math.max(h.ax, h.bx) - EPS14 && h.ay > Math.min(v.ay, v.by) + EPS14 && h.ay < Math.max(v.ay, v.by) - EPS14;
 }
 function troubled(l) {
   const all = l.edges.map(segs2);
@@ -6983,7 +6852,7 @@ function troubled(l) {
     if (s.length > 1)
       bad.add(i);
     for (let j = i + 1;j < all.length; j++) {
-      if (s.some((x) => all[j].some((y) => cross2(x, y)))) {
+      if (s.some((x) => all[j].some((y) => cross(x, y)))) {
         bad.add(i);
         bad.add(j);
       }
@@ -7426,7 +7295,7 @@ var CORNER = 24;
 var LABEL_ROOM = 12;
 var MARK_ROOM = 14;
 var BEND = 16;
-var EPS14 = 0.000001;
+var EPS15 = 0.000001;
 var other = (axis) => axis === "x" ? "y" : "x";
 var at2 = (axis, flow, cross) => axis === "y" ? { x: cross, y: flow } : { x: flow, y: cross };
 function cuts(a, b, box) {
@@ -7434,7 +7303,7 @@ function cuts(a, b, box) {
   const x1 = Math.max(a.x, b.x);
   const y0 = Math.min(a.y, b.y);
   const y1 = Math.max(a.y, b.y);
-  return x1 > box.x + EPS14 && x0 < box.x + box.w - EPS14 && y1 > box.y + EPS14 && y0 < box.y + box.h - EPS14;
+  return x1 > box.x + EPS15 && x0 < box.x + box.w - EPS15 && y1 > box.y + EPS15 && y0 < box.y + box.h - EPS15;
 }
 function faceOf2(box, axis, d) {
   const below = box.shape === "actor" && axis === "y" && d > 0 ? ACTOR_NAME_GAP + ACTOR_NAME_H : 0;
@@ -7458,11 +7327,11 @@ function memberOf(source, drawn, index, nodes) {
   const prev = pts.at(-2);
   const figure = shared.shape === "actor";
   const [ax, ay] = figure ? [q.x - prev.x, q.y - prev.y] : [pts[1].x - pts[0].x, pts[1].y - pts[0].y];
-  if (Math.abs(ax) > EPS14 === Math.abs(ay) > EPS14)
+  if (Math.abs(ax) > EPS15 === Math.abs(ay) > EPS15)
     return;
-  const axis = Math.abs(ay) > EPS14 ? "y" : "x";
+  const axis = Math.abs(ay) > EPS15 ? "y" : "x";
   const d = (axis === "y" ? ay : ax) > 0 ? 1 : -1;
-  if (Math.abs(prev[other(axis)] - q[other(axis)]) > EPS14 || d * (q[axis] - prev[axis]) <= EPS14)
+  if (Math.abs(prev[other(axis)] - q[other(axis)]) > EPS15 || d * (q[axis] - prev[axis]) <= EPS15)
     return;
   const face = figure ? faceOf2(shared, axis, d) : pts[0];
   if (d * (q[axis] - face[axis]) < 2 * MIN_RUN)
@@ -7478,7 +7347,7 @@ function trunkCross(shared, axis, crosses, leaving, ruler) {
   const lo = shared[c];
   const hi = shared[c] + (c === "x" ? shared.w : shared.h);
   const middle = (lo + hi) / 2;
-  if (Math.min(...crosses) < middle - EPS14 && Math.max(...crosses) > middle + EPS14)
+  if (Math.min(...crosses) < middle - EPS15 && Math.max(...crosses) > middle + EPS15)
     return middle;
   const mean = crosses.reduce((a, b) => a + b, 0) / crosses.length;
   return hi - lo <= 2 * CORNER ? middle : edgeNear(ruler, Math.min(hi - CORNER, Math.max(lo + CORNER, mean)));
@@ -7493,17 +7362,17 @@ function drawGroup(group, nodes, ruler, round) {
   const toRoom = Math.min(...group.map((m) => d * (m.pts.at(-1)[axis] - face[axis]) - m.room));
   const nearer = face[axis] + d * Math.max(MIN_RUN, Math.min(d * (half - face[axis]), toRoom));
   const flow = edgeNear(ruler, nearer);
-  if (d * (flow - face[axis]) < MIN_RUN - EPS14 || gap - d * (flow - face[axis]) < MIN_RUN - EPS14)
+  if (d * (flow - face[axis]) < MIN_RUN - EPS15 || gap - d * (flow - face[axis]) < MIN_RUN - EPS15)
     return;
   const t = trunkCross(first.shared, axis, group.map((m) => m.pts.at(-1)[c]), face[c], ruler);
   const junction = at2(axis, flow, t);
-  const lead = group.reduce((a, b) => Math.abs(b.pts.at(-1)[c] - t) < Math.abs(a.pts.at(-1)[c] - t) - EPS14 ? b : a);
+  const lead = group.reduce((a, b) => Math.abs(b.pts.at(-1)[c] - t) < Math.abs(a.pts.at(-1)[c] - t) - EPS15 ? b : a);
   const runIn = round ? at2(axis, flow - d * Math.min(2 * BEND, d * (flow - face[axis])), t) : junction;
   const points = new Map;
   for (const m of group) {
     const q = m.pts.at(-1);
     const start = m === lead ? at2(axis, face[axis], t) : runIn;
-    const path = Math.abs(q[c] - t) < EPS14 ? [start, at2(axis, q[axis], t)] : [start, junction, at2(axis, flow, q[c]), q];
+    const path = Math.abs(q[c] - t) < EPS15 ? [start, at2(axis, q[axis], t)] : [start, junction, at2(axis, flow, q[c]), q];
     const blocked = nodes.some((n) => n.id !== m.shared.id && n.id !== m.otherId && path.slice(1).some((p, i) => cuts(path[i], p, n)));
     if (blocked)
       return;
@@ -7518,7 +7387,7 @@ function labelOn(edge, path, junction, ruler) {
   const last = path.at(-1);
   const pieces = path.length === 2 ? [[junction, last]] : [[path.at(-2), last], [junction, path.at(-2)]];
   for (const [a, b] of pieces) {
-    const vertical = Math.abs(a.x - b.x) < EPS14;
+    const vertical = Math.abs(a.x - b.x) < EPS15;
     const axis = vertical ? "y" : "x";
     const sign = b[axis] > a[axis] ? 1 : -1;
     const from = a[axis];
@@ -8206,7 +8075,7 @@ function compareScores(a, b) {
 }
 
 // src/layout/global-route.ts
-var EPS15 = 0.000001;
+var EPS16 = 0.000001;
 var BEND2 = 24;
 var CROSS = 2 * BEND2;
 var BORDER = BEND2 / 4;
@@ -8222,7 +8091,7 @@ var EDGE_ROOM = 8;
 var RELAXED = 400;
 var DX = [1, 0, -1, 0];
 var DY = [0, 1, 0, -1];
-var near = (a, b) => Math.abs(a - b) < EPS15;
+var near = (a, b) => Math.abs(a - b) < EPS16;
 function inflate(b, by, own) {
   return { x0: b.x - by, y0: b.y - by, x1: b.x + b.w + by, y1: b.y + b.h + by, own };
 }
@@ -8328,7 +8197,7 @@ function portsOf(box, other, degree) {
   }
   return out;
 }
-var enters = (box, other) => other.x >= box.x - EPS15 && other.y >= box.y - EPS15 && other.x + other.w <= box.x + box.w + EPS15 && other.y + other.h <= box.y + box.h + EPS15;
+var enters = (box, other) => other.x >= box.x - EPS16 && other.y >= box.y - EPS16 && other.x + other.w <= box.x + box.w + EPS16 && other.y + other.h <= box.y + box.h + EPS16;
 function routeGlobally(input) {
   const { width, height } = input;
   const boxOf = new Map;
@@ -8399,8 +8268,8 @@ function routeGlobally(input) {
   ys.push(...corridors(spanY, EDGE_ROOM, height - EDGE_ROOM));
   xs.push(...corridors(input.clusters.map((c) => [c.box.x, c.box.x + c.box.w]), EDGE_ROOM, width - EDGE_ROOM));
   ys.push(...corridors(input.clusters.map((c) => [c.box.y, c.box.y + c.box.h]), EDGE_ROOM, height - EDGE_ROOM));
-  const gx = merged(xs.filter((v) => v >= EDGE_ROOM - EPS15 && v <= width - EDGE_ROOM + EPS15));
-  const gy = merged(ys.filter((v) => v >= EDGE_ROOM - EPS15 && v <= height - EDGE_ROOM + EPS15));
+  const gx = merged(xs.filter((v) => v >= EDGE_ROOM - EPS16 && v <= width - EDGE_ROOM + EPS16));
+  const gy = merged(ys.filter((v) => v >= EDGE_ROOM - EPS16 && v <= height - EDGE_ROOM + EPS16));
   for (const job of jobs) {
     for (const [ports, box] of [[job.from, job.fromBox], [job.to, job.toBox]]) {
       const extra = [];
@@ -8413,7 +8282,7 @@ function routeGlobally(input) {
         if (len < 2 * CORNER_CLEAR2)
           continue;
         for (const v of flat ? gx : gy) {
-          if (v < start + CORNER_CLEAR2 - EPS15 || v > start + len - CORNER_CLEAR2 + EPS15)
+          if (v < start + CORNER_CLEAR2 - EPS16 || v > start + len - CORNER_CLEAR2 + EPS16)
             continue;
           const px = flat ? v : d === 0 ? box.x + box.w : box.x;
           const py = flat ? d === 1 ? box.y + box.h : box.y : v;
@@ -8444,36 +8313,36 @@ function routeGlobally(input) {
       if (skipOwn && o.own)
         continue;
       const [a0, a1, b0, b1] = horizontal ? [o.y0, o.y1, o.x0, o.x1] : [o.x0, o.x1, o.y0, o.y1];
-      if (a0 + EPS15 < c && c < a1 - EPS15 && lo < b1 - EPS15 && hi > b0 + EPS15)
+      if (a0 + EPS16 < c && c < a1 - EPS16 && lo < b1 - EPS16 && hi > b0 + EPS16)
         return Infinity;
     }
     let cost = 0;
     const parallel = horizontal ? w.h : w.v;
     const across = horizontal ? w.v : w.h;
     for (const s of parallel) {
-      if (Math.abs(s.c - c) < PITCH - EPS15 && Math.min(hi, s.hi) - Math.max(lo, s.lo) > EPS15) {
+      if (Math.abs(s.c - c) < PITCH - EPS16 && Math.min(hi, s.hi) - Math.max(lo, s.lo) > EPS16) {
         if (!relaxed)
           return Infinity;
         cost += RELAXED;
       }
     }
     for (const s of across) {
-      if (c > s.lo + EPS15 && c < s.hi - EPS15) {
-        if (s.c > lo + EPS15 && s.c < hi - EPS15)
+      if (c > s.lo + EPS16 && c < s.hi - EPS16) {
+        if (s.c > lo + EPS16 && s.c < hi - EPS16)
           cost += CROSS;
         else if (near(s.c, endAlong))
           cost += CROSS;
       }
     }
     for (const s of horizontal ? borderH : borderV) {
-      if (Math.abs(s.c - c) < BORDER_NEAR - EPS15 && Math.min(hi, s.hi) - Math.max(lo, s.lo) > EPS15) {
+      if (Math.abs(s.c - c) < BORDER_NEAR - EPS16 && Math.min(hi, s.hi) - Math.max(lo, s.lo) > EPS16) {
         if (!relaxed)
           return Infinity;
         cost += RELAXED;
       }
     }
     for (const s of horizontal ? borderV : borderH)
-      if (c > s.lo + EPS15 && c < s.hi - EPS15 && s.c > lo + EPS15 && s.c < hi - EPS15)
+      if (c > s.lo + EPS16 && c < s.hi - EPS16 && s.c > lo + EPS16 && s.c < hi - EPS16)
         cost += BORDER;
     return cost;
   };
@@ -8507,7 +8376,7 @@ function routeGlobally(input) {
       const a = points[i];
       const b = points[i + 1];
       const len = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-      if (len < EPS15)
+      if (len < EPS16)
         continue;
       cost += len + segCost(w, a.x, a.y, b.x, b.y, i === 0 || i === points.length - 2, true);
       const dir = near(a.y, b.y) ? 0 : 1;
@@ -8618,14 +8487,14 @@ function routeGlobally(input) {
     let bestPort;
     while (heapF.length > 0) {
       const [f, s] = pop();
-      if (f >= best - EPS15)
+      if (f >= best - EPS16)
         break;
       const d = s & 3;
       const cell = s >> 2;
       const i = Math.floor(cell / ny);
       const j = cell - i * ny;
       const g = dist[s];
-      if (f > g + heuristic(i, j) + EPS15)
+      if (f > g + heuristic(i, j) + EPS16)
         continue;
       const hit = targets.get(cell);
       if (hit !== undefined) {
@@ -8655,7 +8524,7 @@ function routeGlobally(input) {
           continue;
         const ns = stateOf(ni, nj, nd);
         const cost = g + step + (nd === d ? 0 : BEND2);
-        if (cost < dist[ns] - EPS15) {
+        if (cost < dist[ns] - EPS16) {
           dist[ns] = cost;
           parent[ns] = s;
           push(cost + heuristic(ni, nj), ns);
@@ -8717,60 +8586,12 @@ function routeGlobally(input) {
       return [first, ...a === undefined ? [] : [{ x: a.sx, y: a.sy }], ...p.slice(1, -1), ...b === undefined ? [] : [{ x: b.sx, y: b.sy }], last];
     };
     const [before, after] = [priceOf(w, withStubs(old)) + faces(old), priceOf(w, withStubs(fresh)) + faces(fresh)];
-    if (after < before - EPS15) {
+    if (after < before - EPS16) {
       paths[job.index] = fresh;
       results[job.index] = fresh;
     }
   }
   return results;
-}
-
-// src/layout/heap.ts
-class Heap {
-  costs = [];
-  items = [];
-  get size() {
-    return this.costs.length;
-  }
-  push(cost, item) {
-    let i = this.costs.length;
-    this.costs.push(cost);
-    this.items.push(item);
-    while (i > 0) {
-      const parent = i - 1 >> 1;
-      if (this.costs[parent] <= cost)
-        break;
-      this.costs[i] = this.costs[parent];
-      this.items[i] = this.items[parent];
-      i = parent;
-    }
-    this.costs[i] = cost;
-    this.items[i] = item;
-  }
-  pop() {
-    const top = { cost: this.costs[0], item: this.items[0] };
-    const cost = this.costs.pop();
-    const item = this.items.pop();
-    const n = this.costs.length;
-    if (n === 0)
-      return top;
-    let i = 0;
-    for (;; ) {
-      let child = 2 * i + 1;
-      if (child >= n)
-        break;
-      if (child + 1 < n && this.costs[child + 1] < this.costs[child])
-        child += 1;
-      if (this.costs[child] >= cost)
-        break;
-      this.costs[i] = this.costs[child];
-      this.items[i] = this.items[child];
-      i = child;
-    }
-    this.costs[i] = cost;
-    this.items[i] = item;
-    return top;
-  }
 }
 
 // src/layout/clusters.ts
@@ -8780,7 +8601,7 @@ var CLUSTER_NAME_INSET = 16;
 var CORRIDOR = CLUSTER_PAD / 2;
 var CLUSTER_NAME_LINE = 16;
 var NAME_GAP = 12;
-var tidy6 = (v) => {
+var tidy7 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -8958,9 +8779,9 @@ function alignBoxes(layout, kids) {
 var levelGap = (ruler) => ruler.joinGap ?? layeredRuler(ruler).rankGap;
 var shifted = (n, x, y) => ({
   ...n,
-  x: tidy6(x),
-  y: tidy6(y),
-  ...n.outline ? { outline: { ...n.outline, x: tidy6(n.outline.x + x - n.x), y: tidy6(n.outline.y + y - n.y) } } : {}
+  x: tidy7(x),
+  y: tidy7(y),
+  ...n.outline ? { outline: { ...n.outline, x: tidy7(n.outline.x + x - n.x), y: tidy7(n.outline.y + y - n.y) } } : {}
 });
 function gridLevel(level, drawn, kids, gap) {
   const at = new Map(drawn.nodes.map((n) => [n.id, n]));
@@ -8985,7 +8806,7 @@ function gridLevel(level, drawn, kids, gap) {
   const nodes = placed.sort((a, b) => order.get(a.id) - order.get(b.id));
   const right = Math.max(...nodes.map((n) => n.x + n.w));
   const bottom = Math.max(...nodes.map((n) => n.y + n.h));
-  return { ...drawn, nodes, edges: [], lanes: [], width: tidy6(right), height: tidy6(Math.max(bottom, rows * ch)) };
+  return { ...drawn, nodes, edges: [], lanes: [], width: tidy7(right), height: tidy7(Math.max(bottom, rows * ch)) };
 }
 function joinFirstRank(level, full, engine, touched, kids, gap) {
   const lonely = (id) => !touched.has(id) && !kids.has(id);
@@ -9022,8 +8843,8 @@ function joinFirstRank(level, full, engine, touched, kids, gap) {
   return {
     ...laid,
     nodes: [...laid.nodes, ...added],
-    width: td ? Math.max(laid.width, tidy6(extent + room.x)) : laid.width,
-    height: td ? laid.height : Math.max(laid.height, tidy6(extent + room.y))
+    width: td ? Math.max(laid.width, tidy7(extent + room.x)) : laid.width,
+    height: td ? laid.height : Math.max(laid.height, tidy7(extent + room.y))
   };
 }
 var rowOf = (plan, id) => CLUSTER_NAME_ROW + (plan.rows.has(id) ? CLUSTER_NAME_LINE : 0);
@@ -9086,7 +8907,7 @@ function buildLevel(plan, id, direction, mirror) {
   };
   return { layout, kids, content, size };
 }
-function assemble2(plan, block, dx, dy, depth, out) {
+function assemble(plan, block, dx, dy, depth, out) {
   const home = new Map(plan.graph.nodes.map((n) => [n.id, n.cluster]));
   for (const n of block.layout.nodes) {
     const kid = block.kids.get(n.id);
@@ -9094,21 +8915,21 @@ function assemble2(plan, block, dx, dy, depth, out) {
       const cluster = home.get(n.id);
       out.nodes.set(n.id, {
         ...n,
-        x: tidy6(n.x + dx),
-        y: tidy6(n.y + dy),
-        ...n.outline ? { outline: { ...n.outline, x: tidy6(n.outline.x + dx), y: tidy6(n.outline.y + dy) } } : {},
+        x: tidy7(n.x + dx),
+        y: tidy7(n.y + dy),
+        ...n.outline ? { outline: { ...n.outline, x: tidy7(n.outline.x + dx), y: tidy7(n.outline.y + dy) } } : {},
         ...cluster === undefined ? {} : { cluster }
       });
       continue;
     }
-    const box = { x: tidy6(n.x + dx), y: tidy6(n.y + dy), w: n.w, h: n.h };
+    const box = { x: tidy7(n.x + dx), y: tidy7(n.y + dy), w: n.w, h: n.h };
     const style = plan.graph.clusters?.find((c) => c.id === n.id)?.style;
     out.clusters.push({ id: n.id, label: plan.tree.label.get(n.id) ?? n.id, ...box, depth, ...style === undefined ? {} : { style } });
     out.clusterRect.set(n.id, box);
     const kx = Math.round(box.x + CLUSTER_PAD + (box.w - 2 * CLUSTER_PAD - kid.content.w) / 2 - kid.content.x);
     const row = rowOf(plan, n.id);
     const ky = Math.round(box.y + row + CLUSTER_PAD + (box.h - row - 2 * CLUSTER_PAD - kid.content.h) / 2 - kid.content.y);
-    assemble2(plan, kid, kx, ky, depth + 1, out);
+    assemble(plan, kid, kx, ky, depth + 1, out);
   }
   for (const e of block.layout.edges) {
     const index = indexOfMarker(e.id);
@@ -9116,13 +8937,13 @@ function assemble2(plan, block, dx, dy, depth, out) {
       continue;
     out.pieces.set(index, {
       ...e,
-      points: e.points.map((p) => ({ x: tidy6(p.x + dx), y: tidy6(p.y + dy) })),
-      ...e.label ? { label: { ...e.label, x: tidy6(e.label.x + dx), y: tidy6(e.label.y + dy) } } : {}
+      points: e.points.map((p) => ({ x: tidy7(p.x + dx), y: tidy7(p.y + dy) })),
+      ...e.label ? { label: { ...e.label, x: tidy7(e.label.x + dx), y: tidy7(e.label.y + dy) } } : {}
     });
   }
   out.diagnostics.push(...block.layout.diagnostics);
 }
-var EPS16 = 0.000001;
+var EPS17 = 0.000001;
 var DIRS = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -9145,21 +8966,21 @@ function through(a, b, r, grow) {
   const y0 = r.y - grow;
   const x1 = r.x + r.w + grow;
   const y1 = r.y + r.h + grow;
-  return Math.min(a.x, b.x) < x1 - EPS16 && Math.max(a.x, b.x) > x0 + EPS16 && Math.min(a.y, b.y) < y1 - EPS16 && Math.max(a.y, b.y) > y0 + EPS16;
+  return Math.min(a.x, b.x) < x1 - EPS17 && Math.max(a.x, b.x) > x0 + EPS17 && Math.min(a.y, b.y) < y1 - EPS17 && Math.max(a.y, b.y) > y0 + EPS17;
 }
 function clash(a, b, drawn) {
   let cost = 0;
-  const horizontal = Math.abs(a.y - b.y) < EPS16;
+  const horizontal = Math.abs(a.y - b.y) < EPS17;
   for (const s of drawn) {
-    const sh = Math.abs(s.a.y - s.b.y) < EPS16;
+    const sh = Math.abs(s.a.y - s.b.y) < EPS17;
     if (sh === horizontal) {
-      if (horizontal && Math.abs(s.a.y - a.y) < FACE_PITCH - EPS16) {
+      if (horizontal && Math.abs(s.a.y - a.y) < FACE_PITCH - EPS17) {
         const lap = Math.min(Math.max(a.x, b.x), Math.max(s.a.x, s.b.x)) - Math.max(Math.min(a.x, b.x), Math.min(s.a.x, s.b.x));
-        if (lap > EPS16)
+        if (lap > EPS17)
           cost += OVERLAP_COST * lap;
-      } else if (!horizontal && Math.abs(s.a.x - a.x) < FACE_PITCH - EPS16) {
+      } else if (!horizontal && Math.abs(s.a.x - a.x) < FACE_PITCH - EPS17) {
         const lap = Math.min(Math.max(a.y, b.y), Math.max(s.a.y, s.b.y)) - Math.max(Math.min(a.y, b.y), Math.min(s.a.y, s.b.y));
-        if (lap > EPS16)
+        if (lap > EPS17)
           cost += OVERLAP_COST * lap;
       }
       continue;
@@ -9167,14 +8988,62 @@ function clash(a, b, drawn) {
     const [h, v] = horizontal ? [{ a, b }, s] : [s, { a, b }];
     const x = v.a.x;
     const y = h.a.y;
-    if (x > Math.min(h.a.x, h.b.x) + EPS16 && x < Math.max(h.a.x, h.b.x) - EPS16 && y > Math.min(v.a.y, v.b.y) + EPS16 && y < Math.max(v.a.y, v.b.y) - EPS16)
+    if (x > Math.min(h.a.x, h.b.x) + EPS17 && x < Math.max(h.a.x, h.b.x) - EPS17 && y > Math.min(v.a.y, v.b.y) + EPS17 && y < Math.max(v.a.y, v.b.y) - EPS17)
       cost += CROSS_COST;
   }
   return cost;
 }
+
+class Heap {
+  cost = [];
+  item = [];
+  get size() {
+    return this.item.length;
+  }
+  push(cost, item) {
+    let i = this.item.length;
+    this.cost.push(cost);
+    this.item.push(item);
+    while (i > 0) {
+      const p = i - 1 >> 1;
+      if (this.cost[p] <= cost)
+        break;
+      this.swap(i, p);
+      i = p;
+    }
+  }
+  pop() {
+    const top = { cost: this.cost[0], item: this.item[0] };
+    const lastCost = this.cost.pop();
+    const lastItem = this.item.pop();
+    if (this.item.length > 0) {
+      this.cost[0] = lastCost;
+      this.item[0] = lastItem;
+      let i = 0;
+      for (;; ) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < this.item.length && this.cost[l] < this.cost[m])
+          m = l;
+        if (r < this.item.length && this.cost[r] < this.cost[m])
+          m = r;
+        if (m === i)
+          break;
+        this.swap(i, m);
+        i = m;
+      }
+    }
+    return top;
+  }
+  swap(i, j) {
+    [this.cost[i], this.cost[j]] = [this.cost[j], this.cost[i]];
+    [this.item[i], this.item[j]] = [this.item[j], this.item[i]];
+  }
+}
 var key2 = (p) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
 function candidates2(values, lo, hi, must) {
-  const kept = values.filter((v) => v >= lo - EPS16 && v <= hi + EPS16);
+  const kept = values.filter((v) => v >= lo - EPS17 && v <= hi + EPS17);
   const edges = [...new Set(kept.map((v) => Math.round(v * 2) / 2))].sort((a, b) => a - b);
   const mids = [];
   for (let i = 0;i + 1 < edges.length; i++) {
@@ -9204,7 +9073,7 @@ function pathInside(g) {
   const ys = candidates2(ry, lo.y, hi.y, [start.y, ...faces.map((f) => f.p.y)]);
   const nx = xs.length;
   const at = (xi, yi) => yi * nx + xi;
-  const indexIn = (list, v) => list.findIndex((c) => Math.abs(c - Math.round(v * 2) / 2) < EPS16);
+  const indexIn = (list, v) => list.findIndex((c) => Math.abs(c - Math.round(v * 2) / 2) < EPS17);
   const s0 = at(indexIn(xs, start.x), indexIn(ys, start.y));
   const goal = new Map;
   for (const f of faces) {
@@ -9216,7 +9085,7 @@ function pathInside(g) {
       return true;
     const x = xs[xi];
     const y = ys[yi];
-    return x >= lo.x - EPS16 && x <= hi.x + EPS16 && y >= lo.y - EPS16 && y <= hi.y + EPS16;
+    return x >= lo.x - EPS17 && x <= hi.x + EPS17 && y >= lo.y - EPS17 && y <= hi.y + EPS17;
   };
   const dist = new Float64Array(xs.length * ys.length * 4).fill(Infinity);
   const from = new Int32Array(dist.length).fill(-1);
@@ -9272,7 +9141,7 @@ function tighten(points) {
   const out = [];
   for (const p of points) {
     const last = out.at(-1);
-    if (last !== undefined && Math.abs(last.x - p.x) < EPS16 && Math.abs(last.y - p.y) < EPS16)
+    if (last !== undefined && Math.abs(last.x - p.x) < EPS17 && Math.abs(last.y - p.y) < EPS17)
       continue;
     out.push(p);
   }
@@ -9280,7 +9149,7 @@ function tighten(points) {
     const a = out[i - 1];
     const b = out[i];
     const c = out[i + 1];
-    if (Math.abs(a.x - b.x) < EPS16 && Math.abs(b.x - c.x) < EPS16 || Math.abs(a.y - b.y) < EPS16 && Math.abs(b.y - c.y) < EPS16)
+    if (Math.abs(a.x - b.x) < EPS17 && Math.abs(b.x - c.x) < EPS17 || Math.abs(a.y - b.y) < EPS17 && Math.abs(b.y - c.y) < EPS17)
       out.splice(i, 1);
   }
   return out;
@@ -9300,8 +9169,8 @@ function slideEnd(points, g) {
   const b = points[n - 1];
   const a = points[n - 2];
   const { box, target } = g;
-  const onX = Math.abs(b.x - box.x) < EPS16 || Math.abs(b.x - (box.x + box.w)) < EPS16;
-  const onY = Math.abs(b.y - box.y) < EPS16 || Math.abs(b.y - (box.y + box.h)) < EPS16;
+  const onX = Math.abs(b.x - box.x) < EPS17 || Math.abs(b.x - (box.x + box.w)) < EPS17;
+  const onY = Math.abs(b.y - box.y) < EPS17 || Math.abs(b.y - (box.y + box.h)) < EPS17;
   if (onX === onY)
     return points;
   const along = (p) => onX ? p.y : p.x;
@@ -9312,24 +9181,24 @@ function slideEnd(points, g) {
   if (hi < lo)
     return points;
   const centre = onX ? target.y + target.h / 2 : target.x + target.w / 2;
-  if (centre < lo - EPS16 || centre > hi + EPS16)
+  if (centre < lo - EPS17 || centre > hi + EPS17)
     return points;
   const reach = onX ? across(b) < target.x ? target.x : target.x + target.w : across(b) < target.y ? target.y : target.y + target.h;
   const run = [at(centre, across(b)), at(centre, reach)];
   if (g.inner.some((o) => through(run[0], run[1], o, 0)))
     return points;
-  const sameFace = g.meets.filter((m) => Math.abs(across(m) - across(b)) < EPS16);
+  const sameFace = g.meets.filter((m) => Math.abs(across(m) - across(b)) < EPS17);
   let chosen;
   for (let k = 0;k <= 6 && chosen === undefined; k++) {
     for (const sign of k === 0 ? [0] : [1, -1]) {
       const v = centre + sign * k * FACE_PITCH;
-      if (v >= lo - EPS16 && v <= hi + EPS16 && sameFace.every((m) => Math.abs(along(m) - v) >= FACE_PITCH - EPS16)) {
+      if (v >= lo - EPS17 && v <= hi + EPS17 && sameFace.every((m) => Math.abs(along(m) - v) >= FACE_PITCH - EPS17)) {
         chosen = v;
         break;
       }
     }
   }
-  if (chosen === undefined || Math.abs(along(b) - chosen) < EPS16)
+  if (chosen === undefined || Math.abs(along(b) - chosen) < EPS17)
     return points;
   const label = g.label;
   const touches = (p, q) => label !== undefined && Math.min(p.x, q.x) < label.x + label.w + 1 && Math.max(p.x, q.x) > label.x - 1 && Math.min(p.y, q.y) < label.y + label.h + 1 && Math.max(p.y, q.y) > label.y - 1;
@@ -9343,13 +9212,13 @@ function slideEnd(points, g) {
     const jog = across(b) + (across(a) < across(b) ? -JOG : JOG);
     moved = [a, at(along(a), jog), at(chosen, jog), at(chosen, across(b))];
     changed = moved;
-    if (Math.abs(along(a) - chosen) < EPS16) {
+    if (Math.abs(along(a) - chosen) < EPS17) {
       moved = [a, at(chosen, across(b))];
       changed = moved;
     }
   } else {
     const c = points[n - 3];
-    if (Math.abs(across(c) - across(a)) > EPS16 || Math.abs(along(a) - along(b)) > EPS16)
+    if (Math.abs(across(c) - across(a)) > EPS17 || Math.abs(along(a) - along(b)) > EPS17)
       return points;
     if (touches(c, a) || touches(a, b))
       return points;
@@ -9359,21 +9228,21 @@ function slideEnd(points, g) {
   }
   const before = n === 2 ? [a, b] : [points[n - 3], a, b];
   const price = (path) => segmentsOf2(path).reduce((sum, s) => sum + clash(s.a, s.b, g.others), 0);
-  if (price(changed) > price(before) + EPS16)
+  if (price(changed) > price(before) + EPS17)
     return points;
   if (segmentsOf2(changed).some((s) => g.obstacles.some((o) => through(s.a, s.b, o, 0))))
     return points;
   return moved;
 }
 var faceOfPoint = (p, box) => {
-  const within = (v, lo, hi) => v > lo - EPS16 && v < hi + EPS16;
-  if (Math.abs(p.y - box.y) < EPS16 && within(p.x, box.x, box.x + box.w))
+  const within = (v, lo, hi) => v > lo - EPS17 && v < hi + EPS17;
+  if (Math.abs(p.y - box.y) < EPS17 && within(p.x, box.x, box.x + box.w))
     return "top";
-  if (Math.abs(p.y - (box.y + box.h)) < EPS16 && within(p.x, box.x, box.x + box.w))
+  if (Math.abs(p.y - (box.y + box.h)) < EPS17 && within(p.x, box.x, box.x + box.w))
     return "bottom";
-  if (Math.abs(p.x - box.x) < EPS16 && within(p.y, box.y, box.y + box.h))
+  if (Math.abs(p.x - box.x) < EPS17 && within(p.y, box.y, box.y + box.h))
     return "left";
-  if (Math.abs(p.x - (box.x + box.w)) < EPS16 && within(p.y, box.y, box.y + box.h))
+  if (Math.abs(p.x - (box.x + box.w)) < EPS17 && within(p.y, box.y, box.y + box.h))
     return "right";
   return;
 };
@@ -9389,7 +9258,7 @@ function exitRange(face, box, target) {
   const flat = face === "top" || face === "bottom";
   const lo = Math.max((flat ? box.x : box.y) + FACE_CLEAR, (flat ? target.x : target.y) + FACE_CLEAR);
   const hi = Math.min((flat ? box.x + box.w : box.y + box.h) - FACE_CLEAR, (flat ? target.x + target.w : target.y + target.h) - FACE_CLEAR);
-  return lo <= hi + EPS16 ? [lo, hi] : undefined;
+  return lo <= hi + EPS17 ? [lo, hi] : undefined;
 }
 function exitEnds(face, v, box, target) {
   switch (face) {
@@ -9412,7 +9281,7 @@ function crossingAlong(forward, lane, flat) {
   for (let i = forward.length - 2;i >= 0; i--) {
     const a = forward[i];
     const c = forward[i + 1];
-    if (flat ? Math.abs(a.x - c.x) < EPS16 && Math.min(a.y, c.y) + EPS16 < lane && lane < Math.max(a.y, c.y) - EPS16 : Math.abs(a.y - c.y) < EPS16 && Math.min(a.x, c.x) + EPS16 < lane && lane < Math.max(a.x, c.x) - EPS16)
+    if (flat ? Math.abs(a.x - c.x) < EPS17 && Math.min(a.y, c.y) + EPS17 < lane && lane < Math.max(a.y, c.y) - EPS17 : Math.abs(a.y - c.y) < EPS17 && Math.min(a.x, c.x) + EPS17 < lane && lane < Math.max(a.x, c.x) - EPS17)
       return flat ? a.x : a.y;
   }
   return;
@@ -9421,7 +9290,7 @@ function joinAt(forward, lane, flat, stub, q, obstacles) {
   for (let i = forward.length - 2;i >= 0; i--) {
     const a = forward[i];
     const c = forward[i + 1];
-    const crossing = flat ? Math.abs(a.x - c.x) < EPS16 && Math.min(a.y, c.y) + EPS16 < lane && lane < Math.max(a.y, c.y) - EPS16 : Math.abs(a.y - c.y) < EPS16 && Math.min(a.x, c.x) + EPS16 < lane && lane < Math.max(a.x, c.x) - EPS16;
+    const crossing = flat ? Math.abs(a.x - c.x) < EPS17 && Math.min(a.y, c.y) + EPS17 < lane && lane < Math.max(a.y, c.y) - EPS17 : Math.abs(a.y - c.y) < EPS17 && Math.min(a.x, c.x) + EPS17 < lane && lane < Math.max(a.x, c.x) - EPS17;
     if (!crossing)
       continue;
     const joint = flat ? { x: a.x, y: lane } : { x: lane, y: a.y };
@@ -9461,17 +9330,17 @@ function withinCanvas(layout) {
   const height = Math.max(layout.height + dy, y1 + dy + EDGE_ROOM2);
   if (dx === 0 && dy === 0 && width === layout.width && height === layout.height)
     return layout;
-  const move = (t) => ({ ...t, x: tidy6(t.x + dx), y: tidy6(t.y + dy) });
+  const move = (t) => ({ ...t, x: tidy7(t.x + dx), y: tidy7(t.y + dy) });
   return {
     ...layout,
-    width: tidy6(width),
-    height: tidy6(height),
+    width: tidy7(width),
+    height: tidy7(height),
     nodes: layout.nodes.map((n) => ({ ...move(n), ...n.outline ? { outline: move(n.outline) } : {} })),
     clusters: (layout.clusters ?? []).map((c) => ({ ...move(c), ...c.name ? { name: move(c.name) } : {} })),
     lanes: layout.lanes.map((l) => ({ ...move(l), ...l.labelBox ? { labelBox: move(l.labelBox) } : {} })),
     edges: layout.edges.map((e) => ({
       ...e,
-      points: e.points.map((p) => ({ x: tidy6(p.x + dx), y: tidy6(p.y + dy) })),
+      points: e.points.map((p) => ({ x: tidy7(p.x + dx), y: tidy7(p.y + dy) })),
       ...e.label ? { label: move(e.label) } : {},
       ...e.startLabel ? { startLabel: move(e.startLabel) } : {},
       ...e.endLabel ? { endLabel: move(e.endLabel) } : {}
@@ -9501,8 +9370,8 @@ function placeNames(layout, ruler, rows, subtitled) {
     const row = CLUSTER_NAME_ROW + (rows.has(c.id) ? CLUSTER_NAME_LINE : 0);
     const taken = [];
     for (const [a, b] of segs) {
-      if (Math.abs(a.y - b.y) < EPS16) {
-        if (a.y >= c.y - EPS16 && a.y <= c.y + row + EPS16 && Math.max(a.x, b.x) > c.x && Math.min(a.x, b.x) < c.x + c.w)
+      if (Math.abs(a.y - b.y) < EPS17) {
+        if (a.y >= c.y - EPS17 && a.y <= c.y + row + EPS17 && Math.max(a.x, b.x) > c.x && Math.min(a.x, b.x) < c.x + c.w)
           taken.push([Math.min(a.x, b.x) - NAME_GAP, Math.max(a.x, b.x) + NAME_GAP]);
       } else if (a.x > c.x && a.x < c.x + c.w && Math.max(a.y, b.y) > c.y && Math.min(a.y, b.y) < c.y + row)
         taken.push([a.x - NAME_GAP, a.x + NAME_GAP]);
@@ -9514,8 +9383,8 @@ function placeNames(layout, ruler, rows, subtitled) {
     const at = (lines) => {
       const w = Math.max(...lines.map((l) => ruler.textWidth(l, "lane")));
       for (const [a, b] of gaps) {
-        const x = a <= c.x + EPS16 ? c.x + CLUSTER_NAME_INSET : a;
-        if (x + w <= (b >= c.x + c.w - EPS16 ? b - NAME_GAP : b) + EPS16)
+        const x = a <= c.x + EPS17 ? c.x + CLUSTER_NAME_INSET : a;
+        if (x + w <= (b >= c.x + c.w - EPS17 ? b - NAME_GAP : b) + EPS17)
           return { x, w };
       }
       return;
@@ -9635,7 +9504,7 @@ function routedOnce(layout, ruler, subtitled) {
   const grown = withinCanvas(refined);
   if (grown !== refined && layout.legend !== undefined)
     return;
-  const passes = (name) => grown.edges.some((e) => !e.invisible && segmentsOf2(e.points).some((t) => Math.min(t.a.x, t.b.x) < name.x + name.w - EPS16 && Math.max(t.a.x, t.b.x) > name.x + EPS16 && Math.min(t.a.y, t.b.y) < name.y + name.h - EPS16 && Math.max(t.a.y, t.b.y) > name.y + EPS16));
+  const passes = (name) => grown.edges.some((e) => !e.invisible && segmentsOf2(e.points).some((t) => Math.min(t.a.x, t.b.x) < name.x + name.w - EPS17 && Math.max(t.a.x, t.b.x) > name.x + EPS17 && Math.min(t.a.y, t.b.y) < name.y + name.h - EPS17 && Math.max(t.a.y, t.b.y) > name.y + EPS17));
   const kept = { ...grown, clusters: (grown.clusters ?? []).map((c) => c.name?.knockout === true && !passes(c.name) ? { ...c, name: { x: c.name.x, y: c.name.y, w: c.name.w, h: c.name.h, lines: c.name.lines } } : c) };
   if (subtitled.size === 0)
     return kept;
@@ -9647,7 +9516,7 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
   const plan = { graph, ruler, opts, draw, tree, edges: placeEdges(graph, tree), home: (graph.lanes[0] ?? { id: "_" }).id, rows };
   const top = buildLevel(plan, "", graph.direction, graph.mirror);
   const acc = { nodes: new Map, clusters: [], clusterRect: new Map, pieces: new Map, diagnostics: [] };
-  assemble2(plan, top, 0, 0, 1, acc);
+  assemble(plan, top, 0, 0, 1, acc);
   const rectOf = (id) => acc.clusterRect.get(id) ?? acc.nodes.get(id);
   const nodeCluster = new Map(graph.nodes.map((n) => [n.id, n.cluster]));
   const obstaclesFor = (end) => {
@@ -9715,10 +9584,10 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
     for (const e of [...group].sort((a, b) => a.sort[0] - b.sort[0] || a.sort[1] - b.sort[1] || a.sort[2] - b.sort[2])) {
       let v = Math.max(e.wanted, last + FACE_PITCH);
       const own = `${e.r.edge[e.end]}|${e.face}`;
-      while (v <= e.range[1] + EPS16 && (fixed.some((m) => Math.abs(m - v) < FACE_PITCH - EPS16) || (onNode.get(own) ?? []).some((m) => Math.abs(m - v) < FACE_PITCH - EPS16)))
+      while (v <= e.range[1] + EPS17 && (fixed.some((m) => Math.abs(m - v) < FACE_PITCH - EPS17) || (onNode.get(own) ?? []).some((m) => Math.abs(m - v) < FACE_PITCH - EPS17)))
         v += FACE_PITCH;
       const ends = exitEnds(e.face, v, e.box, e.target);
-      if (v > e.range[1] + EPS16 || e.blockers.some((o) => through(ends.inner, ends.border, o, 0)))
+      if (v > e.range[1] + EPS17 || e.blockers.some((o) => through(ends.inner, ends.border, o, 0)))
         continue;
       e.at = v;
       last = v;
@@ -9751,7 +9620,7 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
       const pts = startOf(e);
       const [a, c] = [pts[0], pts[1]];
       const x = ports[i];
-      if (Math.abs(a.x - c.x) > EPS16 || Math.abs(a.x - x) < EPS16)
+      if (Math.abs(a.x - c.x) > EPS17 || Math.abs(a.x - x) < EPS17)
         return;
       const moved = [{ x, y: a.y }, { x, y: c.y }, ...pts.slice(2)];
       const piece = acc.pieces.get(e.r.index);
@@ -9765,8 +9634,8 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
       const piece = acc.pieces.get(e.r.index);
       return crossingAlong(e.end === "to" ? piece.points : [...piece.points].reverse(), lanesOf(e.face, e.box)[0], flat) ?? e.at;
     };
-    const right = placed.filter((e) => origin(e) < e.at - EPS16).sort((a, b) => origin(a) - origin(b));
-    const left = placed.filter((e) => origin(e) > e.at + EPS16).sort((a, b) => origin(b) - origin(a));
+    const right = placed.filter((e) => origin(e) < e.at - EPS17).sort((a, b) => origin(a) - origin(b));
+    const left = placed.filter((e) => origin(e) > e.at + EPS17).sort((a, b) => origin(b) - origin(a));
     right.forEach((e, i) => e.lane = Math.min(3, i));
     left.forEach((e, i) => e.lane = Math.min(3, right.length + i));
   }
@@ -9792,7 +9661,7 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
         best = { path, cost };
         break;
       }
-      if (best === undefined || cost < best.cost - EPS16)
+      if (best === undefined || cost < best.cost - EPS17)
         best = { path, cost };
     }
     const otherEnd = e.end === "to" ? "from" : "to";
@@ -9819,7 +9688,7 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
     const entry = slid.at(-1);
     const inward = dirOf(slid.at(-2), entry);
     const around = pathInside({ region: e.box, start: entry, inward, target: e.target, obstacles: blockersFor(e.box, e.r[e.end], e.r.edge[e.end]), drawn: others, taken: new Set }) ?? straightIn(entry, inward, e.target);
-    if (price([...slid, ...around.slice(1)]) <= price([...best.path, ...along.slice(1)]) + EPS16)
+    if (price([...slid, ...around.slice(1)]) <= price([...best.path, ...along.slice(1)]) + EPS17)
       continue;
     acc.pieces.set(e.r.index, { ...piece, points: e.end === "to" ? best.path : [...best.path].reverse() });
     direct.set(`${e.r.index}:${e.end}`, [ends.border, ends.inner]);
@@ -9913,6 +9782,1289 @@ function layoutPass(graph, ruler, opts, draw, rows, useExits) {
   const finished = ruler.terminal === true ? base : withinCanvas(refineLabels(base, layeredRuler(ruler), redrawn, keepOffBoxes(acc.clusters, false)));
   const named = ruler.terminal === true ? { clusters: finished.clusters ?? [], need: new Set } : placeNames(finished, ruler, rows, subtitledOf(graph));
   return { layout: withLegend({ ...finished, clusters: named.clusters }, ruler, opts.legend), need: named.need };
+}
+
+// src/render/svg.ts
+var TITLE_LINE = 18;
+var BODY_LINE = 16;
+var CORNER_RADIUS = 8;
+var DIAMOND_RADIUS = 12;
+var CHIP_HEIGHT = 24;
+var CHIP_PAD = 10;
+var DOT = 8;
+var CROSS2 = 8;
+var CAP = CYLINDER_CAP;
+var BAR = 8;
+var FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
+var FONT = FONT_STACK;
+function styleSheet(rules) {
+  const light = rules.map((r) => fillColors(r, 0)).join(`
+`);
+  const dark = rules.map((r) => fillColors(r, 1)).join(`
+`);
+  return `${light}
+@media (prefers-color-scheme: dark){
+${dark}
+}`;
+}
+function escapeXml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function num(v) {
+  const r = Math.round(v * 100) / 100;
+  return String(r === 0 ? 0 : r);
+}
+function pathData(points, radius = CORNER_RADIUS, endTrim = 0, hops = []) {
+  const first = points[0];
+  if (!first)
+    return "";
+  let d = `M${num(first.x)} ${num(first.y)}`;
+  let at = { x: first.x, y: first.y };
+  const line = (x, y) => {
+    if (Math.abs(y - at.y) < 0.5 && hops.length > 0) {
+      const dir = Math.sign(x - at.x);
+      const over = hops.filter((h) => Math.abs(h.y - y) < 0.5 && (h.x - at.x) * dir > HOP + 0.5 && (x - h.x) * dir > HOP + 0.5).sort((p, q) => (p.x - q.x) * dir);
+      for (const h of over) {
+        d += ` L${num(h.x - dir * HOP)} ${num(y)} A${HOP} ${HOP} 0 0 ${dir > 0 ? 1 : 0} ${num(h.x + dir * HOP)} ${num(y)}`;
+      }
+    }
+    d += ` L${num(x)} ${num(y)}`;
+    at = { x, y };
+  };
+  let consumed = 0;
+  for (let i = 1;i < points.length; i++) {
+    const prev = points[i - 1];
+    const cur = points[i];
+    const next = points[i + 1];
+    if (!prev || !cur)
+      continue;
+    const lenIn = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    if (!next) {
+      const cut = lenIn === 0 ? 0 : Math.min(endTrim, Math.max(0, lenIn - consumed - 1));
+      line(cur.x - (cur.x - prev.x) / (lenIn || 1) * cut, cur.y - (cur.y - prev.y) / (lenIn || 1) * cut);
+      continue;
+    }
+    const lenOut = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const room = i + 1 === points.length - 1 ? Math.max(0, lenOut - endTrim) : lenOut;
+    const r = Math.min(radius, lenIn / 2, lenOut / 2, room);
+    if (r <= 0) {
+      line(cur.x, cur.y);
+      consumed = 0;
+      continue;
+    }
+    consumed = r;
+    const inX = (cur.x - prev.x) / lenIn;
+    const inY = (cur.y - prev.y) / lenIn;
+    const outX = (next.x - cur.x) / lenOut;
+    const outY = (next.y - cur.y) / lenOut;
+    const sweep = inX * outY - inY * outX > 0 ? 1 : 0;
+    line(cur.x - inX * r, cur.y - inY * r);
+    d += ` A${num(r)} ${num(r)} 0 0 ${sweep} ${num(cur.x + outX * r)} ${num(cur.y + outY * r)}`;
+    at = { x: cur.x + outX * r, y: cur.y + outY * r };
+  }
+  return d;
+}
+var HOP = 6;
+function hopsOf(edges) {
+  const runs = edges.map((e) => e.invisible ? [] : e.points.slice(1).map((q, i) => [e.points[i], q]));
+  return runs.map((mine, i) => mine.flatMap(([a, b]) => {
+    if (Math.abs(a.y - b.y) >= 0.5)
+      return [];
+    const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+    return runs.flatMap((other, j) => j === i ? [] : edges[j]?.trunk !== undefined && edges[j]?.trunk?.id === edges[i]?.trunk?.id ? [] : other.flatMap(([p, q]) => {
+      if (Math.abs(p.x - q.x) >= 0.5)
+        return [];
+      const [y0, y1] = [Math.min(p.y, q.y), Math.max(p.y, q.y)];
+      return p.x > x0 + 0.5 && p.x < x1 - 0.5 && a.y > y0 + 0.5 && a.y < y1 - 0.5 ? [{ x: p.x, y: a.y }] : [];
+    }));
+  }));
+}
+var isRecordNode = (n) => hasCompartments(n) || RECORD_SHAPES.has(n.shape);
+var RECORD_SHAPES = new Set(["start-dot", "end-dot", "bar", "note", "ellipse", "actor"]);
+function rolesOf(layout) {
+  const led = new Set(layout.edges.filter((e) => e.from !== e.to && !e.invisible).map((e) => e.to));
+  const roles = new Map;
+  for (const n of layout.nodes)
+    if (n.shape === "diamond")
+      roles.set(n.id, "decision");
+  const plain = layout.nodes.filter((n) => !isRecordNode(n));
+  const starts = plain.filter((n) => !led.has(n.id));
+  const first = layout.nodes.some(isRecordNode) ? [] : plain.slice(0, 1);
+  for (const n of starts.length > 0 ? starts : first)
+    if (!roles.has(n.id))
+      roles.set(n.id, "start");
+  return roles;
+}
+function laneSvg(lane, tint, centred) {
+  if (lane.label === "")
+    return "";
+  const box = lane.labelBox;
+  return `<g class="ursula-lane-group" data-lane="${escapeXml(lane.id)}">` + `<rect class="ursula-lane${tint ? " ursula-lane--tint" : ""}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="${num(THEME.boxRadius + 4)}"/>` + `<text class="ursula-lane-label" x="${num(centred ? box.x + box.w / 2 : box.x)}" y="${num(box.y + box.h / 2)}"${centred ? ' text-anchor="middle"' : ""} dominant-baseline="central">${escapeXml(lane.label)}</text>` + "</g>";
+}
+function nameText(cluster) {
+  const name = cluster.name;
+  const x = name?.x ?? cluster.x + CLUSTER_NAME_INSET;
+  const top = name?.y ?? cluster.y + 12;
+  const lines = name?.lines ?? [cluster.label];
+  const step = name?.subtitle === true ? 18 : 16;
+  return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? " ursula-zone-sub" : ""}" x="${num(x)}" y="${num(top + 12 + step * i)}">${escapeXml(l)}</text>`).join("");
+}
+function tintOf(cluster) {
+  return cluster.depth <= 1 ? "tint-outer" : cluster.depth % 2 === 0 ? "tint-mid" : "tint-inner";
+}
+function tintUnder(edge, clusters) {
+  const l = edge.label;
+  if (l === undefined)
+    return;
+  const [x, y] = [l.x + l.w / 2, l.y + l.h / 2];
+  const holding = clusters.filter((c) => c.style === "dashed" && x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h);
+  if (holding.length === 0)
+    return;
+  return tintOf(holding.reduce((a, b) => b.depth > a.depth ? b : a));
+}
+function clusterSvg(cluster) {
+  const look = cluster.style === "dashed" ? ` ursula-zone--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? " ursula-zone--plain" : "";
+  return `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` + `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(THEME.boxRadius + 4)}"/>` + (cluster.name?.knockout ? "" : nameText(cluster)) + "</g>";
+}
+function knockoutSvg(cluster) {
+  const name = cluster.name;
+  if (!name?.knockout)
+    return "";
+  const look = cluster.style === "dashed" ? ` ursula-zone-knock--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? " ursula-zone-knock--plain" : "";
+  return `<g class="ursula-cluster-name" data-cluster="${escapeXml(cluster.id)}"><rect class="ursula-zone-knock${look}" x="${num(name.x - 4)}" y="${num(name.y - 2)}" width="${num(name.w + 8)}" height="${num(name.h + 4)}"/>${nameText(cluster)}</g>`;
+}
+function faceRules(layout) {
+  const faced = layout.nodes.some((n) => n.compartments?.some((c) => c.face === true));
+  return [
+    ...faced ? [".ursula-zone-name{fill:$fg;font-size:13px}", ".ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}", ".ursula-cell-body{fill:$muted}"] : [],
+    ...layout.edges.some((e) => e.label?.text.includes(" ")) ? [".ursula-edge-label-tech{font-weight:400;opacity:.7}"] : []
+  ];
+}
+var TINTS = [
+  ["outer", "$tint-outer", "$tint-chip", ""],
+  ["mid", "$surface", "$chip-fill", ";stroke:$line;stroke-width:1;stroke-dasharray:none"],
+  ["inner", "$tint-inner", "$tint-chip", ";stroke:$hair;stroke-width:1;stroke-dasharray:none"]
+];
+function clusterRules(clusters) {
+  if (clusters.length === 0)
+    return [];
+  const m = SCENE_THEME.metrics;
+  return [
+    ".ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}",
+    ".ursula-zone--plain{fill:$surface}",
+    ...clusters.some((c) => c.style === "dashed") ? [`.ursula-zone--dashed{fill:none;stroke:$faint;stroke-width:${m["zone-dash-w"] ?? "1"};stroke-dasharray:${m["dash"] ?? "none"};stroke-linecap:round}`] : [],
+    ...clusters.some((c) => c.style === "dashed") ? TINTS.flatMap(([t, fill, chip, stroke]) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:${fill}${stroke}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:${fill}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:${chip}}`]) : [],
+    ".ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}",
+    ...clusters.some((c) => c.name?.subtitle === true) ? [".ursula-zone-sub{font-weight:400;opacity:.75}"] : [],
+    ...clusters.some((c) => c.name?.knockout) ? [".ursula-zone-knock{fill:$lane}", ".ursula-zone-knock--plain{fill:$surface}", ".ursula-zone-knock--dashed{fill:$surface}"] : []
+  ];
+}
+function trimmedPoints(edge, nodes) {
+  const pts = edge.points;
+  if (pts.length < 2)
+    return pts;
+  const from = nodes.get(edge.from);
+  const to = nodes.get(edge.to);
+  const out = [...pts];
+  if (from)
+    out[0] = trimToOutline(from, pts[0], pts[1]);
+  if (to)
+    out[pts.length - 1] = trimToOutline(to, pts[pts.length - 1], pts[pts.length - 2]);
+  if (from?.outline)
+    out[0] = reachRoundedCorner(diamondPoints(from.outline), DIAMOND_RADIUS, out[0], out[1]);
+  if (to?.outline)
+    out[pts.length - 1] = reachRoundedCorner(diamondPoints(to.outline), DIAMOND_RADIUS, out[pts.length - 1], out[pts.length - 2]);
+  return out;
+}
+var accented = (edge, paint) => edge.style === "thick" || paint.roles.get(edge.from) === "decision";
+var MARK = 12;
+var MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
+function endMarkerId(end, accent, atStart) {
+  switch (end) {
+    case "none":
+      return;
+    case "arrow":
+      return `${accent ? "ursula-arrow-accent" : "ursula-arrow"}${atStart ? "-start" : ""}`;
+    case "circle":
+      return accent ? "ursula-dot-accent" : "ursula-dot";
+    case "cross":
+      return accent ? "ursula-cross-accent" : "ursula-cross";
+    default:
+      return `ursula-end-${end}${accent ? "-accent" : ""}`;
+  }
+}
+function endTrim(end) {
+  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : MARKS.has(end) ? MARK : DOT / 2;
+}
+function markBody(end, accent) {
+  const cls = (base) => accent ? `ursula-end-${base} ursula-end-${base}--accent` : `ursula-end-${base}`;
+  const stroke = (d) => `<path class="${cls("stroke")}" d="${d}"/>`;
+  const foot = "M12 -5L4 0L12 5";
+  const ring = (cx) => `<circle class="${cls("hollow")}" cx="${cx}" cy="0" r="2.5"/>`;
+  switch (end) {
+    case "triangle-open":
+      return `<polygon class="${cls("hollow")}" points="0,-6 12,0 0,6"/>`;
+    case "diamond-filled":
+      return `<polygon class="${cls("solid")}" points="0,0 6,-5 12,0 6,5"/>`;
+    case "diamond-open":
+      return `<polygon class="${cls("hollow")}" points="0,0 6,-5 12,0 6,5"/>`;
+    case "arrow-open":
+      return stroke("M0 0H12M4 -5L12 0L4 5");
+    case "one":
+      return stroke("M0 0H12M9 -5V5M4 -5V5");
+    case "zero-one":
+      return stroke("M0 0H12M9 -5V5") + ring(2.5);
+    case "many":
+      return stroke(`M0 0H12${foot}`);
+    case "one-many":
+      return stroke(`M0 0H12${foot}M1 -5V5`);
+    case "zero-many":
+      return stroke(`M0 0H12${foot}`) + ring(1.5);
+    case "circle-plus":
+      return `<circle class="${cls("hollow")}" cx="6" cy="0" r="6"/>` + stroke("M6 -6V6M0 0H12");
+    case "lollipop":
+      return `<circle class="${cls("hollow")}" cx="6" cy="0" r="6"/>`;
+    default:
+      return "";
+  }
+}
+function trimStart(pts, amount) {
+  const [a, b] = pts;
+  if (amount <= 0 || !a || !b)
+    return pts;
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len === 0)
+    return pts;
+  const cut = Math.min(amount, Math.max(0, len - 1));
+  return [{ x: a.x + (b.x - a.x) / len * cut, y: a.y + (b.y - a.y) / len * cut }, ...pts.slice(1)];
+}
+function edgeSvg(edge, nodes, paint, hops = []) {
+  if (edge.invisible)
+    return "";
+  const branch = paint.roles.get(edge.from) === "decision" && edge.style !== "thick";
+  const accent = accented(edge, paint);
+  const end = edge.end ?? "arrow";
+  const start = edge.startEnd ?? "none";
+  const endId = endMarkerId(end, accent, false);
+  const startId = endMarkerId(start, accent, true);
+  const points = trimStart(trimmedPoints(edge, nodes), endTrim(start));
+  const junction = edge.trunk?.dot;
+  return `<path class="ursula-edge ursula-edge--${edge.style}${branch ? " ursula-edge--branch" : ""}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` + `d="${pathData(points, edge.trunk?.square ? 0 : THEME.bend, endTrim(end), hops)}"${startId === undefined ? "" : ` marker-start="url(#${startId})"`}${endId === undefined ? "" : ` marker-end="url(#${endId})"`}/>` + (junction === undefined ? "" : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`);
+}
+var PORT_RING_R = 4;
+function portRings(layout, nodes) {
+  const seen = [];
+  const marksOf = (edge) => [(edge.startEnd ?? "none") !== "none", (edge.end ?? "arrow") !== "none"];
+  const leads = new Map(layout.edges.filter((e) => e.trunk?.lead === true).map((e) => [e.trunk?.id, marksOf(e)]));
+  for (const edge of layout.edges) {
+    const marked = (edge.trunk === undefined ? undefined : leads.get(edge.trunk.id)) ?? marksOf(edge);
+    if (edge.invisible || marked[0] === marked[1])
+      continue;
+    const points = trimmedPoints(edge, nodes);
+    const at = marked[1] ? points[0] : points[points.length - 1];
+    if (at === undefined || seen.some((p) => Math.abs(p.x - at.x) <= 0.5 && Math.abs(p.y - at.y) <= 0.5))
+      continue;
+    seen.push(at);
+  }
+  return seen.map((p) => `<circle class="ursula-port" cx="${num(p.x)}" cy="${num(p.y)}" r="${PORT_RING_R}"/>`).join("");
+}
+function extraEnds(layout, paint) {
+  const wanted = new Map;
+  const reversed = (m) => m.replace('orient="auto"', 'orient="auto-start-reverse"');
+  let rules = false;
+  const want = (end, accent, atStart) => {
+    const id = endMarkerId(end, accent, atStart);
+    if (id === undefined || wanted.has(id))
+      return;
+    const mod = accent ? "--accent" : "";
+    if (end === "arrow") {
+      if (atStart)
+        wanted.set(id, reversed(flowMarker(id, accent ? "ursula-arrow ursula-arrow--accent" : "ursula-arrow")));
+      return;
+    }
+    if (MARKS.has(end)) {
+      wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
+      return;
+    }
+    rules = true;
+    const body = end === "circle" ? `<circle class="ursula-end-dot${accent ? ` ursula-end-dot${mod}` : ""}" cx="${DOT / 2}" cy="${DOT / 2}" r="${DOT / 2}"/>` : `<path class="ursula-end-cross${accent ? ` ursula-end-cross${mod}` : ""}" d="${crossPath()}"/>`;
+    wanted.set(id, `<marker id="${id}" viewBox="0 0 ${DOT} ${DOT}" refX="${DOT}" refY="${DOT / 2}" markerWidth="${DOT}" markerHeight="${DOT}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${body}</marker>`);
+  };
+  for (const edge of layout.edges) {
+    if (edge.invisible)
+      continue;
+    if (edge.trunk?.dot !== undefined)
+      rules = true;
+    const accent = accented(edge, paint);
+    want(edge.end ?? "arrow", accent, false);
+    want(edge.startEnd ?? "none", accent, true);
+  }
+  const w = THEME.lineWidth;
+  return {
+    markers: [...wanted.values()],
+    rules: rules ? [
+      ".ursula-end-dot{fill:$line}",
+      ".ursula-end-dot--accent{fill:$accent}",
+      `.ursula-end-cross{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round}`,
+      ".ursula-end-cross--accent{stroke:$accent}"
+    ] : []
+  };
+}
+function crossPath() {
+  const mid = DOT / 2;
+  const reach = CROSS2 / 2 / Math.SQRT2;
+  const [lo, hi] = [num(mid - reach), num(mid + reach)];
+  return `M${lo} ${lo}L${hi} ${hi}M${hi} ${lo}L${lo} ${hi}`;
+}
+function labelText(line) {
+  const at = line.indexOf(" ");
+  if (at < 0)
+    return escapeXml(line);
+  return `${escapeXml(line.slice(0, at))}<tspan class="ursula-edge-label-tech" role="note">${escapeXml(line.slice(at))}</tspan>`;
+}
+function labelSvg(edge, paint, on) {
+  const l = edge.label;
+  if (!l || edge.invisible)
+    return "";
+  const lines = l.lines ?? [l.text];
+  const ruler = pixelRuler();
+  const w = Math.max(0, ...lines.map((line) => ruler.textWidth(line, "edge"))) + 2 * CHIP_PAD;
+  const h = CHIP_HEIGHT + (lines.length - 1) * BODY_LINE;
+  const cx = l.x + l.w / 2;
+  const cy = l.y + l.h / 2;
+  const chip = `<rect class="ursula-edge-label-bg" x="${num(cx - w / 2)}" y="${num(cy - h / 2)}" width="${num(w)}" height="${num(h)}" rx="${num(CHIP_HEIGHT / 2)}"/>`;
+  const emphasis = edge.style === "thick" ? " ursula-edge-label--thick" : paint.roles.get(edge.from) === "decision" ? " ursula-edge-label--branch" : "";
+  return `<g class="ursula-edge-label-group${on === undefined ? "" : ` ursula-edge-label--on-${on}`}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` + chip + lines.map((line, i, all) => `<text class="ursula-edge-label${emphasis}" x="${num(cx)}" y="${num(cy + (i - (all.length - 1) / 2) * BODY_LINE)}" text-anchor="middle" dominant-baseline="central">${labelText(line)}</text>`).join("") + "</g>";
+}
+function endLabelSvg(edge) {
+  const one = (label, which) => label === undefined ? "" : `<text class="ursula-end-label" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" data-end="${which}" x="${num(label.x + label.w / 2)}" y="${num(label.y + label.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(label.text)}</text>`;
+  return edge.invisible ? "" : one(edge.startLabel, "start") + one(edge.endLabel, "end");
+}
+function usesRecords(layout) {
+  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && MARKS.has(e.end) || e.startEnd !== undefined && MARKS.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
+}
+var points = (pts) => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(" ");
+function boxSvg(node, rx) {
+  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"/>`;
+}
+function shapeSvg(node) {
+  const { x, y, w, h } = node;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const radius = THEME.boxRadius;
+  switch (node.shape) {
+    case "round":
+      return boxSvg(node, Math.min(radius + 8, h / 2));
+    case "stadium":
+      return boxSvg(node, h / 2);
+    case "circle":
+    case "ellipse":
+      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>`;
+    case "start-dot":
+      return `<circle class="ursula-start-dot" cx="${num(cx)}" cy="${num(cy)}" r="${num(Math.min(w, h) / 2)}"/>`;
+    case "end-dot": {
+      const outer = Math.min(w, h) / 2;
+      return `<circle class="ursula-end-ring" cx="${num(cx)}" cy="${num(cy)}" r="${num(outer - THEME.lineWidth / 2)}"/>` + `<circle class="ursula-end-core" cx="${num(cx)}" cy="${num(cy)}" r="${num(END_CORE / 2)}"/>`;
+    }
+    case "bar":
+      return `<rect class="ursula-bar" x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" rx="${num(Math.min(2, w / 2, h / 2))}"/>`;
+    case "note": {
+      const fold = Math.min(NOTE_FOLD, w / 2, h / 2);
+      return `<path class="ursula-note" d="M${num(x)} ${num(y)}H${num(x + w - fold)}L${num(x + w)} ${num(y + fold)}V${num(y + h)}H${num(x)}Z"/>` + `<path class="ursula-note-fold" d="M${num(x + w - fold)} ${num(y)}V${num(y + fold)}H${num(x + w)}"/>`;
+    }
+    case "actor": {
+      const top = y;
+      return `<circle class="ursula-actor" cx="${num(cx)}" cy="${num(top + 8)}" r="8"/>` + `<path class="ursula-actor" d="M${num(cx)} ${num(top + 16)}V${num(top + 32)}M${num(x)} ${num(top + 24)}H${num(x + w)}M${num(cx)} ${num(top + 32)}L${num(cx - 10)} ${num(y + h)}M${num(cx)} ${num(top + 32)}L${num(cx + 10)} ${num(y + h)}"/>`;
+    }
+    case "hexagon":
+      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"/>`;
+    case "parallelogram":
+      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"/>`;
+    case "lean-l":
+      return `<polygon class="ursula-node-box" points="${points(leanLeftPoints(node))}"/>`;
+    case "trap-b":
+      return `<polygon class="ursula-node-box" points="${points(trapBottomPoints(node))}"/>`;
+    case "trap-t":
+      return `<polygon class="ursula-node-box" points="${points(trapTopPoints(node))}"/>`;
+    case "asym":
+      return `<polygon class="ursula-node-box" points="${points(asymPoints(node))}"/>`;
+    case "dbl-circle":
+      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>` + `<ellipse class="ursula-node-box ursula-node-box--lined" cx="${num(cx)}" cy="${num(cy)}" rx="${num(Math.max(0, w / 2 - RING_GAP))}" ry="${num(Math.max(0, h / 2 - RING_GAP))}"/>`;
+    case "subroutine":
+      return boxSvg(node, BAR) + [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box ursula-node-box--lined" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join("");
+    case "cylinder": {
+      const arc = `A${num(w / 2)} ${CAP} 0 0`;
+      const top = y + CAP;
+      const bottom = y + h - CAP;
+      return `<path class="ursula-node-box ursula-node-box--lined" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` + `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`;
+    }
+    case "diamond":
+      return node.outline ? `<path class="ursula-node-box" d="${roundedPolygonPath(diamondPoints(node.outline), DIAMOND_RADIUS)}"/>` : boxSvg(node, radius);
+    case "rect":
+      return boxSvg(node, radius);
+  }
+}
+var HEAD_BAND = 28;
+var HEAD_BAND_GAP = 10;
+function headBandSvg(node, radius, height) {
+  const inset = THEME.boxBorder / 2;
+  const id = `ursula-band-${node.id.replace(/[^A-Za-z0-9_-]/g, "_")}-${num(node.x)}-${num(node.y)}-${num(node.w)}-${num(node.h)}`.replace(/\./g, "_");
+  return `<clipPath id="${id}"><rect x="${num(node.x + inset)}" y="${num(node.y + inset)}" width="${num(node.w - 2 * inset)}" height="${num(node.h - 2 * inset)}" rx="${num(Math.max(0, radius - inset))}"/></clipPath>` + `<rect class="ursula-head-band" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(height)}" clip-path="url(#${id})"/>`;
+}
+function compartmentsSvg(node) {
+  const cells = node.compartments ?? [];
+  const ruler = pixelRuler();
+  const heights = compartmentHeights(cells, ruler);
+  const cylinder = node.shape === "cylinder";
+  const caps = cylinder ? 2 * CAP : 0;
+  const spare = Math.max(0, node.h - caps - heights.reduce((a, b) => a + b, 0));
+  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
+  const outline = cylinder || node.shape === "round" ? shapeSvg(node) : boxSvg(node, THEME.boxRadius);
+  const parts = [outline];
+  const bandRadius = node.shape === "round" ? Math.min(THEME.boxRadius + 8, node.h / 2) : THEME.boxRadius;
+  const banded = !cylinder;
+  const hasFace = cells.some((c) => c.face === true);
+  if (banded && !hasFace && cells.length > 1)
+    parts.push(headBandSvg(node, bandRadius, heights[0] ?? 0));
+  let top = node.y + caps;
+  cells.forEach((cell, i) => {
+    if (i > 0)
+      parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
+    const centred = (cell.align ?? (i === 0 ? "center" : "left")) === "center" && cell.columns === undefined;
+    const rows = faceLineHeights(cell.lines.length);
+    const content = rows.reduce((a, b) => a + b, 0) + FACE_PILL_GAP;
+    const rowTop = (k) => rows.slice(0, k).reduce((a, b) => a + b, 0) + (k > 0 ? FACE_PILL_GAP : 0);
+    const faceTop = top + ((heights[i] ?? 0) - content) / 2;
+    const onBand = banded && cell.face === true;
+    const faceY = (k) => onBand ? k === 0 ? top + HEAD_BAND / 2 : top + HEAD_BAND + HEAD_BAND_GAP + rowTop(k) - (rows[0] ?? 0) - FACE_PILL_GAP + (rows[k] ?? 0) / 2 : faceTop + rowTop(k) + (rows[k] ?? 0) / 2;
+    const first = cell.face === true ? faceTop + (rows[0] ?? 0) / 2 : top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
+    const starts = cell.columns === undefined ? [] : columnStarts(cell, ruler);
+    cell.lines.forEach((line, k) => {
+      const emphasis = lineEmphasis(cell, k, i);
+      const y = num(cell.face === true ? faceY(k) : first + k * COMPARTMENT_LINE);
+      if (cell.face === true && k === 0 && banded)
+        parts.push(headBandSvg(node, bandRadius, top + HEAD_BAND - node.y));
+      const row = cell.columns?.[k];
+      if (row === undefined) {
+        if (line === "")
+          return;
+        const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
+        parts.push(`<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${y}"${centred ? ' text-anchor="middle"' : ""} dominant-baseline="central">${escapeXml(line)}</text>`);
+        return;
+      }
+      row.forEach((text, c) => {
+        if (text === "")
+          return;
+        parts.push(`<text class="ursula-cell-${cell.columnEmphasis?.[c] ?? emphasis}" x="${num(node.x + COMPARTMENT_INSET + (starts[c] ?? 0))}" y="${y}" dominant-baseline="central">${escapeXml(text)}</text>`);
+      });
+    });
+    top += heights[i] ?? 0;
+  });
+  return parts.join("");
+}
+function nodeSvg(node, hook, paint) {
+  const extra = hook?.(node) ?? {};
+  const attrs = Object.entries(extra.attrs ?? {}).map(([k, v]) => ` ${k.replace(/[^A-Za-z0-9:_-]/g, "")}="${escapeXml(v)}"`).join("");
+  const role = paint.roles.get(node.id);
+  const className = ["ursula-node", role === undefined && paint.tinted.has(node.id) ? "ursula-node--on-lane" : "", extra.className ?? ""].filter((c) => c !== "").join(" ");
+  const block = TITLE_LINE + node.lines.length * BODY_LINE;
+  let y = node.y + (node.h - block) / 2 + (node.shape === "cylinder" ? CAP / 2 : 0);
+  const cx = node.x + node.w / 2;
+  const texts = [
+    `<text class="ursula-node-title" x="${num(cx)}" y="${num(y + TITLE_LINE / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>`
+  ];
+  y += TITLE_LINE;
+  for (const line of node.lines) {
+    texts.push(`<text class="ursula-node-line" x="${num(cx)}" y="${num(y + BODY_LINE / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(line)}</text>`);
+    y += BODY_LINE;
+  }
+  const bare = node.shape === "start-dot" || node.shape === "end-dot" || node.shape === "bar";
+  const body = hasCompartments(node) ? compartmentsSvg(node) : shapeSvg(node) + (node.shape === "actor" ? `<text class="ursula-actor-name" x="${num(cx)}" y="${num(node.y + ACTOR_H + ACTOR_NAME_GAP - 4)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>` : bare ? "" : texts.join(""));
+  return `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}${role === undefined ? "" : ` data-role="${role}"`}>` + body + (extra.extra ?? "") + "</g>";
+}
+function markerId(style) {
+  return style === "thick" ? "ursula-arrow-accent" : "ursula-arrow";
+}
+function legendSvg(legend, margin) {
+  const parts = [
+    `<line class="ursula-legend-rule" x1="${num(margin)}" y1="${num(legend.y)}" x2="${num(legend.w - margin)}" y2="${num(legend.y)}"/>`
+  ];
+  for (const item of legend.items) {
+    const sample = pathData([{ x: item.x, y: item.y }, { x: item.x + item.sampleW, y: item.y }], 0, ARROW_TRIM);
+    parts.push(`<path class="ursula-edge ursula-edge--${item.style}" d="${sample}" marker-end="url(#${markerId(item.style)})"/>` + `<text class="ursula-legend-text" x="${num(item.captionX)}" y="${num(item.y)}" dominant-baseline="central">${escapeXml(item.caption)}</text>`);
+  }
+  return `<g class="ursula-legend">${parts.join("")}</g>`;
+}
+function renderSvg(input, opts = {}) {
+  const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);
+  const heading = opts.drawTitle === undefined || opts.drawTitle === "" ? undefined : opts.drawTitle;
+  const rowH = heading === undefined ? 0 : TITLE_ROW;
+  const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
+  const byId = new Map(layout.nodes.map((n) => [n.id, n]));
+  const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth]));
+  const dashed = new Set((layout.clusters ?? []).filter((c) => c.style === "dashed").map((c) => c.id));
+  const labelled = layout.lanes.filter((l) => l.label !== "");
+  const tinted = (lane) => labelled.indexOf(lane) % 2 === 0;
+  const paint = {
+    roles: rolesOf(layout),
+    tinted: new Set([
+      ...labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id)),
+      ...layout.nodes.filter((n) => n.cluster !== undefined && !dashed.has(n.cluster) && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id)
+    ])
+  };
+  const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), ...(layout.clusters ?? []).filter((c) => c.style === "dashed").map((c) => c.x), layout.width);
+  const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
+  const h = num(layout.height + rowH);
+  const ends = extraEnds(layout, paint);
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
+    `<title>${escapeXml(title)}</title>`,
+    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...usesRecords(layout) ? recordRules() : [], ...faceRules(layout), ...heading === undefined ? [] : [".ursula-title{fill:$fg;font-size:15px;font-weight:600}"]])}</style>`,
+    `<defs>${flowMarker("ursula-arrow", "ursula-arrow")}${flowMarker("ursula-arrow-accent", "ursula-arrow ursula-arrow--accent")}${ends.markers.join("")}</defs>`,
+    ...heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`],
+    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === "along" && (layout.direction === "LR" || layout.direction === "RL"))),
+    ...(layout.clusters ?? []).map(clusterSvg),
+    ...((hops) => layout.edges.map((e, i) => edgeSvg(e, byId, paint, hops[i])))(hopsOf(layout.edges)),
+    ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
+    portRings(layout, byId),
+    ...(layout.clusters ?? []).map(knockoutSvg),
+    ...layout.edges.map((e) => labelSvg(e, paint, tintUnder(e, layout.clusters ?? []))),
+    ...layout.edges.map(endLabelSvg),
+    ...layout.legend ? [legendSvg(layout.legend, margin)] : [],
+    ...heading === undefined ? [] : ["</g>"],
+    "</svg>"
+  ].join("");
+}
+
+// src/render/html.ts
+var PAPER = ["#ffffff", "#16181d"];
+function variables(mode) {
+  const colours = Object.entries(COLORS).filter(([name]) => name !== "bg").map(([name, pair]) => `--ursula-${name}:${pair[mode]}`);
+  return [...colours, `--ursula-paper:${PAPER[mode]}`].join(";");
+}
+var BAKE_SOURCE = `function ursulaBake(text, get) {
+  return text.replace(/var\\(--ursula-([a-z0-9-]+)\\s*(?:,[^)]*)?\\)/g, function (_, name) { return get(name); });
+}`;
+function encodeSource(text) {
+  return text.replace(/\\/g, "\\\\").replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
+}
+function fileBase(title) {
+  const slug = (title ?? "").toLowerCase().replace(/[^a-z0-9ㄱ-ㆎ가-힣]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug === "" ? "diagram" : slug;
+}
+var STYLE = `
+*{box-sizing:border-box}
+:root{${variables(0)};color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${variables(1)};color-scheme:dark}}
+:root[data-theme="dark"]{${variables(1)};color-scheme:dark}
+body{margin:0;padding:16px;background:var(--ursula-paper);color:var(--ursula-fg);font-family:${FONT_STACK}}
+h1{margin:0 0 8px;font-size:16px;font-weight:600}
+.ursula-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
+.ursula-tools button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);cursor:pointer}
+.ursula-tools button:hover{border-color:var(--ursula-accent)}
+.ursula-tools button:focus-visible,[data-node]:focus-visible{outline:2px solid var(--ursula-accent);outline-offset:2px}
+#ursula-note{font-size:12px;color:var(--ursula-muted)}
+.ursula-viewport{overflow-x:auto}
+.ursula-viewport svg{display:block;max-width:none}
+[data-node]{cursor:pointer}
+svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:.25}
+#ursula-raw{margin:12px 0 0;padding:8px;white-space:pre-wrap;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);font-size:12px}
+@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{${variables(0)};color-scheme:light}.ursula-tools,#ursula-raw,#ursula-note{display:none}svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:1}}
+`.trim();
+var SCRIPT = `
+(function () {
+  ${BAKE_SOURCE}
+  var root = document.documentElement;
+  var svg = document.querySelector('.ursula-viewport svg');
+  var note = document.getElementById('ursula-note');
+  var base = document.body.getAttribute('data-file') || 'diagram';
+  var links = {};
+  try { links = JSON.parse(document.getElementById('ursula-links').textContent) || {}; } catch (e) {}
+
+  function theme() {
+    var set = root.getAttribute('data-theme');
+    if (set) return set;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function remember(value) { try { localStorage.setItem('ursula-theme', value); } catch (e) {} }
+  if (root.getAttribute('data-auto') === 'true') {
+    try { var saved = localStorage.getItem('ursula-theme'); if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved); } catch (e) {}
+  }
+  document.getElementById('ursula-theme').addEventListener('click', function () {
+    var next = theme() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    remember(next);
+  });
+
+  function value(name) {
+    var v = getComputedStyle(root).getPropertyValue('--ursula-' + name).trim();
+    return v === '' ? 'transparent' : v;
+  }
+  function baked() {
+    var copy = svg.cloneNode(true);
+    copy.setAttribute('style', 'font-family:' + getComputedStyle(svg).fontFamily);
+    copy.removeAttribute('data-focus');
+    var all = copy.querySelectorAll('[data-on]');
+    for (var i = 0; i < all.length; i++) all[i].removeAttribute('data-on');
+    return ursulaBake(new XMLSerializer().serializeToString(copy), value);
+  }
+  function fail() {
+    note.textContent = 'Could not save in this browser.';
+    setTimeout(function () { note.textContent = ''; }, 3000);
+  }
+  function download(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  document.getElementById('ursula-svg').addEventListener('click', function () {
+    try { download(new Blob([baked()], { type: 'image/svg+xml;charset=utf-8' }), base + '.svg'); } catch (e) { fail(); }
+  });
+  document.getElementById('ursula-png').addEventListener('click', function () {
+    try {
+      var box = svg.viewBox.baseVal;
+      var w = box.width, h = box.height;
+      var url = URL.createObjectURL(new Blob([baked()], { type: 'image/svg+xml;charset=utf-8' }));
+      var img = new Image();
+      img.onerror = function () { URL.revokeObjectURL(url); fail(); };
+      img.onload = function () {
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(w * 2);
+          canvas.height = Math.round(h * 2);
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = value('paper');
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(function (blob) {
+            if (!blob) { fail(); return; }
+            try { download(blob, base + '.png'); } catch (e) { fail(); }
+          }, 'image/png');
+        } catch (e) { fail(); }
+      };
+      img.src = url;
+    } catch (e) { fail(); }
+  });
+
+  function source() {
+    return decode(document.getElementById('ursula-source').textContent);
+  }
+  function decode(text) { return text.replace(/\\\\([\\\\/!])/g, '$1'); }
+  document.getElementById('ursula-copy').addEventListener('click', function () {
+    var text = source();
+    function spread() {
+      var pre = document.getElementById('ursula-raw');
+      if (!pre) {
+        pre = document.createElement('pre');
+        pre.id = 'ursula-raw';
+        document.body.appendChild(pre);
+      }
+      pre.textContent = text;
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    try {
+      if (!navigator.clipboard) { spread(); return; }
+      navigator.clipboard.writeText(text).then(function () {
+        note.textContent = 'Copied.';
+        setTimeout(function () { note.textContent = ''; }, 3000);
+      }, spread);
+    } catch (e) { spread(); }
+  });
+
+  var nodes = svg.querySelectorAll('[data-node]');
+  var current = null;
+  function clear() {
+    current = null;
+    svg.removeAttribute('data-focus');
+    var on = svg.querySelectorAll('[data-on]');
+    for (var i = 0; i < on.length; i++) on[i].removeAttribute('data-on');
+    for (var j = 0; j < nodes.length; j++) nodes[j].setAttribute('aria-pressed', 'false');
+  }
+  function select(id) {
+    if (current === id) { clear(); return; }
+    clear();
+    current = id;
+    svg.setAttribute('data-focus', id);
+    var near = links[id] || [];
+    for (var i = 0; i < nodes.length; i++) {
+      var own = nodes[i].getAttribute('data-node');
+      if (own === id || near.indexOf(own) >= 0) nodes[i].setAttribute('data-on', '');
+      if (own === id) nodes[i].setAttribute('aria-pressed', 'true');
+    }
+    var edges = svg.querySelectorAll('[data-from]');
+    for (var k = 0; k < edges.length; k++) {
+      if (edges[k].getAttribute('data-from') === id || edges[k].getAttribute('data-to') === id) edges[k].setAttribute('data-on', '');
+    }
+  }
+  svg.addEventListener('click', function (event) {
+    var node = event.target.closest ? event.target.closest('[data-node]') : null;
+    if (node) select(node.getAttribute('data-node'));
+    else clear();
+  });
+  svg.addEventListener('keydown', function (event) {
+    var node = event.target.closest ? event.target.closest('[data-node]') : null;
+    if (node && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      select(node.getAttribute('data-node'));
+    }
+  });
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') clear(); });
+  for (var n = 0; n < nodes.length; n++) nodes[n].setAttribute('aria-pressed', 'false');
+  var match = /^#focus=(.+)$/.exec(location.hash);
+  if (match) { try { select(decodeURIComponent(match[1])); } catch (e) {} }
+})();
+`.trim();
+function neighbours(layout) {
+  const out = {};
+  for (const e of layout?.edges ?? []) {
+    if (e.from === e.to)
+      continue;
+    (out[e.from] ??= []).push(e.to);
+    (out[e.to] ??= []).push(e.from);
+  }
+  for (const [id, list] of Object.entries(out))
+    out[id] = [...new Set(list)].sort();
+  return out;
+}
+function renderHtmlDocument(svg, layout, source, opts = {}) {
+  const title = opts.title ?? "Diagram";
+  const theme = opts.theme ?? "auto";
+  const pressable = svg.replace(/(<g class="[^"]*" )(data-node=)/g, '$1tabindex="0" role="button" $2');
+  const links = JSON.stringify(neighbours(layout)).replace(/</g, "\\u003c");
+  return [
+    "<!doctype html>",
+    `<html lang="en"${theme === "auto" ? ' data-auto="true"' : ` data-theme="${theme}"`}>`,
+    "<head>",
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<title>${escapeXml(title)}</title>`,
+    `<style>${STYLE}</style>`,
+    "</head>",
+    `<body data-file="${escapeXml(fileBase(opts.title))}">`,
+    ...opts.title === undefined ? [] : [`<h1>${escapeXml(opts.title)}</h1>`],
+    '<div class="ursula-tools">' + '<button type="button" id="ursula-theme">Theme</button>' + '<button type="button" id="ursula-png">PNG</button>' + '<button type="button" id="ursula-svg">SVG</button>' + '<button type="button" id="ursula-copy">Copy source</button>' + '<span id="ursula-note" role="status"></span></div>',
+    `<div class="ursula-viewport">${pressable}</div>`,
+    `<script type="text/plain" id="ursula-source">${encodeSource(source)}</script>`,
+    `<script type="application/json" id="ursula-links">${links}</script>`,
+    `<script>${SCRIPT}</script>`,
+    "</body>",
+    "</html>",
+    ""
+  ].join(`
+`);
+}
+
+// src/render/png.ts
+var PNG_RENDERER = "@resvg/resvg-js";
+var PNG_HINT = `install ${PNG_RENDERER} to write PNG: npm i -g ${PNG_RENDERER}`;
+var DEFAULT_SCALE = 2;
+var MAX_SCALE = 8;
+var DARK_RULES = /\n@media \(prefers-color-scheme: dark\)\{\n[\s\S]*?\n\}(?=<\/style>)/g;
+var VARIABLE = /var\(--ursula-([a-z0-9-]+)\s*(?:,([^)]*))?\)/g;
+var FONT_FAMILY = /font-family:([^;}"]*)/g;
+var REVERSED_MARKER = /<marker id="([^"]+)"([^>]*?) orient="auto-start-reverse"([^>]*)>([\s\S]*?)<\/marker>/g;
+function turnStartMarkers(svg) {
+  const ids = [];
+  const fixed = svg.replace(REVERSED_MARKER, (_, id, before, after, body) => {
+    const attrs = `${before}${after}`;
+    const refX = /refX="([^"]+)"/.exec(attrs)?.[1] ?? "0";
+    const refY = /refY="([^"]+)"/.exec(attrs)?.[1] ?? "0";
+    const twinAttrs = attrs.includes("overflow=") ? attrs : `${attrs} overflow="visible"`;
+    ids.push(id);
+    return `<marker id="${id}"${before} orient="auto"${after}>${body}</marker>` + `<marker id="${id}-start-turned"${twinAttrs} orient="auto"><g transform="rotate(180 ${refX} ${refY})">${body}</g></marker>`;
+  });
+  return ids.reduce((text, id) => text.split(`marker-start="url(#${id})"`).join(`marker-start="url(#${id}-start-turned)"`), fixed);
+}
+function bakeSvg(svg, theme) {
+  const mode = theme === "dark" ? 1 : 0;
+  return turnStartMarkers(svg).replace(DARK_RULES, "").replace(VARIABLE, (whole, name, fallback) => COLORS[name]?.[mode] ?? fallback?.trim() ?? whole).replace(FONT_FAMILY, (_, list) => `font-family:${list.replace(/'/g, "")}`);
+}
+function validScale(scale) {
+  return Number.isFinite(scale) && scale > 0 && scale <= MAX_SCALE;
+}
+function svgToPng(svg, resvg, opts = {}) {
+  const theme = opts.theme ?? "light";
+  const scale = opts.scale ?? DEFAULT_SCALE;
+  if (!validScale(scale))
+    throw new RangeError(`scale must be above 0 and at most ${MAX_SCALE}; got ${scale}`);
+  const drawn = new resvg.Resvg(bakeSvg(svg, theme), {
+    fitTo: { mode: "zoom", value: scale },
+    background: PAPER[theme === "dark" ? 1 : 0],
+    font: { loadSystemFonts: true, ...opts.fontDirs === undefined || opts.fontDirs.length === 0 ? {} : { fontDirs: [...opts.fontDirs] } }
+  });
+  return drawn.render().asPng();
+}
+
+// src/command/args.ts
+var FORMATS = ["svg", "text", "text-svg", "json", "check", "html", "png", "fixed"];
+var choice = (key, choices) => (req, v) => choices.includes(v) ? { ...req, [key]: v } : undefined;
+var OPTIONS = [
+  { name: "--format", value: "F", choices: FORMATS, help: "svg (the default), text, text-svg, html, png, json, check or fixed", apply: choice("format", FORMATS) },
+  {
+    name: "--width",
+    value: "N",
+    help: "columns for text and text-svg; fails with code 3 when the drawing cannot fit",
+    apply: (req, v) => v.trim() !== "" && Number.isFinite(Number(v)) ? { ...req, width: Number(v) } : undefined
+  },
+  { name: "--fix", help: "fix a misspelt header or keyword and a flowchart ->, draw, and name each fix on stderr", apply: (req) => ({ ...req, fix: true }) },
+  { name: "--check", help: "with a drawing format: the drawing to stdout, the check report to stderr (the report counts the svg layout)", apply: (req) => ({ ...req, check: true }) },
+  { name: "--charset", value: "C", choices: ["unicode", "ascii"], help: "text in box-drawing characters (unicode, the default) or ascii only", apply: choice("charset", ["unicode", "ascii"]) },
+  { name: "--color", help: "text with ANSI colours", apply: (req) => ({ ...req, color: true }) },
+  { name: "--title", value: "TEXT", help: "the page title of html", apply: (req, v) => ({ ...req, title: v }) },
+  { name: "--theme", value: "T", choices: ["auto", "light", "dark"], help: "the starting theme of html, or the colours of png (auto is light): auto, light, dark", apply: choice("theme", ["auto", "light", "dark"]) },
+  {
+    name: "--scale",
+    value: "N",
+    help: `pixels per SVG unit of png: 2 by default, at most ${MAX_SCALE}`,
+    apply: (req, v) => v.trim() !== "" && validScale(Number(v)) ? { ...req, scale: Number(v) } : undefined
+  },
+  { name: "--detail", value: "D", choices: ["auto", "full", "narrow", "title"], help: "how much of each box text keeps: auto (the fullest that fits), full, narrow, title", apply: choice("detail", ["auto", "full", "narrow", "title"]) },
+  { name: "--quality", value: "Q", choices: ["fast", "best"], help: "layout effort, fast or best; pictures draw best and text fast unless told", apply: choice("quality", ["fast", "best"]) },
+  { name: "--engine", value: "E", choices: ["layered", "grid"], help: "the flowchart layout engine: layered (the default) or grid", apply: choice("engine", ["grid", "layered"]) },
+  { name: "--composition", value: "C", choices: ["auto", "lanes", "stages"], help: "swimlanes along the flow (lanes), across it (stages), or auto", apply: choice("composition", ["auto", "lanes", "stages"]) },
+  { name: "--no-legend", help: "no legend of line styles", apply: (req) => ({ ...req, legend: false }) },
+  { name: "--no-questions", help: "no questions in the check report", apply: (req) => ({ ...req, questions: false }) },
+  { name: "--no-elbows", help: "no one-bend lines out of the side of a box", apply: (req) => ({ ...req, elbows: false }) }
+];
+var USAGE = `usage: ursula-diagram [file.mmd] ${OPTIONS.map((o) => `[${o.name}${o.value === undefined ? "" : ` ${o.choices ? o.choices.join("|") : o.value}`}]`).join(" ")}`;
+function parseDrawArgs(args) {
+  let req = { format: "svg", legend: true, color: false, questions: true, elbows: true, check: false, fix: false };
+  for (let i = 0;i < args.length; i++) {
+    const a = args[i];
+    if (a === "--help" || a === "-h")
+      return { kind: "help" };
+    const spec = OPTIONS.find((o) => o.name === a);
+    if (spec) {
+      let value = "";
+      if (spec.value !== undefined) {
+        const next = args[++i];
+        if (next === undefined)
+          return { kind: "usage" };
+        value = next;
+      }
+      const applied = spec.apply(req, value);
+      if (!applied)
+        return { kind: "usage" };
+      req = applied;
+    } else if (!a.startsWith("-") && req.file === undefined)
+      req = { ...req, file: a };
+    else
+      return { kind: "usage" };
+  }
+  return { kind: "draw", request: req };
+}
+
+// src/text/wrap.ts
+function wrapWords(text, limit, width, opts = {}) {
+  const words = (opts.split === "space" ? text.split(" ") : text.split(/\s+/)).filter((w) => w !== "");
+  const lines = [];
+  let cur = "";
+  for (const word of words) {
+    const joined = cur === "" ? word : `${cur} ${word}`;
+    if (width(joined) <= limit) {
+      cur = joined;
+      continue;
+    }
+    if (cur !== "") {
+      lines.push(cur);
+      cur = "";
+    }
+    if (opts.longWord === "keep" || width(word) <= limit) {
+      cur = word;
+      continue;
+    }
+    for (const ch of word) {
+      if (cur !== "" && width(cur + ch) > limit) {
+        lines.push(cur);
+        cur = "";
+      }
+      cur += ch;
+    }
+  }
+  if (cur !== "")
+    lines.push(cur);
+  return lines.length === 0 && opts.blank === true ? [""] : lines;
+}
+function wrapParagraphs(parts, limit, width, opts = {}) {
+  return parts.flatMap((p) => wrapWords(p, limit, width, opts));
+}
+
+// src/layout/estimate.ts
+var WEIGHT = { crossing: 1000, bend: 10 };
+var side = (a, b, c) => Math.sign((b.flow - a.flow) * (c.cross - a.cross) - (b.cross - a.cross) * (c.flow - a.flow));
+function cross2(a, b, c, d) {
+  const s1 = side(a, b, c);
+  const s2 = side(a, b, d);
+  const s3 = side(c, d, a);
+  const s4 = side(c, d, b);
+  if (s1 === 0 && s2 === 0 && s3 === 0 && s4 === 0) {
+    const key = (p) => a.flow === b.flow && c.flow === d.flow ? p.cross : p.flow;
+    return Math.max(Math.min(key(a), key(b)), Math.min(key(c), key(d))) < Math.min(Math.max(key(a), key(b)), Math.max(key(c), key(d)));
+  }
+  return s1 * s2 < 0 && s3 * s4 < 0;
+}
+function blocked(a, b, all) {
+  const alongFlow = a.cross === b.cross;
+  const lo = Math.min(alongFlow ? a.flow : a.cross, alongFlow ? b.flow : b.cross);
+  const hi = Math.max(alongFlow ? a.flow : a.cross, alongFlow ? b.flow : b.cross);
+  for (const p of all) {
+    if (p === a || p === b)
+      continue;
+    if (alongFlow ? p.cross === a.cross && p.flow > lo && p.flow < hi : p.flow === a.flow && p.cross > lo && p.cross < hi)
+      return true;
+  }
+  return false;
+}
+function structuralEstimate(edges, slots) {
+  const segments = [];
+  let bends = 0;
+  for (const e of edges) {
+    const a = slots.get(e.from);
+    const b = slots.get(e.to);
+    if (!a || !b || e.from === e.to)
+      continue;
+    segments.push([e.from, e.to, a, b]);
+    const aligned = a.flow === b.flow || a.cross === b.cross;
+    if (!aligned)
+      bends += 2;
+    else if (blocked(a, b, slots.values()))
+      bends += 4;
+  }
+  let crossings = 0;
+  for (let i = 0;i < segments.length; i++) {
+    for (let j = i + 1;j < segments.length; j++) {
+      const s = segments[i];
+      const t = segments[j];
+      if (!s || !t || s[0] === t[0] || s[0] === t[1] || s[1] === t[0] || s[1] === t[1])
+        continue;
+      if (cross2(s[2], s[3], t[2], t[3]))
+        crossings++;
+    }
+  }
+  return WEIGHT.crossing * crossings + WEIGHT.bend * bends;
+}
+
+// src/layout/along.ts
+var ALONG_RATIO = 3;
+var SWEEPS2 = 6;
+function edgeKinds(graph) {
+  const laneOf = new Map(graph.nodes.map((n) => [n.id, n.lane]));
+  const within = [];
+  const between = [];
+  for (const e of graph.edges) {
+    const a = laneOf.get(e.from);
+    const b = laneOf.get(e.to);
+    if (a === undefined || b === undefined)
+      continue;
+    (a === b ? within : between).push(e);
+  }
+  return { within, between };
+}
+function considerAlong(graph) {
+  if (graph.lanes.filter((l) => l.label !== "").length < 2)
+    return false;
+  const { within, between } = edgeKinds(graph);
+  return between.length >= 2 && between.length >= ALONG_RATIO * within.length;
+}
+function laneColumns(ids, edges) {
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const out = ids.map(() => []);
+  for (const e of edges) {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a !== undefined && b !== undefined && a !== b)
+      out[a]?.push(b);
+  }
+  const state = new Array(ids.length).fill(0);
+  const back = new Set;
+  const visit = (u) => {
+    state[u] = 1;
+    for (const v of out[u] ?? []) {
+      if (state[v] === 1)
+        back.add(`${u}>${v}`);
+      else if (state[v] === 0)
+        visit(v);
+    }
+    state[u] = 2;
+  };
+  ids.forEach((_, i) => {
+    if (state[i] === 0)
+      visit(i);
+  });
+  const next = ids.map(() => []);
+  const pending = new Array(ids.length).fill(0);
+  out.forEach((targets, u) => {
+    for (const v of targets) {
+      const [a, b] = back.has(`${u}>${v}`) ? [v, u] : [u, v];
+      next[a]?.push(b);
+      pending[b] = (pending[b] ?? 0) + 1;
+    }
+  });
+  const col = new Array(ids.length).fill(0);
+  const queue = [];
+  pending.forEach((p, i) => {
+    if (p === 0)
+      queue.push(i);
+  });
+  for (let head = 0;head < queue.length; head++) {
+    const u = queue[head] ?? 0;
+    for (const v of next[u] ?? []) {
+      col[v] = Math.max(col[v] ?? 0, (col[u] ?? 0) + 1);
+      pending[v] = (pending[v] ?? 0) - 1;
+      if (pending[v] === 0)
+        queue.push(v);
+    }
+  }
+  return new Map(ids.map((id, i) => [id, col[i] ?? 0]));
+}
+function orderLanes(graph) {
+  const laneOf = new Map(graph.nodes.map((n) => [n.id, n.lane]));
+  const net = new Map(graph.lanes.map((l) => [l.id, 0]));
+  for (const e of edgeKinds(graph).between) {
+    const a = laneOf.get(e.from) ?? "";
+    const b = laneOf.get(e.to) ?? "";
+    net.set(a, (net.get(a) ?? 0) + 1);
+    net.set(b, (net.get(b) ?? 0) - 1);
+  }
+  return graph.lanes.map((l, i) => ({ l, i })).sort((x, y) => (net.get(y.l.id) ?? 0) - (net.get(x.l.id) ?? 0) || x.i - y.i).map((x) => x.l);
+}
+var median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 === 1 ? s[m] ?? 0 : ((s[m - 1] ?? 0) + (s[m] ?? 0)) / 2;
+};
+var dense = (values) => {
+  const used = [...new Set(values.values())].sort((a, b) => a - b);
+  const at = new Map(used.map((v, i) => [v, i]));
+  return new Map([...values].map(([id, v]) => [id, at.get(v) ?? 0]));
+};
+function assemble2(source, lanes, colIn, rowIn) {
+  const col = new Map;
+  const rank = new Map;
+  const starts = [];
+  let offset = 0;
+  for (const lane of lanes) {
+    const ids = source.nodes.filter((n) => n.lane === lane.id).map((n) => n.id);
+    const own = dense(new Map(ids.map((id) => [id, colIn.get(id) ?? 0])));
+    starts.push(offset);
+    for (const id of ids) {
+      col.set(id, own.get(id) ?? 0);
+      rank.set(id, offset + (own.get(id) ?? 0));
+    }
+    offset += ids.length === 0 ? 0 : Math.max(...own.values()) + 1;
+  }
+  const laneOf = new Map(source.nodes.map((n) => [n.id, n.lane]));
+  const single = { id: "__along", label: "" };
+  return {
+    graph: { ...source, lanes: [single], nodes: source.nodes.map((n) => ({ ...n, lane: single.id })) },
+    rank,
+    row: dense(rowIn),
+    spec: { lanes: lanes.map((l) => ({ id: l.id, label: l.label })), starts, laneOf },
+    lanes,
+    col,
+    source
+  };
+}
+function arrangeAlong(graph) {
+  const lanes = orderLanes(graph);
+  const { within } = edgeKinds(graph);
+  const col = new Map;
+  for (const lane of lanes) {
+    const ids = graph.nodes.filter((n) => n.lane === lane.id).map((n) => n.id);
+    const set = new Set(ids);
+    for (const [id, c] of laneColumns(ids, within.filter((e) => set.has(e.from) && set.has(e.to))))
+      col.set(id, c);
+  }
+  const rank = assemble2(graph, lanes, col, new Map).rank;
+  const ranks = Math.max(0, ...rank.values()) + 1;
+  const layers = Array.from({ length: ranks }, () => []);
+  for (const n of graph.nodes)
+    layers[rank.get(n.id) ?? 0]?.push(n.id);
+  const edges = graph.edges.filter((e) => e.from !== e.to && rank.has(e.from) && rank.has(e.to) && rank.get(e.from) !== rank.get(e.to));
+  const nbrs = new Map(graph.nodes.map((n) => [n.id, []]));
+  for (const e of edges) {
+    nbrs.get(e.from)?.push(e.to);
+    nbrs.get(e.to)?.push(e.from);
+  }
+  const posOf = () => {
+    const pos = new Map;
+    for (const layer of layers)
+      layer.forEach((id, i) => pos.set(id, (i + 0.5) / layer.length));
+    return pos;
+  };
+  const crossingsOf = () => {
+    const pos = new Map;
+    for (const layer of layers)
+      layer.forEach((id, i) => pos.set(id, i));
+    let total = 0;
+    for (let i = 0;i < edges.length; i++) {
+      for (let j = i + 1;j < edges.length; j++) {
+        const a = edges[i];
+        const b = edges[j];
+        if (!a || !b)
+          continue;
+        const [a0, a1] = (rank.get(a.from) ?? 0) <= (rank.get(a.to) ?? 0) ? [a.from, a.to] : [a.to, a.from];
+        const [b0, b1] = (rank.get(b.from) ?? 0) <= (rank.get(b.to) ?? 0) ? [b.from, b.to] : [b.to, b.from];
+        if (rank.get(a0) !== rank.get(b0) || rank.get(a1) !== rank.get(b1))
+          continue;
+        const d = ((pos.get(a0) ?? 0) - (pos.get(b0) ?? 0)) * ((pos.get(a1) ?? 0) - (pos.get(b1) ?? 0));
+        if (d < 0)
+          total++;
+      }
+    }
+    return total;
+  };
+  const sweep = (order) => {
+    for (const r of order) {
+      const layer = layers[r];
+      if (!layer || layer.length < 2)
+        continue;
+      const pos = posOf();
+      const keyed = layer.map((id, i) => {
+        const near = nbrs.get(id) ?? [];
+        return { id, i, key: near.length === 0 ? pos.get(id) ?? 0 : median(near.map((o) => pos.get(o) ?? 0)) };
+      });
+      keyed.sort((a, b) => a.key - b.key || a.i - b.i);
+      layers[r] = keyed.map((k) => k.id);
+    }
+  };
+  const upRanks = Array.from({ length: ranks }, (_, i) => i);
+  let best = layers.map((l) => [...l]);
+  let bestCross = crossingsOf();
+  for (let pass = 0;pass < SWEEPS2; pass++) {
+    if (pass % 2 === 0)
+      sweep(upRanks);
+    else
+      sweep([...upRanks].reverse());
+    const c = crossingsOf();
+    if (c < bestCross) {
+      bestCross = c;
+      best = layers.map((l) => [...l]);
+    }
+  }
+  best.forEach((l, i) => {
+    layers[i] = l;
+  });
+  const row = new Map;
+  const anchor = layers.reduce((b, l, i) => l.length > (layers[b]?.length ?? 0) ? i : b, 0);
+  (layers[anchor] ?? []).forEach((id, i) => row.set(id, i));
+  const place = (r) => {
+    const layer = layers[r] ?? [];
+    let prev = -1;
+    for (const id of layer) {
+      const rows = (nbrs.get(id) ?? []).flatMap((o) => row.has(o) ? [row.get(o) ?? 0] : []);
+      const want = rows.length === 0 ? prev + 1 : Math.round(median(rows));
+      const at = Math.max(want, prev + 1);
+      row.set(id, at);
+      prev = at;
+    }
+  };
+  for (let r = anchor - 1;r >= 0; r--)
+    place(r);
+  for (let r = anchor + 1;r < ranks; r++)
+    place(r);
+  return assemble2(graph, lanes, col, row);
+}
+var ALONG_REFINE = 6;
+function alongEstimate(a) {
+  const slots = new Map(a.source.nodes.map((n) => [n.id, { flow: a.rank.get(n.id) ?? 0, cross: a.row.get(n.id) ?? 0 }]));
+  return structuralEstimate(a.source.edges, slots);
+}
+function neighbours2(best, columns) {
+  const ids = best.source.nodes.map((n) => n.id);
+  const laneOf = new Map(best.source.nodes.map((n) => [n.id, n.lane]));
+  const top = Math.max(...best.row.values());
+  const out = [];
+  for (const id of ids) {
+    const c0 = best.col.get(id) ?? 0;
+    const r0 = best.row.get(id) ?? 0;
+    const laneCols = Math.max(...ids.filter((o) => laneOf.get(o) === laneOf.get(id)).map((o) => best.col.get(o) ?? 0)) + 1;
+    for (let c = columns ? -1 : c0;c <= (columns ? laneCols : c0); c++) {
+      for (let r = -1;r <= top + 1; r++) {
+        if (c === c0 && r === r0)
+          continue;
+        const col = new Map(best.col);
+        const row = new Map(best.row);
+        const other = ids.find((o) => o !== id && laneOf.get(o) === laneOf.get(id) && best.col.get(o) === c && best.row.get(o) === r);
+        col.set(id, c);
+        row.set(id, r);
+        if (other !== undefined) {
+          col.set(other, c0);
+          row.set(other, r0);
+        }
+        out.push(assemble2(best.source, best.lanes, col, row));
+      }
+    }
+  }
+  for (const column of new Set(best.rank.values())) {
+    for (const shift of [-2, -1, 1, 2]) {
+      const row = new Map(best.row);
+      for (const id of ids)
+        if (best.rank.get(id) === column)
+          row.set(id, (best.row.get(id) ?? 0) + shift);
+      out.push(assemble2(best.source, best.lanes, best.col, row));
+    }
+  }
+  return out;
+}
+var POLISH_ROUNDS = 4;
+var CROSSING_ESTIMATE = 1000;
+function polishAlong(start) {
+  let best = start;
+  let bestEstimate = alongEstimate(best);
+  if (bestEstimate === 0)
+    return best;
+  for (let round = 0;round < POLISH_ROUNDS; round++) {
+    let next = best;
+    let nextEstimate = bestEstimate;
+    for (const a of neighbours2(best, bestEstimate >= CROSSING_ESTIMATE)) {
+      const est = alongEstimate(a);
+      if (est < nextEstimate) {
+        next = a;
+        nextEstimate = est;
+      }
+    }
+    if (next === best)
+      break;
+    best = next;
+    bestEstimate = nextEstimate;
+  }
+  return best;
+}
+function refineAlong(start, startScore, score) {
+  const base = alongEstimate(start);
+  const seen = new Set([JSON.stringify([...start.rank, ...start.row])]);
+  const ranked = [];
+  neighbours2(start, true).forEach((a, at) => {
+    const key = JSON.stringify([...a.rank, ...a.row]);
+    if (seen.has(key))
+      return;
+    seen.add(key);
+    const est = alongEstimate(a);
+    if (est <= base)
+      ranked.push({ a, est, at });
+  });
+  ranked.sort((x, y) => x.est - y.est || x.at - y.at);
+  let best = start;
+  let bestScore = startScore;
+  for (const { a } of ranked.slice(0, ALONG_REFINE)) {
+    const s = score(a);
+    if (s < bestScore - 0.000000001) {
+      best = a;
+      bestScore = s;
+    }
+  }
+  return best;
 }
 
 // src/c4/grid-place.ts
@@ -10516,7 +11668,7 @@ var STEP2 = 8;
 var ROUND = 80;
 var LAST_RUN = 24;
 var BEND3 = 24;
-var CROSS2 = 48;
+var CROSS3 = 48;
 var BORDER2 = 6;
 var TOUCH = 200;
 var NEAR3 = 100;
@@ -10532,7 +11684,7 @@ var ROOM_PRICE = 4;
 var LOOP = 24;
 var DX2 = [1, 0, -1, 0];
 var DY2 = [0, 1, 0, -1];
-var tidy7 = (v) => {
+var tidy8 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -10551,7 +11703,7 @@ function faceTo(box, other) {
     return 1;
   return other.x + other.w / 2 < box.x + box.w / 2 ? 2 : 0;
 }
-var pointOn = (box, face, off) => face === 1 || face === 3 ? { x: tidy7(box.x + box.w / 2 + off), y: face === 1 ? box.y + box.h : box.y } : { x: face === 0 ? box.x + box.w : box.x, y: tidy7(box.y + box.h / 2 + off) };
+var pointOn = (box, face, off) => face === 1 || face === 3 ? { x: tidy8(box.x + box.w / 2 + off), y: face === 1 ? box.y + box.h : box.y } : { x: face === 0 ? box.x + box.w : box.x, y: tidy8(box.y + box.h / 2 + off) };
 var segs3 = (pts) => pts.slice(1).map((q, i) => [pts[i], q]);
 var bendsOf2 = (pts) => Math.max(0, pts.length - 2);
 var lengthOf = (pts) => segs3(pts).reduce((m, [a, b]) => m + Math.abs(a.x - b.x) + Math.abs(a.y - b.y), 0);
@@ -10615,11 +11767,11 @@ function shapes(p, q, atEnd = false, gapMids = () => []) {
     const mids = vp ? gapMids(Math.min(p.x, q.x), Math.max(p.x, q.x)).filter((m) => (m - from) * sp >= -0.000001 && (m - to) * sp <= 0.000001) : [];
     const ms = new Set;
     for (let m = from;(m - to) * sp <= 0.000001; m += sp * STEP2)
-      ms.add(tidy7(m));
-    ms.add(tidy7(to));
-    ms.add(tidy7(wish));
+      ms.add(tidy8(m));
+    ms.add(tidy8(to));
+    ms.add(tidy8(wish));
     for (const m of mids)
-      ms.add(tidy7(m));
+      ms.add(tidy8(m));
     const atMiddle = (m) => mids.some((c) => Math.abs(m - c) < 0.5);
     for (const m of ms)
       out.push({ pts: make(m), prefer: 0.5 * Math.abs(m - wish) - (atMiddle(m) ? MIDDLE : 0) });
@@ -10627,7 +11779,7 @@ function shapes(p, q, atEnd = false, gapMids = () => []) {
   }
   const base = sp > 0 ? Math.max(along(p), along(q)) + RUN : Math.min(along(p), along(q)) - RUN;
   for (let k = 0;k <= ROUND; k++)
-    out.push({ pts: make(tidy7(base + sp * k * STEP2)), prefer: 0 });
+    out.push({ pts: make(tidy8(base + sp * k * STEP2)), prefer: 0 });
   return out;
 }
 function drawLines(scene) {
@@ -10650,7 +11802,7 @@ function drawLines(scene) {
   });
   const rowCuts = [...boxes.map(({ box }) => box), ...names];
   const gapMids = (x0, x1) => {
-    const ys = [...new Set(rowCuts.filter((r) => r.x < x1 + 0.5 && r.x + r.w > x0 - 0.5).flatMap((r) => [tidy7(r.y), tidy7(r.y + r.h)]))].sort((a, b) => a - b);
+    const ys = [...new Set(rowCuts.filter((r) => r.x < x1 + 0.5 && r.x + r.w > x0 - 0.5).flatMap((r) => [tidy8(r.y), tidy8(r.y + r.h)]))].sort((a, b) => a - b);
     return ys.slice(1).map((y, k) => (ys[k] + y) / 2);
   };
   const runClear = (a, b, ends) => {
@@ -10806,7 +11958,7 @@ function drawLines(scene) {
       const id = far(e.from) <= far(e.to) ? e.from : e.to;
       const box = boxOf.get(id);
       const face = Math.abs(q.x - p.x) > Math.abs(q.y - p.y) ? q.x > p.x ? 0 : 2 : q.y > p.y ? 1 : 3;
-      const off = tidy7(face % 2 === 0 ? p.y - box.y - box.h / 2 : p.x - box.x - box.w / 2);
+      const off = tidy8(face % 2 === 0 ? p.y - box.y - box.h / 2 : p.x - box.x - box.w / 2);
       const k = `${id}:${face}`;
       if (!(reserved.get(k) ?? []).includes(off))
         reserved.set(k, [...reserved.get(k) ?? [], off]);
@@ -11008,7 +12160,7 @@ function drawLines(scene) {
       let out;
       const [loadFrom, loadTo] = [load.get(faceKey(i, "from")) ?? 0, load.get(faceKey(i, "to")) ?? 0];
       for (const s of shapes(pin.from, pin.to, loadTo > loadFrom, Math.max(loadFrom, loadTo) <= CROWD ? gapMids : undefined)) {
-        const pts = s.pts.map((p) => ({ x: tidy7(p.x), y: tidy7(p.y) }));
+        const pts = s.pts.map((p) => ({ x: tidy8(p.x), y: tidy8(p.y) }));
         const own = ownCost(pts, i);
         if (own === undefined)
           continue;
@@ -11018,7 +12170,7 @@ function drawLines(scene) {
           if (j === i || o === undefined)
             return;
           const t = between(mine, o);
-          cost += t.penalty + CROSS2 * t.cross;
+          cost += t.penalty + CROSS3 * t.cross;
         });
         if (out === undefined || cost < out.cost - 0.000001)
           out = { pts, cost };
@@ -11188,7 +12340,7 @@ function drawLines(scene) {
       ...e.startEnd === undefined ? {} : { startEnd: e.startEnd },
       ...e.end === undefined ? {} : { end: e.end },
       ...e.invisible === true ? { invisible: true } : {},
-      points: lines[i].map((p) => ({ x: tidy7(p.x), y: tidy7(p.y) })),
+      points: lines[i].map((p) => ({ x: tidy8(p.x), y: tidy8(p.y) })),
       ...size === undefined ? {} : { label: { text: e.label, x: 0, y: 0, w: size.w, h: size.h } }
     };
   });
@@ -11556,12 +12708,12 @@ function centreLabels(layout, avoid) {
   });
   return { ...layout, edges: settle(settle(layout.edges)) };
 }
-var CHIP_PAD = 10;
-var CHIP_HEIGHT = 24;
+var CHIP_PAD2 = 10;
+var CHIP_HEIGHT2 = 24;
 function chipSize(text, ruler) {
   const size = labelSize(text, layeredRuler(ruler));
   const pad = layeredRuler(ruler).labelPadX;
-  return { w: size.w + 2 * (CHIP_PAD - pad), h: Math.max(size.h, CHIP_HEIGHT) };
+  return { w: size.w + 2 * (CHIP_PAD2 - pad), h: Math.max(size.h, CHIP_HEIGHT2) };
 }
 function alignSiblings2(clusters, rectOf, parentOf, boxes = []) {
   const at = new Map(clusters.map((c) => [c.id, { x0: c.x, x1: c.x + c.w, y0: c.y, y1: c.y + c.h }]));
@@ -13415,15 +14567,12 @@ var PRIORITY = { dotted: 0, normal: 1, thick: 2 };
 
 class Canvas {
   rows;
-  tones;
   width;
   height;
-  tone = "normal";
-  constructor(width, height, toned = false) {
+  constructor(width, height) {
     this.width = width;
     this.height = height;
     this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
-    this.tones = toned ? Array.from({ length: height }, () => new Array(width).fill("normal")) : undefined;
   }
   widen(width) {
     if (width <= this.width)
@@ -13431,12 +14580,9 @@ class Canvas {
     for (const row of this.rows)
       while (row.length < width)
         row.push(" ");
-    for (const row of this.tones ?? [])
-      while (row.length < width)
-        row.push("normal");
     this.width = width;
   }
-  put(x, y, ch, tone = this.tone) {
+  put(x, y, ch) {
     const row = this.rows[y];
     if (!row || x < 0 || x >= this.width)
       return;
@@ -13455,55 +14601,19 @@ class Canvas {
       row[x + 1] = "";
     }
     row[x] = ch;
-    const tones = this.tones?.[y];
-    if (tones !== undefined)
-      tones[x] = tone;
   }
   get(x, y) {
     return this.rows[y]?.[x] ?? " ";
   }
-  text(x, y, s, tone = this.tone) {
+  text(x, y, s) {
     let cx = x;
     for (const ch of s) {
-      this.put(cx, y, ch, tone);
+      this.put(cx, y, ch);
       cx += cellWidthOf(ch.codePointAt(0) ?? 0);
     }
   }
   lines() {
     return this.rows.map((r) => r.join("").trimEnd());
-  }
-  spans() {
-    return this.rows.map((row, y) => {
-      const text = row.join("").trimEnd();
-      const tones = this.tones?.[y] ?? [];
-      const out = [];
-      let at = 0;
-      const toneAt = (x) => {
-        if (row[x] !== " ")
-          return tones[x] ?? "normal";
-        let l = x - 1;
-        while (l >= 0 && (row[l] === " " || row[l] === ""))
-          l--;
-        let r = x + 1;
-        while (r < row.length && (row[r] === " " || row[r] === ""))
-          r++;
-        const left = l >= 0 ? tones[l] : undefined;
-        return left !== undefined && left === tones[r] && r < row.length ? left : "normal";
-      };
-      for (let x = 0;x < row.length && at < text.length; x++) {
-        const ch = row[x] ?? "";
-        if (ch === "")
-          continue;
-        at += ch.length;
-        const tone = toneAt(x);
-        const last = out[out.length - 1];
-        if (last !== undefined && last.tone === tone)
-          out[out.length - 1] = { text: last.text + ch, tone };
-        else
-          out.push({ text: ch, tone });
-      }
-      return out;
-    });
   }
 }
 function drawLanes2(c, layout) {
@@ -13516,7 +14626,7 @@ function drawLanes2(c, layout) {
     const x1 = x0 + Math.round(lane.w) - 1;
     const y1 = y0 + Math.round(lane.h) - 1;
     if (lane.bare && vertical) {
-      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, "bold");
+      c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
       continue;
     }
     if (vertical) {
@@ -13529,28 +14639,7 @@ function drawLanes2(c, layout) {
         c.put(x, y0, "─");
       continue;
     }
-    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label, "bold");
-  }
-}
-var UPRIGHT = new Set([..."│┆┃╎┌┐└┘├┤┬┴┼╭╮╰╯┏┓┗┛┣┫┳┻╋▲▼△▽^v"]);
-function drawColumnRules(c, layout) {
-  if (layout.direction === "TD" === (layout.laneAxis === "along"))
-    return;
-  const columns = layout.lanes.filter((l) => l.label !== "" && l.bare === true).sort((a, b) => a.x - b.x);
-  for (let i = 0;i + 1 < columns.length; i++) {
-    const a = columns[i];
-    const b = columns[i + 1];
-    const end = Math.floor(a.x) + Math.round(a.w);
-    const gap = Math.floor(b.x) - end;
-    if (gap < 3)
-      continue;
-    const x = end + Math.floor(gap / 2);
-    const top = Math.max(Math.floor(a.y), Math.floor(b.y));
-    const bottom = Math.min(Math.floor(a.y) + Math.round(a.h), Math.floor(b.y) + Math.round(b.h)) - 1;
-    const free = (y) => c.get(x, y) === " " && !UPRIGHT.has(c.get(x, y - 1)) && !UPRIGHT.has(c.get(x, y + 1));
-    const rows = Array.from({ length: bottom - top + 1 }, (_, k) => top + k).filter(free);
-    for (const y of rows)
-      c.put(x, y, "╎", "dim");
+    c.text(Math.floor(lane.labelBox.x), Math.floor(lane.labelBox.y), lane.label);
   }
 }
 function cellOf2(edge, nodes, index) {
@@ -13609,6 +14698,7 @@ function markGlyphs(end, heading) {
       return [];
   }
 }
+var RELATION_MARKS = new Set(["triangle-open", "diamond-filled", "diamond-open", "arrow-open", "one", "zero-one", "many", "one-many", "zero-many", "circle-plus", "lollipop"]);
 function rulesOf2(layout) {
   const vertical = layout.direction === "TD" !== (layout.laneAxis === "along");
   if (vertical)
@@ -13631,6 +14721,7 @@ function drawEdges(c, layout) {
     return next;
   };
   const arrows = [];
+  const records = layout.nodes.some((n) => hasCompartments(n) || ["start-dot", "end-dot", "bar", "note", "ellipse", "actor"].includes(n.shape)) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd));
   const mark = (end, at, from) => {
     const dx = Math.sign(at[0] - from[0]);
     const dy = Math.sign(at[1] - from[1]);
@@ -13696,7 +14787,7 @@ function drawEdges(c, layout) {
       else if (cell.bits === (N | S) || cell.bits === N || cell.bits === S)
         ch = "┆";
     }
-    c.put(Number(xs), Number(ys), ch, cell.style === "dotted" ? "dim" : "normal");
+    c.put(Number(xs), Number(ys), ch);
   }
   for (const a of arrows)
     c.put(a.x, a.y, a.ch);
@@ -13718,7 +14809,7 @@ function drawLabels(c, layout) {
 function drawEndLabels(c, layout) {
   const put = (label) => {
     if (label)
-      c.text(Math.round(label.x), Math.round(label.y), label.text, "dim");
+      c.text(Math.round(label.x), Math.round(label.y), label.text);
   };
   for (const edge of layout.edges) {
     if (edge.invisible)
@@ -13726,13 +14817,6 @@ function drawEndLabels(c, layout) {
     put(edge.startLabel);
     put(edge.endLabel);
   }
-}
-function compartmentTone(emphasis, index) {
-  if (emphasis === "title")
-    return "bold";
-  if (emphasis === "tag")
-    return "dim";
-  return emphasis === undefined && index === 0 ? "bold" : "normal";
 }
 function drawCompartments(c, n, x0, y0, w) {
   const cells = n.compartments ?? [];
@@ -13750,11 +14834,10 @@ function drawCompartments(c, n, x0, y0, w) {
     const starts = cell.columns === undefined ? [] : columnStarts(cell, cellRuler());
     cell.lines.forEach((line, k) => {
       const row = cell.columns?.[k];
-      const tone = compartmentTone(cell.lineEmphasis?.[k], i);
       if (row === undefined)
-        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line, tone);
+        c.text(centred ? x0 + 1 + Math.floor((w - 2 - cellWidth(line)) / 2) : x0 + 2, y + k, line);
       else
-        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text, tone));
+        row.forEach((text, col) => text !== "" && c.text(x0 + 2 + (starts[col] ?? 0), y + k, text));
     });
     y += heights[i] ?? 0;
   });
@@ -13805,14 +14888,14 @@ function drawNode(c, n) {
   const texts = [n.shape === "actor" ? `o ${n.title}` : n.title, ...n.lines].filter((t, i) => i > 0 || t !== "" || n.lines.length === 0);
   const start = y0 + 1 + Math.floor((h - 2 - texts.length) / 2);
   texts.forEach((t, i) => {
-    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t, i === 0 && n.title !== "" ? "bold" : "normal");
+    c.text(x0 + 1 + Math.floor((w - 2 - cellWidth(t)) / 2), start + i, t);
   });
 }
 var SAMPLE_GLYPH = { normal: "──", thick: "━━", dotted: "┄┄" };
 function drawLegend(c, layout) {
   for (const item of layout.legend?.items ?? []) {
-    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style], item.style === "dotted" ? "dim" : "normal");
-    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption, "dim");
+    c.text(Math.round(item.x), Math.floor(item.y), SAMPLE_GLYPH[item.style]);
+    c.text(Math.round(item.captionX), Math.floor(item.y), item.caption);
   }
 }
 function drawLaneNames(c, layout, limit) {
@@ -13828,30 +14911,12 @@ function drawLaneNames(c, layout, limit) {
     const w = cellWidth(placed.text);
     c.widen(placed.at + w);
     c.put(placed.at - 1, y, " ");
-    c.text(placed.at, y, placed.text, "bold");
+    c.text(placed.at, y, placed.text);
     c.put(placed.at + w, y, " ");
   }
 }
 function renderTextLayout(layout, maxWidth) {
-  const lines = drawLayout(layout, maxWidth, false).lines();
-  while (lines.length > 0 && lines[lines.length - 1] === "")
-    lines.pop();
-  return lines;
-}
-function renderTextLayoutSpans(layout, maxWidth) {
-  const rows = drawLayout(layout, maxWidth, true).spans();
-  while (rows.length > 0 && (rows[rows.length - 1] ?? []).length === 0)
-    rows.pop();
-  return rows;
-}
-function layoutSpans(layout, lines, maxWidth) {
-  const plain = (text) => text === "" ? [] : [{ text, tone: "normal" }];
-  const drawn = renderTextLayoutSpans(layout, maxWidth);
-  const same = drawn.length <= lines.length && drawn.every((row, i) => row.map((s) => s.text).join("") === lines[i]);
-  return same ? [...drawn, ...lines.slice(drawn.length).map(plain)] : lines.map(plain);
-}
-function drawLayout(layout, maxWidth, toned) {
-  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height), toned);
+  const c = new Canvas(Math.ceil(layout.width), Math.ceil(layout.height));
   drawLanes2(c, layout);
   drawEdges(c, layout);
   drawLabels(c, layout);
@@ -13860,8 +14925,10 @@ function drawLayout(layout, maxWidth, toned) {
     drawNode(c, n);
   drawLaneNames(c, layout, maxWidth ?? c.width);
   drawLegend(c, layout);
-  drawColumnRules(c, layout);
-  return c;
+  const lines = c.lines();
+  while (lines.length > 0 && lines[lines.length - 1] === "")
+    lines.pop();
+  return lines;
 }
 var ANSI = { normal: "", dim: "\x1B[2m", bold: "\x1B[1m", accent: "\x1B[36m" };
 function spansToAnsi(line) {
@@ -13915,7 +14982,7 @@ var TOP_RIGHT = new Set(["┐", "╮", "┒"]);
 var BOTTOM_LEFT = new Set(["└", "╰"]);
 var BOTTOM_RIGHT = new Set(["┘", "╯"]);
 var DOTS = new Set(["●", "◉"]);
-var UPRIGHT2 = new Set(["│", "┃", "┆", "┼", "╋", "├", "┤", "┣", "┫", "▼", "▲", "▽", "△", "◆", "◇", "⊕", "○", "v", "^"]);
+var UPRIGHT = new Set(["│", "┃", "┆", "┼", "╋", "├", "┤", "┣", "┫", "▼", "▲", "▽", "△", "◆", "◇", "⊕", "○", "v", "^"]);
 var LEGEND = /^(──|━━|┄┄) .+ {3}(──|━━|┄┄) /;
 function cellsOf(lines) {
   return lines.map((line) => {
@@ -14020,7 +15087,7 @@ function roomViolations(lines, grid = cellsOf(lines)) {
   for (const a of boxes) {
     for (let x = a.x0;x <= a.x1; x++) {
       let y = a.y1 + 1;
-      while (UPRIGHT2.has(at(x, y)))
+      while (UPRIGHT.has(at(x, y)))
         y++;
       const gap = y - a.y1 - 1;
       if (gap === 0 || gap >= 2)
@@ -14754,7 +15821,7 @@ var W3 = {
 };
 var PASS_CAP = 12;
 var RESTARTS = 2;
-var EPS17 = 0.000000001;
+var EPS18 = 0.000000001;
 var BOUND_MARGIN = 0.000001;
 var INSET = 0.1;
 var SEG = 5;
@@ -14941,7 +16008,7 @@ class Placement {
   }
   crossings(e, f) {
     const bx = this.box;
-    if ((bx[e * 4 + 2] ?? 0) < (bx[f * 4] ?? 0) - EPS17 || (bx[f * 4 + 2] ?? 0) < (bx[e * 4] ?? 0) - EPS17 || (bx[e * 4 + 3] ?? 0) < (bx[f * 4 + 1] ?? 0) - EPS17 || (bx[f * 4 + 3] ?? 0) < (bx[e * 4 + 1] ?? 0) - EPS17) {
+    if ((bx[e * 4 + 2] ?? 0) < (bx[f * 4] ?? 0) - EPS18 || (bx[f * 4 + 2] ?? 0) < (bx[e * 4] ?? 0) - EPS18 || (bx[e * 4 + 3] ?? 0) < (bx[f * 4 + 1] ?? 0) - EPS18 || (bx[f * 4 + 3] ?? 0) < (bx[e * 4 + 1] ?? 0) - EPS18) {
       return 0;
     }
     const s = this.segs[e];
@@ -14963,7 +16030,7 @@ class Placement {
         const vk = ih ? j * SEG : i * SEG;
         const hy = h[hk + 1] ?? 0;
         const vx = v[vk] ?? 0;
-        if (vx > (h[hk] ?? 0) + EPS17 && vx < (h[hk + 2] ?? 0) - EPS17 && hy > (v[vk + 1] ?? 0) + EPS17 && hy < (v[vk + 3] ?? 0) - EPS17)
+        if (vx > (h[hk] ?? 0) + EPS18 && vx < (h[hk + 2] ?? 0) - EPS18 && hy > (v[vk + 1] ?? 0) + EPS18 && hy < (v[vk + 3] ?? 0) - EPS18)
           n++;
       }
     }
@@ -15206,7 +16273,7 @@ class Placement {
   }
 }
 function put(out, n, x0, y0, x1, y1, leg = 0) {
-  if (Math.abs(x0 - x1) < EPS17 && Math.abs(y0 - y1) < EPS17)
+  if (Math.abs(x0 - x1) < EPS18 && Math.abs(y0 - y1) < EPS18)
     return n;
   const k = n * SEG;
   out[k] = Math.min(x0, x1);
@@ -15227,13 +16294,13 @@ function forcedCrossing(s, a, t, b, horizontal) {
   const q = horizontal ? t[b + 1] ?? 0 : t[b] ?? 0;
   const lo2 = horizontal ? t[b] ?? 0 : t[b + 1] ?? 0;
   const hi2 = horizontal ? t[b + 2] ?? 0 : t[b + 3] ?? 0;
-  if (Math.abs(p - q) > EPS17)
+  if (Math.abs(p - q) > EPS18)
     return 0;
-  if (Math.min(hi1, hi2) - Math.max(lo1, lo2) < EPS17)
+  if (Math.min(hi1, hi2) - Math.max(lo1, lo2) < EPS18)
     return 0;
   if (oa !== ob)
     return 1;
-  const nested = lo1 < lo2 - EPS17 && hi2 < hi1 - EPS17 || lo2 < lo1 - EPS17 && hi1 < hi2 - EPS17;
+  const nested = lo1 < lo2 - EPS18 && hi2 < hi1 - EPS18 || lo2 < lo1 - EPS18 && hi1 < hi2 - EPS18;
   return nested ? 1 : 0;
 }
 function wrap(lanes, lane, rank, row, span, K, width) {
@@ -15346,7 +16413,7 @@ function placeRanked(input, all) {
       for (let i = 0;i < ids.length; i++) {
         const l = lane[i] ?? 0;
         const s = span[i] ?? 2;
-        const choice = { delta: -EPS17, moves: null };
+        const choice = { delta: -EPS18, moves: null };
         const known = p.before([[i, p.col[i] ?? 0, p.row[i] ?? 0]]);
         const consider = (moves) => {
           const { delta, restore } = p.apply(moves, moves.length === 1 ? known : undefined, choice.delta);
@@ -15415,7 +16482,7 @@ function placeRanked(input, all) {
             continue;
           const moves = block.map((j) => [j, (q.col[j] ?? 0) + d, q.row[j] ?? 0]);
           const { delta, restore } = q.apply(moves);
-          if (delta < -EPS17) {
+          if (delta < -EPS18) {
             q.baseTotal = undefined;
             moved = true;
             break;
@@ -15480,7 +16547,7 @@ function shiftHalfSteps(graph, rank, row, span, gap = 0.5, limits = new Map) {
     let improved = false;
     for (let i = 0;i < ids.length; i++) {
       const known = p.before([[i, p.col[i] ?? 0, p.row[i] ?? 0]]);
-      let best = -EPS17;
+      let best = -EPS18;
       let move = null;
       for (const d of [-1, 1]) {
         const c = (p.col[i] ?? 0) + d;
@@ -15507,14 +16574,14 @@ function shiftHalfSteps(graph, rank, row, span, gap = 0.5, limits = new Map) {
 }
 
 // src/layout/mirror.ts
-var tidy8 = (v) => {
+var tidy9 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
 function mirrorLayout(layout, how, base) {
   const horizontal = how === "RL";
-  const flipBox = (b) => horizontal ? { ...b, x: tidy8(base.width - b.x - b.w) } : { ...b, y: tidy8(base.height - b.y - b.h) };
-  const flipPoint = (p) => horizontal ? { x: tidy8(base.width - p.x), y: p.y } : { x: p.x, y: tidy8(base.height - p.y) };
+  const flipBox = (b) => horizontal ? { ...b, x: tidy9(base.width - b.x - b.w) } : { ...b, y: tidy9(base.height - b.y - b.h) };
+  const flipPoint = (p) => horizontal ? { x: tidy9(base.width - p.x), y: p.y } : { x: p.x, y: tidy9(base.height - p.y) };
   const lanes = layout.lanes.map((lane) => ({ ...flipBox(lane), labelBox: flipBox(lane.labelBox) }));
   const nodes = layout.nodes.map((node) => ({ ...flipBox(node), ...node.outline ? { outline: flipBox(node.outline) } : {} }));
   const edges = layout.edges.map((edge) => ({
@@ -15556,7 +16623,7 @@ var SLIDE_CELLS = 1;
 var TRIES3 = 24;
 var FRACTIONS = [0.5, 0.25, 0.75, 0.12, 0.88];
 var AHEAD = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } };
-var tidy9 = (v) => {
+var tidy10 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -15614,20 +16681,20 @@ function drawAttached(laid, attached, ruler) {
     const at = (k, j) => {
       const away = gap + k * slide;
       if (side === "left")
-        return { x: tidy9(target.x - away - w), y: tidy9(middle.y - half(h) + j * (h + clear)), w, h };
+        return { x: tidy10(target.x - away - w), y: tidy10(middle.y - half(h) + j * (h + clear)), w, h };
       if (side === "right")
-        return { x: tidy9(target.x + target.w + away), y: tidy9(middle.y - half(h) + j * (h + clear)), w, h };
-      return { x: tidy9(middle.x - half(w) + j * (w + clear)), y: tidy9(target.y - away - h), w, h };
+        return { x: tidy10(target.x + target.w + away), y: tidy10(middle.y - half(h) + j * (h + clear)), w, h };
+      return { x: tidy10(middle.x - half(w) + j * (w + clear)), y: tidy10(target.y - away - h), w, h };
     };
     const joint = (r) => {
       if (side === "over") {
         const lo = Math.max(r.x, target.x);
         const hi = Math.min(r.x + r.w, target.x + target.w);
-        return hi - lo >= clear ? tidy9(cells ? Math.floor((lo + hi - 1) / 2) : (lo + hi) / 2) : undefined;
+        return hi - lo >= clear ? tidy10(cells ? Math.floor((lo + hi - 1) / 2) : (lo + hi) / 2) : undefined;
       }
       const lo = Math.max(r.y, target.y);
       const hi = Math.min(r.y + r.h, target.y + target.h);
-      return hi - lo >= clear ? tidy9(cells ? Math.floor((lo + hi - 1) / 2) : (lo + hi) / 2) : undefined;
+      return hi - lo >= clear ? tidy10(cells ? Math.floor((lo + hi - 1) / 2) : (lo + hi) / 2) : undefined;
     };
     const between = (r) => side === "left" ? { x: r.x + r.w, y: r.y, w: target.x - r.x - r.w, h: r.h } : side === "right" ? { x: target.x + target.w, y: r.y, w: r.x - target.x - target.w, h: r.h } : { x: r.x, y: r.y + r.h, w: r.w, h: target.y - r.y - r.h };
     const ours = new Set(attached.notes.map((s) => s.id));
@@ -15657,8 +16724,8 @@ function drawAttached(laid, attached, ruler) {
     drawn.push(rect);
     owned.push({ rect, owner: target });
     const style = "dotted";
-    const row = at0 ?? tidy9(middle.y);
-    const col = at0 ?? tidy9(middle.x);
+    const row = at0 ?? tidy10(middle.y);
+    const col = at0 ?? tidy10(middle.x);
     const points = side === "left" ? [{ x: rect.x + rect.w, y: row }, { x: target.x, y: row }] : side === "right" ? [{ x: target.x + target.w, y: row }, { x: rect.x, y: row }] : [{ x: col, y: rect.y + rect.h }, { x: col, y: target.y }];
     const [from, to] = side === "right" ? [target.id, spec.id] : [spec.id, target.id];
     edges.push({ from, to, style, end: "none", points });
@@ -15689,7 +16756,7 @@ function drawAttached(laid, attached, ruler) {
         const line = cells ? { x: face === "left" ? p1.x : p0.x, y: face === "top" ? p1.y : p0.y, w: vertical ? 1 : 3, h: vertical ? 3 : 1 } : { x: Math.min(p0.x, p1.x) - (vertical ? RING / 2 : 0), y: Math.min(p0.y, p1.y) - (vertical ? 0 : RING / 2), w: vertical ? RING : reach, h: vertical ? reach : RING };
         const sides = vertical ? cells ? [{ x: ring.x + 2, y: ring.y, ...label }, { x: ring.x - 1 - label.w, y: ring.y, ...label }] : [{ x: centre.x + RING / 2 + RING_TEXT, y: centre.y - label.h / 2, ...label }, { x: centre.x - RING / 2 - RING_TEXT - label.w, y: centre.y - label.h / 2, ...label }] : cells ? [{ x: ring.x - Math.floor((label.w - 1) / 2), y: ring.y - 1, ...label }, { x: ring.x - Math.floor((label.w - 1) / 2), y: ring.y + 1, ...label }] : [{ x: centre.x - label.w / 2, y: centre.y - RING / 2 - RING_TEXT - label.h, ...label }, { x: centre.x - label.w / 2, y: centre.y + RING / 2 + RING_TEXT, ...label }];
         for (const t of sides)
-          spots.push({ line, ring, text: { x: tidy9(t.x), y: tidy9(t.y), w: t.w, h: t.h }, points: [p0, p1] });
+          spots.push({ line, ring, text: { x: tidy10(t.x), y: tidy10(t.y), w: t.w, h: t.h }, points: [p0, p1] });
       }
     }
     const free = (s) => !taken(s.line, target.id) && !taken(s.text, "") && !drawn.some((d) => overlaps(s.line, d) || overlaps(s.text, d));
@@ -15728,15 +16795,15 @@ function drawAttached(laid, attached, ruler) {
   const dy = Math.max(0, before.y - after.y);
   const right = Math.max(0, after.x + after.w - (before.x + before.w));
   const bottom = Math.max(0, after.y + after.h - (before.y + before.h));
-  const moved = (b) => ({ ...b, x: tidy9(b.x + dx), y: tidy9(b.y + dy) });
-  const shiftPoint = (p) => ({ x: tidy9(p.x + dx), y: tidy9(p.y + dy) });
+  const moved = (b) => ({ ...b, x: tidy10(b.x + dx), y: tidy10(b.y + dy) });
+  const shiftPoint = (p) => ({ x: tidy10(p.x + dx), y: tidy10(p.y + dy) });
   const stretch = (zone) => owned.reduce((z, o) => inside(o.owner, zone) && !inside(o.rect, z) ? { ...z, ...union(z, grow2(o.rect, cells ? 1 : 12)) } : z, zone);
   const lanes = laid.lanes.map((lane) => ({ ...moved(stretch(lane)), labelBox: moved(lane.labelBox) }));
   const grownClusters = clusters.map((c) => moved(stretch(c)));
   return {
     ...laid,
-    width: tidy9(Math.max(laid.width + dx + right, after.x + after.w + dx + Math.max(0, laid.width - before.x - before.w))),
-    height: tidy9(Math.max(laid.height + dy + bottom, after.y + after.h + dy + Math.max(0, laid.height - before.y - before.h))),
+    width: tidy10(Math.max(laid.width + dx + right, after.x + after.w + dx + Math.max(0, laid.width - before.x - before.w))),
+    height: tidy10(Math.max(laid.height + dy + bottom, after.y + after.h + dy + Math.max(0, laid.height - before.y - before.h))),
     lanes,
     ...laid.clusters === undefined ? {} : { clusters: grownClusters },
     nodes: nodes.map((n) => ({ ...moved(n), ...n.outline ? { outline: moved(n.outline) } : {} })),
@@ -15752,7 +16819,7 @@ function drawAttached(laid, attached, ruler) {
 }
 
 // src/layout/text-cost.ts
-var EPS18 = 0.000001;
+var EPS19 = 0.000001;
 var rowsOf = new WeakMap;
 function writtenOf(l) {
   const known = rowsOf.get(l);
@@ -15762,8 +16829,8 @@ function writtenOf(l) {
   rowsOf.set(l, rows);
   return rows;
 }
-var between2 = (v, a, b) => v > Math.min(a, b) + EPS18 && v < Math.max(a, b) - EPS18;
-var upright = (a, b) => Math.abs(a.x - b.x) < EPS18;
+var between2 = (v, a, b) => v > Math.min(a, b) + EPS19 && v < Math.max(a, b) - EPS19;
+var upright = (a, b) => Math.abs(a.x - b.x) < EPS19;
 function cellsOf2(e, nodes) {
   const corners = e.points.map((_, i) => cellOf(e, nodes, i));
   const first = corners[0];
@@ -15809,7 +16876,7 @@ function textCost(l) {
       for (const [p, q] of segments[j] ?? []) {
         if (!together) {
           for (const c of a.points.slice(1, -1))
-            if (upright(p, q) ? Math.abs(c.x - p.x) < EPS18 && between2(c.y, p.y, q.y) : Math.abs(c.y - p.y) < EPS18 && between2(c.x, p.x, q.x))
+            if (upright(p, q) ? Math.abs(c.x - p.x) < EPS19 && between2(c.y, p.y, q.y) : Math.abs(c.y - p.y) < EPS19 && between2(c.x, p.x, q.x))
               touches++;
         }
         if (i > j)
@@ -15850,7 +16917,7 @@ function textCost(l) {
   };
 }
 function costsMore(a, b) {
-  return Object.keys(a).some((k) => a[k] > b[k] + EPS18);
+  return Object.keys(a).some((k) => a[k] > b[k] + EPS19);
 }
 
 // src/layout/text-intact.ts
@@ -15859,7 +16926,7 @@ var E3 = 2;
 var S3 = 4;
 var W4 = 8;
 var LEVEL = E3 | W4;
-var UPRIGHT3 = N3 | S3;
+var UPRIGHT2 = N3 | S3;
 var RUNS2 = {
   "─": E3 | W4,
   "━": E3 | W4,
@@ -15889,7 +16956,7 @@ var RUNS2 = {
 var HEADS2 = new Set(["▶", "◀", "▼", "▲", "▷", "◁", "▽", "△"]);
 var UPRIGHT_HEADS = new Set(["▼", "▲", "▽", "△"]);
 var LEVEL_HEADS = new Set(["▶", "◀", "▷", "◁"]);
-var MARKS = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
+var MARKS2 = new Set([...HEADS2, "◆", "◇", "⊕", "○", "<", ">", "^", "v", "|", "o", "┼"]);
 var BREAK_KINDS = ["brokenLines", "brokenBoxes", "tangled", "strayLabels", "crowdedLabels", "coveredLabels", "labelsAtHeads", "room", "unseen", "forks", "crossMarks", "mixedNets", "hugging", "overwritten"];
 function runsOf2(edge, nodes) {
   const cellAt = (index) => {
@@ -15983,9 +17050,9 @@ function breaksOf(layout, lines, labels, notes) {
       const need = run.bits.get(`${x},${y}`) ?? 0;
       if (((RUNS2[ch] ?? 0) & need) === need && need !== 0)
         return false;
-      if ((k < 2 || k >= ends - 2) && MARKS.has(ch))
+      if ((k < 2 || k >= ends - 2) && MARKS2.has(ch))
         return false;
-      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT3 || need === E3 || need === W4))
+      if (own !== undefined && y === own.y && x >= own.x0 - 1 && x <= own.x1 + 1 && (need === LEVEL || need === UPRIGHT2 || need === E3 || need === W4))
         return false;
       return true;
     });
@@ -16032,7 +17099,7 @@ function breaksOf(layout, lines, labels, notes) {
   for (const [key, list] of byCell) {
     list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      if (a === LEVEL && b === UPRIGHT3 || a === UPRIGHT3 && b === LEVEL)
+      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
         return;
       root[find(i)] = find(j);
     }));
@@ -16045,7 +17112,7 @@ function breaksOf(layout, lines, labels, notes) {
       if (together(drawn[i], drawn[j]))
         return false;
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      return (a & LEVEL) !== 0 && (b & LEVEL) !== 0 || (a & UPRIGHT3) !== 0 && (b & UPRIGHT3) !== 0;
+      return (a & LEVEL) !== 0 && (b & LEVEL) !== 0 || (a & UPRIGHT2) !== 0 && (b & UPRIGHT2) !== 0;
     }));
     if (tangles) {
       tangled++;
@@ -16056,7 +17123,7 @@ function breaksOf(layout, lines, labels, notes) {
   for (const [key, list] of byCell) {
     list.forEach((i, k) => list.slice(k + 1).forEach((j) => {
       const [a, b] = [runs[i]?.bits.get(key) ?? 0, runs[j]?.bits.get(key) ?? 0];
-      if (a === LEVEL && b === UPRIGHT3 || a === UPRIGHT3 && b === LEVEL)
+      if (a === LEVEL && b === UPRIGHT2 || a === UPRIGHT2 && b === LEVEL)
         crossings.set(`${i}|${j}`, (crossings.get(`${i}|${j}`) ?? 0) + 1);
     }));
   }
@@ -16065,10 +17132,10 @@ function breaksOf(layout, lines, labels, notes) {
     if (n > 1)
       note(`lines ${pair} cross ${n} times`);
   }
-  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
+  const lineOf = (x, y) => RUNS2[at(x, y)] === undefined && !MARKS2.has(at(x, y)) ? [] : byCell.get(`${x},${y}`) ?? [];
   const inBox = (x, y) => layout.nodes.some((n) => x >= Math.round(n.x) && x < Math.round(n.x + n.w) && y >= Math.round(n.y) && y < Math.round(n.y + n.h));
   const rule = (x, y) => RUNS2[at(x, y)] !== undefined && !byCell.has(`${x},${y}`) && !inBox(x, y);
-  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT3) !== 0 || UPRIGHT_HEADS.has(at(x, y));
+  const uprightAt = (x, y) => ((RUNS2[at(x, y)] ?? 0) & UPRIGHT2) !== 0 || UPRIGHT_HEADS.has(at(x, y));
   const apart = (p, q) => !p.some((i) => q.some((j) => find(i) === find(j)));
   const spots = drawn.map((e) => e.label === undefined ? undefined : spotOf(e.label));
   let strayLabels = 0;
@@ -16115,7 +17182,7 @@ function breaksOf(layout, lines, labels, notes) {
     let crowded = false;
     for (const [side, edge] of [[1, spot.x1], [-1, spot.x0]]) {
       const near = edge + 2 * side;
-      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT3) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT3) !== 0)
+      if (!crowded && blank(edge + side, spot.y) && mine(near, spot.y) && ((RUNS2[at(near, spot.y)] ?? 0) & UPRIGHT2) !== 0 && blank(near + side, spot.y) && other(near + 2 * side, spot.y) && ((RUNS2[at(near + 2 * side, spot.y)] ?? 0) & UPRIGHT2) !== 0)
         crowded = true;
     }
     for (const side of [1, -1]) {
@@ -16174,7 +17241,7 @@ function breaksOf(layout, lines, labels, notes) {
       crossMarks++;
     if (list.some((i) => {
       const b = runs[i]?.bits.get(key) ?? 0;
-      return b !== LEVEL && b !== UPRIGHT3;
+      return b !== LEVEL && b !== UPRIGHT2;
     })) {
       forks++;
       note(`fork drawn as a crossing at ${key}`);
@@ -16225,7 +17292,7 @@ function breaksOf(layout, lines, labels, notes) {
       return;
     for (const [x, y] of run.cells) {
       const b = run.bits.get(`${x},${y}`) ?? 0;
-      if (b !== LEVEL && b !== UPRIGHT3)
+      if (b !== LEVEL && b !== UPRIGHT2)
         continue;
       const across = b === LEVEL ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
       const along = b === LEVEL ? [1, 0] : [0, 1];
@@ -16262,7 +17329,7 @@ function breaksOf(layout, lines, labels, notes) {
   runs.forEach((run, i) => {
     for (const [x, y] of run?.cells ?? []) {
       const b = run?.bits.get(`${x},${y}`) ?? 0;
-      if (b !== LEVEL && b !== UPRIGHT3 || RUNS2[at(x, y)] !== b)
+      if (b !== LEVEL && b !== UPRIGHT2 || RUNS2[at(x, y)] !== b)
         continue;
       const [dx, dy] = b === LEVEL ? [0, 1] : [1, 0];
       const [ax, ay] = b === LEVEL ? [1, 0] : [0, 1];
@@ -16296,7 +17363,7 @@ function breaksOf(layout, lines, labels, notes) {
     run?.cells.forEach(([x, y], k) => {
       const key = `${x},${y}`;
       const ch = at(x, y);
-      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS.has(ch) || inBox(x, y))
+      if (textAt.has(key) || ch === " " || RUNS2[ch] !== undefined || (k < 2 || k >= ends - 2) && MARKS2.has(ch) || inBox(x, y))
         return;
       if ((byCell.get(key) ?? [i]).some((j) => {
         const s = spots[j];
@@ -16769,7 +17836,7 @@ function buildPaths(sk, geo, ruler, plans, routed, runs, tracks, counts, table, 
 }
 
 // src/layout/lanes-along.ts
-var tidy10 = (v) => {
+var tidy11 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -16825,23 +17892,23 @@ function alongBands(sk, geo, ruler, along) {
       return {
         id: lane.id,
         label: lane.label,
-        x: tidy10(sk.margin),
-        y: tidy10(f0),
-        w: tidy10(crossExt),
-        h: tidy10(ext),
-        labelBox: { x: tidy10(sk.margin + ruler.laneLabelGap), y: tidy10(f0 + ruler.laneLabelGap), w: labelW, h: labelH }
+        x: tidy11(sk.margin),
+        y: tidy11(f0),
+        w: tidy11(crossExt),
+        h: tidy11(ext),
+        labelBox: { x: tidy11(sk.margin + ruler.laneLabelGap), y: tidy11(f0 + ruler.laneLabelGap), w: labelW, h: labelH }
       };
     }
     return {
       id: lane.id,
       label: lane.label,
-      x: tidy10(f0),
-      y: tidy10(sk.margin),
-      w: tidy10(ext),
-      h: tidy10(crossExt),
+      x: tidy11(f0),
+      y: tidy11(sk.margin),
+      w: tidy11(ext),
+      h: tidy11(crossExt),
       labelBox: {
-        x: tidy10(edgeNear(ruler, f0 + (ext - labelW) / 2)),
-        y: tidy10(sk.margin + ruler.laneLabelGap),
+        x: tidy11(edgeNear(ruler, f0 + (ext - labelW) / 2)),
+        y: tidy11(sk.margin + ruler.laneLabelGap),
         w: labelW,
         h: labelH
       }
@@ -17232,7 +18299,7 @@ function turnOrders(runs, chains) {
 }
 
 // src/layout/solve.ts
-var tidy11 = (v) => {
+var tidy12 = (v) => {
   const r = Math.round(v * 1e6) / 1e6;
   return r === 0 ? 0 : r;
 };
@@ -17420,7 +18487,7 @@ function build2(graph, ruler, rank, row, opts, span, pass) {
       break;
   }
   const { tracks, counts, geo, avoid } = settled;
-  const phys = (p) => td ? { x: tidy11(p.c), y: tidy11(p.f) } : { x: tidy11(p.f), y: tidy11(p.c) };
+  const phys = (p) => td ? { x: tidy12(p.c), y: tidy12(p.f) } : { x: tidy12(p.f), y: tidy12(p.c) };
   const nodes = sk.slots.map((s) => {
     const { f0, c0 } = origin(sk, geo, ruler, s);
     const nf = finalNf(sk, geo, s);
@@ -17431,10 +18498,10 @@ function build2(graph, ruler, rank, row, opts, span, pass) {
       rank: s.rank,
       span: s.span,
       row: s.row,
-      x: tidy11(x),
-      y: tidy11(y),
-      w: tidy11(w),
-      h: tidy11(h),
+      x: tidy12(x),
+      y: tidy12(y),
+      w: tidy12(w),
+      h: tidy12(h),
       title: s.title,
       lines: s.lines,
       shape: s.shape
@@ -17480,7 +18547,7 @@ function build2(graph, ruler, rank, row, opts, span, pass) {
     const foreign = edges.flatMap((other, k) => k === e ? [] : segmentsOf(other.points));
     const placed = placeLabel([p, q], size, nodeRects, placedLabels, ruler, foreign);
     placedLabels.push(placed.rect);
-    edge.label = { text: plan.label, x: tidy11(placed.rect.x), y: tidy11(placed.rect.y), w: size.w, h: size.h };
+    edge.label = { text: plan.label, x: tidy12(placed.rect.x), y: tidy12(placed.rect.y), w: size.w, h: size.h };
     if (placed.overlap) {
       diagnostics.push({
         kind: "label-overlap",
@@ -17513,7 +18580,7 @@ function build2(graph, ruler, rank, row, opts, span, pass) {
     diagnostics.push({
       kind: "overflow",
       nodes: [],
-      message: `Drawing is ${tidy11(width)} wide; the limit is ${opts.maxWidth}.`
+      message: `Drawing is ${tidy12(width)} wide; the limit is ${opts.maxWidth}.`
     });
   }
   const lanes = pass.along ? alongBands(sk, geo, ruler, pass.along) : sk.lanes.map((lane, l) => {
@@ -17526,24 +18593,24 @@ function build2(graph, ruler, rank, row, opts, span, pass) {
     return td ? {
       id: lane.id,
       label: lane.label,
-      x: tidy11(start),
-      y: tidy11(sk.margin),
-      w: tidy11(ext),
-      h: tidy11(flowExt),
-      labelBox: { x: tidy11(start + ruler.laneLabelGap), y: tidy11(sk.margin + ruler.laneLabelGap), w: labelW, h: labelH }
+      x: tidy12(start),
+      y: tidy12(sk.margin),
+      w: tidy12(ext),
+      h: tidy12(flowExt),
+      labelBox: { x: tidy12(start + ruler.laneLabelGap), y: tidy12(sk.margin + ruler.laneLabelGap), w: labelW, h: labelH }
     } : {
       id: lane.id,
       label: lane.label,
-      x: tidy11(sk.margin),
-      y: tidy11(start),
-      w: tidy11(flowExt),
-      h: tidy11(ext),
-      labelBox: { x: tidy11(sk.margin + ruler.laneLabelGap), y: tidy11(firstRow), w: labelW, h: labelH }
+      x: tidy12(sk.margin),
+      y: tidy12(start),
+      w: tidy12(flowExt),
+      h: tidy12(ext),
+      labelBox: { x: tidy12(sk.margin + ruler.laneLabelGap), y: tidy12(firstRow), w: labelW, h: labelH }
     };
   });
   const layout = {
-    width: tidy11(width),
-    height: tidy11(height),
+    width: tidy12(width),
+    height: tidy12(height),
     direction: graph.direction,
     laneAxis: pass.along ? "along" : "across",
     lanes,
@@ -17925,17 +18992,9 @@ function layoutAny(source, given, opts) {
   const { legend: _drawn, ...bare } = arrange(attached.graph, ruler, opts);
   return withLegend(drawAttached(bare, attached, ruler), ruler, opts.legend);
 }
-function c4GridWithin(graph, ruler, opts) {
-  const across = layoutC4Grid(graph, ruler, opts);
-  const limit = opts.maxWidth ?? ruler.defaultWidth;
-  if (graph.direction !== "LR" || graph.mirror !== undefined || graph.grid?.cells !== undefined || limit === undefined || across.width <= limit)
-    return across;
-  const down = layoutC4Grid({ ...graph, direction: "TD" }, ruler, opts);
-  return down.width < across.width ? down : across;
-}
 function arrange(graph, ruler, opts) {
   if (graph.placer === "c4-grid" && ruler.terminal !== true)
-    return c4GridWithin(graph, ruler, opts);
+    return layoutC4Grid(graph, ruler, opts);
   if (graph.clusters !== undefined && graph.clusters.length > 0) {
     if (ruler.terminal !== true)
       return layoutClusters(graph, ruler, opts, (g, r, o) => layout(g, r, { ...o, nested: true }));
@@ -18252,7 +19311,7 @@ function readNode(c, line, st) {
     }
   }
   if (c.s.startsWith(":::", c.i)) {
-    const cls = /:::(\w+(?:-\w+)*)/y;
+    const cls = /:::([\w-]+)/y;
     cls.lastIndex = c.i;
     const cm = cls.exec(c.s);
     if (!cm)
@@ -19882,964 +20941,6 @@ function selectFrontEnd(src) {
   };
 }
 
-// src/render/shapes.ts
-var SLANT = 12;
-var EPS19 = 0.000001;
-function hexagonPoints(b) {
-  const cy = b.y + b.h / 2;
-  return [
-    { x: b.x + SLANT, y: b.y },
-    { x: b.x + b.w - SLANT, y: b.y },
-    { x: b.x + b.w, y: cy },
-    { x: b.x + b.w - SLANT, y: b.y + b.h },
-    { x: b.x + SLANT, y: b.y + b.h },
-    { x: b.x, y: cy }
-  ];
-}
-function diamondPoints(o) {
-  const cx = o.x + o.w / 2;
-  const cy = o.y + o.h / 2;
-  return [
-    { x: cx, y: o.y },
-    { x: o.x + o.w, y: cy },
-    { x: cx, y: o.y + o.h },
-    { x: o.x, y: cy }
-  ];
-}
-var ARROW2 = 8;
-function parallelogramPoints(b) {
-  return [
-    { x: b.x + SLANT, y: b.y },
-    { x: b.x + b.w, y: b.y },
-    { x: b.x + b.w - SLANT, y: b.y + b.h },
-    { x: b.x, y: b.y + b.h }
-  ];
-}
-function leanLeftPoints(b) {
-  return [
-    { x: b.x, y: b.y },
-    { x: b.x + b.w - SLANT, y: b.y },
-    { x: b.x + b.w, y: b.y + b.h },
-    { x: b.x + SLANT, y: b.y + b.h }
-  ];
-}
-function trapBottomPoints(b) {
-  return [
-    { x: b.x + SLANT, y: b.y },
-    { x: b.x + b.w - SLANT, y: b.y },
-    { x: b.x + b.w, y: b.y + b.h },
-    { x: b.x, y: b.y + b.h }
-  ];
-}
-function trapTopPoints(b) {
-  return [
-    { x: b.x, y: b.y },
-    { x: b.x + b.w, y: b.y },
-    { x: b.x + b.w - SLANT, y: b.y + b.h },
-    { x: b.x + SLANT, y: b.y + b.h }
-  ];
-}
-function asymPoints(b) {
-  return [
-    { x: b.x, y: b.y },
-    { x: b.x + b.w, y: b.y },
-    { x: b.x + b.w, y: b.y + b.h },
-    { x: b.x, y: b.y + b.h },
-    { x: b.x + b.h / 4, y: b.y + b.h / 2 }
-  ];
-}
-var RING_GAP = 4;
-function enterPolygon(poly, p, d) {
-  const mx = poly.reduce((s, q) => s + q.x, 0) / poly.length;
-  const my = poly.reduce((s, q) => s + q.y, 0) / poly.length;
-  let tin = -Infinity;
-  let tout = Infinity;
-  for (let i = 0;i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    let nx = b.y - a.y;
-    let ny = a.x - b.x;
-    if (nx * (mx - a.x) + ny * (my - a.y) > 0) {
-      nx = -nx;
-      ny = -ny;
-    }
-    const side = nx * (p.x - a.x) + ny * (p.y - a.y);
-    const along = nx * d.x + ny * d.y;
-    if (Math.abs(along) < EPS19) {
-      if (side > EPS19)
-        return;
-    } else if (along > 0) {
-      tout = Math.min(tout, -side / along);
-    } else {
-      tin = Math.max(tin, -side / along);
-    }
-  }
-  return tin <= tout && tout >= 0 ? tin : undefined;
-}
-function enterSimplePolygon(poly, p, d) {
-  let area = 0;
-  for (let i = 0;i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    area += a.x * b.y - b.x * a.y;
-  }
-  let best;
-  for (let i = 0;i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    const ex = b.x - a.x;
-    const ey = b.y - a.y;
-    const [nx, ny] = area > 0 ? [ey, -ex] : [-ey, ex];
-    if (nx * d.x + ny * d.y >= -EPS19)
-      continue;
-    const denom = d.x * ey - d.y * ex;
-    if (Math.abs(denom) < EPS19)
-      continue;
-    const t = ((a.x - p.x) * ey - (a.y - p.y) * ex) / denom;
-    const u = ((a.x - p.x) * d.y - (a.y - p.y) * d.x) / denom;
-    if (u < -EPS19 || u > 1 + EPS19 || t < -EPS19)
-      continue;
-    if (best === undefined || t < best)
-      best = t;
-  }
-  return best;
-}
-function enterEllipse(cx, cy, rx, ry, p, d) {
-  const px = (p.x - cx) / rx;
-  const py = (p.y - cy) / ry;
-  const dx = d.x / rx;
-  const dy = d.y / ry;
-  const a = dx * dx + dy * dy;
-  const b = 2 * (px * dx + py * dy);
-  const c = px * px + py * py - 1;
-  const disc = b * b - 4 * a * c;
-  if (a < EPS19 || disc < 0)
-    return;
-  const root = Math.sqrt(disc);
-  const t1 = (-b - root) / (2 * a);
-  const t2 = (-b + root) / (2 * a);
-  return t2 < 0 ? undefined : t1;
-}
-function earliest(ts) {
-  const found = ts.filter((t) => t !== undefined);
-  return found.length === 0 ? undefined : Math.min(...found);
-}
-function entry(b, p, d) {
-  const cx = b.x + b.w / 2;
-  const cy = b.y + b.h / 2;
-  switch (b.shape) {
-    case "circle":
-    case "dbl-circle":
-    case "ellipse":
-    case "start-dot":
-    case "end-dot":
-      return enterEllipse(cx, cy, b.w / 2, b.h / 2, p, d);
-    case "hexagon":
-      return enterPolygon(hexagonPoints(b), p, d);
-    case "parallelogram":
-      return enterPolygon(parallelogramPoints(b), p, d);
-    case "lean-l":
-      return enterPolygon(leanLeftPoints(b), p, d);
-    case "trap-b":
-      return enterPolygon(trapBottomPoints(b), p, d);
-    case "trap-t":
-      return enterPolygon(trapTopPoints(b), p, d);
-    case "asym":
-      return enterSimplePolygon(asymPoints(b), p, d);
-    case "stadium": {
-      const r = b.h / 2;
-      const middle = [
-        { x: b.x + r, y: b.y },
-        { x: b.x + b.w - r, y: b.y },
-        { x: b.x + b.w - r, y: b.y + b.h },
-        { x: b.x + r, y: b.y + b.h }
-      ];
-      return earliest([
-        enterPolygon(middle, p, d),
-        enterEllipse(b.x + r, cy, r, r, p, d),
-        enterEllipse(b.x + b.w - r, cy, r, r, p, d)
-      ]);
-    }
-    default:
-      return;
-  }
-}
-function trimToOutline(node, end, next) {
-  const len = Math.hypot(next.x - end.x, next.y - end.y);
-  if (len < EPS19)
-    return end;
-  const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
-  if (node.shape === "diamond" && node.outline)
-    return fitToDiamond(node.outline, end, next, len, d);
-  const t = entry(node, end, d);
-  if (t === undefined || t < EPS19 || t > len / 2)
-    return end;
-  return { x: end.x + d.x * t, y: end.y + d.y * t };
-}
-function fitToDiamond(outline, end, next, len, d) {
-  const t = enterPolygon(diamondPoints(outline), end, d);
-  if (t === undefined || len + t < ARROW2 - EPS19)
-    return end;
-  return { x: end.x + d.x * t, y: end.y + d.y * t };
-}
-var tidy12 = (v) => String(Math.round(v * 100) / 100 || 0);
-var MOST_PULLED_IN = 8;
-function roundCorners(points, radius) {
-  const n = points.length;
-  return points.map((c, i) => {
-    const p = points[(i + n - 1) % n];
-    const q = points[(i + 1) % n];
-    const lenIn = Math.hypot(c.x - p.x, c.y - p.y);
-    const lenOut = Math.hypot(q.x - c.x, q.y - c.y);
-    const u = { x: (p.x - c.x) / lenIn, y: (p.y - c.y) / lenIn };
-    const v = { x: (q.x - c.x) / lenOut, y: (q.y - c.y) / lenOut };
-    const half = Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))) / 2;
-    const pull = 1 / Math.sin(half) - 1;
-    const wanted = pull <= 0 ? radius : Math.min(radius, MOST_PULLED_IN / pull);
-    const reach = Math.min(wanted / Math.tan(half), Math.min(lenIn, lenOut) / 3);
-    const r = reach * Math.tan(half);
-    const cross = -u.x * v.y + u.y * v.x;
-    const bx = u.x + v.x;
-    const by = u.y + v.y;
-    const bl = Math.hypot(bx, by) || 1;
-    return {
-      from: { x: c.x + u.x * reach, y: c.y + u.y * reach },
-      to: { x: c.x + v.x * reach, y: c.y + v.y * reach },
-      r,
-      sweep: cross > 0 ? 1 : 0,
-      retreat: r * pull,
-      inward: { x: bx / bl, y: by / bl }
-    };
-  });
-}
-function roundedPolygonPath(points, radius) {
-  if (points.length < 3)
-    return "";
-  const corners = roundCorners(points, radius);
-  const at = (q) => `${tidy12(q.x)} ${tidy12(q.y)}`;
-  const arc = (k) => `A${tidy12(k.r)} ${tidy12(k.r)} 0 0 ${k.sweep} ${at(k.to)}`;
-  const first = corners[0];
-  return `M${at(first.to)}${corners.slice(1).map((k) => ` L${at(k.from)} ${arc(k)}`).join("")} L${at(first.from)} ${arc(first)}Z`;
-}
-function reachRoundedCorner(points, radius, end, next) {
-  const corners = roundCorners(points, radius);
-  const i = points.findIndex((c) => Math.hypot(c.x - end.x, c.y - end.y) < 1);
-  const corner = corners[i];
-  if (!corner || corner.retreat <= 0)
-    return end;
-  const len = Math.hypot(end.x - next.x, end.y - next.y);
-  if (len < EPS19)
-    return end;
-  const d = { x: (end.x - next.x) / len, y: (end.y - next.y) / len };
-  const along = d.x * corner.inward.x + d.y * corner.inward.y;
-  if (along < EPS19)
-    return end;
-  const t = corner.retreat / along;
-  return { x: end.x + d.x * t, y: end.y + d.y * t };
-}
-
-// src/render/scene-theme.ts
-var SCENE_THEME = {
-  metrics: {
-    "box-w": "1.5",
-    "start-w": "1.5",
-    "decision-w": "1.5",
-    "active-w": "1.5",
-    "note-w": "1",
-    "rule-w": "1",
-    "edge-w": "1.5",
-    "edge-thick-w": "3",
-    dash: "5 4",
-    "dash-msg": "5 4",
-    "lifeline-w": "1",
-    "guide-w": "1",
-    "chip-w": "1",
-    "zone-w": "1",
-    "zone-plain-w": "1",
-    "zone-dash-w": "1.5",
-    "frame-w": "1",
-    "grid-w": "1",
-    "grid-dash": "none",
-    "data-w": "1.5",
-    "dot-w": "1.5",
-    "value-weight": "500",
-    "tint-stroke-w": "0",
-    overlap: "0.24",
-    "overlap-w": "0"
-  },
-  boxRadius: 10,
-  roundRadius: 18,
-  zoneRadius: 18,
-  bend: 8,
-  barWidth: 40,
-  barTop: 14,
-  dotRadius: 3.5,
-  neutralDotRadius: 4,
-  portRadius: 4,
-  arrow: { length: 9, width: 9, stroke: 1.5 }
-};
-
-// src/front/title.ts
-var TITLE_ROW = 40;
-var TITLE_CENTRE = 33;
-var TITLE_FONT = 15;
-var TITLE_MARGIN = 24;
-function titleWidth(text) {
-  return pixelRuler().textWidth(text, "title") * TITLE_FONT / 13;
-}
-function widthWithTitle(width, left, text) {
-  return Math.max(width, Math.ceil(left + titleWidth(text) + TITLE_MARGIN));
-}
-function titledLines(lines, title, maxWidth) {
-  if (title === undefined || title === "")
-    return lines;
-  return [maxWidth === undefined ? title : clip(title, maxWidth), "", ...lines];
-}
-function titledSpans(rows, title, maxWidth) {
-  if (title === undefined || title === "")
-    return rows;
-  return [[{ text: maxWidth === undefined ? title : clip(title, maxWidth), tone: "bold" }], [], ...rows];
-}
-
-// src/render/theme.ts
-var THEME = {
-  boxRadius: 10,
-  boxBorder: 1.5,
-  lineWidth: 1.5,
-  dash: "5 4",
-  bend: 8,
-  arrow: { length: 9, width: 9 }
-};
-var { lineWidth } = THEME;
-function flowRules(font) {
-  const w = lineWidth;
-  return [
-    `.ursula{background:$bg;font-family:${font};font-size:12px}`,
-    ".ursula-lane{fill:$surface;stroke:$hair;stroke-width:1}",
-    ".ursula-lane--tint{fill:$lane}",
-    ".ursula-lane-label{fill:$fg;font-size:13px;font-weight:600}",
-    `.ursula-node-box{fill:$surface;stroke:$border;stroke-width:${THEME.boxBorder}}`,
-    ".ursula-node--on-lane .ursula-node-box{fill:$surface}",
-    '[data-role="start"] .ursula-node-box{fill:$start-fill}',
-    '[data-role="decision"] .ursula-node-box{fill:$surface}',
-    ".ursula-node-title{fill:$fg;font-size:13px;font-weight:600}",
-    ".ursula-node-line{fill:$muted;font-size:12px;font-weight:400}",
-    '[data-role="start"] .ursula-node-title{fill:$on-accent}',
-    '[data-role="start"] .ursula-node-line{fill:$on-accent;fill-opacity:.8}',
-    '[data-role="decision"] .ursula-node-title{fill:$fg}',
-    '[data-role="decision"] .ursula-node-line{fill:$fg;fill-opacity:.8}',
-    `.ursula-edge{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round;stroke-linejoin:round}`,
-    `.ursula-edge--dotted{stroke-dasharray:${THEME.dash}}`,
-    ".ursula-arrow{fill:$line}",
-    ".ursula-arrow--accent{fill:$line}",
-    ".ursula-edge-label-bg{fill:$chip-fill}",
-    ".ursula-edge-label{fill:$muted;font-size:12px;font-weight:500}",
-    `.ursula-port{fill:$surface;stroke:$line;stroke-width:${w}}`,
-    ".ursula-legend-rule{stroke:$hair;stroke-width:1}",
-    ".ursula-legend-text{fill:$muted;font-size:12px;font-weight:400}"
-  ];
-}
-function recordRules() {
-  const w = lineWidth;
-  const stroke = (colour) => `fill:none;stroke:${colour};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round`;
-  const noteLine = "stroke:$border;stroke-width:1;stroke-linejoin:round";
-  return [
-    ".ursula-rule{fill:none;stroke:$hair;stroke-width:1}",
-    ".ursula-node--on-lane .ursula-rule{stroke:$hair;stroke-width:1}",
-    ".ursula-head-band{fill:$lane}",
-    ".ursula-cell-title{fill:$fg;font-size:13px;font-weight:600}",
-    ".ursula-cell-tag{fill:$muted;font-size:11px;font-weight:500}",
-    ".ursula-cell-body{fill:$fg;font-size:12px;font-weight:400}",
-    ".ursula-start-dot{fill:$accent}",
-    `.ursula-end-ring{fill:$surface;stroke:$fg;stroke-width:${w}}`,
-    ".ursula-end-core{fill:$fg}",
-    ".ursula-bar{fill:$fg}",
-    `.ursula-note{fill:$lane;${noteLine}}`,
-    `.ursula-note-fold{fill:none;${noteLine}}`,
-    `.ursula-actor{${stroke("$line")}}`,
-    ".ursula-actor-name{fill:$muted;font-size:12px;font-weight:500}",
-    `.ursula-end-stroke{${stroke("$line")}}`,
-    ".ursula-end-stroke--accent{stroke:$accent}",
-    `.ursula-end-hollow{fill:$surface;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
-    ".ursula-end-hollow--accent{stroke:$accent}",
-    `.ursula-end-solid{fill:$line;stroke:$line;stroke-width:${w};stroke-linejoin:round}`,
-    ".ursula-end-solid--accent{fill:$accent;stroke:$accent}",
-    ".ursula-end-label{fill:$fg;font-size:11px;font-weight:500}"
-  ];
-}
-var ARROW_TRIM = THEME.arrow.length - 1;
-function flowMarker(id, cls) {
-  const { length, width } = THEME.arrow;
-  const cy = width / 2;
-  return `<marker id="${id}" viewBox="0 0 ${length} ${width}" refX="1" refY="${cy}" markerWidth="${length}" markerHeight="${width}" markerUnits="userSpaceOnUse" orient="auto">` + `<path class="${cls}" d="M0 0L${length} ${cy}L0 ${width}z"/></marker>`;
-}
-
-// src/render/head-band.ts
-var HEAD_BAND = 28;
-function headBand(x, y, w, data) {
-  const inset = Number.parseFloat(SCENE_THEME.metrics["box-w"] ?? "0") / 2;
-  const r = Math.max(0, SCENE_THEME.boxRadius - inset);
-  const left = x + inset;
-  const right = x + w - inset;
-  const top = y + inset;
-  const bottom = y + HEAD_BAND;
-  const d = `M${left} ${bottom}V${top + r}A${r} ${r} 0 0 1 ${left + r} ${top}H${right - r}A${r} ${r} 0 0 1 ${right} ${top + r}V${bottom}Z`;
-  return { kind: "path", d, role: ["head-band"], ...data === undefined ? {} : { data } };
-}
-
-// src/render/svg.ts
-var TITLE_LINE = 18;
-var BODY_LINE = 16;
-var CORNER_RADIUS = 8;
-var DIAMOND_RADIUS = 12;
-var CHIP_HEIGHT2 = 24;
-var CHIP_PAD2 = 10;
-var DOT = 8;
-var CROSS3 = 8;
-var CAP = CYLINDER_CAP;
-var BAR = 8;
-var FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
-var FONT = FONT_STACK;
-function styleSheet(rules) {
-  const light = rules.map((r) => fillColors(r, 0)).join(`
-`);
-  const dark = rules.map((r) => fillColors(r, 1)).join(`
-`);
-  return `${light}
-@media (prefers-color-scheme: dark){
-${dark}
-}`;
-}
-function escapeXml(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-function num(v) {
-  const r = Math.round(v * 100) / 100;
-  return String(r === 0 ? 0 : r);
-}
-function pathData(points, radius = CORNER_RADIUS, endTrim = 0, hops = []) {
-  const first = points[0];
-  if (!first)
-    return "";
-  let d = `M${num(first.x)} ${num(first.y)}`;
-  let at = { x: first.x, y: first.y };
-  const line = (x, y) => {
-    if (Math.abs(y - at.y) < 0.5 && hops.length > 0) {
-      const dir = Math.sign(x - at.x);
-      const over = hops.filter((h) => Math.abs(h.y - y) < 0.5 && (h.x - at.x) * dir > HOP + 0.5 && (x - h.x) * dir > HOP + 0.5).sort((p, q) => (p.x - q.x) * dir);
-      for (const h of over) {
-        d += ` L${num(h.x - dir * HOP)} ${num(y)} A${HOP} ${HOP} 0 0 ${dir > 0 ? 1 : 0} ${num(h.x + dir * HOP)} ${num(y)}`;
-      }
-    }
-    d += ` L${num(x)} ${num(y)}`;
-    at = { x, y };
-  };
-  let consumed = 0;
-  for (let i = 1;i < points.length; i++) {
-    const prev = points[i - 1];
-    const cur = points[i];
-    const next = points[i + 1];
-    if (!prev || !cur)
-      continue;
-    const lenIn = Math.hypot(cur.x - prev.x, cur.y - prev.y);
-    if (!next) {
-      const cut = lenIn === 0 ? 0 : Math.min(endTrim, Math.max(0, lenIn - consumed - 1));
-      line(cur.x - (cur.x - prev.x) / (lenIn || 1) * cut, cur.y - (cur.y - prev.y) / (lenIn || 1) * cut);
-      continue;
-    }
-    const lenOut = Math.hypot(next.x - cur.x, next.y - cur.y);
-    const room = i + 1 === points.length - 1 ? Math.max(0, lenOut - endTrim) : lenOut;
-    const r = Math.min(radius, lenIn / 2, lenOut / 2, room);
-    if (r <= 0) {
-      line(cur.x, cur.y);
-      consumed = 0;
-      continue;
-    }
-    consumed = r;
-    const inX = (cur.x - prev.x) / lenIn;
-    const inY = (cur.y - prev.y) / lenIn;
-    const outX = (next.x - cur.x) / lenOut;
-    const outY = (next.y - cur.y) / lenOut;
-    const sweep = inX * outY - inY * outX > 0 ? 1 : 0;
-    line(cur.x - inX * r, cur.y - inY * r);
-    d += ` A${num(r)} ${num(r)} 0 0 ${sweep} ${num(cur.x + outX * r)} ${num(cur.y + outY * r)}`;
-    at = { x: cur.x + outX * r, y: cur.y + outY * r };
-  }
-  return d;
-}
-var HOP = 6;
-function hopsOf(edges) {
-  const runs = edges.map((e) => e.invisible ? [] : e.points.slice(1).map((q, i) => [e.points[i], q]));
-  return runs.map((mine, i) => mine.flatMap(([a, b]) => {
-    if (Math.abs(a.y - b.y) >= 0.5)
-      return [];
-    const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
-    return runs.flatMap((other, j) => j === i ? [] : edges[j]?.trunk !== undefined && edges[j]?.trunk?.id === edges[i]?.trunk?.id ? [] : other.flatMap(([p, q]) => {
-      if (Math.abs(p.x - q.x) >= 0.5)
-        return [];
-      const [y0, y1] = [Math.min(p.y, q.y), Math.max(p.y, q.y)];
-      return p.x > x0 + 0.5 && p.x < x1 - 0.5 && a.y > y0 + 0.5 && a.y < y1 - 0.5 ? [{ x: p.x, y: a.y }] : [];
-    }));
-  }));
-}
-var isRecordNode = (n) => hasCompartments(n) || RECORD_SHAPES.has(n.shape);
-var RECORD_SHAPES = new Set(["start-dot", "end-dot", "bar", "note", "ellipse", "actor"]);
-function rolesOf(layout) {
-  const led = new Set(layout.edges.filter((e) => e.from !== e.to && !e.invisible).map((e) => e.to));
-  const roles = new Map;
-  for (const n of layout.nodes)
-    if (n.shape === "diamond")
-      roles.set(n.id, "decision");
-  const plain = layout.nodes.filter((n) => !isRecordNode(n));
-  const starts = plain.filter((n) => !led.has(n.id));
-  const first = layout.nodes.some(isRecordNode) ? [] : plain.slice(0, 1);
-  for (const n of starts.length > 0 ? starts : first)
-    if (!roles.has(n.id))
-      roles.set(n.id, "start");
-  return roles;
-}
-function laneSvg(lane, tint, centred) {
-  if (lane.label === "")
-    return "";
-  const box = lane.labelBox;
-  return `<g class="ursula-lane-group" data-lane="${escapeXml(lane.id)}">` + `<rect class="ursula-lane${tint ? " ursula-lane--tint" : ""}" x="${num(lane.x)}" y="${num(lane.y)}" width="${num(lane.w)}" height="${num(lane.h)}" rx="${num(THEME.boxRadius + 4)}"/>` + `<text class="ursula-lane-label" x="${num(centred ? box.x + box.w / 2 : box.x)}" y="${num(box.y + box.h / 2)}"${centred ? ' text-anchor="middle"' : ""} dominant-baseline="central">${escapeXml(lane.label)}</text>` + "</g>";
-}
-function nameText(cluster) {
-  const name = cluster.name;
-  const x = name?.x ?? cluster.x + CLUSTER_NAME_INSET;
-  const top = name?.y ?? cluster.y + 12;
-  const lines = name?.lines ?? [cluster.label];
-  const step = name?.subtitle === true ? 18 : 16;
-  return lines.map((l, i) => `<text class="ursula-zone-name${i > 0 && name?.subtitle === true ? " ursula-zone-sub" : ""}" x="${num(x)}" y="${num(top + 12 + step * i)}">${escapeXml(l)}</text>`).join("");
-}
-function tintOf(cluster) {
-  return cluster.depth <= 1 ? "tint-outer" : cluster.depth % 2 === 0 ? "tint-mid" : "tint-inner";
-}
-function tintUnder(edge, clusters) {
-  const l = edge.label;
-  if (l === undefined)
-    return;
-  const [x, y] = [l.x + l.w / 2, l.y + l.h / 2];
-  const holding = clusters.filter((c) => c.style === "dashed" && x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h);
-  if (holding.length === 0)
-    return;
-  return tintOf(holding.reduce((a, b) => b.depth > a.depth ? b : a));
-}
-function clusterSvg(cluster) {
-  const look = cluster.style === "dashed" ? ` ursula-zone--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? " ursula-zone--plain" : "";
-  return `<g class="ursula-cluster" data-cluster="${escapeXml(cluster.id)}">` + `<rect class="ursula-zone${look}" x="${num(cluster.x)}" y="${num(cluster.y)}" width="${num(cluster.w)}" height="${num(cluster.h)}" rx="${num(THEME.boxRadius + 4)}"/>` + (cluster.name?.knockout ? "" : nameText(cluster)) + "</g>";
-}
-function knockoutSvg(cluster) {
-  const name = cluster.name;
-  if (!name?.knockout)
-    return "";
-  const look = cluster.style === "dashed" ? ` ursula-zone-knock--dashed ursula-zone--${tintOf(cluster)}` : cluster.depth % 2 === 0 ? " ursula-zone-knock--plain" : "";
-  return `<g class="ursula-cluster-name" data-cluster="${escapeXml(cluster.id)}"><rect class="ursula-zone-knock${look}" x="${num(name.x - 4)}" y="${num(name.y - 2)}" width="${num(name.w + 8)}" height="${num(name.h + 4)}"/>${nameText(cluster)}</g>`;
-}
-function faceRules(layout) {
-  const faced = layout.nodes.some((n) => n.compartments?.some((c) => c.face === true));
-  return [
-    ...faced ? [".ursula-zone-name{fill:$fg;font-size:13px}", ".ursula-zone-sub{fill:$muted;font-size:12px;font-weight:500;opacity:1}", ".ursula-cell-body{fill:$muted}"] : [],
-    ...layout.edges.some((e) => e.label?.text.includes(" ")) ? [".ursula-edge-label-tech{font-weight:400;opacity:.7}"] : []
-  ];
-}
-function thickRules(layout) {
-  return layout.edges.some((e) => e.style === "thick" && !e.invisible) ? [`.ursula-edge--thick{stroke-width:${THEME.lineWidth * 2}}`] : [];
-}
-var TINTS = [
-  ["outer", "$tint-outer", "$tint-chip", ""],
-  ["mid", "$surface", "$chip-fill", ";stroke:$line;stroke-width:1;stroke-dasharray:none"],
-  ["inner", "$tint-inner", "$tint-chip", ";stroke:$hair;stroke-width:1;stroke-dasharray:none"]
-];
-function clusterRules(clusters) {
-  if (clusters.length === 0)
-    return [];
-  const m = SCENE_THEME.metrics;
-  return [
-    ".ursula-zone{fill:$lane;stroke:$hair;stroke-width:1}",
-    ".ursula-zone--plain{fill:$surface}",
-    ...clusters.some((c) => c.style === "dashed") ? [`.ursula-zone--dashed{fill:none;stroke:$faint;stroke-width:${m["zone-dash-w"] ?? "1"};stroke-dasharray:${m["dash"] ?? "none"};stroke-linecap:round}`] : [],
-    ...clusters.some((c) => c.style === "dashed") ? TINTS.flatMap(([t, fill, chip, stroke]) => [`.ursula-zone--dashed.ursula-zone--tint-${t}{fill:${fill}${stroke}}`, `.ursula-zone-knock--dashed.ursula-zone--tint-${t}{fill:${fill}}`, `.ursula-edge-label--on-tint-${t} .ursula-edge-label-bg{fill:${chip}}`]) : [],
-    ".ursula-zone-name{fill:$muted;font-size:12px;font-weight:600}",
-    ...clusters.some((c) => c.name?.subtitle === true) ? [".ursula-zone-sub{font-weight:400;opacity:.75}"] : [],
-    ...clusters.some((c) => c.name?.knockout) ? [".ursula-zone-knock{fill:$lane}", ".ursula-zone-knock--plain{fill:$surface}", ".ursula-zone-knock--dashed{fill:$surface}"] : []
-  ];
-}
-function trimmedPoints(edge, nodes) {
-  const pts = edge.points;
-  if (pts.length < 2)
-    return pts;
-  const from = nodes.get(edge.from);
-  const to = nodes.get(edge.to);
-  const out = [...pts];
-  if (from)
-    out[0] = trimToOutline(from, pts[0], pts[1]);
-  if (to)
-    out[pts.length - 1] = trimToOutline(to, pts[pts.length - 1], pts[pts.length - 2]);
-  if (from?.outline)
-    out[0] = reachRoundedCorner(diamondPoints(from.outline), DIAMOND_RADIUS, out[0], out[1]);
-  if (to?.outline)
-    out[pts.length - 1] = reachRoundedCorner(diamondPoints(to.outline), DIAMOND_RADIUS, out[pts.length - 1], out[pts.length - 2]);
-  return out;
-}
-var accented = (edge, paint) => edge.style === "thick" || paint.roles.get(edge.from) === "decision";
-var MARK = 12;
-function endMarkerId(end, accent, atStart) {
-  switch (end) {
-    case "none":
-      return;
-    case "arrow":
-      return `${accent ? "ursula-arrow-accent" : "ursula-arrow"}${atStart ? "-start" : ""}`;
-    case "circle":
-      return accent ? "ursula-dot-accent" : "ursula-dot";
-    case "cross":
-      return accent ? "ursula-cross-accent" : "ursula-cross";
-    default:
-      return `ursula-end-${end}${accent ? "-accent" : ""}`;
-  }
-}
-function endTrim(end) {
-  return end === "arrow" ? ARROW_TRIM : end === "none" ? 0 : RELATION_MARKS.has(end) ? MARK : DOT / 2;
-}
-function markBody(end, accent) {
-  const cls = (base) => accent ? `ursula-end-${base} ursula-end-${base}--accent` : `ursula-end-${base}`;
-  const stroke = (d) => `<path class="${cls("stroke")}" d="${d}"/>`;
-  const foot = "M12 -5L4 0L12 5";
-  const ring = (cx) => `<circle class="${cls("hollow")}" cx="${cx}" cy="0" r="2.5"/>`;
-  switch (end) {
-    case "triangle-open":
-      return `<polygon class="${cls("hollow")}" points="0,-6 12,0 0,6"/>`;
-    case "diamond-filled":
-      return `<polygon class="${cls("solid")}" points="0,0 6,-5 12,0 6,5"/>`;
-    case "diamond-open":
-      return `<polygon class="${cls("hollow")}" points="0,0 6,-5 12,0 6,5"/>`;
-    case "arrow-open":
-      return stroke("M0 0H12M4 -5L12 0L4 5");
-    case "one":
-      return stroke("M0 0H12M9 -5V5M4 -5V5");
-    case "zero-one":
-      return stroke("M0 0H12M9 -5V5") + ring(2.5);
-    case "many":
-      return stroke(`M0 0H12${foot}`);
-    case "one-many":
-      return stroke(`M0 0H12${foot}M1 -5V5`);
-    case "zero-many":
-      return stroke(`M0 0H12${foot}`) + ring(1.5);
-    case "circle-plus":
-      return `<circle class="${cls("hollow")}" cx="6" cy="0" r="6"/>` + stroke("M6 -6V6M0 0H12");
-    case "lollipop":
-      return `<circle class="${cls("hollow")}" cx="6" cy="0" r="6"/>`;
-    default:
-      return "";
-  }
-}
-function trimStart(pts, amount) {
-  const [a, b] = pts;
-  if (amount <= 0 || !a || !b)
-    return pts;
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  if (len === 0)
-    return pts;
-  const cut = Math.min(amount, Math.max(0, len - 1));
-  return [{ x: a.x + (b.x - a.x) / len * cut, y: a.y + (b.y - a.y) / len * cut }, ...pts.slice(1)];
-}
-function edgeSvg(edge, nodes, paint, hops = []) {
-  if (edge.invisible)
-    return "";
-  const branch = paint.roles.get(edge.from) === "decision" && edge.style !== "thick";
-  const accent = accented(edge, paint);
-  const end = edge.end ?? "arrow";
-  const start = edge.startEnd ?? "none";
-  const endId = endMarkerId(end, accent, false);
-  const startId = endMarkerId(start, accent, true);
-  const points = trimStart(trimmedPoints(edge, nodes), endTrim(start));
-  const junction = edge.trunk?.dot;
-  return `<path class="ursula-edge ursula-edge--${edge.style}${branch ? " ursula-edge--branch" : ""}" data-style="${edge.style}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" ` + `d="${pathData(points, edge.trunk?.square ? 0 : THEME.bend, endTrim(end), hops)}"${startId === undefined ? "" : ` marker-start="url(#${startId})"`}${endId === undefined ? "" : ` marker-end="url(#${endId})"`}/>` + (junction === undefined ? "" : `<circle class="ursula-end-dot" cx="${num(junction.x)}" cy="${num(junction.y)}" r="${DOT / 2}"/>`);
-}
-var PORT_RING_R = 4;
-function portRings(layout, nodes) {
-  const seen = [];
-  const marksOf = (edge) => [(edge.startEnd ?? "none") !== "none", (edge.end ?? "arrow") !== "none"];
-  const leads = new Map(layout.edges.filter((e) => e.trunk?.lead === true).map((e) => [e.trunk?.id, marksOf(e)]));
-  for (const edge of layout.edges) {
-    const marked = (edge.trunk === undefined ? undefined : leads.get(edge.trunk.id)) ?? marksOf(edge);
-    if (edge.invisible || marked[0] === marked[1])
-      continue;
-    const points = trimmedPoints(edge, nodes);
-    const at = marked[1] ? points[0] : points[points.length - 1];
-    if (at === undefined || seen.some((p) => Math.abs(p.x - at.x) <= 0.5 && Math.abs(p.y - at.y) <= 0.5))
-      continue;
-    seen.push(at);
-  }
-  return seen.map((p) => `<circle class="ursula-port" cx="${num(p.x)}" cy="${num(p.y)}" r="${PORT_RING_R}"/>`).join("");
-}
-function extraEnds(layout, paint) {
-  const wanted = new Map;
-  const reversed = (m) => m.replace('orient="auto"', 'orient="auto-start-reverse"');
-  let rules = false;
-  const want = (end, accent, atStart) => {
-    const id = endMarkerId(end, accent, atStart);
-    if (id === undefined || wanted.has(id))
-      return;
-    const mod = accent ? "--accent" : "";
-    if (end === "arrow") {
-      if (atStart)
-        wanted.set(id, reversed(flowMarker(id, accent ? "ursula-arrow ursula-arrow--accent" : "ursula-arrow")));
-      return;
-    }
-    if (RELATION_MARKS.has(end)) {
-      wanted.set(id, `<marker id="${id}" viewBox="0 -7 14 14" refX="0" refY="0" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${markBody(end, accent)}</marker>`);
-      return;
-    }
-    rules = true;
-    const body = end === "circle" ? `<circle class="ursula-end-dot${accent ? ` ursula-end-dot${mod}` : ""}" cx="${DOT / 2}" cy="${DOT / 2}" r="${DOT / 2}"/>` : `<path class="ursula-end-cross${accent ? ` ursula-end-cross${mod}` : ""}" d="${crossPath()}"/>`;
-    wanted.set(id, `<marker id="${id}" viewBox="0 0 ${DOT} ${DOT}" refX="${DOT}" refY="${DOT / 2}" markerWidth="${DOT}" markerHeight="${DOT}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${body}</marker>`);
-  };
-  for (const edge of layout.edges) {
-    if (edge.invisible)
-      continue;
-    if (edge.trunk?.dot !== undefined)
-      rules = true;
-    const accent = accented(edge, paint);
-    want(edge.end ?? "arrow", accent, false);
-    want(edge.startEnd ?? "none", accent, true);
-  }
-  const w = THEME.lineWidth;
-  return {
-    markers: [...wanted.values()],
-    rules: rules ? [
-      ".ursula-end-dot{fill:$line}",
-      ".ursula-end-dot--accent{fill:$accent}",
-      `.ursula-end-cross{fill:none;stroke:$line;stroke-width:${w};stroke-linecap:round}`,
-      ".ursula-end-cross--accent{stroke:$accent}"
-    ] : []
-  };
-}
-function crossPath() {
-  const mid = DOT / 2;
-  const reach = CROSS3 / 2 / Math.SQRT2;
-  const [lo, hi] = [num(mid - reach), num(mid + reach)];
-  return `M${lo} ${lo}L${hi} ${hi}M${hi} ${lo}L${lo} ${hi}`;
-}
-function labelText(line) {
-  const at = line.indexOf(" ");
-  if (at < 0)
-    return escapeXml(line);
-  return `${escapeXml(line.slice(0, at))}<tspan class="ursula-edge-label-tech" role="note">${escapeXml(line.slice(at))}</tspan>`;
-}
-function labelSvg(edge, paint, on) {
-  const l = edge.label;
-  if (!l || edge.invisible)
-    return "";
-  const lines = l.lines ?? [l.text];
-  const ruler = pixelRuler();
-  const w = Math.max(0, ...lines.map((line) => ruler.textWidth(line, "edge"))) + 2 * CHIP_PAD2;
-  const h = CHIP_HEIGHT2 + (lines.length - 1) * BODY_LINE;
-  const cx = l.x + l.w / 2;
-  const cy = l.y + l.h / 2;
-  const chip = `<rect class="ursula-edge-label-bg" x="${num(cx - w / 2)}" y="${num(cy - h / 2)}" width="${num(w)}" height="${num(h)}" rx="${num(CHIP_HEIGHT2 / 2)}"/>`;
-  const emphasis = edge.style === "thick" ? " ursula-edge-label--thick" : paint.roles.get(edge.from) === "decision" ? " ursula-edge-label--branch" : "";
-  return `<g class="ursula-edge-label-group${on === undefined ? "" : ` ursula-edge-label--on-${on}`}" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}">` + chip + lines.map((line, i, all) => `<text class="ursula-edge-label${emphasis}" x="${num(cx)}" y="${num(cy + (i - (all.length - 1) / 2) * BODY_LINE)}" text-anchor="middle" dominant-baseline="central">${labelText(line)}</text>`).join("") + "</g>";
-}
-function endLabelSvg(edge) {
-  const one = (label, which) => label === undefined ? "" : `<text class="ursula-end-label" data-from="${escapeXml(edge.from)}" data-to="${escapeXml(edge.to)}" data-end="${which}" x="${num(label.x + label.w / 2)}" y="${num(label.y + label.h / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(label.text)}</text>`;
-  return edge.invisible ? "" : one(edge.startLabel, "start") + one(edge.endLabel, "end");
-}
-function usesRecords(layout) {
-  return layout.nodes.some(isRecordNode) || layout.edges.some((e) => e.end !== undefined && RELATION_MARKS.has(e.end) || e.startEnd !== undefined && RELATION_MARKS.has(e.startEnd) || e.startLabel !== undefined || e.endLabel !== undefined);
-}
-var points = (pts) => pts.map((q) => `${num(q.x)},${num(q.y)}`).join(" ");
-function boxSvg(node, rx) {
-  return `<rect class="ursula-node-box" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(node.h)}" rx="${num(rx)}"/>`;
-}
-function shapeSvg(node) {
-  const { x, y, w, h } = node;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const radius = THEME.boxRadius;
-  switch (node.shape) {
-    case "round":
-      return boxSvg(node, Math.min(radius + 8, h / 2));
-    case "stadium":
-      return boxSvg(node, h / 2);
-    case "circle":
-    case "ellipse":
-      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>`;
-    case "start-dot":
-      return `<circle class="ursula-start-dot" cx="${num(cx)}" cy="${num(cy)}" r="${num(Math.min(w, h) / 2)}"/>`;
-    case "end-dot": {
-      const outer = Math.min(w, h) / 2;
-      return `<circle class="ursula-end-ring" cx="${num(cx)}" cy="${num(cy)}" r="${num(outer - THEME.lineWidth / 2)}"/>` + `<circle class="ursula-end-core" cx="${num(cx)}" cy="${num(cy)}" r="${num(END_CORE / 2)}"/>`;
-    }
-    case "bar":
-      return `<rect class="ursula-bar" x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" rx="${num(Math.min(2, w / 2, h / 2))}"/>`;
-    case "note": {
-      const fold = Math.min(NOTE_FOLD, w / 2, h / 2);
-      return `<path class="ursula-note" d="M${num(x)} ${num(y)}H${num(x + w - fold)}L${num(x + w)} ${num(y + fold)}V${num(y + h)}H${num(x)}Z"/>` + `<path class="ursula-note-fold" d="M${num(x + w - fold)} ${num(y)}V${num(y + fold)}H${num(x + w)}"/>`;
-    }
-    case "actor": {
-      const top = y;
-      return `<circle class="ursula-actor" cx="${num(cx)}" cy="${num(top + 8)}" r="8"/>` + `<path class="ursula-actor" d="M${num(cx)} ${num(top + 16)}V${num(top + 32)}M${num(x)} ${num(top + 24)}H${num(x + w)}M${num(cx)} ${num(top + 32)}L${num(cx - 10)} ${num(y + h)}M${num(cx)} ${num(top + 32)}L${num(cx + 10)} ${num(y + h)}"/>`;
-    }
-    case "hexagon":
-      return `<polygon class="ursula-node-box" points="${points(hexagonPoints(node))}"/>`;
-    case "parallelogram":
-      return `<polygon class="ursula-node-box" points="${points(parallelogramPoints(node))}"/>`;
-    case "lean-l":
-      return `<polygon class="ursula-node-box" points="${points(leanLeftPoints(node))}"/>`;
-    case "trap-b":
-      return `<polygon class="ursula-node-box" points="${points(trapBottomPoints(node))}"/>`;
-    case "trap-t":
-      return `<polygon class="ursula-node-box" points="${points(trapTopPoints(node))}"/>`;
-    case "asym":
-      return `<polygon class="ursula-node-box" points="${points(asymPoints(node))}"/>`;
-    case "dbl-circle":
-      return `<ellipse class="ursula-node-box" cx="${num(cx)}" cy="${num(cy)}" rx="${num(w / 2)}" ry="${num(h / 2)}"/>` + `<ellipse class="ursula-node-box ursula-node-box--lined" cx="${num(cx)}" cy="${num(cy)}" rx="${num(Math.max(0, w / 2 - RING_GAP))}" ry="${num(Math.max(0, h / 2 - RING_GAP))}"/>`;
-    case "subroutine":
-      return boxSvg(node, BAR) + [x + BAR, x + w - BAR].map((bx) => `<line class="ursula-node-box ursula-node-box--lined" x1="${num(bx)}" y1="${num(y)}" x2="${num(bx)}" y2="${num(y + h)}"/>`).join("");
-    case "cylinder": {
-      const arc = `A${num(w / 2)} ${CAP} 0 0`;
-      const top = y + CAP;
-      const bottom = y + h - CAP;
-      return `<path class="ursula-node-box ursula-node-box--lined" d="M${num(x)} ${num(top)} ${arc} 1 ${num(x + w)} ${num(top)} ${arc} 1 ${num(x)} ${num(top)} ` + `M${num(x)} ${num(top)} V${num(bottom)} ${arc} 0 ${num(x + w)} ${num(bottom)} V${num(top)}"/>`;
-    }
-    case "diamond":
-      return node.outline ? `<path class="ursula-node-box" d="${roundedPolygonPath(diamondPoints(node.outline), DIAMOND_RADIUS)}"/>` : boxSvg(node, radius);
-    case "rect":
-      return boxSvg(node, radius);
-  }
-}
-var HEAD_BAND_GAP = 10;
-function headBandSvg(node, radius, height) {
-  const inset = THEME.boxBorder / 2;
-  const id = `ursula-band-${node.id.replace(/[^A-Za-z0-9_-]/g, "_")}-${num(node.x)}-${num(node.y)}-${num(node.w)}-${num(node.h)}`.replace(/\./g, "_");
-  return `<clipPath id="${id}"><rect x="${num(node.x + inset)}" y="${num(node.y + inset)}" width="${num(node.w - 2 * inset)}" height="${num(node.h - 2 * inset)}" rx="${num(Math.max(0, radius - inset))}"/></clipPath>` + `<rect class="ursula-head-band" x="${num(node.x)}" y="${num(node.y)}" width="${num(node.w)}" height="${num(height)}" clip-path="url(#${id})"/>`;
-}
-function compartmentsSvg(node) {
-  const cells = node.compartments ?? [];
-  const ruler = pixelRuler();
-  const heights = compartmentHeights(cells, ruler);
-  const cylinder = node.shape === "cylinder";
-  const caps = cylinder ? 2 * CAP : 0;
-  const spare = Math.max(0, node.h - caps - heights.reduce((a, b) => a + b, 0));
-  heights[heights.length - 1] = (heights[heights.length - 1] ?? 0) + spare;
-  const outline = cylinder || node.shape === "round" ? shapeSvg(node) : boxSvg(node, THEME.boxRadius);
-  const parts = [outline];
-  const bandRadius = node.shape === "round" ? Math.min(THEME.boxRadius + 8, node.h / 2) : THEME.boxRadius;
-  const banded = !cylinder;
-  const hasFace = cells.some((c) => c.face === true);
-  if (banded && !hasFace && cells.length > 1)
-    parts.push(headBandSvg(node, bandRadius, heights[0] ?? 0));
-  let top = node.y + caps;
-  cells.forEach((cell, i) => {
-    if (i > 0)
-      parts.push(`<path class="ursula-rule" d="M${num(node.x)} ${num(top)}H${num(node.x + node.w)}"/>`);
-    const centred = (cell.align ?? (i === 0 ? "center" : "left")) === "center" && cell.columns === undefined;
-    const rows = faceLineHeights(cell.lines.length);
-    const content = rows.reduce((a, b) => a + b, 0) + FACE_PILL_GAP;
-    const rowTop = (k) => rows.slice(0, k).reduce((a, b) => a + b, 0) + (k > 0 ? FACE_PILL_GAP : 0);
-    const faceTop = top + ((heights[i] ?? 0) - content) / 2;
-    const onBand = banded && cell.face === true;
-    const faceY = (k) => onBand ? k === 0 ? top + HEAD_BAND / 2 : top + HEAD_BAND + HEAD_BAND_GAP + rowTop(k) - (rows[0] ?? 0) - FACE_PILL_GAP + (rows[k] ?? 0) / 2 : faceTop + rowTop(k) + (rows[k] ?? 0) / 2;
-    const first = cell.face === true ? faceTop + (rows[0] ?? 0) / 2 : top + (i === 0 ? 10 : 8) + COMPARTMENT_LINE / 2;
-    const starts = cell.columns === undefined ? [] : columnStarts(cell, ruler);
-    cell.lines.forEach((line, k) => {
-      const emphasis = lineEmphasis(cell, k, i);
-      const y = num(cell.face === true ? faceY(k) : first + k * COMPARTMENT_LINE);
-      if (cell.face === true && k === 0 && banded)
-        parts.push(headBandSvg(node, bandRadius, top + HEAD_BAND - node.y));
-      const row = cell.columns?.[k];
-      if (row === undefined) {
-        if (line === "")
-          return;
-        const x = centred ? node.x + node.w / 2 : node.x + COMPARTMENT_INSET;
-        parts.push(`<text class="ursula-cell-${emphasis}" x="${num(x)}" y="${y}"${centred ? ' text-anchor="middle"' : ""} dominant-baseline="central">${escapeXml(line)}</text>`);
-        return;
-      }
-      row.forEach((text, c) => {
-        if (text === "")
-          return;
-        parts.push(`<text class="ursula-cell-${cell.columnEmphasis?.[c] ?? emphasis}" x="${num(node.x + COMPARTMENT_INSET + (starts[c] ?? 0))}" y="${y}" dominant-baseline="central">${escapeXml(text)}</text>`);
-      });
-    });
-    top += heights[i] ?? 0;
-  });
-  return parts.join("");
-}
-function nodeSvg(node, hook, paint) {
-  const extra = hook?.(node) ?? {};
-  const attrs = Object.entries(extra.attrs ?? {}).map(([k, v]) => ` ${k.replace(/[^A-Za-z0-9:_-]/g, "")}="${escapeXml(v)}"`).join("");
-  const role = paint.roles.get(node.id);
-  const className = ["ursula-node", role === undefined && paint.tinted.has(node.id) ? "ursula-node--on-lane" : "", extra.className ?? ""].filter((c) => c !== "").join(" ");
-  const block = TITLE_LINE + node.lines.length * BODY_LINE;
-  let y = node.y + (node.h - block) / 2 + (node.shape === "cylinder" ? CAP / 2 : 0);
-  const cx = node.x + node.w / 2;
-  const texts = [
-    `<text class="ursula-node-title" x="${num(cx)}" y="${num(y + TITLE_LINE / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>`
-  ];
-  y += TITLE_LINE;
-  for (const line of node.lines) {
-    texts.push(`<text class="ursula-node-line" x="${num(cx)}" y="${num(y + BODY_LINE / 2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(line)}</text>`);
-    y += BODY_LINE;
-  }
-  const bare = node.shape === "start-dot" || node.shape === "end-dot" || node.shape === "bar";
-  const body = hasCompartments(node) ? compartmentsSvg(node) : shapeSvg(node) + (node.shape === "actor" ? `<text class="ursula-actor-name" x="${num(cx)}" y="${num(node.y + ACTOR_H + ACTOR_NAME_GAP - 4)}" text-anchor="middle" dominant-baseline="central">${escapeXml(node.title)}</text>` : bare ? "" : texts.join(""));
-  return `<g class="${escapeXml(className)}" data-node="${escapeXml(node.id)}"${attrs}${role === undefined ? "" : ` data-role="${role}"`}>` + body + (extra.extra ?? "") + "</g>";
-}
-function markerId(style) {
-  return style === "thick" ? "ursula-arrow-accent" : "ursula-arrow";
-}
-function legendSvg(legend, margin) {
-  const parts = [
-    `<line class="ursula-legend-rule" x1="${num(margin)}" y1="${num(legend.y)}" x2="${num(legend.w - margin)}" y2="${num(legend.y)}"/>`
-  ];
-  for (const item of legend.items) {
-    const sample = pathData([{ x: item.x, y: item.y }, { x: item.x + item.sampleW, y: item.y }], 0, ARROW_TRIM);
-    parts.push(`<path class="ursula-edge ursula-edge--${item.style}" d="${sample}" marker-end="url(#${markerId(item.style)})"/>` + `<text class="ursula-legend-text" x="${num(item.captionX)}" y="${num(item.y)}" dominant-baseline="central">${escapeXml(item.caption)}</text>`);
-  }
-  return `<g class="ursula-legend">${parts.join("")}</g>`;
-}
-function renderSvg(input, opts = {}) {
-  const layout = opts.legend === undefined ? input : withLegend(input, pixelRuler(), opts.legend);
-  const heading = opts.drawTitle === undefined || opts.drawTitle === "" ? undefined : opts.drawTitle;
-  const rowH = heading === undefined ? 0 : TITLE_ROW;
-  const title = opts.title ?? `Flowchart: ${layout.nodes.length} nodes, ${layout.edges.length} edges`;
-  const byId = new Map(layout.nodes.map((n) => [n.id, n]));
-  const depthOf = new Map((layout.clusters ?? []).map((c) => [c.id, c.depth]));
-  const dashed = new Set((layout.clusters ?? []).filter((c) => c.style === "dashed").map((c) => c.id));
-  const labelled = layout.lanes.filter((l) => l.label !== "");
-  const tinted = (lane) => labelled.indexOf(lane) % 2 === 0;
-  const paint = {
-    roles: rolesOf(layout),
-    tinted: new Set([
-      ...labelled.filter(tinted).flatMap((lane) => layout.nodes.filter((n) => n.lane === lane.id).map((n) => n.id)),
-      ...layout.nodes.filter((n) => n.cluster !== undefined && !dashed.has(n.cluster) && (depthOf.get(n.cluster) ?? 0) % 2 === 1).map((n) => n.id)
-    ])
-  };
-  const margin = Math.min(...layout.lanes.map((l) => l.x), ...layout.nodes.map((n) => n.x), ...(layout.clusters ?? []).filter((c) => c.style === "dashed").map((c) => c.x), layout.width);
-  const w = num(heading === undefined ? layout.width : widthWithTitle(layout.width, margin, heading));
-  const h = num(layout.height + rowH);
-  const ends = extraEnds(layout, paint);
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="ursula" data-theme="band" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`,
-    `<title>${escapeXml(title)}</title>`,
-    `<style>${styleSheet([...flowRules(FONT), ...clusterRules(layout.clusters ?? []), ...ends.rules, ...usesRecords(layout) ? recordRules() : [], ...faceRules(layout), ...thickRules(layout), ...heading === undefined ? [] : [".ursula-title{fill:$fg;font-size:15px;font-weight:600}"]])}</style>`,
-    `<defs>${flowMarker("ursula-arrow", "ursula-arrow")}${flowMarker("ursula-arrow-accent", "ursula-arrow ursula-arrow--accent")}${ends.markers.join("")}</defs>`,
-    ...heading === undefined ? [] : [`<text class="ursula-title ursula-diagram-title" x="${num(margin)}" y="${num(TITLE_CENTRE)}" dominant-baseline="central">${escapeXml(heading)}</text>`, `<g transform="translate(0 ${rowH})">`],
-    ...layout.lanes.map((lane) => laneSvg(lane, tinted(lane), layout.laneAxis === "along" && (layout.direction === "LR" || layout.direction === "RL"))),
-    ...(layout.clusters ?? []).map(clusterSvg),
-    ...((hops) => layout.edges.map((e, i) => edgeSvg(e, byId, paint, hops[i])))(hopsOf(layout.edges)),
-    ...layout.nodes.map((n) => nodeSvg(n, opts.node, paint)),
-    portRings(layout, byId),
-    ...(layout.clusters ?? []).map(knockoutSvg),
-    ...layout.edges.map((e) => labelSvg(e, paint, tintUnder(e, layout.clusters ?? []))),
-    ...layout.edges.map(endLabelSvg),
-    ...layout.legend ? [legendSvg(layout.legend, margin)] : [],
-    ...heading === undefined ? [] : ["</g>"],
-    "</svg>"
-  ].join("");
-}
-
 // src/text-detail.ts
 var TITLE_LINES = 2;
 var DESCRIPTION_LINES = 3;
@@ -21027,10 +21128,6 @@ registerFrontEnd({
   },
   textLines(src, maxWidth, opts) {
     return titledLines(drawText(src, maxWidth, opts).lines, opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    const drawn = drawText(src, maxWidth, opts);
-    return titledSpans(layoutSpans(drawn.layout, drawn.lines), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(parse(src), mode === "text" ? cellRuler() : pixelRuler(), layoutOptions(opts));
@@ -21385,21 +21482,6 @@ function accessibleTitle(src) {
   }
   return reader.title === "" ? undefined : reader.title;
 }
-function terminal(src, maxWidth, config) {
-  const graph = read(src, config);
-  const draw = (g) => {
-    const laid = layout(g, cellRuler(), { legend: false, fold: true, ...maxWidth === undefined ? {} : { maxWidth } });
-    return { lines: renderTextLayout(laid), layout: laid };
-  };
-  let drawn = draw(graph);
-  if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined))
-    return drawn;
-  const widest = (ls) => Math.max(0, ...ls.map(cellWidth));
-  for (let limit = 40;widest(drawn.lines) > maxWidth && limit >= 8; limit -= 4) {
-    drawn = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
-  }
-  return drawn;
-}
 registerFrontEnd({
   name: "class",
   headers: ["classDiagram", "classDiagram-v2"],
@@ -21417,10 +21499,16 @@ registerFrontEnd({
     return renderSvg(laid, { ...svgOpts, title, legend: false, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
-    return titledLines(terminal(src, maxWidth, opts.config).lines, opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    return titledSpans(renderTextLayoutSpans(terminal(src, maxWidth, opts.config).layout), opts.heading, maxWidth);
+    const graph = read(src, opts.config);
+    const draw = (g) => renderTextLayout(layout(g, cellRuler(), { legend: false, fold: true, ...maxWidth === undefined ? {} : { maxWidth } }));
+    let lines = draw(graph);
+    if (maxWidth === undefined || graph.nodes.some((n) => n.compartments !== undefined))
+      return titledLines(lines, opts.heading, maxWidth);
+    const widest = (ls) => Math.max(0, ...ls.map(cellWidth));
+    for (let limit = 40;widest(lines) > maxWidth && limit >= 8; limit -= 4) {
+      lines = draw({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, title: clip(n.title, limit), lines: n.lines.map((l) => clip(l, limit)) })) });
+    }
+    return titledLines(lines, opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return layout(read(src, opts.config), mode === "text" ? cellRuler() : pixelRuler(), { legend: false });
@@ -21696,20 +21784,17 @@ function pixels(src, opts) {
   return { ...laid, title: opts.title ?? model.title ?? summary(model.graph) };
 }
 var headsOnly = (g) => ({ ...g, nodes: g.nodes.map((n) => ({ ...n, compartments: (n.compartments ?? []).slice(0, 1) })) });
-function terminal2(src, maxWidth, opts) {
+function terminal(src, maxWidth, opts) {
   const model = parseEr(src, opts.heading);
-  const draw = (g, fold, squeeze = true) => {
-    const laid = layout(g, cellRuler(), {
-      legend: false,
-      fold,
-      squeeze,
-      ...opts.quality === undefined ? {} : { quality: opts.quality },
-      ...maxWidth === undefined ? {} : { maxWidth },
-      ...opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight }
-    });
-    return { lines: renderTextLayout(laid), layout: laid };
-  };
-  const widest = (d) => Math.max(0, ...d.lines.map(cellWidth));
+  const draw = (g, fold, squeeze = true) => renderTextLayout(layout(g, cellRuler(), {
+    legend: false,
+    fold,
+    squeeze,
+    ...opts.quality === undefined ? {} : { quality: opts.quality },
+    ...maxWidth === undefined ? {} : { maxWidth },
+    ...opts.maxHeight === undefined ? {} : { maxHeight: opts.maxHeight }
+  }));
+  const widest = (lines) => Math.max(0, ...lines.map(cellWidth));
   const full = draw(model.graph, true, false);
   if (maxWidth === undefined || widest(full) <= maxWidth)
     return full;
@@ -21724,10 +21809,7 @@ registerFrontEnd({
     return renderSvg(laid, { title, legend: false, ...opts.heading === undefined ? {} : { drawTitle: opts.heading } });
   },
   textLines(src, maxWidth, opts) {
-    return titledLines(terminal2(src, maxWidth, opts).lines, opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    return titledSpans(renderTextLayoutSpans(terminal2(src, maxWidth, opts).layout), opts.heading, maxWidth);
+    return titledLines(terminal(src, maxWidth, opts), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseEr(src, opts.heading);
@@ -21800,7 +21882,6 @@ function sceneRules() {
     ".ursula-head-band{fill:$lane}",
     ".ursula-edge{fill:none;stroke:$line;stroke-width:%edge-w;stroke-linecap:round;stroke-linejoin:round}",
     ".ursula-edge--accent{stroke:$accent}",
-    ".ursula-edge--thick{stroke-width:%edge-thick-w}",
     ".ursula-edge--pending{stroke-dasharray:%dash}",
     ".ursula-edge--msg{stroke:$line}",
     ".ursula-edge--msg.ursula-edge--pending{stroke-dasharray:%dash-msg}",
@@ -21926,11 +22007,19 @@ function arrowsOf(roles) {
   const variant = roles.includes("edge--accent") ? "accent" : roles.includes("edge--msg") ? "msg" : "edge";
   return { variant, end: roles.includes("edge--arrow"), start: roles.includes("edge--arrow-start") };
 }
+function trimStart2(points, by) {
+  const [a, b, ...rest] = points;
+  if (a === undefined || b === undefined)
+    return [...points];
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const cut = len === 0 ? 0 : Math.min(by, Math.max(0, len - 1));
+  return [{ x: a.x + (b.x - a.x) / (len || 1) * cut, y: a.y + (b.y - a.y) / (len || 1) * cut }, b, ...rest];
+}
 function lineSvg(item) {
   const roles = Array.isArray(item.role) ? item.role : ["edge"];
   const { variant, end, start } = arrowsOf(roles);
   const head = SCENE_THEME.arrow.length;
-  const points = start ? trimStart(item.points, head) : item.points;
+  const points = start ? trimStart2(item.points, head) : item.points;
   const d = pathData(points, item.radius ?? SCENE_THEME.bend, end ? head : 0);
   const markers = `${start ? ` marker-start="url(#${markerId2(variant, "start")})"` : ""}${end ? ` marker-end="url(#${markerId2(variant, "end")})"` : ""}`;
   return `<path class="${classOf(roles)}" d="${d}"${markers}${dataAttrs(item.data)}/>`;
@@ -22421,61 +22510,12 @@ var padEnd = (text, width) => text + " ".repeat(Math.max(0, width - cellWidth(te
 var padStart = (text, width) => " ".repeat(Math.max(0, width - cellWidth(text))) + text;
 var span2 = (text, tone = "normal") => ({ text, tone });
 var joinSpans = (row) => row.map((s) => s.text).join("");
-function spansOf(...pieces) {
-  const flat = pieces.flatMap((p) => {
-    if (typeof p === "string")
-      return [[p, "normal"]];
-    if ("text" in p)
-      return [[p.text, p.tone]];
-    if (p.length === 2 && typeof p[0] === "string")
-      return [p];
-    return p.map((s) => [s.text, s.tone]);
-  });
-  const out = [];
-  for (const [text, tone] of flat) {
-    if (text === "")
-      continue;
-    const last = out[out.length - 1];
-    if (last !== undefined && last.tone === tone)
-      out[out.length - 1] = { text: last.text + text, tone };
-    else
-      out.push({ text, tone });
-  }
-  return out;
-}
-function sliceSpans(row, start, end = Infinity) {
-  const out = [];
-  let at = 0;
-  for (const s of row) {
-    const from = Math.max(start, at);
-    const to = Math.min(end, at + s.text.length);
-    if (from < to)
-      out.push({ text: s.text.slice(from - at, to - at), tone: s.tone });
-    at += s.text.length;
-  }
-  return spansOf(out);
-}
-var trimEndSpans = (row) => sliceSpans(row, 0, joinSpans(row).trimEnd().length);
-function cutSpans(row, limit) {
-  const text = joinSpans(row);
-  const kept = cut2(text, limit);
-  if (kept === text)
-    return spansOf(row);
-  const at = kept.length - 1;
-  const tone = sliceSpans(row, at, at + 1)[0]?.tone ?? "normal";
-  return spansOf(sliceSpans(row, 0, at), ["…", tone]);
-}
-var padEndSpans = (row, width) => spansOf(row, padEnd("", width - cellWidth(joinSpans(row))));
 
 // src/journey/text.ts
 var GAP2 = 2;
 var MIN = 4;
-function journeyTextSpans(journey, maxWidth) {
-  const tasks = journey.sections.flatMap((sec) => sec.tasks);
-  const scores = tasks.map((t) => t.score);
-  const worst = Math.min(...scores);
-  const marked = scores.some((v) => v !== worst);
-  const rows = journey.sections.flatMap((sec) => sec.tasks.map((t, i) => ({ section: i === 0 ? sec.name ?? "" : "", task: t.name, score: t.scoreText, actors: t.actors.join(", "), low: marked && t.score === worst })));
+function journeyTextLines(journey, maxWidth) {
+  const rows = journey.sections.flatMap((sec) => sec.tasks.map((t, i) => ({ section: i === 0 ? sec.name ?? "" : "", task: t.name, score: t.scoreText, actors: t.actors.join(", ") })));
   const widthOf = (key) => Math.max(0, ...rows.map((r) => cellWidth(r[key])));
   const w = { section: widthOf("section"), task: widthOf("task"), score: widthOf("score"), actors: widthOf("actors") };
   const total = () => w.section + w.task + w.score + w.actors + (w.section > 0 ? GAP2 : 0) + GAP2 + (w.actors > 0 ? GAP2 : 0);
@@ -22487,12 +22527,17 @@ function journeyTextSpans(journey, maxWidth) {
       w[key] -= 1;
     }
   }
-  const gap = " ".repeat(GAP2);
   const lines = rows.map((r) => {
-    const section = cut2(r.section, w.section);
-    return trimEndSpans(spansOf(...w.section > 0 ? [[section, "bold"], padEnd("", w.section - cellWidth(section)), gap] : [], padEnd(cut2(r.task, w.task), w.task), gap, [padStart(r.score, w.score), r.low ? "accent" : "normal"], ...w.actors > 0 ? [gap, [cut2(r.actors, w.actors), "dim"]] : []));
+    const parts = [];
+    if (w.section > 0)
+      parts.push(padEnd(cut2(r.section, w.section), w.section));
+    parts.push(padEnd(cut2(r.task, w.task), w.task));
+    parts.push(padStart(r.score, w.score));
+    if (w.actors > 0)
+      parts.push(cut2(r.actors, w.actors));
+    return parts.join(" ".repeat(GAP2)).trimEnd();
   });
-  const head = journey.title === undefined ? [] : [spansOf([maxWidth === undefined ? journey.title : cut2(journey.title, maxWidth), "bold"])];
+  const head = journey.title === undefined ? [] : [maxWidth === undefined ? journey.title : cut2(journey.title, maxWidth)];
   return [...head, ...lines];
 }
 
@@ -22507,10 +22552,7 @@ registerFrontEnd({
     return withDescription(svg, journey.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return journeyTextSpans(parseJourney(src, opts.heading), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return journeyTextSpans(parseJourney(src, opts.heading), maxWidth);
+    return journeyTextLines(parseJourney(src, opts.heading), maxWidth);
   },
   json(src, _mode, opts) {
     const journey = parseJourney(src, opts.heading);
@@ -23353,16 +23395,14 @@ function diamondOutline(cx, cy) {
   return `M${cx - r} ${cy}L${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}Z`;
 }
 
-// src/errors/fail.ts
-function fail2(message, line, code = "syntax") {
-  throw new UrsulaError(message, code, line);
-}
-
 // src/gantt/parse.ts
 var TAGS = ["active", "done", "crit", "milestone", "vert"];
 var TICK_UNITS = { millisecond: "ms", second: "s", minute: "min", hour: "h", day: "d", week: "w", month: "M" };
 var TICK_INTERVAL = /^([1-9][0-9]*)(millisecond|second|minute|hour|day|week|month)$/;
 var KEYWORDS = new Set(["title", "dateFormat", "axisFormat", "tickInterval", "weekday", "weekend", "excludes", "includes", "section", "todayMarker", "inclusiveEndDates", "topAxis", "click", "accTitle", "accDescr"]);
+function fail2(message, line, code) {
+  throw new UrsulaError(message, code, line);
+}
 function tickIntervalOf(text) {
   const m = TICK_INTERVAL.exec(text.trim());
   const unit = m === null ? undefined : TICK_UNITS[m[2] ?? ""];
@@ -23710,7 +23750,7 @@ function toneOf(t) {
     return "bold";
   return t.done ? "dim" : "normal";
 }
-function spansOf2(cells) {
+function spansOf(cells) {
   const out = [];
   for (const cell of cells) {
     const last = out[out.length - 1];
@@ -23788,13 +23828,13 @@ function layoutGanttText(model, maxWidth) {
     for (const tick of plan.ticks)
       if (tick.month !== undefined)
         put(cells, Math.floor(cellOf(tick.t)), tick.month, "dim");
-    rows.push([...lead(""), ...spansOf2(cells)]);
+    rows.push([...lead(""), ...spansOf(cells)]);
   }
   const labelCells = blank(columns + rightW);
   for (const tick of plan.ticks)
     if (tick.label !== "")
       put(labelCells, Math.floor(cellOf(tick.t)), tick.label, "dim");
-  rows.push([...lead(""), ...spansOf2(labelCells)]);
+  rows.push([...lead(""), ...spansOf(labelCells)]);
   const rule = blank(columns);
   for (let i = 0;i < columns; i++)
     rule[i] = { ch: "─", tone: "dim" };
@@ -23803,7 +23843,7 @@ function layoutGanttText(model, maxWidth) {
     if (at >= 0 && at < columns)
       rule[at] = { ch: "┬", tone: "dim" };
   }
-  rows.push([span2("─".repeat(nameW + 1), "dim"), ...spansOf2(rule)]);
+  rows.push([span2("─".repeat(nameW + 1), "dim"), ...spansOf(rule)]);
   const verts = tasks.filter((t) => t.vert).map((t) => ({ col: Math.min(columns - 1, Math.max(0, Math.floor(cellOf(t.start)))), label: t.label }));
   let section = -1;
   for (const ti of rowsOf) {
@@ -23830,7 +23870,7 @@ function layoutGanttText(model, maxWidth) {
     }
     if (showRight)
       put(cells, end + 1, statusOf(t), "dim");
-    rows.push([...lead(`${" ".repeat(indent)}${t.label}`), ...spansOf2(cells)]);
+    rows.push([...lead(`${" ".repeat(indent)}${t.label}`), ...spansOf(cells)]);
   }
   verts.forEach((v, i) => {
     const cells = blank(columns + rightW);
@@ -23841,7 +23881,7 @@ function layoutGanttText(model, maxWidth) {
       put(cells, v.col, `┊ ${v.label}`, "dim");
     else
       put(cells, Math.max(0, v.col - cellWidth(v.label) - 1), `${v.label} ┊`, "dim");
-    rows.push([...lead(""), ...spansOf2(cells)]);
+    rows.push([...lead(""), ...spansOf(cells)]);
   });
   return rows.map(trimEnd);
 }
@@ -23871,6 +23911,19 @@ registerFrontEnd({
     return { model, ...layoutGantt(model, pixelRuler()), ...notes };
   }
 });
+
+// src/render/head-band.ts
+var HEAD_BAND2 = 28;
+function headBand(x, y, w, data) {
+  const inset = Number.parseFloat(SCENE_THEME.metrics["box-w"] ?? "0") / 2;
+  const r = Math.max(0, SCENE_THEME.boxRadius - inset);
+  const left = x + inset;
+  const right = x + w - inset;
+  const top = y + inset;
+  const bottom = y + HEAD_BAND2;
+  const d = `M${left} ${bottom}V${top + r}A${r} ${r} 0 0 1 ${left + r} ${top}H${right - r}A${r} ${r} 0 0 1 ${right} ${top + r}V${bottom}Z`;
+  return { kind: "path", d, role: ["head-band"], ...data === undefined ? {} : { data } };
+}
 
 // src/eventmodeling/model.ts
 var ZONE_NAMES = {
@@ -24052,7 +24105,7 @@ function layoutEventModel(model, ruler) {
     const data = { frame: frame.label, kind: frame.kind };
     boxItems.push({ kind: "box", x: p.x, y: p.y, w: p.w, h: p.h, role, data });
     boxItems.push(headBand(p.x, p.y, p.w, data));
-    boxItems.push({ kind: "text", x: p.x + p.w / 2, y: p.y + HEAD_BAND / 2, text: frame.kind, anchor: "middle", role: ["tag-text"], data });
+    boxItems.push({ kind: "text", x: p.x + p.w / 2, y: p.y + HEAD_BAND2 / 2, text: frame.kind, anchor: "middle", role: ["tag-text"], data });
     const nameY = p.y + NAME_UNDER_BAND;
     boxItems.push({ kind: "text", x: p.x + p.w / 2, y: nameY, text: frame.name, anchor: "middle", role: start ? ["name", "on-start"] : ["name"], data });
     if (size.rows.length > 0) {
@@ -24304,7 +24357,7 @@ var N4 = 1;
 var E4 = 2;
 var S4 = 4;
 var W5 = 8;
-var UPRIGHT4 = N4 | S4;
+var UPRIGHT3 = N4 | S4;
 var LEVEL2 = E4 | W5;
 var DX3 = [0, 1, 0, -1];
 var DY3 = [-1, 0, 1, 0];
@@ -24354,6 +24407,53 @@ function bitsOf(path, from, to) {
       bits |= toward(cell, to);
     return bits;
   });
+}
+
+class Heap3 {
+  keys = [];
+  items = [];
+  get size() {
+    return this.keys.length;
+  }
+  push(key, item) {
+    let i = this.keys.length;
+    this.keys.push(key);
+    this.items.push(item);
+    while (i > 0) {
+      const parent = i - 1 >> 1;
+      if (this.keys[parent] <= key)
+        break;
+      this.keys[i] = this.keys[parent];
+      this.items[i] = this.items[parent];
+      i = parent;
+    }
+    this.keys[i] = key;
+    this.items[i] = item;
+  }
+  pop() {
+    const top = [this.keys[0], this.items[0]];
+    const key = this.keys.pop();
+    const item = this.items.pop();
+    const n = this.keys.length;
+    if (n === 0)
+      return top;
+    let i = 0;
+    for (;; ) {
+      let child = 2 * i + 1;
+      if (child >= n)
+        break;
+      if (child + 1 < n && this.keys[child + 1] < this.keys[child])
+        child += 1;
+      if (this.keys[child] >= key)
+        break;
+      this.keys[i] = this.keys[child];
+      this.items[i] = this.items[child];
+      i = child;
+    }
+    this.keys[i] = key;
+    this.items[i] = item;
+    return top;
+  }
 }
 function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) {
   const height = rows.length;
@@ -24431,7 +24531,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
       stopped = true;
       return;
     }
-    const heap = new Heap;
+    const heap = new Heap3;
     const pace = wires.some((w, i) => i !== index && paths[i] !== undefined && related(i, index)) ? SHARED : STEP5;
     const ahead = (state) => {
       if (state === states)
@@ -24468,7 +24568,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
       }
     }
     while (heap.size > 0) {
-      const { item: state } = heap.pop();
+      const [, state] = heap.pop();
       if (settled[state] === run)
         continue;
       settled[state] = run;
@@ -24506,8 +24606,8 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
         let shut = false;
         for (const u of uses[nkey] ?? NONE) {
           if (related(u.wire, index))
-            shared ||= (u.bits & (level ? LEVEL2 : UPRIGHT4)) !== 0;
-          else if (u.end || u.bits !== (level ? UPRIGHT4 : LEVEL2))
+            shared ||= (u.bits & (level ? LEVEL2 : UPRIGHT3)) !== 0;
+          else if (u.end || u.bits !== (level ? UPRIGHT3 : LEVEL2))
             shut = true;
           else
             crosses = true;
@@ -24524,7 +24624,7 @@ function routeWires(rects, wires, width, rows, spend = () => true, tidy = true) 
             const skey = ny * width + side;
             if (blocked[skey] === 1)
               step += BESIDE_BOX;
-            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT4) !== 0))
+            else if ((uses[skey] ?? NONE).some((u) => !related(u.wire, index) && (u.bits & UPRIGHT3) !== 0))
               step += BESIDE_LINE;
           }
         }
@@ -24879,12 +24979,6 @@ function nameOverLine(layout, lines) {
 }
 var RESERVES = [0, 2, 4, 8];
 function drawEventModel(model, maxWidth, told) {
-  return bestDrawing(model, maxWidth, told)?.lines;
-}
-function drawEventModelSpans(model, maxWidth) {
-  return bestDrawing(model, maxWidth)?.spans();
-}
-function bestDrawing(model, maxWidth, told) {
   if (model.frames.length === 0)
     return;
   const limit = maxWidth ?? Number.POSITIVE_INFINITY;
@@ -24915,11 +25009,10 @@ function bestDrawing(model, maxWidth, told) {
     const first = renderTextLayout(layout, limit);
     const widest = largest(first.map(cellWidth), 0);
     const reach = Math.min(widest + 2, limit);
-    const drawn = widest > layout.width ? { ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) } : layout;
-    const lines = drawn === layout ? first : renderTextLayout(drawn, limit);
+    const lines = widest > layout.width ? renderTextLayout({ ...layout, width: reach, lanes: layout.lanes.map((l) => ({ ...l, w: reach })) }, limit) : first;
     if (!lines.every((line) => cellWidth(line) <= limit) || nameOverLine(layout, lines))
       return;
-    return { lines, spans: () => renderTextLayoutSpans(drawn, limit), cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length, rows: lines.length - grid.opened };
+    return { lines, cut: layout.lanes.filter((lane) => !(lines[lane.y] ?? "").includes(lane.label)).length, rows: lines.length - grid.opened };
   };
   const firstWhole = (ways) => {
     let fits;
@@ -24937,11 +25030,11 @@ function bestDrawing(model, maxWidth, told) {
   };
   const one = firstWhole(VARIANTS.map((variant) => () => attempt(variant, limit, "one", true) ?? attempt(variant, limit, "one", false)));
   if (one !== undefined || maxWidth === undefined || spent > BUDGET2 || tooLarge)
-    return one;
+    return one?.lines;
   const wide = VARIANTS.filter((v) => v.step === VARIANTS[0]?.step);
   const ways = wide.flatMap((variant) => RESERVES.map((reserve) => ({ variant, wrap: maxWidth - reserve, set: setOut(model, variant, maxWidth - reserve) }))).map(({ variant, wrap, set }) => ({ variant, wrap, least: set === undefined ? Number.POSITIVE_INFINITY : leastRows(set.slots, set.bands.length) })).sort((a, b) => a.least - b.least);
   const wrapped = (tidy) => firstWhole(ways.map((way) => () => attempt(way.variant, way.wrap, "any", tidy)));
-  return wrapped(true) ?? wrapped(false);
+  return (wrapped(true) ?? wrapped(false))?.lines;
 }
 
 // src/eventmodeling/text.ts
@@ -25000,10 +25093,6 @@ function drawn(model, maxWidth) {
   const lines = drawEventModel(model, maxWidth);
   return lines === undefined ? undefined : titledLines(lines, model.title, maxWidth);
 }
-function drawnSpans(model, maxWidth) {
-  const rows = drawEventModelSpans(model, maxWidth);
-  return rows === undefined ? undefined : titledSpans(rows, model.title, maxWidth);
-}
 registerFrontEnd({
   name: "eventmodeling",
   headers: ["eventmodeling"],
@@ -25019,7 +25108,7 @@ registerFrontEnd({
   },
   textSpans(src, maxWidth, opts) {
     const model = parseEventModeling(src, opts.heading);
-    return drawnSpans(model, maxWidth) ?? layoutEventModelText(model, maxWidth);
+    return drawn(model, maxWidth)?.map((text) => [{ text, tone: "normal" }]) ?? layoutEventModelText(model, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseEventModeling(src, opts.heading);
@@ -25513,6 +25602,9 @@ function layoutCynefin(model, ruler) {
 }
 
 // src/cynefin/parse.ts
+function fail4(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var ITEM = /^"([^"]*)"$/u;
 var TRANSITION = /^([A-Za-z]+)\s*-->\s*([A-Za-z]+)\s*(?::\s*(.*))?$/u;
 function domainOf(word) {
@@ -25526,7 +25618,7 @@ function labelOf(raw, line) {
   if (text.startsWith('"')) {
     const m = ITEM.exec(text);
     if (m === null)
-      fail2(`Cannot read the label ${text}; a label is written "text".`, line, "label");
+      fail4(`Cannot read the label ${text}; a label is written "text".`, line, "label");
     return m[1] === "" ? undefined : m[1];
   }
   return text;
@@ -25549,7 +25641,7 @@ function parseCynefin(src, heading) {
       continue;
     if (!headerSeen) {
       if (s !== "cynefin-beta")
-        fail2('A Cynefin diagram starts with "cynefin-beta".', lineNo, "header");
+        fail4('A Cynefin diagram starts with "cynefin-beta".', lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -25567,12 +25659,12 @@ function parseCynefin(src, heading) {
     const item = ITEM.exec(s);
     if (item !== null) {
       if (current === undefined)
-        fail2("An item belongs to a domain; write the domain name above it.", lineNo, "item");
+        fail4("An item belongs to a domain; write the domain name above it.", lineNo, "item");
       items[current].push(item[1] ?? "");
       continue;
     }
     if (s.startsWith('"'))
-      fail2(`Cannot read ${s}; an item is a quoted label on its own line.`, lineNo, "item");
+      fail4(`Cannot read ${s}; an item is a quoted label on its own line.`, lineNo, "item");
     const domain = domainOf(s);
     if (domain !== undefined) {
       current = domain;
@@ -25583,9 +25675,9 @@ function parseCynefin(src, heading) {
       const from = domainOf(tr[1] ?? "");
       const to = domainOf(tr[2] ?? "");
       if (from === undefined)
-        fail2(`"${tr[1] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
+        fail4(`"${tr[1] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
       if (to === undefined)
-        fail2(`"${tr[2] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
+        fail4(`"${tr[2] ?? ""}" is not a domain; use ${DOMAINS.join(", ")}.`, lineNo, "domain");
       current = undefined;
       if (from === to)
         continue;
@@ -25593,10 +25685,10 @@ function parseCynefin(src, heading) {
       transitions.push({ from, to, ...label === undefined ? {} : { label }, line: lineNo });
       continue;
     }
-    fail2(`Cannot read "${s}"; write a domain name, a quoted item, or "from --> to : \\"label\\"".`, lineNo);
+    fail4(`Cannot read "${s}"; write a domain name, a quoted item, or "from --> to : \\"label\\"".`, lineNo);
   }
   if (!headerSeen)
-    fail2('A Cynefin diagram starts with "cynefin-beta".', 1, "header");
+    fail4('A Cynefin diagram starts with "cynefin-beta".', 1, "header");
   if (!bodyTitle && heading !== undefined && heading !== "")
     title = heading;
   return { ...title === undefined ? {} : { title }, ...acc.title === undefined ? {} : { accTitle: acc.title }, items, transitions };
@@ -25604,23 +25696,23 @@ function parseCynefin(src, heading) {
 
 // src/cynefin/text.ts
 var ORDER2 = ["complex", "complicated", "chaotic", "clear", "confusion"];
-function cynefinTextSpans(model, maxWidth) {
+function cynefinTextLines(model, maxWidth) {
   const nameW = Math.max(...ORDER2.map((d) => cellWidth(DOMAIN_NAMES[d])));
   const cap = (fixed) => maxWidth === undefined ? Number.POSITIVE_INFINITY : Math.max(1, maxWidth - fixed);
-  const fit = (row, fixed) => cutSpans(row, cap(fixed));
+  const fit = (s, fixed) => cut2(s, cap(fixed));
   const rows = ORDER2.flatMap((domain) => {
     const items = model.items[domain];
     const name = DOMAIN_NAMES[domain];
     if (items.length === 0)
-      return [spansOf([name, "bold"])];
-    return items.map((item, i) => spansOf(padEndSpans(spansOf([i === 0 ? name : "", "bold"]), nameW), "  ", fit(spansOf(item), nameW + 2)));
+      return [name];
+    return items.map((item, i) => `${padEnd(i === 0 ? name : "", nameW)}  ${fit(item, nameW + 2)}`);
   });
   const moves = model.transitions.map((t) => {
     const head = `${DOMAIN_NAMES[t.from]} → ${DOMAIN_NAMES[t.to]}`;
-    return fit(spansOf(head, [t.label === undefined ? "" : ` : ${t.label}`, "dim"]), 0);
+    return fit(t.label === undefined ? head : `${head} : ${t.label}`, 0);
   });
-  const head = model.title === undefined ? [] : [fit(spansOf([model.title, "bold"]), 0)];
-  return [...head, ...rows, ...moves.length === 0 ? [] : [[], ...moves]];
+  const head = model.title === undefined ? [] : [fit(model.title, 0)];
+  return [...head, ...rows, ...moves.length === 0 ? [] : ["", ...moves]];
 }
 
 // src/cynefin/frontend.ts
@@ -25634,10 +25726,7 @@ registerFrontEnd({
     });
   },
   textLines(src, maxWidth, opts) {
-    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return cynefinTextSpans(parseCynefin(src, opts.heading), maxWidth);
+    return cynefinTextLines(parseCynefin(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseCynefin(src, opts.heading);
@@ -25984,6 +26073,9 @@ function buildGit(graph, ruler, delays) {
 }
 
 // src/git/parse.ts
+function fail5(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var HEADER = /^gitgraph(?:\s+(LR|TB|BT))?\s*:?\s*$/iu;
 var ATTR = /^\s*(id|type|tag|msg|parent|order)\s*:\s*(?:"([^"]*)"|(\S+))/iu;
 var NAME4 = /^\s*(?:"([^"]*)"|(\S+))/u;
@@ -26043,7 +26135,7 @@ function readAttrs(rest, line) {
   while (text.trim() !== "") {
     const m = ATTR.exec(text);
     if (m === null)
-      fail2(`Cannot read "${text.trim()}"; an attribute is written key: value, for example id: "a1".`, line);
+      fail5(`Cannot read "${text.trim()}"; an attribute is written key: value, for example id: "a1".`, line);
     const key = (m[1] ?? "").toLowerCase();
     const value = m[2] ?? m[3] ?? "";
     if (key === "id")
@@ -26055,12 +26147,12 @@ function readAttrs(rest, line) {
     else if (key === "order") {
       const n = Number(value);
       if (!Number.isFinite(n))
-        fail2(`"${value}" is not a number; order is a number.`, line, "value");
+        fail5(`"${value}" is not a number; order is a number.`, line, "value");
       out.order = n;
     } else if (key === "type") {
       const t = value.toUpperCase();
       if (t !== "NORMAL" && t !== "REVERSE" && t !== "HIGHLIGHT")
-        fail2(`Unknown commit type "${value}"; use NORMAL, REVERSE or HIGHLIGHT.`, line, "value");
+        fail5(`Unknown commit type "${value}"; use NORMAL, REVERSE or HIGHLIGHT.`, line, "value");
       out.type = t;
     }
     text = text.slice(m[0].length);
@@ -26070,7 +26162,7 @@ function readAttrs(rest, line) {
 function readName(rest, line, what) {
   const m = NAME4.exec(rest);
   if (m === null)
-    fail2(`${what} needs a branch name.`, line);
+    fail5(`${what} needs a branch name.`, line);
   return { name: m[1] ?? m[2] ?? "", rest: rest.slice(m[0].length) };
 }
 function parseGit(src, heading, config) {
@@ -26107,7 +26199,7 @@ function parseGit(src, heading, config) {
     if (!headerSeen) {
       const h = HEADER.exec(s);
       if (h === null)
-        fail2('A git graph starts with "gitGraph".', line, "header");
+        fail5('A git graph starts with "gitGraph".', line, "header");
       headerSeen = true;
       if (h[1] !== undefined)
         orientation = h[1].toUpperCase();
@@ -26130,7 +26222,7 @@ function parseGit(src, heading, config) {
     } else if (keyword === "branch") {
       const { name, rest: after } = readName(rest, line, "branch");
       if (exists(name))
-        fail2(`The branch "${name}" already exists; a branch name must be unique.`, line, "branch");
+        fail5(`The branch "${name}" already exists; a branch name must be unique.`, line, "branch");
       const a = readAttrs(after, line);
       branches.push({ name, ...a.order === undefined ? {} : { order: a.order }, ...head === undefined ? {} : { parent: head }, line });
       heads.set(name, head);
@@ -26138,40 +26230,40 @@ function parseGit(src, heading, config) {
     } else if (keyword === "checkout" || keyword === "switch") {
       const { name } = readName(rest, line, keyword);
       if (!exists(name))
-        fail2(`The branch "${name}" does not exist; create it with "branch ${name}" first.`, line, "branch");
+        fail5(`The branch "${name}" does not exist; create it with "branch ${name}" first.`, line, "branch");
       current = name;
     } else if (keyword === "merge") {
       const { name, rest: after } = readName(rest, line, "merge");
       if (!exists(name))
-        fail2(`Cannot merge "${name}"; the branch does not exist.`, line, "branch");
+        fail5(`Cannot merge "${name}"; the branch does not exist.`, line, "branch");
       if (name === current)
-        fail2(`Cannot merge "${name}" into itself.`, line, "merge");
+        fail5(`Cannot merge "${name}" into itself.`, line, "merge");
       const source = heads.get(name);
       if (head === undefined)
-        fail2(`Cannot merge into "${current}"; it has no commit yet.`, line, "merge");
+        fail5(`Cannot merge into "${current}"; it has no commit yet.`, line, "merge");
       if (source === undefined)
-        fail2(`Cannot merge "${name}"; it has no commit yet.`, line, "merge");
+        fail5(`Cannot merge "${name}"; it has no commit yet.`, line, "merge");
       if (source === head)
-        fail2(`Cannot merge "${name}"; both branches end in the same commit.`, line, "merge");
+        fail5(`Cannot merge "${name}"; both branches end in the same commit.`, line, "merge");
       const a = readAttrs(after, line);
       push({ branch: current, type: a.type ?? "NORMAL", ...a.tag === undefined ? {} : { tag: a.tag }, ...a.id === undefined ? {} : { id: a.id }, kind: "merge", parents: [head, source], mergedFrom: name, line });
     } else if (keyword === "cherry-pick") {
       const a = readAttrs(rest, line);
       if (a.id === undefined)
-        fail2('cherry-pick needs the id of the commit to copy, for example cherry-pick id: "a1".', line, "cherry-pick");
+        fail5('cherry-pick needs the id of the commit to copy, for example cherry-pick id: "a1".', line, "cherry-pick");
       if (head === undefined)
-        fail2(`Cannot cherry-pick onto "${current}"; it has no commit yet.`, line, "cherry-pick");
+        fail5(`Cannot cherry-pick onto "${current}"; it has no commit yet.`, line, "cherry-pick");
       const same = commits.filter((c) => c.id === a.id);
       if (same.length === 0)
-        fail2(`Cannot cherry-pick "${a.id}"; no commit has that id.`, line, "cherry-pick");
+        fail5(`Cannot cherry-pick "${a.id}"; no commit has that id.`, line, "cherry-pick");
       const found = [...same].reverse().find((c) => c.branch !== current);
       if (found === undefined)
-        fail2(`Cannot cherry-pick "${a.id}"; it is on the current branch "${current}".`, line, "cherry-pick");
+        fail5(`Cannot cherry-pick "${a.id}"; it is on the current branch "${current}".`, line, "cherry-pick");
       let parentNote = "";
       if (found.parents.length > 1) {
         const parent = a.parent === undefined ? undefined : found.parents.map((p) => commits[p]).find((c) => c?.id === a.parent);
         if (parent === undefined)
-          fail2(`Cannot cherry-pick the merge commit "${a.id}" without parent: "<id>" naming one of its parents.`, line, "cherry-pick");
+          fail5(`Cannot cherry-pick the merge commit "${a.id}" without parent: "<id>" naming one of its parents.`, line, "cherry-pick");
         parentNote = `|parent:${parent.id}`;
       }
       push({
@@ -26184,19 +26276,18 @@ function parseGit(src, heading, config) {
         line
       });
     } else {
-      fail2(`Cannot read "${s}"; a git graph line is commit, branch, checkout, merge or cherry-pick.`, line);
+      fail5(`Cannot read "${s}"; a git graph line is commit, branch, checkout, merge or cherry-pick.`, line);
     }
   }
   if (!headerSeen)
-    fail2('A git graph starts with "gitGraph".', 1, "header");
+    fail5('A git graph starts with "gitGraph".', 1, "header");
   const shownTitle = title ?? (heading === undefined || heading === "" ? undefined : heading);
   return { orientation, branches, commits, config: cfg, ...shownTitle === undefined ? {} : { title: shownTitle }, ...acc.title === undefined || acc.title === "" ? {} : { accTitle: acc.title } };
 }
 
 // src/git/text.ts
 var GLYPH = { NORMAL: "●", HIGHLIGHT: "◉", REVERSE: "⊗" };
-var branchList = (names) => spansOf("(", ...names.flatMap((n, i) => [i === 0 ? "" : ", ", [n, "bold"]]), ")");
-function gitTextSpans(graph, maxWidth) {
+function gitTextLines(graph, maxWidth) {
   const order = displayOrder(graph);
   const col = new Map(order.map((n, i) => [n, i]));
   const cols = order.length;
@@ -26270,26 +26361,26 @@ function gitTextSpans(graph, maxWidth) {
   const note = (c) => {
     const parts = [];
     if (graph.config.showCommitLabel)
-      parts.push(spansOf([c.id, "dim"]));
+      parts.push(c.id);
     if (c.tag !== undefined)
-      parts.push(spansOf([`[${c.tag}]`, "accent"]));
+      parts.push(`[${c.tag}]`);
     const names = tips.get(c.seq);
     if (names !== undefined)
-      parts.push(branchList(names));
-    return spansOf(...parts.flatMap((p, i) => i === 0 ? [p] : ["  ", p]));
+      parts.push(`(${names.join(", ")})`);
+    return parts.join("  ");
   };
-  const graphCells = rows.map((row) => spansOf(...row.glyph.flatMap((g, i) => [[g, g === GLYPH.HIGHLIGHT ? "accent" : "normal"], row.fill[i] ?? ""])));
-  const graphW = Math.max(0, ...graphCells.map((r) => cellWidth(r.map((s) => s.text).join(""))));
+  const graphCells = rows.map((row) => row.glyph.map((g, i) => `${g}${row.fill[i] ?? ""}`).join(""));
+  const graphW = Math.max(0, ...graphCells.map(cellWidth));
   const lines = graph.commits.map((c, i) => {
-    const left = trimEndSpans(graphCells[i] ?? []);
-    const pad = " ".repeat(Math.max(0, graphW - cellWidth(left.map((s) => s.text).join(""))));
+    const left = (graphCells[i] ?? "").replace(/\s+$/u, "");
+    const pad = " ".repeat(Math.max(0, graphW - cellWidth(left)));
     const text = note(c);
     const room = maxWidth === undefined ? undefined : Math.max(1, maxWidth - graphW - 2);
-    return trimEndSpans(spansOf(left, `${pad}  `, room === undefined ? text : cutSpans(text, room)));
+    return `${left}${pad}  ${room === undefined ? text : cut2(text, room)}`.replace(/\s+$/u, "");
   });
-  const head = graph.title === undefined ? [] : [spansOf([maxWidth === undefined ? graph.title : cut2(graph.title, maxWidth), "bold"])];
+  const head = graph.title === undefined ? [] : [maxWidth === undefined ? graph.title : cut2(graph.title, maxWidth)];
   const strays = order.filter((n) => !graph.commits.some((c) => c.branch === n) && !(tips.get(graph.branches.find((b) => b.name === n)?.parent ?? -1) ?? []).includes(n));
-  const tail = graph.config.showBranches && strays.length > 0 ? [branchList(strays)] : [];
+  const tail = graph.config.showBranches && strays.length > 0 ? [`(${strays.join(", ")})`] : [];
   return [...head, ...lines, ...tail];
 }
 
@@ -26302,10 +26393,7 @@ var gitFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return gitTextSpans(parseGit(src, opts.heading, opts.config), maxWidth);
+    return gitTextLines(parseGit(src, opts.heading, opts.config), maxWidth);
   },
   json(src, mode, opts) {
     const graph = parseGit(src, opts.heading, opts.config);
@@ -27007,6 +27095,9 @@ function layoutMindmap(map, ruler, opts = {}) {
 }
 
 // src/mindmap/parse.ts
+function fail6(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var SHAPES3 = [
   ["circle", /^([^\s()[\]{}]*)\(\(([\s\S]*)\)\)$/u],
   ["bang", /^([^\s()[\]{}]*)\)\)([\s\S]*)\(\($/u],
@@ -27061,12 +27152,12 @@ function readNode2(content, line) {
       continue;
     const label = labelOf2(m[2] ?? "");
     if (label.paragraphs.length === 0)
-      fail2("A node needs text between its shape delimiters.", line, "empty");
+      fail6("A node needs text between its shape delimiters.", line, "empty");
     return { id: m[1] ?? "", ...label, shape };
   }
   const label = labelOf2(text);
   if (label.paragraphs.length === 0)
-    fail2("A node needs text.", line, "empty");
+    fail6("A node needs text.", line, "empty");
   return { id: text, ...label, shape: "default" };
 }
 function parseMindmap(src) {
@@ -27085,7 +27176,7 @@ function parseMindmap(src) {
       continue;
     if (!headerSeen) {
       if (s !== "mindmap")
-        fail2('A mindmap starts with "mindmap".', lineNo, "header");
+        fail6('A mindmap starts with "mindmap".', lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -27104,7 +27195,7 @@ ${(rows[m] ?? "").trim()}`;
           break;
       }
       if (m >= rows.length)
-        fail2("A markdown string is never closed.", lineNo, "string");
+        fail6("A markdown string is never closed.", lineNo, "string");
       n = m;
     }
     const indent = raw.length - raw.trimStart().length;
@@ -27115,7 +27206,7 @@ ${(rows[m] ?? "").trim()}`;
     const parent = stack[stack.length - 1];
     if (parent === undefined) {
       if (root !== undefined)
-        fail2("A mindmap has one root; this node is indented no deeper than it.", lineNo, "root");
+        fail6("A mindmap has one root; this node is indented no deeper than it.", lineNo, "root");
       root = node;
     } else {
       parent.node.children.push(node);
@@ -27123,28 +27214,28 @@ ${(rows[m] ?? "").trim()}`;
     stack.push({ indent, node });
   }
   if (!headerSeen)
-    fail2('A mindmap starts with "mindmap".', 1, "header");
+    fail6('A mindmap starts with "mindmap".', 1, "header");
   if (root === undefined)
-    fail2("A mindmap needs a root node.", rows.length, "empty");
+    fail6("A mindmap needs a root node.", rows.length, "empty");
   return { root, ...acc.title === undefined ? {} : { accTitle: acc.title } };
 }
 
 // src/mindmap/text.ts
 var labelOf3 = (n) => n.paragraphs.join(" ");
-function mindmapTextSpans(map, maxWidth, heading) {
+function mindmapTextLines(map, maxWidth, heading) {
   const rows = [];
   const walk = (children, prefix) => {
     children.forEach((c, i) => {
       const last = i === children.length - 1;
-      rows.push(spansOf([`${prefix}${last ? "└── " : "├── "}`, "dim"], labelOf3(c)));
+      rows.push(`${prefix}${last ? "└── " : "├── "}${labelOf3(c)}`);
       walk(c.children, `${prefix}${last ? "    " : "│   "}`);
     });
   };
-  rows.push(spansOf([labelOf3(map.root), "bold"]));
+  rows.push(labelOf3(map.root));
   walk(map.root.children, "");
-  const head = heading === undefined || heading === "" ? [] : [spansOf([heading, "bold"])];
+  const head = heading === undefined || heading === "" ? [] : [heading];
   const lines = [...head, ...rows];
-  return maxWidth === undefined ? lines : lines.map((l) => cutSpans(l, maxWidth));
+  return maxWidth === undefined ? lines : lines.map((l) => cut2(l, maxWidth));
 }
 
 // src/mindmap/frontend.ts
@@ -27164,10 +27255,7 @@ var mindmapFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return mindmapTextSpans(parseMindmap(src), maxWidth, opts.heading);
+    return mindmapTextLines(parseMindmap(src), maxWidth, opts.heading);
   },
   json(src, mode, opts) {
     const { map, layout } = layoutOf(src, opts, mode);
@@ -27216,6 +27304,9 @@ function nearestSeries(hex, opts = {}) {
 // src/quadrant/parse.ts
 var POINT = /^(.+?)(?::::([A-Za-z_][\w-]*))?\s*:\s*\[\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*,\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*\]\s*(.*)$/u;
 var STYLE_KEYS = new Set(["radius", "color", "stroke-color", "stroke-width"]);
+function fail7(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function unquote4(text) {
   const t = text.trim();
   return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1).trim() : t;
@@ -27232,15 +27323,15 @@ function parseStyle(text, line) {
       continue;
     const at = piece.indexOf(":");
     if (at < 0)
-      fail2(`Expected "key: value" in a style, got "${piece}".`, line);
+      fail7(`Expected "key: value" in a style, got "${piece}".`, line);
     const key = piece.slice(0, at).trim();
     const value = piece.slice(at + 1).trim();
     if (!STYLE_KEYS.has(key))
-      fail2(`Unknown style "${key}"; use radius, color, stroke-color or stroke-width.`, line);
+      fail7(`Unknown style "${key}"; use radius, color, stroke-color or stroke-width.`, line);
     if (key === "radius") {
       const m = /^(\d+(?:\.\d+)?)(?:px)?$/u.exec(value);
       if (m === null)
-        fail2(`radius must be a number, got "${value}".`, line);
+        fail7(`radius must be a number, got "${value}".`, line);
       out.radius = Number(m[1]);
     } else if (key === "color" && /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(value)) {
       out.color = value;
@@ -27254,7 +27345,7 @@ function parseAxis(rest, what, line) {
   const at = rest.indexOf("-->");
   const low = unquote4(at < 0 ? rest : rest.slice(0, at));
   if (low === "")
-    fail2(`${what} needs a label.`, line);
+    fail7(`${what} needs a label.`, line);
   if (at < 0)
     return { low };
   const high = unquote4(rest.slice(at + 3));
@@ -27266,7 +27357,7 @@ function chartSize(text, key, line) {
     return;
   const v = Number(m[1]);
   if (v < 80)
-    fail2(`${key} must be at least 80, got ${v}.`, line);
+    fail7(`${key} must be at least 80, got ${v}.`, line);
   return v;
 }
 function parseQuadrant(src, opts = {}) {
@@ -27310,7 +27401,7 @@ function parseQuadrant(src, opts = {}) {
       continue;
     if (!headerSeen) {
       if (s !== "quadrantChart")
-        fail2(`Expected "quadrantChart" before "${s}".`, lineNo);
+        fail7(`Expected "quadrantChart" before "${s}".`, lineNo);
       headerSeen = true;
       continue;
     }
@@ -27324,7 +27415,7 @@ function parseQuadrant(src, opts = {}) {
       for (n++;n < rows.length && (rows[n] ?? "").trim() !== "}"; n++)
         body.push((rows[n] ?? "").trim());
       if (n >= rows.length)
-        fail2('accDescr block is not closed with "}".', lineNo);
+        fail7('accDescr block is not closed with "}".', lineNo);
       chart.accDescr = body.filter((l) => l !== "").join(" ");
     } else if ((m = /^title\s+(.+)$/u.exec(s)) !== null) {
       chart.title = unquote4(m[1] ?? "");
@@ -27344,7 +27435,7 @@ function parseQuadrant(src, opts = {}) {
       const x = Number(m[3]);
       const y = Number(m[4]);
       if (x < 0 || x > 1 || y < 0 || y > 1)
-        fail2(`Coordinates must be between 0 and 1, got [${m[3]}, ${m[4]}].`, lineNo);
+        fail7(`Coordinates must be between 0 and 1, got [${m[3]}, ${m[4]}].`, lineNo);
       const style = parseStyle(m[5] ?? "", lineNo);
       for (const k of style.ignoredKeys)
         ignored.add(`point ${k}`);
@@ -27356,11 +27447,11 @@ function parseQuadrant(src, opts = {}) {
       chart.points.push(point);
       pointClass.push(m[2]);
     } else {
-      fail2(`Unrecognised line "${s}".`, lineNo);
+      fail7(`Unrecognised line "${s}".`, lineNo);
     }
   }
   if (!headerSeen)
-    fail2('Missing "quadrantChart" header.', 1);
+    fail7('Missing "quadrantChart" header.', 1);
   chart.points.forEach((p, i) => {
     const cls = pointClass[i];
     if (p.radius === undefined && cls !== undefined) {
@@ -27527,7 +27618,7 @@ function layoutQuadrant(chart, ruler) {
 }
 
 // src/quadrant/text.ts
-function quadrantTextSpans(chart, maxWidth) {
+function quadrantTextLines(chart, maxWidth) {
   const GAP = 2;
   const MIN = 4;
   const rows = chart.points.map((p) => {
@@ -27552,11 +27643,9 @@ function quadrantTextSpans(chart, maxWidth) {
   }
   const lines = [];
   const title = chart.title ?? "Quadrant chart";
-  lines.push(spansOf([maxWidth === undefined ? title : cut2(title, maxWidth), "bold"]));
-  const gap = " ".repeat(GAP);
+  lines.push(maxWidth === undefined ? title : cut2(title, maxWidth));
   for (const r of rows) {
-    const name = cut2(r.name, nameW);
-    lines.push(trimEndSpans(spansOf([name, "bold"], padEnd("", nameW - cellWidth(name)), gap, padStart(r.x, xW), gap, padStart(r.y, yW), gap, [cut2(r.quadrant, quadW), "dim"])));
+    lines.push([padEnd(cut2(r.name, nameW), nameW), padStart(r.x, xW), padStart(r.y, yW), cut2(r.quadrant, quadW)].join(" ".repeat(GAP)).trimEnd());
   }
   return lines;
 }
@@ -27572,10 +27661,7 @@ registerFrontEnd({
     return withDescription(svg, chart.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return quadrantTextSpans(parseQuadrant(src, opts), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return quadrantTextSpans(parseQuadrant(src, opts), maxWidth);
+    return quadrantTextLines(parseQuadrant(src, opts), maxWidth);
   },
   json(src, _mode, opts) {
     return layoutQuadrant(parseQuadrant(src, opts), pixelRuler());
@@ -27825,6 +27911,9 @@ var HEADERS = {
   "railroad-abnf-beta": "abnf",
   "railroad-peg-beta": "peg"
 };
+function fail8(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var SYMBOLS2 = new Set([..."|/,()[]{}?*+!&.-;=:"]);
 var ID_START = /[A-Za-z_]/u;
 var ID2 = /[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*/uy;
@@ -27850,7 +27939,7 @@ function lex(text, notation, firstLine) {
 `)
       j += text[j] === "\\" ? 2 : 1;
     if (text[j] !== quote)
-      fail2("A string is not closed.", line);
+      fail8("A string is not closed.", line);
     const body = text.slice(start + 1, j);
     const raw = text.slice(start - prefix.length, j + 1);
     if (prefix === "")
@@ -27877,7 +27966,7 @@ function lex(text, notation, firstLine) {
       const close = text.startsWith("/*", i) ? "*/" : "*)";
       const end = text.indexOf(close, i + 2);
       if (end < 0)
-        fail2("A comment is not closed.", line);
+        fail8("A comment is not closed.", line);
       line += text.slice(i, end).split(`
 `).length - 1;
       i = end + 2;
@@ -27903,7 +27992,7 @@ function lex(text, notation, firstLine) {
       NUM_VAL.lastIndex = i;
       const m = NUM_VAL.exec(text);
       if (m === null)
-        fail2("A numeric value is written %x41, %d65 or %b1000001.", line);
+        fail8("A numeric value is written %x41, %d65 or %b1000001.", line);
       push("val", m[0], m[0], line);
       i += m[0].length;
       continue;
@@ -27912,7 +28001,7 @@ function lex(text, notation, firstLine) {
       const end = text.indexOf(">", i);
       if (end < 0 || text.slice(i, end).includes(`
 `))
-        fail2("A prose value is not closed.", line);
+        fail8("A prose value is not closed.", line);
       push("prose", text.slice(i, end + 1), text.slice(i, end + 1), line);
       i = end + 1;
       continue;
@@ -27923,7 +28012,7 @@ function lex(text, notation, firstLine) {
 `)
         j += text[j] === "\\" ? 2 : 1;
       if (text[j] !== "]")
-        fail2("A character class is not closed.", line);
+        fail8("A character class is not closed.", line);
       push("class", text.slice(i, j + 1), text.slice(i, j + 1), line);
       i = j + 1;
       continue;
@@ -27954,7 +28043,7 @@ function lex(text, notation, firstLine) {
       i++;
       continue;
     }
-    fail2(`Unexpected character "${ch}".`, line);
+    fail8(`Unexpected character "${ch}".`, line);
   }
   return toks;
 }
@@ -27982,7 +28071,7 @@ class Cursor {
   }
   expectSym(v, what) {
     if (!this.isSym(v))
-      fail2(`Expected "${v}" ${what}.`, this.line());
+      fail8(`Expected "${v}" ${what}.`, this.line());
     this.pos++;
   }
 }
@@ -27990,9 +28079,9 @@ var seqOf = (items) => items.length === 1 ? items[0] : { k: "seq", items };
 var choiceOf = (items) => items.length === 1 ? items[0] : { k: "choice", items };
 function counted2(item, min, max, line) {
   if (max !== null && max < min)
-    fail2(`The repeat count ${min}*${max} runs backwards.`, line);
+    fail8(`The repeat count ${min}*${max} runs backwards.`, line);
   if (max === 0)
-    fail2("A repeat of at most 0 times matches nothing.", line);
+    fail8("A repeat of at most 0 times matches nothing.", line);
   if (min === 1 && max === 1)
     return item;
   if (min === 0 && max === 1)
@@ -28020,7 +28109,7 @@ function group(c, close, inner) {
   const open = c.next();
   const node = inner();
   if (!c.isSym(close))
-    fail2(`"${open.v}" opened here is not closed with "${close}".`, c.line() === c.endLine ? open.line : c.line());
+    fail8(`"${open.v}" opened here is not closed with "${close}".`, c.line() === c.endLine ? open.line : c.line());
   c.pos++;
   return node;
 }
@@ -28046,14 +28135,14 @@ function ebnfSeq(c) {
     if (items.length > 0 && c.isSym(",")) {
       c.pos++;
       if (!ebnfStarts(c.peek()))
-        fail2('A "," must be followed by an element.', c.line());
+        fail8('A "," must be followed by an element.', c.line());
     }
     if (!ebnfStarts(c.peek()))
       break;
     items.push(ebnfExcept(c));
   }
   if (items.length === 0)
-    fail2("An empty alternative; write an element between the separators.", at);
+    fail8("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function ebnfExcept(c) {
@@ -28062,7 +28151,7 @@ function ebnfExcept(c) {
     return item;
   c.pos++;
   if (!ebnfStarts(c.peek()))
-    fail2('A "-" must be followed by the element to exclude.', c.line());
+    fail8('A "-" must be followed by the element to exclude.', c.line());
   return { k: "except", item, except: suffixes(c, ebnfPrimary(c), true) };
 }
 function ebnfPrimary(c) {
@@ -28086,7 +28175,7 @@ function ebnfPrimary(c) {
   while (c.peek() !== undefined && !c.isSym("?"))
     words.push(c.next());
   if (!c.isSym("?"))
-    fail2('A special sequence "? ... ?" is not closed.', t.line);
+    fail8('A special sequence "? ... ?" is not closed.', t.line);
   c.pos++;
   const text = words.map((w, i) => (i > 0 && w.sp ? " " : "") + w.raw).join("");
   return { k: "special", text };
@@ -28112,7 +28201,7 @@ function abnfConcat(c) {
   while (abnfStarts(c.peek()))
     items.push(abnfRepetition(c));
   if (items.length === 0)
-    fail2("An empty alternative; write an element between the separators.", at);
+    fail8("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function abnfRepetition(c) {
@@ -28137,7 +28226,7 @@ function abnfRepetition(c) {
     }
   }
   if (!abnfStarts(c.peek()) || c.peek()?.k === "num" || c.isSym("*"))
-    fail2("A repeat count must be followed by an element.", line);
+    fail8("A repeat count must be followed by an element.", line);
   return counted2(abnfElement(c), min, max, line);
 }
 function abnfElement(c) {
@@ -28179,7 +28268,7 @@ function pegSeq(c) {
   while (pegStarts(c.peek()))
     items.push(pegPrefix(c));
   if (items.length === 0)
-    fail2("An empty alternative; write an element between the separators.", at);
+    fail8("An empty alternative; write an element between the separators.", at);
   return seqOf(items);
 }
 function pegPrefix(c) {
@@ -28187,7 +28276,7 @@ function pegPrefix(c) {
   if (t.k === "sym" && (t.v === "!" || t.v === "&")) {
     c.pos++;
     if (!pegStarts(c.peek()))
-      fail2(`A "${t.v}" must be followed by an element.`, c.line());
+      fail8(`A "${t.v}" must be followed by an element.`, c.line());
     return { k: "predicate", op: t.v === "!" ? "not" : "and", item: pegPrefix(c) };
   }
   return suffixes(c, pegPrimary(c), false);
@@ -28214,16 +28303,16 @@ var IR_MANY = ["sequence", "choice"];
 function irCall(c) {
   const t = c.next();
   if (t === undefined || t.k !== "id")
-    fail2('Expected a constructor such as terminal("x") or sequence(a, b).', t?.line ?? c.endLine);
+    fail8('Expected a constructor such as terminal("x") or sequence(a, b).', t?.line ?? c.endLine);
   const name = t.v;
   if (![...IR_ONE, ...IR_TEXT, ...IR_MANY].includes(name))
-    fail2(`"${name}" is not a constructor; use terminal, nonterminal, special, sequence, choice, optional, zeroOrMore or oneOrMore.`, t.line);
+    fail8(`"${name}" is not a constructor; use terminal, nonterminal, special, sequence, choice, optional, zeroOrMore or oneOrMore.`, t.line);
   c.expectSym("(", `after ${name}`);
   let node;
   if (IR_TEXT.includes(name)) {
     const s = c.next();
     if (s === undefined || s.k !== "str")
-      fail2(`${name}( ) takes one quoted string.`, s?.line ?? t.line);
+      fail8(`${name}( ) takes one quoted string.`, s?.line ?? t.line);
     node = name === "terminal" ? { k: "terminal", text: s.v } : name === "nonterminal" ? { k: "nonterminal", name: s.v } : { k: "special", text: s.v };
   } else if (IR_ONE.includes(name)) {
     const item = irCall(c);
@@ -28253,7 +28342,7 @@ function parseRailroad(src, heading) {
   const word = headerAt < 0 ? "" : (rows[headerAt] ?? "").trim().split(/[\s;]+/)[0] ?? "";
   const notation = HEADERS[word];
   if (notation === undefined)
-    fail2("A railroad diagram starts with railroad-beta, railroad-ebnf-beta, railroad-abnf-beta or railroad-peg-beta.", headerAt + 1 || 1, "header");
+    fail8("A railroad diagram starts with railroad-beta, railroad-ebnf-beta, railroad-abnf-beta or railroad-peg-beta.", headerAt + 1 || 1, "header");
   let title;
   const acc = createAccessibilityReader();
   const body = rows.map(() => "");
@@ -28285,38 +28374,38 @@ function parseRailroad(src, heading) {
   while (c.peek() !== undefined) {
     const name = c.next();
     if (name.k !== "id")
-      fail2(`Expected a rule name, found "${name.raw}".`, name.line);
+      fail8(`Expected a rule name, found "${name.raw}".`, name.line);
     const op = c.next();
     if (op === undefined || op.k !== "sym" || !ASSIGN[notation].includes(op.v))
-      fail2(`Expected "${ASSIGN[notation].join('" or "')}" after the rule name "${name.v}".`, op?.line ?? name.line);
+      fail8(`Expected "${ASSIGN[notation].join('" or "')}" after the rule name "${name.v}".`, op?.line ?? name.line);
     let end = c.pos;
     while (end < toks.length && !(toks[end]?.k === "sym" && toks[end]?.v === ";"))
       end++;
     if (end >= toks.length)
-      fail2(`The rule "${name.v}" does not end with ";".`, name.line);
+      fail8(`The rule "${name.v}" does not end with ";".`, name.line);
     const inner = new Cursor(toks.slice(c.pos, end), toks[end]?.line ?? name.line);
     if (inner.peek() === undefined)
-      fail2(`The rule "${name.v}" has no definition.`, name.line);
+      fail8(`The rule "${name.v}" has no definition.`, name.line);
     const bodyNode = notation === "ir" ? irCall(inner) : notation === "ebnf" ? ebnfChoice(inner) : notation === "abnf" ? abnfAlt(inner) : pegChoice(inner);
     const extra = inner.peek();
     if (extra !== undefined)
-      fail2(`Unexpected "${extra.raw}" in the rule "${name.v}".`, extra.line);
+      fail8(`Unexpected "${extra.raw}" in the rule "${name.v}".`, extra.line);
     c.pos = end + 1;
     const known = rules.findIndex((r) => r.name === name.v);
     if (op.v === "=/") {
       const old = rules[known];
       if (old === undefined)
-        fail2(`"${name.v}" is extended with "=/" before it is defined.`, name.line);
+        fail8(`"${name.v}" is extended with "=/" before it is defined.`, name.line);
       const first = old.body.k === "choice" ? old.body.items : [old.body];
       rules[known] = { ...old, body: { k: "choice", items: [...first, ...bodyNode.k === "choice" ? bodyNode.items : [bodyNode]] } };
       continue;
     }
     if (known >= 0)
-      fail2(`The rule "${name.v}" is defined twice.`, name.line);
+      fail8(`The rule "${name.v}" is defined twice.`, name.line);
     rules.push({ name: name.v, body: bodyNode, line: name.line });
   }
   if (rules.length === 0)
-    fail2("A railroad diagram needs at least one rule.", rows.length, "empty");
+    fail8("A railroad diagram needs at least one rule.", rows.length, "empty");
   const final = title ?? (heading !== undefined && heading !== "" ? heading : undefined);
   const accTitle = acc.title;
   return { notation, ...final === undefined ? {} : { title: final }, ...accTitle === undefined || accTitle === "" ? {} : { accTitle }, rules };
@@ -28365,27 +28454,20 @@ function ebnf(node) {
       return `${wrapped(node.item, ebnf(node.item), 3)} - ${wrapped(node.except, ebnf(node.except), 3)}`;
   }
 }
-function ruleLine(name, prefix, body, closes) {
-  const named = prefix.startsWith(name) ? name : "";
-  const end = closes && body.endsWith(";") ? body.length - 1 : body.length;
-  return spansOf([named, "bold"], [prefix.slice(named.length), "dim"], body.slice(0, end), [body.slice(end), "dim"]);
-}
-function railroadTextSpans(model, maxWidth) {
-  const head = model.title === undefined ? [] : [spansOf([maxWidth === undefined ? model.title : cut2(model.title, maxWidth), "bold"])];
+function railroadTextLines(model, maxWidth) {
+  const head = model.title === undefined ? [] : [maxWidth === undefined ? model.title : cut2(model.title, maxWidth)];
   const rows = model.rules.flatMap((rule) => {
     const first = `${rule.name} = `;
     const whole = `${first}${ebnf(rule.body)} ;`;
     if (maxWidth === undefined || cellWidth(whole) <= maxWidth)
-      return [ruleLine(rule.name, first, `${ebnf(rule.body)} ;`, true)];
+      return [whole];
     const pieces = rule.body.k === "choice" ? rule.body.items.map(ebnf) : [ebnf(rule.body)];
     const lead = " ".repeat(cellWidth(rule.name));
     return pieces.flatMap((piece, i) => {
       const prefix = i === 0 ? first : `${lead} ${rule.body.k === "choice" && rule.body.ordered === true ? "/" : "|"} `;
       const room = Math.max(1, maxWidth - cellWidth(prefix));
-      const last = i === pieces.length - 1;
-      const body = last ? `${piece} ;` : piece;
-      const wrapped = wrapWords(body, room, cellWidth, { blank: true });
-      return wrapped.map((l, j) => ruleLine(rule.name, j === 0 ? prefix : " ".repeat(cellWidth(prefix)), l, last && j === wrapped.length - 1));
+      const body = i === pieces.length - 1 ? `${piece} ;` : piece;
+      return wrapWords(body, room, cellWidth, { blank: true }).map((l, j) => (j === 0 ? prefix : " ".repeat(cellWidth(prefix))) + l);
     });
   });
   return [...head, ...rows];
@@ -28400,10 +28482,7 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return railroadTextSpans(parseRailroad(src, opts.heading), maxWidth);
+    return railroadTextLines(parseRailroad(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseRailroad(src, opts.heading);
@@ -29162,7 +29241,7 @@ function sceneItems(blocks, links, model, u) {
   for (const link of links) {
     if (link.invisible || link.points.length < 2)
       continue;
-    const role = ["edge", ...link.arrow ? ["edge--arrow"] : [], ...link.arrowStart ? ["edge--arrow-start"] : [], ...link.style === "dotted" ? ["edge--pending"] : [], ...link.style === "thick" ? ["edge--accent", "edge--thick"] : []];
+    const role = ["edge", ...link.arrow ? ["edge--arrow"] : [], ...link.arrowStart ? ["edge--arrow-start"] : [], ...link.style === "dotted" ? ["edge--pending"] : [], ...link.style === "thick" ? ["edge--accent"] : []];
     const line = { kind: "line", points: link.points, role, data: { from: link.from, to: link.to } };
     items.push(line);
   }
@@ -29196,7 +29275,7 @@ function sceneItems(blocks, links, model, u) {
 }
 
 // src/block/parse.ts
-function fail4(message, line, code = "syntax", column) {
+function fail9(message, line, code = "syntax", column) {
   throw new UrsulaError(message, code, line, column === undefined ? {} : { column });
 }
 var BRACKETS = [
@@ -29259,7 +29338,7 @@ function readBracket(rest, line) {
   if (rest[at] === '"') {
     const end = rest.indexOf('"', at + 1);
     if (end < 0)
-      fail4("A label opened with a quote has no closing quote.", line);
+      fail9("A label opened with a quote has no closing quote.", line);
     body = rest.slice(at + 1, end);
     at = end + 1;
     while (rest[at] === " ")
@@ -29272,19 +29351,19 @@ function readBracket(rest, line) {
         end = found;
     }
     if (end < 0)
-      fail4(`"${first.open}" has no closing "${first.close}".`, line);
+      fail9(`"${first.open}" has no closing "${first.close}".`, line);
     body = rest.slice(at, end).trim();
     at = end;
   }
   const closer = candidates.find((c) => rest.startsWith(c.close, at));
   if (closer === undefined)
-    fail4(`"${first.open}" has no closing "${first.close}".`, line);
+    fail9(`"${first.open}" has no closing "${first.close}".`, line);
   return { shape: closer.shape, label: labelLines3(body), length: at + closer.close.length };
 }
 function readHeads(rest, line) {
   const m = /^\(([^)]*)\)/u.exec(rest);
   if (m === null)
-    return fail4('A block arrow names its direction: <["label"]>(right).', line, "arrow");
+    return fail9('A block arrow names its direction: <["label"]>(right).', line, "arrow");
   const heads = [];
   for (const word of (m[1] ?? "").split(",").map((w) => w.trim().toLowerCase())) {
     if (word === "x")
@@ -29294,7 +29373,7 @@ function readHeads(rest, line) {
     else if (DIRECTIONS.has(word))
       heads.push(word);
     else
-      fail4(`"${word}" is not a direction of a block arrow; use right, left, up, down, x or y.`, line, "arrow");
+      fail9(`"${word}" is not a direction of a block arrow; use right, left, up, down, x or y.`, line, "arrow");
   }
   return { heads: [...new Set(heads)], length: m[0].length };
 }
@@ -29317,7 +29396,7 @@ function tokenize(s, line) {
     }
     const id = ID3.exec(rest)?.[0];
     if (id === undefined)
-      fail4(`Cannot read "${rest.trim()}"; a block is an id, optionally followed by a bracket pair and ":width".`, line);
+      fail9(`Cannot read "${rest.trim()}"; a block is an id, optionally followed by a bracket pair and ":width".`, line);
     pos += id.length;
     const node = { t: "node", id, space: id === "space" };
     const bracket = readBracket(s.slice(pos), line);
@@ -29336,10 +29415,10 @@ function tokenize(s, line) {
       node.span = Number(width[1]);
       pos += width[0].length;
       if (node.span < 1)
-        fail4(`The width of "${id}" is ${node.span}; a width is at least 1.`, line, "width");
+        fail9(`The width of "${id}" is ${node.span}; a width is at least 1.`, line, "width");
     }
     if (pos < s.length && s[pos] !== " " && s[pos] !== "\t" && readLink(s.slice(pos)) === undefined) {
-      fail4(`Cannot read "${s.slice(pos).trim()}" after "${id}".`, line);
+      fail9(`Cannot read "${s.slice(pos).trim()}" after "${id}".`, line);
     }
     tokens.push(node);
   }
@@ -29395,7 +29474,7 @@ function parseBlock(src, heading) {
       continue;
     if (!headerSeen) {
       if (!/^block(?:-beta)?$/u.test(s))
-        fail4('A block diagram starts with "block".', line, "header");
+        fail9('A block diagram starts with "block".', line, "header");
       headerSeen = true;
       continue;
     }
@@ -29403,7 +29482,7 @@ function parseBlock(src, heading) {
       continue;
     if (s === "end") {
       if (stack.length === 1)
-        fail4('"end" closes a block that was never opened.', line, "block");
+        fail9('"end" closes a block that was never opened.', line, "block");
       stack.pop();
       continue;
     }
@@ -29415,7 +29494,7 @@ function parseBlock(src, heading) {
       else if (/^[1-9]\d*$/u.test(value))
         current().columns = Number(value);
       else
-        fail4(`"columns ${value}" needs a number of columns or "auto".`, line, "columns");
+        fail9(`"columns ${value}" needs a number of columns or "auto".`, line, "columns");
       continue;
     }
     if (IGNORED3.test(s)) {
@@ -29449,7 +29528,7 @@ function parseBlock(src, heading) {
       continue;
     }
     if (tokens.some((t, i) => i % 2 === 0 !== (t.t === "node")) || tokens[tokens.length - 1]?.t !== "node") {
-      fail4("A link joins two blocks: A --> B.", line, "link", (rows[n] ?? "").trimEnd().length + 1);
+      fail9("A link joins two blocks: A --> B.", line, "link", (rows[n] ?? "").trimEnd().length + 1);
     }
     for (const t of tokens)
       if (t.t === "node")
@@ -29469,13 +29548,13 @@ function parseBlock(src, heading) {
     }
   }
   if (!headerSeen)
-    fail4('A block diagram starts with "block".', 1, "header");
+    fail9('A block diagram starts with "block".', 1, "header");
   if (stack.length > 1)
-    fail4('A "block" is not closed by "end".', current().line, "block");
+    fail9('A "block" is not closed by "end".', current().line, "block");
   for (const link of links) {
     for (const end of [link.from, link.to]) {
       if (!byId.has(end))
-        fail4(`The link names "${end}", which is not a block.`, link.line, "link");
+        fail9(`The link names "${end}", which is not a block.`, link.line, "link");
     }
   }
   return {
@@ -29530,40 +29609,35 @@ var HEAVY2 = {
 
 class Canvas2 {
   rows;
-  tones;
   width;
   constructor(width, height) {
     this.width = width;
     this.rows = Array.from({ length: height }, () => new Array(width).fill(" "));
-    this.tones = Array.from({ length: height }, () => new Array(width).fill("normal"));
   }
-  put(x, y, ch, tone = "normal") {
+  put(x, y, ch) {
     const row = this.rows[y];
-    const tones = this.tones[y];
-    if (row === undefined || tones === undefined || x < 0 || x >= this.width)
+    if (row === undefined || x < 0 || x >= this.width)
       return;
     row[x] = ch;
-    tones[x] = tone;
   }
-  text(x, y, s, tone = "normal") {
+  text(x, y, s) {
     let at = x;
     for (const ch of s) {
       const w = cellWidth(ch);
-      this.put(at, y, ch, tone);
+      this.put(at, y, ch);
       if (w === 2)
-        this.put(at + 1, y, "", tone);
+        this.put(at + 1, y, "");
       at += w;
     }
   }
   lines() {
-    const out = this.rows.map((r, y) => trimEndSpans(spansOf(...r.map((ch, x) => [ch, this.tones[y]?.[x] ?? "normal"]))));
-    while (out.length > 0 && out[out.length - 1]?.length === 0)
+    const out = this.rows.map((r) => r.join("").trimEnd());
+    while (out.length > 0 && out[out.length - 1] === "")
       out.pop();
-    while (out.length > 0 && out[0]?.length === 0)
+    while (out.length > 0 && out[0] === "")
       out.shift();
-    const texts = out.map(joinSpans);
-    const indent = Math.min(...texts.filter((l) => l !== "").map((l) => l.length - l.trimStart().length));
-    return Number.isFinite(indent) ? out.map((l) => sliceSpans(l, indent)) : out;
+    const indent = Math.min(...out.filter((l) => l !== "").map((l) => l.length - l.trimStart().length));
+    return Number.isFinite(indent) ? out.map((l) => l.slice(indent)) : out;
   }
 }
 function glyphsOf(b) {
@@ -29597,20 +29671,19 @@ function glyphsOf(b) {
 function drawFrame(c, b, g, dashed) {
   const { x, y, w, h } = b;
   const mid = y + Math.floor(h / 2);
-  const tone = dashed ? "dim" : "normal";
   for (let i = 1;i < w - 1; i++) {
-    c.put(x + i, y, dashed ? "╌" : g.top, tone);
-    c.put(x + i, y + h - 1, dashed ? "╌" : g.top, tone);
+    c.put(x + i, y, dashed ? "╌" : g.top);
+    c.put(x + i, y + h - 1, dashed ? "╌" : g.top);
   }
   for (let j = 1;j < h - 1; j++) {
     const row = y + j;
-    c.put(x, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[0] : g.side, tone);
-    c.put(x + w - 1, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[1] : g.side, tone);
+    c.put(x, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[0] : g.side);
+    c.put(x + w - 1, row, dashed ? "╎" : row === mid && g.mid !== undefined ? g.mid[1] : g.side);
   }
-  c.put(x, y, g.corners[0], tone);
-  c.put(x + w - 1, y, g.corners[1], tone);
-  c.put(x, y + h - 1, g.corners[2], tone);
-  c.put(x + w - 1, y + h - 1, g.corners[3], tone);
+  c.put(x, y, g.corners[0]);
+  c.put(x + w - 1, y, g.corners[1]);
+  c.put(x, y + h - 1, g.corners[2]);
+  c.put(x + w - 1, y + h - 1, g.corners[3]);
 }
 function drawMarks(c, b) {
   const { x, y, w, h } = b;
@@ -29663,7 +29736,7 @@ function drawBlock(c, b) {
     if (line === "")
       return;
     const w = cellWidth(line);
-    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line, "bold");
+    c.text(b.x + 1 + Math.max(0, Math.floor((room - w) / 2)), first + i, line);
   });
 }
 function cellOf3(p, block, isEnd) {
@@ -29722,7 +29795,7 @@ function drawLinks(c, links, byId) {
     const horizontal = (cell.bits & (E5 | W6)) !== 0 && (cell.bits & (N5 | S5)) === 0;
     const vertical = (cell.bits & (N5 | S5)) !== 0 && (cell.bits & (E5 | W6)) === 0;
     const glyph = cell.style === "dotted" && horizontal ? "┄" : cell.style === "dotted" && vertical ? "┆" : (cell.style === "thick" ? HEAVY2 : LIGHT2)[cell.bits] ?? "┼";
-    c.put(x, y, glyph, cell.style === "dotted" ? "dim" : "normal");
+    c.put(x, y, glyph);
   }
   for (const h of heads)
     c.put(h.x, h.y, h.ch);
@@ -29746,28 +29819,11 @@ function render(layout) {
   drawChips(c, layout.links);
   return c.lines();
 }
-function tonesAlong(whole) {
-  const blank = (ch) => /\s/u.test(ch);
-  const tones = whole.flatMap((s) => [...s.text].filter((ch) => !blank(ch)).map(() => s.tone));
-  let at = 0;
-  return (line) => {
-    const chars = [...line];
-    const own = chars.map((ch) => blank(ch) ? undefined : tones[at++] ?? "normal");
-    return spansOf(...chars.map((ch, i) => {
-      const tone = own[i];
-      if (tone !== undefined)
-        return [ch, tone];
-      const before = own.slice(0, i).reverse().find((t) => t !== undefined);
-      const after = own.slice(i + 1).find((t) => t !== undefined);
-      return [ch, before !== undefined && before === after ? before : "normal"];
-    }));
-  };
-}
 function outline2(model, maxWidth) {
   const lines = [];
   if (model.title !== undefined)
-    lines.push(spansOf([model.title, "bold"]), []);
-  const label = (item) => item.kind === "space" ? spansOf(["·".repeat(Math.min(item.span, 3)), "dim"]) : item.kind === "group" ? spansOf(["[", "dim"], [item.id, "bold"], ["]", "dim"]) : spansOf([item.lines.join(" "), "bold"], [item.span > 1 ? ` x${item.span}` : "", "dim"]);
+    lines.push(model.title, "");
+  const label = (item) => item.kind === "space" ? "·".repeat(Math.min(item.span, 3)) : item.kind === "group" ? `[${item.id}]` : `${item.lines.join(" ")}${item.span > 1 ? ` x${item.span}` : ""}`;
   const walk = (children, columns, depth) => {
     const perRow = [[]];
     let used = 0;
@@ -29781,10 +29837,8 @@ function outline2(model, maxWidth) {
       used += span;
     }
     for (const row of perRow) {
-      const whole = spansOf(...row.flatMap((item, i) => [i === 0 ? "" : [" | ", "dim"], label(item)]));
-      const along = tonesAlong(whole);
-      for (const text of wrapWords(joinSpans(whole), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true }))
-        lines.push(spansOf("  ".repeat(depth), along(text)));
+      for (const text of wrapWords(row.map(label).join(" | "), Math.max(8, maxWidth - 2 * depth), cellWidth, { blank: true }))
+        lines.push(`${"  ".repeat(depth)}${text}`);
       for (const item of row)
         if (item.kind === "group")
           walk(item.children, item.columns, depth + 1);
@@ -29792,26 +29846,18 @@ function outline2(model, maxWidth) {
   };
   walk(model.children, model.columns, 0);
   if (model.links.length > 0)
-    lines.push([]);
-  for (const link of model.links) {
-    const line = `${link.style === "dotted" ? "┄" : link.style === "thick" ? "━" : "─"}${link.arrow ? "▶" : "─"}`;
-    lines.push(spansOf([link.from, "bold"], " ", [line, link.style === "dotted" ? "dim" : "normal"], " ", [link.to, "bold"], [link.label === undefined ? "" : `  ${link.label}`, "dim"]));
-  }
-  return lines.map((l) => {
-    const text = joinSpans(l);
-    if (cellWidth(text) <= maxWidth)
-      return l;
-    const kept = [...text].slice(0, maxWidth - 1).join("").length;
-    return spansOf(sliceSpans(l, 0, kept), ["…", sliceSpans(l, kept, kept + 1)[0]?.tone ?? "normal"]);
-  });
+    lines.push("");
+  for (const link of model.links)
+    lines.push(`${link.from} ${link.style === "dotted" ? "┄" : link.style === "thick" ? "━" : "─"}${link.arrow ? "▶" : "─"} ${link.to}${link.label === undefined ? "" : `  ${link.label}`}`);
+  return lines.map((l) => cellWidth(l) > maxWidth ? [...l].slice(0, maxWidth - 1).join("") + "…" : l);
 }
-function blockTextSpans(model, maxWidth) {
+function blockTextLines(model, maxWidth) {
   const ruler = cellRuler();
-  const titleRows = model.title === undefined ? [] : [spansOf([model.title, "bold"]), []];
+  const titleRows = model.title === undefined ? [] : [model.title, ""];
   const { title, ...untitled } = model;
   for (const compact of [false, true]) {
     const body = render(layoutBlock(untitled, ruler, compact));
-    const widest = Math.max(0, ...body.map((l) => cellWidth(joinSpans(l))));
+    const widest = Math.max(0, ...body.map(cellWidth));
     if (maxWidth === undefined || widest <= maxWidth)
       return [...titleRows, ...body];
   }
@@ -29828,10 +29874,7 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return blockTextSpans(parseBlock(src, opts.heading), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return blockTextSpans(parseBlock(src, opts.heading), maxWidth);
+    return blockTextLines(parseBlock(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const model = parseBlock(src, opts.heading);
@@ -30066,6 +30109,9 @@ function ringPath(cx, cy, outer, inner, a0, a1, gap, corner) {
 // src/pie/parse.ts
 var SLICE = /^"([^"]*)"\s*:\s*(.+)$/u;
 var NUMBER2 = /^\d+(?:\.\d+)?$/u;
+function fail10(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function parsePie(src, heading, config) {
   const rows = src.split(/\r?\n/);
   const slices = [];
@@ -30084,7 +30130,7 @@ function parsePie(src, heading, config) {
     if (!headerSeen) {
       const head = /^pie(?:\s+(.*))?$/u.exec(s);
       if (head === null)
-        fail2('A pie chart starts with "pie".', lineNo, "header");
+        fail10('A pie chart starts with "pie".', lineNo, "header");
       headerSeen = true;
       let rest = (head[1] ?? "").trim();
       for (;; ) {
@@ -30106,7 +30152,7 @@ function parsePie(src, heading, config) {
         break;
       }
       if (rest !== "")
-        fail2(`Unexpected "${rest}" after "pie".`, lineNo);
+        fail10(`Unexpected "${rest}" after "pie".`, lineNo);
       continue;
     }
     if (/^showData$/u.test(s)) {
@@ -30126,21 +30172,21 @@ function parsePie(src, heading, config) {
       continue;
     const m = SLICE.exec(s);
     if (m === null)
-      fail2(`Cannot read "${s}"; a slice is written "label" : value.`, lineNo);
+      fail10(`Cannot read "${s}"; a slice is written "label" : value.`, lineNo);
     const raw = (m[2] ?? "").trim();
     if (/^-\d/u.test(raw))
-      fail2(`"${m[1] ?? ""}" has the negative value ${raw}; values must be greater than zero.`, lineNo, "value");
+      fail10(`"${m[1] ?? ""}" has the negative value ${raw}; values must be greater than zero.`, lineNo, "value");
     if (!NUMBER2.test(raw))
-      fail2(`"${raw}" is not a number; a value is digits with an optional decimal part.`, lineNo, "value");
+      fail10(`"${raw}" is not a number; a value is digits with an optional decimal part.`, lineNo, "value");
     const value = Number(raw);
     if (value <= 0)
-      fail2(`"${m[1] ?? ""}" has the value ${raw}; values must be greater than zero.`, lineNo, "value");
+      fail10(`"${m[1] ?? ""}" has the value ${raw}; values must be greater than zero.`, lineNo, "value");
     slices.push({ label: m[1] ?? "", value, valueText: raw });
   }
   if (!headerSeen)
-    fail2('A pie chart starts with "pie".', 1, "header");
+    fail10('A pie chart starts with "pie".', 1, "header");
   if (slices.length === 0)
-    fail2("A pie chart needs at least one slice.", rows.length, "empty");
+    fail10("A pie chart needs at least one slice.", rows.length, "empty");
   if (!bodyTitle && heading !== undefined && heading !== "")
     title = heading;
   const hole = configSection(config, "pie")?.["donutHole"];
@@ -30152,7 +30198,7 @@ function parsePie(src, heading, config) {
 function percent(value, total) {
   return `${(value / total * 100).toFixed(1)}%`;
 }
-function pieTextSpans(pie, maxWidth) {
+function pieTextLines(pie, maxWidth) {
   const total = pie.slices.reduce((sum, s) => sum + s.value, 0);
   const values = pie.slices.map((s) => s.valueText);
   const shares = pie.slices.map((s) => percent(s.value, total));
@@ -30161,12 +30207,11 @@ function pieTextSpans(pie, maxWidth) {
   const fixed = 2 + valueW + 2 + shareW;
   const labelW = Math.max(...pie.slices.map((s) => cellWidth(s.label)));
   const cap = maxWidth === undefined ? labelW : Math.max(1, Math.min(labelW, maxWidth - fixed));
-  const largest = pie.slices.findIndex((s) => s.value === Math.max(...pie.slices.map((t) => t.value)));
   const rows = pie.slices.map((s, i) => {
     const label = cut2(s.label, cap);
-    return spansOf(`${padEnd(label, cap)}  ${padStart(values[i] ?? "", valueW)}  `, [padStart(shares[i] ?? "", shareW), i === largest ? "accent" : "dim"]);
+    return `${padEnd(label, cap)}  ${padStart(values[i] ?? "", valueW)}  ${padStart(shares[i] ?? "", shareW)}`;
   });
-  const head = pie.title === undefined ? [] : [spansOf([maxWidth === undefined ? pie.title : cut2(pie.title, maxWidth), "bold"])];
+  const head = pie.title === undefined ? [] : [maxWidth === undefined ? pie.title : cut2(pie.title, maxWidth)];
   return [...head, ...rows];
 }
 
@@ -30179,10 +30224,7 @@ var pieFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return pieTextSpans(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
+    return pieTextLines(parsePie(src, frontOf(opts).heading, frontOf(opts).config), maxWidth);
   },
   json(src, mode, opts) {
     const pie = parsePie(src, frontOf(opts).heading, frontOf(opts).config);
@@ -30315,6 +30357,9 @@ function layoutPacket(packet, ruler) {
 // src/packet/parse.ts
 var MAX_ROWS = 2000;
 var FIELD = /^(\+\s*\d+|\d+(?:\s*-\s*\d+)?)\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*;?$/u;
+function fail11(message, line) {
+  throw new UrsulaError(message, "syntax", line);
+}
 function unquote6(value) {
   const v = value.trim();
   const q = v[0];
@@ -30380,7 +30425,7 @@ function parsePacket(src, opts = {}) {
     }
     if (!seenHeader) {
       if (s !== "packet" && s !== "packet-beta")
-        fail2("expected a 'packet' header", line);
+        fail11("expected a 'packet' header", line);
       seenHeader = true;
       continue;
     }
@@ -30398,7 +30443,7 @@ function parsePacket(src, opts = {}) {
     }
     const m = FIELD.exec(s);
     if (!m)
-      fail2(`cannot read '${s}'; a field is written 0-15: "Name", 7: "Name" or +8: "Name"`, line);
+      fail11(`cannot read '${s}'; a field is written 0-15: "Name", 7: "Name" or +8: "Name"`, line);
     const spec = (m[1] ?? "").replace(/\s+/gu, "");
     const label = m[2] ?? m[3] ?? "";
     let start;
@@ -30406,7 +30451,7 @@ function parsePacket(src, opts = {}) {
     if (spec.startsWith("+")) {
       const count = Number(spec.slice(1));
       if (count === 0)
-        fail2("a field cannot have 0 bits", line);
+        fail11("a field cannot have 0 bits", line);
       start = lastBit + 1;
       end = start + count - 1;
     } else if (spec.includes("-")) {
@@ -30414,24 +30459,24 @@ function parsePacket(src, opts = {}) {
       start = Number(a);
       end = Number(b);
       if (end < start)
-        fail2(`bits ${start}-${end}: the end must not be smaller than the start`, line);
+        fail11(`bits ${start}-${end}: the end must not be smaller than the start`, line);
     } else {
       start = Number(spec);
       end = start;
     }
     if (start !== lastBit + 1)
-      fail2(`bits ${start}-${end} are not contiguous; the next field must start at bit ${lastBit + 1}`, line);
+      fail11(`bits ${start}-${end} are not contiguous; the next field must start at bit ${lastBit + 1}`, line);
     lastBit = end;
     fields.push({ start, end, label, line });
   }
   if (!seenHeader)
-    fail2("expected a 'packet' header", rows.length === 0 ? 1 : rows.length);
+    fail11("expected a 'packet' header", rows.length === 0 ? 1 : rows.length);
   if (fields.length === 0)
-    fail2("the packet has no fields", rows.length);
+    fail11("the packet has no fields", rows.length);
   const bitsPerRow = settings.bitsPerRow ?? 32;
   title ??= opts.heading;
   if (Math.ceil((lastBit + 1) / bitsPerRow) > MAX_ROWS)
-    fail2(`the packet needs more than ${MAX_ROWS} rows`, fields[fields.length - 1]?.line ?? 1);
+    fail11(`the packet needs more than ${MAX_ROWS} rows`, fields[fields.length - 1]?.line ?? 1);
   return {
     ...title === undefined || title === "" ? {} : { title },
     fields,
@@ -30460,7 +30505,6 @@ function put2(row, at, text) {
       row[at + i] = ch;
   });
 }
-var rowOf2 = (cells, tone) => trimEndSpans(spansOf([cells.join(""), tone]));
 function layoutPacketText(packet, maxWidth) {
   const { cells: k, bits } = plan(packet.bitsPerRow, maxWidth);
   const pieces = splitFields({ ...packet, bitsPerRow: bits });
@@ -30468,13 +30512,12 @@ function layoutPacketText(packet, maxWidth) {
   const total = bits * k + 1;
   const out = [];
   if (packet.title !== undefined)
-    out.push(spansOf([packet.title, "bold"]), []);
+    out.push(packet.title, "");
   for (let r = 0;r < rows; r++) {
     const mine = pieces.filter((p) => p.row === r).sort((a, b) => a.c0 - b.c0);
     const numbers = new Array(total).fill(" ");
     const top = new Array(total).fill(" ");
     const mid = new Array(total).fill(" ");
-    const named = new Array(total).fill(false);
     const bottom = new Array(total).fill(" ");
     mine.forEach((p, i) => {
       const x0 = p.c0 * k;
@@ -30493,21 +30536,15 @@ function layoutPacketText(packet, maxWidth) {
       mid[x1] = "│";
       const room = x1 - x0 - 1;
       const name = shrinkToFit(p.label, room, cellWidth) ?? "…";
-      const at = x0 + 1 + Math.floor((room - cellWidth(name)) / 2);
-      put2(mid, at, name);
-      [...name].forEach((_, j) => {
-        if (at + j < total)
-          named[at + j] = true;
-      });
+      put2(mid, x0 + 1 + Math.floor((room - cellWidth(name)) / 2), name);
       const num = String(p.left);
       const nextAt = mine[i + 1] === undefined ? total : (mine[i + 1]?.c0 ?? 0) * k;
       if (x0 + num.length < nextAt)
         put2(numbers, x0, num);
     });
     if (packet.showBits)
-      out.push(rowOf2(numbers, "dim"));
-    const middle = spansOf(...mid.map((ch, x) => [ch, named[x] === true ? "bold" : "normal"]));
-    out.push(rowOf2(top, "normal"), trimEndSpans(middle), rowOf2(bottom, "normal"));
+      out.push(numbers.join("").trimEnd());
+    out.push(top.join("").trimEnd(), mid.join("").trimEnd(), bottom.join("").trimEnd());
   }
   return out;
 }
@@ -30524,9 +30561,6 @@ registerFrontEnd({
     return renderThemedScene(scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
     return layoutPacketText(parsePacket(src, packetOptions(opts)), maxWidth);
   },
   json(src, mode, opts) {
@@ -30868,6 +30902,9 @@ function layoutRadar(model, ruler) {
 // src/radar/parse.ts
 var NUMBER3 = /^[-+]?(?:\d+\.?\d*|\.\d+)$/u;
 var ID4 = /^[\w-]+/u;
+function fail12(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function stripComment5(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -30888,7 +30925,7 @@ function readEntries(text, withBody, line) {
     skip();
     const id = ID4.exec(text.slice(i))?.[0];
     if (id === undefined)
-      fail2(`expected an id, found "${text.slice(i, i + 12)}"`, line);
+      fail12(`expected an id, found "${text.slice(i, i + 12)}"`, line);
     i += id.length;
     const entry = { id };
     skip();
@@ -30900,17 +30937,17 @@ function readEntries(text, withBody, line) {
       if (q === '"' || q === "'") {
         const end = text.indexOf(q, i + 1);
         if (end < 0)
-          fail2(`unterminated label of "${id}"`, line);
+          fail12(`unterminated label of "${id}"`, line);
         label = text.slice(i + 1, end);
         i = end + 1;
         skip();
         if (text[i] !== "]")
-          fail2(`expected "]" after the label of "${id}"`, line);
+          fail12(`expected "]" after the label of "${id}"`, line);
         i++;
       } else {
         const end = text.indexOf("]", i);
         if (end < 0)
-          fail2(`unterminated label of "${id}"`, line);
+          fail12(`unterminated label of "${id}"`, line);
         label = text.slice(i, end).trim();
         i = end + 1;
       }
@@ -30919,10 +30956,10 @@ function readEntries(text, withBody, line) {
     }
     if (withBody) {
       if (text[i] !== "{")
-        fail2(`curve "${id}" needs its values in braces`, line);
+        fail12(`curve "${id}" needs its values in braces`, line);
       const end = text.indexOf("}", i);
       if (end < 0)
-        fail2(`unterminated values of "${id}"`, line);
+        fail12(`unterminated values of "${id}"`, line);
       entry.body = text.slice(i + 1, end);
       i = end + 1;
       skip();
@@ -30931,14 +30968,14 @@ function readEntries(text, withBody, line) {
     if (i >= text.length)
       return entries;
     if (text[i] !== ",")
-      fail2(`expected "," after "${id}", found "${text.slice(i, i + 12)}"`, line);
+      fail12(`expected "," after "${id}", found "${text.slice(i, i + 12)}"`, line);
     i++;
   }
 }
 function parseNumber(text, what, line) {
   const t = text.trim();
   if (!NUMBER3.test(t))
-    fail2(`${what} must be a number, found "${t}"`, line);
+    fail12(`${what} must be a number, found "${t}"`, line);
   return Number(t);
 }
 function readValues(entry, line) {
@@ -30951,12 +30988,12 @@ function readValues(entry, line) {
     } else {
       const key = part.slice(0, colon).trim();
       if (keyed.has(key))
-        fail2(`curve "${entry.id}" gives axis "${key}" twice`, line);
+        fail12(`curve "${entry.id}" gives axis "${key}" twice`, line);
       keyed.set(key, parseNumber(part.slice(colon + 1), `value of "${entry.id}" on "${key}"`, line));
     }
   }
   if (positional.length > 0 && keyed.size > 0)
-    fail2(`curve "${entry.id}" mixes plain and "axis: value" entries`, line);
+    fail12(`curve "${entry.id}" mixes plain and "axis: value" entries`, line);
   return { id: entry.id, label: entry.label ?? entry.id, positional, keyed, line };
 }
 function readThemeVariables(config) {
@@ -30996,7 +31033,7 @@ function parseRadar(src, heading, config) {
     }
     if (!headerSeen) {
       if (!/^radar(?:-beta)?$/u.test(s))
-        fail2(`a radar diagram starts with "radar-beta", found "${s}"`, lineNo, "header");
+        fail12(`a radar diagram starts with "radar-beta", found "${s}"`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -31006,7 +31043,7 @@ function parseRadar(src, heading, config) {
     switch (keyword) {
       case "title":
         if (rest === "")
-          fail2("title needs a text", lineNo);
+          fail12("title needs a text", lineNo);
         title = unquote7(rest);
         break;
       case "accTitle":
@@ -31018,14 +31055,14 @@ function parseRadar(src, heading, config) {
       case "axis":
         for (const e of readEntries(rest, false, lineNo)) {
           if (axes.some((a) => a.id === e.id))
-            fail2(`axis "${e.id}" is defined twice`, lineNo);
+            fail12(`axis "${e.id}" is defined twice`, lineNo);
           axes.push({ id: e.id, label: e.label ?? e.id });
         }
         break;
       case "curve":
         for (const e of readEntries(rest, true, lineNo)) {
           if (raws.some((c) => c.id === e.id))
-            fail2(`curve "${e.id}" is defined twice`, lineNo);
+            fail12(`curve "${e.id}" is defined twice`, lineNo);
           raws.push(readValues(e, lineNo));
         }
         break;
@@ -31038,43 +31075,43 @@ function parseRadar(src, heading, config) {
       case "ticks": {
         const t = parseNumber(rest, "ticks", lineNo);
         if (!Number.isInteger(t) || t < 1)
-          fail2(`ticks must be a whole number of at least 1, found "${rest}"`, lineNo);
+          fail12(`ticks must be a whole number of at least 1, found "${rest}"`, lineNo);
         ticks = t;
         break;
       }
       case "graticule":
         if (rest !== "circle" && rest !== "polygon")
-          fail2(`graticule is "circle" or "polygon", found "${rest}"`, lineNo);
+          fail12(`graticule is "circle" or "polygon", found "${rest}"`, lineNo);
         out.graticule = rest;
         break;
       case "showLegend":
         if (rest !== "true" && rest !== "false")
-          fail2(`showLegend is "true" or "false", found "${rest}"`, lineNo);
+          fail12(`showLegend is "true" or "false", found "${rest}"`, lineNo);
         out.showLegend = rest === "true";
         break;
       default:
-        fail2(`unknown statement "${s}"`, lineNo);
+        fail12(`unknown statement "${s}"`, lineNo);
     }
   }
   if (!headerSeen)
-    fail2('empty diagram; a radar diagram starts with "radar-beta"', Math.max(1, rows.length), "header");
+    fail12('empty diagram; a radar diagram starts with "radar-beta"', Math.max(1, rows.length), "header");
   if (axes.length === 0)
-    fail2("a radar diagram needs at least one axis", rows.length);
+    fail12("a radar diagram needs at least one axis", rows.length);
   const curves = raws.map((raw) => {
     if (raw.keyed.size > 0) {
       const values = axes.map((a) => {
         const v = raw.keyed.get(a.id);
         if (v === undefined)
-          fail2(`curve "${raw.id}" has no value for axis "${a.id}"`, raw.line);
+          fail12(`curve "${raw.id}" has no value for axis "${a.id}"`, raw.line);
         return v;
       });
       for (const key of raw.keyed.keys())
         if (!axes.some((a) => a.id === key))
-          fail2(`curve "${raw.id}" names the unknown axis "${key}"`, raw.line);
+          fail12(`curve "${raw.id}" names the unknown axis "${key}"`, raw.line);
       return { id: raw.id, label: raw.label, values };
     }
     if (raw.positional.length !== axes.length) {
-      fail2(`curve "${raw.id}" has ${raw.positional.length} values for ${axes.length} axes`, raw.line);
+      fail12(`curve "${raw.id}" has ${raw.positional.length} values for ${axes.length} axes`, raw.line);
     }
     return { id: raw.id, label: raw.label, values: raw.positional };
   });
@@ -31091,7 +31128,7 @@ function parseRadar(src, heading, config) {
 }
 
 // src/radar/text.ts
-function radarTextSpans(model, maxWidth) {
+function radarTextLines(model, maxWidth) {
   const cols = model.curves.map((c, k) => ({ head: c.label, cells: model.axes.map((_, i) => String(c.values[i] ?? "")), k }));
   const labels = model.axes.map((a) => a.label);
   let labelW = Math.max(0, ...labels.map(cellWidth));
@@ -31114,13 +31151,13 @@ function radarTextSpans(model, maxWidth) {
   }
   const lines = [];
   if (model.title !== undefined)
-    lines.push(spansOf([maxWidth === undefined ? model.title : cut2(model.title, maxWidth), "bold"]));
+    lines.push(maxWidth === undefined ? model.title : cut2(model.title, maxWidth));
   if (cols.length > 0)
-    lines.push(spansOf(padEnd("", labelW), ...cols.map((c, j) => ["  " + padStart(cut2(c.head, colW[j] ?? 0), colW[j] ?? 0), "dim"])));
+    lines.push(padEnd("", labelW) + cols.map((c, j) => `  ${padStart(cut2(c.head, colW[j] ?? 0), colW[j] ?? 0)}`).join(""));
   labels.forEach((l, i) => {
-    lines.push(spansOf([padEnd(cut2(l, labelW), labelW), "dim"], cols.map((c, j) => `  ${padStart(c.cells[i] ?? "", colW[j] ?? 0)}`).join("")));
+    lines.push(padEnd(cut2(l, labelW), labelW) + cols.map((c, j) => `  ${padStart(c.cells[i] ?? "", colW[j] ?? 0)}`).join(""));
   });
-  return lines.map(trimEndSpans);
+  return lines.map((l) => l.trimEnd());
 }
 
 // src/radar/frontend.ts
@@ -31132,10 +31169,7 @@ var radarFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return radarTextSpans(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
+    return radarTextLines(parseRadar(src, opts.heading, frontOf(opts).config), maxWidth);
   },
   json(src, _mode, opts) {
     return layoutRadar(parseRadar(src, opts.heading, frontOf(opts).config), pixelRuler());
@@ -31356,11 +31390,6 @@ var requirementFrontEnd = {
     const ruler = cellRuler();
     const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
     return titledLines(renderTextLayout(laid), opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    const ruler = cellRuler();
-    const laid = layout(requirementGraph(parseRequirement(src), ruler), ruler, { ...maxWidth === undefined ? {} : { maxWidth }, ...opts.quality === undefined ? {} : { quality: opts.quality } });
-    return titledSpans(renderTextLayoutSpans(laid), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const ruler = mode === "text" ? cellRuler() : pixelRuler();
@@ -31704,6 +31733,9 @@ function layoutSankey(map, ruler) {
 // src/sankey/parse.ts
 var HEADERS2 = new Set(["sankey-beta", "sankey"]);
 var NUMBER4 = /^(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/u;
+function fail13(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function readSankeyConfig(config) {
   const section = configSection(config, "sankey");
   if (section === undefined)
@@ -31754,7 +31786,7 @@ function csvFields(row, lineNo) {
       i++;
       for (;; ) {
         if (i >= row.length)
-          fail2("A quoted field is not closed.", lineNo, "quote");
+          fail13("A quoted field is not closed.", lineNo, "quote");
         if (row[i] === '"') {
           if (row[i + 1] === '"') {
             text += '"';
@@ -31770,7 +31802,7 @@ function csvFields(row, lineNo) {
       while (row[i] === " " || row[i] === "\t")
         i++;
       if (i < row.length && row[i] !== ",")
-        fail2(`Unexpected text after a quoted field: "${row.slice(i)}".`, lineNo, "quote");
+        fail13(`Unexpected text after a quoted field: "${row.slice(i)}".`, lineNo, "quote");
       fields.push(text);
     } else {
       const end = row.indexOf(",", i);
@@ -31828,7 +31860,7 @@ function parseSankey(src, heading, config) {
     }
     if (!headerSeen) {
       if (!HEADERS2.has(s))
-        fail2(`Expected "sankey-beta" or "sankey" but found "${s}".`, lineNo, "header");
+        fail13(`Expected "sankey-beta" or "sankey" but found "${s}".`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -31836,25 +31868,25 @@ function parseSankey(src, heading, config) {
       continue;
     const fields = csvFields(s, lineNo);
     if (fields.length !== 3)
-      fail2(`A row has three fields (source,target,value) but this one has ${fields.length}.`, lineNo, "fields");
+      fail13(`A row has three fields (source,target,value) but this one has ${fields.length}.`, lineNo, "fields");
     const [from = "", to = "", amount = ""] = fields;
     if (from === "" || to === "")
-      fail2("A row needs a source and a target name.", lineNo, "name");
+      fail13("A row needs a source and a target name.", lineNo, "name");
     if (!NUMBER4.test(amount))
-      fail2(`"${amount}" is not a number; the third field is the value.`, lineNo, "value");
+      fail13(`"${amount}" is not a number; the third field is the value.`, lineNo, "value");
     const value = Number(amount);
     if (value <= 0)
-      fail2(`The value ${amount} must be greater than zero.`, lineNo, "value");
+      fail13(`The value ${amount} must be greater than zero.`, lineNo, "value");
     if (from === to)
-      fail2(`"${from}" flows into itself.`, lineNo, "cycle");
+      fail13(`"${from}" flows into itself.`, lineNo, "cycle");
     const source = nodeOf(from, lineNo);
     const target = nodeOf(to, lineNo);
     links.push({ source, target, value, line: lineNo });
   }
   if (!headerSeen)
-    fail2('Expected "sankey-beta" or "sankey" as the first line.', 1, "header");
+    fail13('Expected "sankey-beta" or "sankey" as the first line.', 1, "header");
   if (links.length === 0)
-    fail2("A sankey needs at least one row source,target,value.", rows.length, "empty");
+    fail13("A sankey needs at least one row source,target,value.", rows.length, "empty");
   assertAcyclic(nodes, links);
   const settings = { ...readSankeyConfig(config), ...init };
   return {
@@ -31878,7 +31910,7 @@ function assertAcyclic(nodes, links) {
     state[i] = 1;
     for (const l of out[i] ?? []) {
       if (state[l.target] === 1)
-        fail2(`"${nodes[l.source]?.name}" to "${nodes[l.target]?.name}" closes a circle of flows; a sankey cannot loop.`, l.line, "cycle");
+        fail13(`"${nodes[l.source]?.name}" to "${nodes[l.target]?.name}" closes a circle of flows; a sankey cannot loop.`, l.line, "cycle");
       if (state[l.target] === 0)
         visit(l.target);
     }
@@ -31890,7 +31922,7 @@ function assertAcyclic(nodes, links) {
 }
 
 // src/sankey/text.ts
-function sankeyTextSpans(map, maxWidth) {
+function sankeyTextLines(map, maxWidth) {
   const rows = map.links.map((l) => ({ from: map.nodes[l.source]?.name ?? "", to: map.nodes[l.target]?.name ?? "", value: valueText(l.value) }));
   const valueW = Math.max(...rows.map((r) => cellWidth(r.value)));
   let fromW = Math.max(...rows.map((r) => cellWidth(r.from)));
@@ -31904,13 +31936,8 @@ function sankeyTextSpans(map, maxWidth) {
         toW--;
     }
   }
-  const largest = map.links.findIndex((l) => l.value === Math.max(...map.links.map((m) => m.value)));
-  const named = (text, width) => {
-    const name = cut2(text, width);
-    return spansOf([name, "bold"], padEnd("", width - cellWidth(name)));
-  };
-  const lines = rows.map((r, i) => spansOf(named(r.from, fromW), "  ", named(r.to, toW), "  ", [padStart(r.value, valueW), i === largest ? "accent" : "normal"]));
-  const head = map.title === undefined ? [] : [spansOf([maxWidth === undefined ? map.title : cut2(map.title, maxWidth), "bold"])];
+  const lines = rows.map((r) => `${padEnd(cut2(r.from, fromW), fromW)}  ${padEnd(cut2(r.to, toW), toW)}  ${padStart(r.value, valueW)}`);
+  const head = map.title === undefined ? [] : [maxWidth === undefined ? map.title : cut2(map.title, maxWidth)];
   return [...head, ...lines];
 }
 
@@ -31927,10 +31954,7 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return sankeyTextSpans(read2(src, opts), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return sankeyTextSpans(read2(src, opts), maxWidth);
+    return sankeyTextLines(read2(src, opts), maxWidth);
   },
   json(src, mode, opts) {
     const sankey = read2(src, opts);
@@ -32453,7 +32477,7 @@ function layoutArchitecture(model, ruler) {
     let firstLine = n.y + n.h / 2 - LINE_STEP * (names.length - 1) / 2;
     if (def.icon !== undefined) {
       items.push(headBand(n.x, n.y, n.w, data));
-      items.push({ kind: "text", x: cx, y: n.y + HEAD_BAND / 2, text: def.icon, role: ["tag-text"], data });
+      items.push({ kind: "text", x: cx, y: n.y + HEAD_BAND2 / 2, text: def.icon, role: ["tag-text"], data });
       firstLine = n.y + NAME_UNDER_BAND2;
     }
     names.forEach((line, i) => items.push({ kind: "text", x: cx, y: firstLine + LINE_STEP * i, text: line, role: ["name"], data }));
@@ -32471,6 +32495,9 @@ var SERVICE = DECLARATION2("service");
 var JUNCTION2 = new RegExp(`^junction\\s+(${ID5})(?:\\s+in\\s+(${ID5}))?$`, "u");
 var EDGE = new RegExp(`^(${ID5})(\\{group\\})?:([TBLR])\\s*(<)?--(>)?\\s*([TBLR]):(${ID5})(\\{group\\})?$`, "u");
 var ALIGN = /^align\s+(row|column)\s+(.+)$/u;
+function fail14(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function parseArchitecture(src, heading) {
   const rows = src.split(/\r?\n/);
   const groups = [];
@@ -32484,24 +32511,24 @@ function parseArchitecture(src, heading) {
   const nodeById = (id) => nodes.find((n) => n.id === id);
   const claim = (id, line) => {
     if (groupById(id) !== undefined || nodeById(id) !== undefined)
-      fail2(`The id "${id}" is already used.`, line, "duplicate");
+      fail14(`The id "${id}" is already used.`, line, "duplicate");
   };
   const parentOf = (id, line) => {
     if (id === undefined)
       return;
     if (groupById(id) === undefined)
-      fail2(`"${id}" is not a group declared above; a service or group goes "in" a group.`, line, "parent");
+      fail14(`"${id}" is not a group declared above; a service or group goes "in" a group.`, line, "parent");
     return id;
   };
   const endpoint = (id, group, line) => {
     const node = nodeById(id);
     if (node === undefined) {
       if (groupById(id) !== undefined)
-        fail2(`"${id}" is a group; an edge names services or junctions.`, line, "edge");
-      fail2(`"${id}" is not declared above.`, line, "edge");
+        fail14(`"${id}" is a group; an edge names services or junctions.`, line, "edge");
+      fail14(`"${id}" is not declared above.`, line, "edge");
     }
     if (group && node.parent === undefined)
-      fail2(`"${id}" stands in no group, so "{group}" has nothing to name.`, line, "edge");
+      fail14(`"${id}" stands in no group, so "{group}" has nothing to name.`, line, "edge");
   };
   rows.forEach((raw, i) => {
     const line = i + 1;
@@ -32512,7 +32539,7 @@ function parseArchitecture(src, heading) {
       return;
     if (!headerSeen) {
       if (s !== "architecture-beta" && s !== "architecture")
-        fail2(`Expected "architecture-beta" but found "${s}".`, line, "header");
+        fail14(`Expected "architecture-beta" but found "${s}".`, line, "header");
       headerSeen = true;
       return;
     }
@@ -32569,19 +32596,19 @@ function parseArchitecture(src, heading) {
     if (a !== null) {
       const members = (a[2] ?? "").split(/\s+/u).filter((m) => m !== "");
       if (members.length < 2)
-        fail2('An "align" line needs at least two members.', line, "align");
+        fail14('An "align" line needs at least two members.', line, "align");
       for (const m of members)
         if (nodeById(m) === undefined)
-          fail2(`"${m}" is not a service or junction declared above.`, line, "align");
+          fail14(`"${m}" is not a service or junction declared above.`, line, "align");
       aligns.push({ axis: a[1] === "row" ? "row" : "column", members, line });
       return;
     }
-    fail2(`Cannot read "${s}"; use group, service, junction, an edge such as "a:R -- L:b", or align.`, line);
+    fail14(`Cannot read "${s}"; use group, service, junction, an edge such as "a:R -- L:b", or align.`, line);
   });
   if (!headerSeen)
-    fail2('Expected "architecture-beta" as the first line.', 1, "header");
+    fail14('Expected "architecture-beta" as the first line.', 1, "header");
   if (nodes.length === 0 && groups.length === 0)
-    fail2("An architecture diagram needs at least one service.", rows.length, "empty");
+    fail14("An architecture diagram needs at least one service.", rows.length, "empty");
   if (title === undefined && heading !== undefined && heading !== "")
     title = heading;
   return { ...title === undefined ? {} : { title }, ...acc.title === undefined || acc.title === "" ? {} : { accTitle: acc.title }, groups, nodes, edges, aligns };
@@ -32644,14 +32671,11 @@ function layoutArchitectureText(model, maxWidth) {
 
 // src/architecture/frontend.ts
 function drawn2(model, maxWidth) {
-  return drawnSpans2(model, maxWidth)?.map((row) => row.map((s) => s.text).join(""));
-}
-function drawnSpans2(model, maxWidth) {
   if (model.nodes.length === 0)
     return;
   try {
-    const lines = renderTextLayoutSpans(layout(architectureGraph(model), cellRuler(), { ...maxWidth === undefined ? {} : { maxWidth }, fold: true, legend: false }));
-    return titledSpans(lines, model.title, maxWidth);
+    const lines = renderTextLayout(layout(architectureGraph(model), cellRuler(), { ...maxWidth === undefined ? {} : { maxWidth }, fold: true, legend: false }));
+    return titledLines(lines, model.title, maxWidth);
   } catch (error) {
     if (error instanceof UrsulaError)
       return;
@@ -32673,7 +32697,7 @@ registerFrontEnd({
   },
   textSpans(src, maxWidth, opts) {
     const model = parseArchitecture(src, opts.heading);
-    return drawnSpans2(model, maxWidth) ?? layoutArchitectureText(model, maxWidth);
+    return drawn2(model, maxWidth)?.map((text) => [{ text, tone: "normal" }]) ?? layoutArchitectureText(model, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseArchitecture(src, opts.heading);
@@ -32811,7 +32835,22 @@ function queuePath(x0, x1, y, h) {
   return `M${fmt4(x0 + rx)} ${fmt4(y)}H${fmt4(x1 - rx)}A${rx} ${ry} 0 0 1 ${fmt4(x1 - rx)} ${fmt4(y + h)}` + `H${fmt4(x0 + rx)}A${rx} ${ry} 0 0 1 ${fmt4(x0 + rx)} ${fmt4(y)}Z` + `M${fmt4(x1 - rx)} ${fmt4(y)}A${rx} ${ry} 0 0 0 ${fmt4(x1 - rx)} ${fmt4(y + h)}`;
 }
 function wrapLine(line, cap, measure) {
-  return wrapWords(line, cap, measure, { keepIfFits: true, longWord: "keep" });
+  if (cap === Infinity || measure(line) <= cap)
+    return [line];
+  const out = [];
+  let cur = "";
+  for (const word of line.split(/\s+/).filter((w) => w !== "")) {
+    const next = cur === "" ? word : `${cur} ${word}`;
+    if (cur === "" || measure(next) <= cap)
+      cur = next;
+    else {
+      out.push(cur);
+      cur = word;
+    }
+  }
+  if (cur !== "")
+    out.push(cur);
+  return out;
 }
 function wrappable(seq) {
   const out = [];
@@ -33745,7 +33784,7 @@ class Grid {
     return cx - x;
   }
 }
-function spansOf3(row) {
+function spansOf2(row) {
   let last = -1;
   row.forEach((cell, i) => {
     if (cell !== undefined && cell.ch !== " ")
@@ -33767,8 +33806,35 @@ function spansOf3(row) {
 function joinSpans2(line) {
   return line.map((s) => s.text).join("");
 }
-function wrapCells2(text, cap, hard) {
-  return wrapWords(text, cap, cellWidth, { keepIfFits: true, longWord: hard ? "break" : "keep" });
+function wrapWords2(text, cap, hard) {
+  if (cap === Infinity || cellWidth(text) <= cap)
+    return [text];
+  const out = [];
+  let cur = "";
+  const flush = () => {
+    if (cur !== "")
+      out.push(cur);
+    cur = "";
+  };
+  for (const word of text.split(/\s+/).filter((w) => w !== "")) {
+    const next = cur === "" ? word : `${cur} ${word}`;
+    if (cellWidth(next) <= cap) {
+      cur = next;
+      continue;
+    }
+    flush();
+    if (!hard || cellWidth(word) <= cap) {
+      cur = word;
+      continue;
+    }
+    for (const ch of word) {
+      if (cellWidth(cur) + cellWidthOf(ch.codePointAt(0) ?? 0) > cap)
+        flush();
+      cur += ch;
+    }
+  }
+  flush();
+  return out;
 }
 var HEADS4 = {
   filled: ["▶", "◀"],
@@ -33811,7 +33877,7 @@ function prepare3(seq, R, limit, headWrap, list, legend, tagged) {
     return named.flatMap((l) => {
       const words = l.split(/\s+/).filter((w) => w !== "");
       const longest = Math.max(0, ...words.map((w) => cellWidth(w)));
-      return wrapCells2(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
+      return wrapWords2(l, Math.max(Math.ceil(cellWidth(l) / 2), longest), false);
     });
   });
   const boxW = headLines.map((lines) => {
@@ -34091,7 +34157,7 @@ function render2(c, gaps) {
       return;
     }
     const pad = T.noteBoxPad;
-    const lines = wrapCells2(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
+    const lines = wrapWords2(text, regionW - 2 * R.nodeBorder - 2 * pad, true);
     const inner = Math.max(...lines.map(cellWidth)) + 2 * pad;
     const w = inner + 2 * R.nodeBorder;
     const x = place(w);
@@ -34125,7 +34191,7 @@ function render2(c, gaps) {
     const hi = bound();
     const lo = low();
     const act = (col) => (depth[col] ?? 0) > 0;
-    const lines = (cap) => wrapCells2(m.label, cap - m.numExtra, true);
+    const lines = (cap) => wrapWords2(m.label, cap - m.numExtra, true);
     const blockW = (ls) => m.numExtra + Math.max(0, ...ls.map(cellWidth));
     if (m.a === m.b) {
       const start = a + T.selfReach + 1 + T.selfGap;
@@ -34262,7 +34328,7 @@ function render2(c, gaps) {
         title(d.row, [[`[${d.text}]`, "normal"]]);
     }
   }
-  const lines = g.rows.map(spansOf3);
+  const lines = g.rows.map(spansOf2);
   let width = 0;
   for (const row of g.rows) {
     let last = -1;
@@ -34278,7 +34344,7 @@ function render2(c, gaps) {
     lines.push([]);
     for (const f of c.footnotes) {
       const numExtra = f.numText === "" ? 0 : cellWidth(f.numText) + 1;
-      wrapCells2(f.label, cap - numExtra, true).forEach((l, k) => {
+      wrapWords2(f.label, cap - numExtra, true).forEach((l, k) => {
         const row = [];
         if (pad !== "")
           row.push({ text: pad, tone: "normal" });
@@ -34434,6 +34500,9 @@ function groupLabel(rest) {
 function textLines(text) {
   return decodeEntities(text).trim().split(BREAK).map((l) => l.trim());
 }
+function fail15(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function stripComment6(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -34466,28 +34535,28 @@ function readDeclaration(rest, line) {
   const id = rest.slice(0, at).trim();
   const end = objectEnd(rest, at + 1);
   if (id === "")
-    fail2("'@{' needs a participant name before it", line);
+    fail15("'@{' needs a participant name before it", line);
   if (end < 0)
-    fail2("missing '}' after '@{'", line);
+    fail15("missing '}' after '@{'", line);
   let config;
   try {
     config = JSON.parse(rest.slice(at + 1, end + 1));
   } catch {
-    return fail2("the participant settings after the name are not valid JSON", line);
+    return fail15("the participant settings after the name are not valid JSON", line);
   }
   if (config === null || typeof config !== "object" || Array.isArray(config))
-    fail2("the participant settings must be an object", line);
+    fail15("the participant settings must be an object", line);
   const { type, alias } = config;
   let kind;
   if (type !== undefined) {
     const found = PARTICIPANT_KINDS.find((k) => k === type);
     if (!found)
-      fail2(`unknown participant type '${String(type)}'; use ${PARTICIPANT_KINDS.join(", ")}`, line);
+      fail15(`unknown participant type '${String(type)}'; use ${PARTICIPANT_KINDS.join(", ")}`, line);
     kind = found;
   }
   const tail = /^\s+as\s+(.+)$/i.exec(rest.slice(end + 1));
   if (rest.slice(end + 1).trim() !== "" && !tail)
-    fail2("expected 'as <label>' after the participant settings", line);
+    fail15("expected 'as <label>' after the participant settings", line);
   return { id, label: tail?.[1] ?? (typeof alias === "string" ? alias : undefined), kind };
 }
 function parseSequence(src) {
@@ -34523,7 +34592,7 @@ function parseSequence(src) {
       continue;
     if (!headerSeen) {
       if (s !== "sequenceDiagram")
-        fail2("expected a 'sequenceDiagram' header", lineNo);
+        fail15("expected a 'sequenceDiagram' header", lineNo);
       headerSeen = true;
       continue;
     }
@@ -34531,14 +34600,14 @@ function parseSequence(src) {
     const rest = s.slice(word.length).trim();
     if (word === "participant" || word === "actor") {
       if (rest === "")
-        fail2(`'${word}' needs a name`, lineNo);
+        fail15(`'${word}' needs a name`, lineNo);
       declareParticipant(readDeclaration(rest, lineNo), word);
       continue;
     }
     if (word === "create") {
       const m = /^(participant|actor)\s+(.+)$/i.exec(rest);
       if (!m)
-        fail2("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
+        fail15("'create' must be followed by 'participant' or 'actor' and a name", lineNo);
       const d = readDeclaration(m[2] ?? "", lineNo);
       declareParticipant(d, (m[1] ?? "").toLowerCase() === "actor" ? "actor" : "participant");
       created.add(d.id);
@@ -34546,7 +34615,7 @@ function parseSequence(src) {
     }
     if (word === "destroy") {
       if (rest === "")
-        fail2("'destroy' needs a participant", lineNo);
+        fail15("'destroy' needs a participant", lineNo);
       destroyed.add(touch(rest));
       continue;
     }
@@ -34559,18 +34628,18 @@ function parseSequence(src) {
       } else {
         const nums = args.map(Number);
         if (nums.some((v) => !Number.isInteger(v)) || nums.length > 2)
-          fail2("invalid 'autonumber' arguments", lineNo);
+          fail15("invalid 'autonumber' arguments", lineNo);
         numbering = { next: nums[0] ?? 1, step: nums[1] ?? 1 };
       }
       continue;
     }
     if (word === "activate" || word === "deactivate") {
       if (rest === "")
-        fail2(`'${word}' needs a participant`, lineNo);
+        fail15(`'${word}' needs a participant`, lineNo);
       const who = touch(rest);
       const d = depth.get(who) ?? 0;
       if (word === "deactivate" && d === 0)
-        fail2(`'${rest}' is not active`, lineNo);
+        fail15(`'${rest}' is not active`, lineNo);
       depth.set(who, word === "activate" ? d + 1 : d - 1);
       statements.push({ kind: word, who, line: lineNo });
       continue;
@@ -34578,11 +34647,11 @@ function parseSequence(src) {
     if (word === "note") {
       const m = /^(left of|right of|over)\s+([^:]+?)\s*:\s*(.*)$/i.exec(rest);
       if (!m)
-        fail2("expected 'Note left of|right of|over <participant>: text'", lineNo);
+        fail15("expected 'Note left of|right of|over <participant>: text'", lineNo);
       const side = (m[1] ?? "").toLowerCase().startsWith("left") ? "left" : (m[1] ?? "").toLowerCase().startsWith("right") ? "right" : "over";
       const anchors = (m[2] ?? "").split(",").map((a) => a.trim());
       if (anchors.some((a) => a === "") || anchors.length > (side === "over" ? 2 : 1))
-        fail2("wrong number of participants in note", lineNo);
+        fail15("wrong number of participants in note", lineNo);
       statements.push({ kind: "note", side, anchors: anchors.map(touch), lines: textLines(m[3] ?? ""), line: lineNo });
       continue;
     }
@@ -34606,14 +34675,14 @@ function parseSequence(src) {
       const top = open[open.length - 1];
       const wanted = word === "else" ? "alt" : word === "option" ? "critical" : "par";
       if (top?.kind !== wanted)
-        fail2(`'${word}' outside '${wanted}'`, lineNo);
+        fail15(`'${word}' outside '${wanted}'`, lineNo);
       statements.push({ kind: "branch", lines: rest === "" ? [] : textLines(rest), line: lineNo });
       continue;
     }
     if (s === "end") {
       const top = open.pop();
       if (!top)
-        fail2("'end' without an open block", lineNo);
+        fail15("'end' without an open block", lineNo);
       if (top.kind === "zone")
         statements.push({ kind: "zoneClose", line: lineNo });
       else if (top.kind !== "ignored" && top.kind !== "group")
@@ -34624,10 +34693,10 @@ function parseSequence(src) {
     const head = colon < 0 ? s : s.slice(0, colon);
     const m = MESSAGE.exec(head);
     if (!m)
-      fail2(`unsupported syntax '${s.length > 24 ? `${s.slice(0, 24)}...` : s}'`, lineNo);
+      fail15(`unsupported syntax '${s.length > 24 ? `${s.slice(0, 24)}...` : s}'`, lineNo);
     const op = OPERATORS.find(([o]) => o === m[2]);
     if (!op)
-      fail2("unknown arrow", lineNo);
+      fail15("unknown arrow", lineNo);
     let from = (m[1] ?? "").trim();
     let to = (m[4] ?? "").trim();
     const centreFrom = from.endsWith(CENTRE);
@@ -34637,7 +34706,7 @@ function parseSequence(src) {
     if (centreTo)
       to = to.slice(CENTRE.length).trim();
     if (from === "" || to === "")
-      fail2("message needs a sender and a receiver", lineNo);
+      fail15("message needs a sender and a receiver", lineNo);
     const mark = m[3];
     touch(from);
     touch(to);
@@ -34675,16 +34744,16 @@ function parseSequence(src) {
     if (msg.deactivate) {
       const d = depth.get(from) ?? 0;
       if (d === 0)
-        fail2(`'${from}' is not active`, lineNo);
+        fail15(`'${from}' is not active`, lineNo);
       depth.set(from, d - 1);
     }
     statements.push(msg);
   }
   if (!headerSeen)
-    fail2("expected a 'sequenceDiagram' header", 1);
+    fail15("expected a 'sequenceDiagram' header", 1);
   const unclosed = open[open.length - 1];
   if (unclosed)
-    fail2(`'${unclosed.kind}' block is never closed`, unclosed.line);
+    fail15(`'${unclosed.kind}' block is never closed`, unclosed.line);
   return { participants: [...participants.values()], statements, ...groups.length > 0 ? { groups } : {} };
 }
 
@@ -35031,9 +35100,6 @@ registerFrontEnd({
   },
   textLines(src, maxWidth, opts) {
     return titledLines(renderTextLayout(drawn3(src, cellRuler(), { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }).layout), opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    return titledSpans(renderTextLayoutSpans(drawn3(src, cellRuler(), { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }).layout), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     return drawn3(src, mode === "text" ? cellRuler() : pixelRuler(), opts).layout;
@@ -35580,6 +35646,9 @@ var HEADERS3 = new Set(["treeView-beta", "treeView"]);
 var BRANCH = /[├└┣┗┠┖┝┕╠╚]/u;
 var RAIL = /[│┃║]/u;
 var DASHES = /^[─━═-]+/u;
+function fail16(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function bodyOf2(src) {
   const all = src.split(/\r?\n/).map((l) => l.replace(/\t/gu, "    "));
   let n = 0;
@@ -35602,14 +35671,14 @@ function bodyOf2(src) {
       continue;
     if (!header) {
       if (!HEADERS3.has(trimmed))
-        fail2(`Expected "treeView-beta" but found "${trimmed}".`, n + 1);
+        fail16(`Expected "treeView-beta" but found "${trimmed}".`, n + 1);
       header = true;
       continue;
     }
     rows.push({ no: n + 1, text: raw });
   }
   if (!header)
-    fail2('Expected "treeView-beta" but the source is empty.', Math.max(1, all.length));
+    fail16('Expected "treeView-beta" but the source is empty.', Math.max(1, all.length));
   return { rows };
 }
 function annotated(text, line) {
@@ -35619,7 +35688,7 @@ function annotated(text, line) {
   if (head.startsWith('"')) {
     const close = head.indexOf('"', 1);
     if (close < 0)
-      fail2("A quoted name is never closed.", line);
+      fail16("A quoted name is never closed.", line);
     label = head.slice(1, close).trim();
     head = head.slice(close + 1);
   } else {
@@ -35645,10 +35714,10 @@ function annotated(text, line) {
     else if (/^icon\([^()]*\)$/u.test(token))
       icon = token.slice(5, -1);
     else
-      fail2(`Cannot read "${token}" after the name.`, line);
+      fail16(`Cannot read "${token}" after the name.`, line);
   }
   if (label === "")
-    fail2("An item has no name.", line);
+    fail16("An item has no name.", line);
   return { label, classes, ...icon === undefined ? {} : { icon }, ...description === undefined || description === "" ? {} : { description } };
 }
 function boxRows(rows) {
@@ -35667,7 +35736,7 @@ function boxRows(rows) {
     if (BRANCH.test(rest[0] ?? ""))
       rest = rest.slice(1).replace(DASHES, "").trim();
     if (rest === "")
-      fail2("A branch has no name.", no);
+      fail16("A branch has no name.", no);
     out.push({ no, col, text: rest });
   }
   return out;
@@ -35680,7 +35749,7 @@ function parseTreeView(src) {
   const boxed = body.rows.some((r) => BRANCH.test(r.text));
   const located = boxed ? boxRows(body.rows) : indentRows(body.rows);
   if (located.length === 0)
-    fail2("The tree has no items.", 1, "empty");
+    fail16("The tree has no items.", 1, "empty");
   const items = [];
   const stack = [];
   let unit = 0;
@@ -35691,7 +35760,7 @@ function parseTreeView(src) {
       depth = Math.floor(row.col / 4);
       const above = items[items.length - 1];
       if (above === undefined ? depth !== 0 : depth > above.depth + 1)
-        fail2("This item is indented more than one level below the line above.", row.no, "indent");
+        fail16("This item is indented more than one level below the line above.", row.no, "indent");
     } else {
       const top = stack[stack.length - 1];
       if (top === undefined) {
@@ -35702,14 +35771,14 @@ function parseTreeView(src) {
         if (unit === 0)
           unit = step;
         else if (step >= 2 * unit)
-          fail2("This item is indented two levels or more below the line above.", row.no, "indent");
+          fail16("This item is indented two levels or more below the line above.", row.no, "indent");
         stack.push(row.col);
         depth = stack.length - 1;
       } else {
         while (stack.length > 0 && (stack[stack.length - 1] ?? 0) > row.col)
           stack.pop();
         if (stack[stack.length - 1] !== row.col)
-          fail2("This item lines up with no level above it.", row.no, "indent");
+          fail16("This item lines up with no level above it.", row.no, "indent");
         depth = stack.length - 1;
       }
     }
@@ -36041,7 +36110,7 @@ function jsonRows(text, line) {
 // src/usecase/parse.ts
 var ID7 = "[A-Za-z0-9_]+";
 var LANE10 = { id: "_", label: "" };
-function fail5(message, line) {
+function fail17(message, line) {
   throw new UrsulaError(message, "parse", line);
 }
 function decode(text) {
@@ -36115,7 +36184,7 @@ ${row}`;
           break;
         m++;
         if (m >= rows.length)
-          fail5("accDescr block is not closed", n + 1);
+          fail17("accDescr block is not closed", n + 1);
         rest = rows[m] ?? "";
       }
       accDescr = parts.join(" ");
@@ -36134,7 +36203,7 @@ ${row}`;
       items.push(st);
   }
   if (pending)
-    fail5("Unterminated string or brace", pending.line);
+    fail17("Unterminated string or brace", pending.line);
   return { items, ...accTitle === undefined ? {} : { accTitle }, ...accDescr === undefined ? {} : { accDescr } };
 }
 function closeBrace(s, from, line) {
@@ -36149,7 +36218,7 @@ function closeBrace(s, from, line) {
     else if (!quoted && c === "}" && --depth === 0)
       return i;
   }
-  return fail5("Metadata block is not closed", line);
+  return fail17("Metadata block is not closed", line);
 }
 function readMeta(body, line) {
   const out = {};
@@ -36171,7 +36240,7 @@ function readMeta(body, line) {
       continue;
     const m = /^\s*([A-Za-z_]+)\s*:\s*(.*?)\s*$/s.exec(part);
     if (!m)
-      fail5(`Cannot read metadata "${part.trim()}"`, line);
+      fail17(`Cannot read metadata "${part.trim()}"`, line);
     const value = (m?.[2] ?? "").replace(/^"(.*)"$/s, "$1");
     out[m?.[1] ?? ""] = value;
   }
@@ -36189,17 +36258,17 @@ function scan(s, line, quotedId) {
   let bracket;
   if (s[i] === '"') {
     if (!quotedId)
-      fail5("A quoted name is not allowed here", line);
+      fail17("A quoted name is not allowed here", line);
     const end = s.indexOf('"', i + 1);
     if (end < 0)
-      fail5("Unterminated string", line);
+      fail17("Unterminated string", line);
     label = labelLines4(s.slice(i, end + 1));
     id = joined(label).replace(/\W/g, "_");
     i = end + 1;
   } else {
     const m = new RegExp(`^${ID7}`).exec(s.slice(i));
     if (!m)
-      return fail5(`Expected an identifier, found "${s.slice(i, i + 12)}"`, line);
+      return fail17(`Expected an identifier, found "${s.slice(i, i + 12)}"`, line);
     id = m[0];
     i += id.length;
     skip();
@@ -36214,17 +36283,17 @@ function scan(s, line, quotedId) {
       if (s[j] === '"') {
         const end = s.indexOf('"', j + 1);
         if (end < 0)
-          fail5("Unterminated string", line);
+          fail17("Unterminated string", line);
         content = s.slice(j, end + 1);
         after = end + 1;
         while (s[after] === " " || s[after] === "\t")
           after++;
         if (s[after] !== close)
-          fail5(`Expected "${close}" after the label`, line);
+          fail17(`Expected "${close}" after the label`, line);
       } else {
         after = s.indexOf(close, j);
         if (after < 0)
-          fail5(`Expected "${close}" after the label`, line);
+          fail17(`Expected "${close}" after the label`, line);
         content = s.slice(j, after);
       }
       label = labelLines4(content);
@@ -36243,19 +36312,19 @@ function scan(s, line, quotedId) {
   if (s.startsWith("<<", i)) {
     const end = s.indexOf(">>", i + 2);
     if (end < 0)
-      fail5('Stereotype is not closed with ">>"', line);
+      fail17('Stereotype is not closed with ">>"', line);
     stereotype = s.slice(i + 2, end).trim();
     i = end + 2;
   }
   if (s.startsWith(":::", i)) {
     const m = /^:::[\w-]+(?:,[\w-]+)*/.exec(s.slice(i));
     if (!m)
-      fail5('Expected a class name after ":::"', line);
+      fail17('Expected a class name after ":::"', line);
     i += m?.[0].length ?? 0;
   }
   skip();
   if (i < s.length)
-    fail5(`Unexpected text "${s.slice(i, i + 20)}"`, line);
+    fail17(`Unexpected text "${s.slice(i, i + 20)}"`, line);
   return { id, ...label === undefined ? {} : { label }, ...bracket === undefined ? {} : { bracket }, meta, ...stereotype === undefined ? {} : { stereotype } };
 }
 function operatorOf(token) {
@@ -36284,7 +36353,7 @@ function parseUsecase(src) {
   const { items, accTitle, accDescr } = statements(src);
   const head = items[0];
   if (!head || head.text.split(/[\s;]+/)[0] !== "usecase-beta")
-    fail5('A usecase diagram starts with "usecase-beta"', head?.line ?? 1);
+    fail17('A usecase diagram starts with "usecase-beta"', head?.line ?? 1);
   const elements = new Map;
   const boundaries = new Map;
   const links = [];
@@ -36296,7 +36365,7 @@ function parseUsecase(src) {
   let mirror;
   const claim = (id, line) => {
     if (boundaries.has(id))
-      fail5(`"${id}" is already a system boundary`, line);
+      fail17(`"${id}" is already a system boundary`, line);
   };
   const ensure = (id, line) => {
     claim(id, line);
@@ -36311,9 +36380,9 @@ function parseUsecase(src) {
     const sc = scan(s, line, kind === "usecase");
     const e = ensure(sc.id, line);
     if (e.explicit && e.kind !== kind)
-      fail5(`"${sc.id}" is declared as both an actor and a use case`, line);
+      fail17(`"${sc.id}" is declared as both an actor and a use case`, line);
     if (e.explicit && e.cluster !== undefined && cluster !== undefined && e.cluster !== cluster)
-      fail5(`"${sc.id}" is in two system boundaries`, line);
+      fail17(`"${sc.id}" is in two system boundaries`, line);
     e.kind = kind;
     e.explicit = true;
     if (sc.label)
@@ -36330,22 +36399,22 @@ function parseUsecase(src) {
     for (const [key, value] of Object.entries(meta)) {
       if (key === "business") {
         if (value !== "true" && value !== "false")
-          fail5("business must be true or false", line);
+          fail17("business must be true or false", line);
         e.business = value === "true";
       } else if (key === "type" && e.kind === "actor") {
         if (value !== "normal" && value !== "hollow" && value !== "awesome")
-          fail5(`Unknown actor type "${value}"`, line);
+          fail17(`Unknown actor type "${value}"`, line);
         e.variant = value;
       } else if (key === "icon" && e.kind === "actor") {
         e.icon = value;
         e.variant = "icon";
       } else
-        fail5(`Metadata "${key}" is not allowed on ${e.kind === "actor" ? "an actor" : "a use case"}`, line);
+        fail17(`Metadata "${key}" is not allowed on ${e.kind === "actor" ? "an actor" : "a use case"}`, line);
     }
     if (e.variant === "icon" && (e.business || e.icon === undefined))
-      fail5("An icon actor cannot be a business element or have a type", line);
+      fail17("An icon actor cannot be a business element or have a type", line);
     if (e.business && (e.variant === "awesome" || e.kind === "usecase" && e.rect))
-      fail5("This element cannot be a business element", line);
+      fail17("This element cannot be a business element", line);
   };
   let inside;
   for (const st of items.slice(1)) {
@@ -36357,17 +36426,17 @@ function parseUsecase(src) {
       } else if (word === "actor" && /^actor\s/.test(text))
         addElement("actor", text.slice(5), line, inside);
       else if (/^(systemBoundary|note|json|direction|class|classDef|style)\b/.test(text) || PLAIN2.test(text) || INCLUDE.test(text)) {
-        fail5("A system boundary holds only actor and use case declarations", line);
+        fail17("A system boundary holds only actor and use case declarations", line);
       } else
         addElement("usecase", text, line, inside);
       continue;
     }
     if (text === "end")
-      fail5('"end" without a system boundary', line);
+      fail17('"end" without a system boundary', line);
     if (/^direction\s/.test(text)) {
       const d = /^direction\s+(TD|TB|BT|LR|RL)$/.exec(text)?.[1];
       if (!d)
-        fail5("direction takes TD, TB, BT, LR or RL", line);
+        fail17("direction takes TD, TB, BT, LR or RL", line);
       direction = d === "LR" || d === "RL" ? "LR" : "TD";
       mirror = d === "RL" || d === "BT" ? d : undefined;
     } else if (/^(classDef|class|style)\s/.test(text)) {
@@ -36376,10 +36445,10 @@ function parseUsecase(src) {
       const sc = scan(text.slice("systemBoundary".length), line, true);
       claim(sc.id, line);
       if (elements.has(sc.id) || boundaries.has(sc.id))
-        fail5(`"${sc.id}" is already used`, line);
+        fail17(`"${sc.id}" is already used`, line);
       for (const [k, v] of Object.entries(sc.meta)) {
         if (k !== "type" || v !== "rect" && v !== "package")
-          fail5(`Boundary metadata "${k}: ${v}" is not allowed`, line);
+          fail17(`Boundary metadata "${k}: ${v}" is not allowed`, line);
         if (v === "package")
           packages.add(sc.id);
       }
@@ -36390,21 +36459,21 @@ function parseUsecase(src) {
     } else if (/^note\s+for\s/.test(text)) {
       const m = new RegExp(`^note\\s+for\\s+(${ID7})\\s+("[\\s\\S]*")$`).exec(text);
       if (!m)
-        fail5('A note reads: note for <id> "<text>"', line);
+        fail17('A note reads: note for <id> "<text>"', line);
       notes.push({ target: m?.[1] ?? "", lines: labelLines4(m?.[2] ?? ""), line });
     } else if (/^json\s/.test(text)) {
       const m = new RegExp(`^json\\s+(${ID7})\\s*@\\{`).exec(text);
       if (!m)
-        fail5("A JSON table reads: json <id>@{ ... }", line);
+        fail17("A JSON table reads: json <id>@{ ... }", line);
       const id = m?.[1] ?? "";
       const open = text.indexOf("@{") + 1;
       const end = closeBrace(text, open, line);
       const rest = text.slice(end + 1).trim();
       if (rest !== "" && !/^:::[\w-]+(?:,[\w-]+)*$/.test(rest))
-        fail5(`Unexpected text "${rest.slice(0, 20)}"`, line);
+        fail17(`Unexpected text "${rest.slice(0, 20)}"`, line);
       const e = ensure(id, line);
       if (e.explicit)
-        fail5(`"${id}" is already declared`, line);
+        fail17(`"${id}" is already declared`, line);
       e.kind = "json";
       e.explicit = true;
       e.rows = jsonRows(text.slice(open, end + 1), line);
@@ -36413,7 +36482,7 @@ function parseUsecase(src) {
       const open = text.indexOf("@{") + 1;
       const end = closeBrace(text, open, line);
       if (text.slice(end + 1).trim() !== "")
-        fail5("Unexpected text after the metadata block", line);
+        fail17("Unexpected text after the metadata block", line);
       const body = text.slice(open + 1, end);
       if (edgeIds.has(id))
         continue;
@@ -36425,14 +36494,14 @@ function parseUsecase(src) {
         const meta = readMeta(body, line);
         for (const [k, v] of Object.entries(meta)) {
           if (k !== "type" || v !== "rect" && v !== "package")
-            fail5(`Boundary metadata "${k}: ${v}" is not allowed`, line);
+            fail17(`Boundary metadata "${k}: ${v}" is not allowed`, line);
           if (v === "package")
             packages.add(id);
           else
             packages.delete(id);
         }
       } else
-        fail5(`"${id}" is not declared`, line);
+        fail17(`"${id}" is not declared`, line);
     } else {
       const inc = INCLUDE.exec(text);
       const plain = PLAIN2.exec(text);
@@ -36473,7 +36542,7 @@ function parseUsecase(src) {
         }
         if (id !== undefined) {
           if (edgeIds.has(id) || elements.has(id) || boundaries.has(id))
-            fail5(`"${id}" is already used`, line);
+            fail17(`"${id}" is already used`, line);
           edgeIds.add(id);
           edge = { ...edge, id };
         }
@@ -36486,26 +36555,26 @@ function parseUsecase(src) {
     }
   }
   if (inside !== undefined)
-    fail5(`System boundary "${inside}" is not closed with "end"`, items.at(-1)?.line ?? 1);
+    fail17(`System boundary "${inside}" is not closed with "end"`, items.at(-1)?.line ?? 1);
   const kindOf = (id) => elements.get(id)?.kind ?? "usecase";
   const isUsecase = (id) => kindOf(id) === "usecase";
   for (const l of links) {
     const a = kindOf(l.from);
     const b = kindOf(l.to);
     if (a === "note" || b === "note")
-      fail5('A note is attached with "note for"', l.line);
+      fail17('A note is attached with "note for"', l.line);
     if ((l.kind === "include" || l.kind === "extend") && !(isUsecase(l.from) && isUsecase(l.to)))
-      fail5(`${l.kind} needs use cases at both ends`, l.line);
+      fail17(`${l.kind} needs use cases at both ends`, l.line);
     if (l.kind === "generalization" && a !== b)
-      fail5("Generalization joins two actors or two use cases", l.line);
+      fail17("Generalization joins two actors or two use cases", l.line);
     if ((a === "json" || b === "json") && (l.kind !== "association" || l.edge.end === "circle" || l.edge.end === "cross" || l.edge.startEnd !== undefined)) {
-      fail5("A JSON table takes only plain association lines", l.line);
+      fail17("A JSON table takes only plain association lines", l.line);
     }
   }
   for (const n of notes) {
     const t = elements.get(n.target);
     if (!t || t.kind !== "actor" && t.kind !== "usecase")
-      fail5(`A note can only target an actor or a use case, not "${n.target}"`, n.line);
+      fail17(`A note can only target an actor or a use case, not "${n.target}"`, n.line);
   }
   const nodes = [];
   const meta = new Map;
@@ -36672,10 +36741,6 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const model = parseUsecase(src);
     return titledLines(renderTextLayout(laidOut(model, { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }, true)), opts.heading, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    const model = parseUsecase(src);
-    return titledSpans(renderTextLayoutSpans(laidOut(model, { ...opts, ...maxWidth === undefined ? {} : { maxWidth } }, true)), opts.heading, maxWidth);
   },
   json(src, mode, opts) {
     const model = parseUsecase(src);
@@ -37023,6 +37088,9 @@ var HEADERS4 = new Set(["treemap-beta", "treemap"]);
 var NODE = /^(?:"([^"]*)"|'([^']*)')\s*(?::\s*(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*)?(?::::([A-Za-z_][\w-]*))?\s*;?$/u;
 var LOOSE = /^(?:"([^"]*)"|'([^']*)')\s*:\s*(.+?)\s*;?$/u;
 var CLASS_DEF = /^classDef\s+(\S+)\s+(.*?)\s*;?$/u;
+function fail18(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function readTreemapConfig(config) {
   const section = configSection(config, "treemap");
   if (section === undefined)
@@ -37085,7 +37153,7 @@ function parseTreemap(src, heading, config) {
     }
     if (!headerSeen) {
       if (!HEADERS4.has(s))
-        fail2(`Expected "treemap-beta" but found "${s}".`, lineNo, "header");
+        fail18(`Expected "treemap-beta" but found "${s}".`, lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -37105,15 +37173,15 @@ function parseTreemap(src, heading, config) {
     if (m === null) {
       const loose = LOOSE.exec(s);
       if (loose !== null)
-        fail2(`"${(loose[3] ?? "").replace(/:::.*$/u, "")}" is not a number; a leaf is written "name": value.`, lineNo, "value");
-      fail2(`Cannot read "${s}"; a node is written "name" or "name": value.`, lineNo);
+        fail18(`"${(loose[3] ?? "").replace(/:::.*$/u, "")}" is not a number; a leaf is written "name": value.`, lineNo, "value");
+      fail18(`Cannot read "${s}"; a node is written "name" or "name": value.`, lineNo);
     }
     const label = m[1] ?? m[2] ?? "";
     const node = { label, line: lineNo, children: [] };
     if (m[3] !== undefined) {
       const value = Number(m[3]);
       if (value <= 0)
-        fail2(`"${label}" has the value ${m[3]}; values must be greater than zero.`, lineNo, "value");
+        fail18(`"${label}" has the value ${m[3]}; values must be greater than zero.`, lineNo, "value");
       node.value = value;
     }
     if (m[4] !== undefined)
@@ -37126,23 +37194,23 @@ function parseTreemap(src, heading, config) {
       roots.push(node);
     else {
       if (parent.value !== undefined)
-        fail2(`"${parent.label}" has a value, so it cannot hold "${label}" below it.`, lineNo, "nesting");
+        fail18(`"${parent.label}" has a value, so it cannot hold "${label}" below it.`, lineNo, "nesting");
       parent.children.push(node);
     }
     stack.push({ indent, node });
   }
   if (!headerSeen)
-    fail2('Expected "treemap-beta" as the first line.', 1, "header");
+    fail18('Expected "treemap-beta" as the first line.', 1, "header");
   const check = (nodes) => {
     for (const nd of nodes) {
       if (nd.value === undefined && nd.children.length === 0)
-        fail2(`"${nd.label}" has nothing below it; give it a leaf "name": value.`, nd.line, "empty");
+        fail18(`"${nd.label}" has nothing below it; give it a leaf "name": value.`, nd.line, "empty");
       check(nd.children);
     }
   };
   check(roots);
   if (roots.length === 0)
-    fail2("A treemap needs at least one node.", rows.length, "empty");
+    fail18("A treemap needs at least one node.", rows.length, "empty");
   const settings = { ...readTreemapConfig(config), ...init };
   const shownTitle = title ?? (heading !== undefined && heading !== "" ? heading : undefined);
   return {
@@ -37156,14 +37224,14 @@ function parseTreemap(src, heading, config) {
 }
 
 // src/treemap/text.ts
-function treemapTextSpans(map, maxWidth) {
+function treemapTextLines(map, maxWidth) {
   const fmt = makeFormatter(map.valueFormat);
   const rows = [];
   const walk = (nodes, lead, top) => {
     nodes.forEach((n, i) => {
       const last = i === nodes.length - 1;
       const prefix = top ? "" : `${lead}${last ? "└── " : "├── "}`;
-      rows.push({ prefix, label: n.label, value: fmt(total2(n)), group: n.children.length > 0 });
+      rows.push({ prefix, label: n.label, value: fmt(total2(n)) });
       walk(n.children, top ? "" : `${lead}${last ? "    " : "│   "}`, false);
     });
   };
@@ -37173,9 +37241,9 @@ function treemapTextSpans(map, maxWidth) {
   const cap = maxWidth === undefined ? natural : Math.max(1, Math.min(natural, maxWidth - 2 - valueW));
   const lines = rows.map((r) => {
     const label = cut2(r.label, Math.max(1, cap - cellWidth(r.prefix)));
-    return spansOf([r.prefix, "dim"], [label, r.group ? "bold" : "normal"], `${padEnd("", cap - cellWidth(r.prefix + label))}  ${padStart(r.value, valueW)}`);
+    return `${padEnd(`${r.prefix}${label}`, cap)}  ${padStart(r.value, valueW)}`;
   });
-  const head = map.title === undefined ? [] : [spansOf([maxWidth === undefined ? map.title : cut2(map.title, maxWidth), "bold"])];
+  const head = map.title === undefined ? [] : [maxWidth === undefined ? map.title : cut2(map.title, maxWidth)];
   return [...head, ...lines];
 }
 
@@ -37192,10 +37260,7 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return treemapTextSpans(read4(src, opts), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return treemapTextSpans(read4(src, opts), maxWidth);
+    return treemapTextLines(read4(src, opts), maxWidth);
   },
   json(src, mode, opts) {
     const treemap = read4(src, opts);
@@ -37601,8 +37666,11 @@ var SIZE = String.raw`(?:\s*:\s*(\S+))?`;
 var SET = new RegExp(String.raw`^set\s+(${ID8})${LABEL}${SIZE}\s*$`, "u");
 var UNION = new RegExp(String.raw`^union\s+((?:${ID8})(?:\s*,\s*(?:${ID8}))+)${LABEL}${SIZE}\s*$`, "u");
 var TEXT = new RegExp(String.raw`^text\s+(${ID8})${LABEL}\s*$`, "u");
-var STYLE = new RegExp(String.raw`^style\s+((?:${ID8})(?:\s*,\s*(?:${ID8}))*)\s+(.+)$`, "u");
+var STYLE2 = new RegExp(String.raw`^style\s+((?:${ID8})(?:\s*,\s*(?:${ID8}))*)\s+(.+)$`, "u");
 var NUMBER5 = /^\d+(?:\.\d+)?$/u;
+function fail19(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var unquote8 = (id) => id.startsWith('"') ? id.slice(1, -1) : id;
 function splitIds(list) {
   return [...list.matchAll(new RegExp(ID8, "gu"))].map((m) => unquote8(m[0]));
@@ -37611,10 +37679,10 @@ function sizeOf3(raw, line) {
   if (raw === undefined)
     return {};
   if (!NUMBER5.test(raw))
-    fail2(`"${raw}" is not a size; a size is a number greater than zero.`, line, "value");
+    fail19(`"${raw}" is not a size; a size is a number greater than zero.`, line, "value");
   const size = Number(raw);
   if (size <= 0)
-    fail2(`The size ${raw} must be greater than zero.`, line, "value");
+    fail19(`The size ${raw} must be greater than zero.`, line, "value");
   return { size, sizeText: raw };
 }
 function parseVenn(src, heading) {
@@ -37636,7 +37704,7 @@ function parseVenn(src, heading) {
       continue;
     if (!headerSeen) {
       if (!/^venn-beta\s*$/u.test(s))
-        fail2('A Venn diagram starts with "venn-beta".', line, "header");
+        fail19('A Venn diagram starts with "venn-beta".', line, "header");
       headerSeen = true;
       continue;
     }
@@ -37653,7 +37721,7 @@ function parseVenn(src, heading) {
     if (set !== null) {
       const id = unquote8(set[1] ?? "");
       if (sets.some((x) => x.id === id))
-        fail2(`The set "${id}" is defined twice.`, line, "duplicate");
+        fail19(`The set "${id}" is defined twice.`, line, "duplicate");
       const label = set[2] ?? set[3];
       current = { id, label: label === undefined || label === "" ? id : label, ...sizeOf3(set[4], line), texts: [], line };
       sets.push(current);
@@ -37664,12 +37732,12 @@ function parseVenn(src, heading) {
       const ids = splitIds(union[1] ?? "");
       for (const id of ids)
         if (!sets.some((x) => x.id === id))
-          fail2(`The union uses "${id}", which no earlier set defines.`, line, "reference");
+          fail19(`The union uses "${id}", which no earlier set defines.`, line, "reference");
       if (new Set(ids).size !== ids.length)
-        fail2("A union names each set once.", line);
+        fail19("A union names each set once.", line);
       const key = [...ids].sort().join("\x00");
       if (unions.some((u) => [...u.ids].sort().join("\x00") === key))
-        fail2(`The union ${ids.join(",")} is defined twice.`, line, "duplicate");
+        fail19(`The union ${ids.join(",")} is defined twice.`, line, "duplicate");
       const label = union[2] ?? union[3];
       current = { ids, ...label === undefined ? {} : { label }, ...sizeOf3(union[4], line), texts: [], line };
       unions.push(current);
@@ -37678,32 +37746,32 @@ function parseVenn(src, heading) {
     const text = TEXT.exec(s);
     if (text !== null) {
       if (current === undefined)
-        fail2("A text node belongs to the set or union above it.", line, "reference");
+        fail19("A text node belongs to the set or union above it.", line, "reference");
       const id = unquote8(text[1] ?? "");
       if (texts.has(id))
-        fail2(`The text node "${id}" is defined twice.`, line, "duplicate");
+        fail19(`The text node "${id}" is defined twice.`, line, "duplicate");
       const label = text[2] ?? text[3];
       const node = { id, label: label === undefined || label === "" ? id : label, line };
       texts.set(id, node);
       current.texts.push(node);
       continue;
     }
-    const style = STYLE.exec(s);
+    const style = STYLE2.exec(s);
     if (style !== null) {
       styleLines.push({ ids: splitIds(style[1] ?? ""), props: style[2] ?? "", line });
       continue;
     }
-    fail2(`Cannot read "${s}"; a line is title, set, union, text or style.`, line);
+    fail19(`Cannot read "${s}"; a line is title, set, union, text or style.`, line);
   }
   if (!headerSeen)
-    fail2('A Venn diagram starts with "venn-beta".', 1, "header");
+    fail19('A Venn diagram starts with "venn-beta".', 1, "header");
   if (sets.length === 0)
-    fail2("A Venn diagram needs at least one set.", rows.length, "empty");
+    fail19("A Venn diagram needs at least one set.", rows.length, "empty");
   const ignored = [];
   for (const { ids, props, line } of styleLines) {
     for (const id of ids) {
       if (!sets.some((x) => x.id === id) && !texts.has(id) && ids.length === 1)
-        fail2(`The style names "${id}", which is no set, union or text node.`, line, "reference");
+        fail19(`The style names "${id}", which is no set, union or text node.`, line, "reference");
     }
     ignored.push(`style ${ids.join(",")} ${props.trim()}`);
   }
@@ -37712,29 +37780,26 @@ function parseVenn(src, heading) {
 }
 
 // src/venn/text.ts
-function vennTextSpans(venn, maxWidth) {
+function vennTextLines(venn, maxWidth) {
   const nameOf = (id) => venn.sets.find((s) => s.id === id)?.label ?? id;
   const rows = [];
-  const texts = (list) => {
-    for (const t of list)
-      rows.push([spansOf(["  " + t.label, "dim"]), ""]);
-  };
   for (const set of venn.sets) {
-    rows.push([spansOf([set.label, "bold"]), set.sizeText ?? ""]);
-    texts(set.texts);
+    rows.push([set.label, set.sizeText ?? ""]);
+    for (const t of set.texts)
+      rows.push([`  ${t.label}`, ""]);
   }
   for (const u of venn.unions) {
     const sets = u.ids.map(nameOf).join(" ∩ ");
-    rows.push([spansOf(sets, u.label === undefined ? "" : ` : ${u.label}`), u.sizeText ?? ""]);
-    texts(u.texts);
+    rows.push([u.label === undefined ? sets : `${sets} : ${u.label}`, u.sizeText ?? ""]);
+    for (const t of u.texts)
+      rows.push([`  ${t.label}`, ""]);
   }
-  const text = (row) => row.map((s) => s.text).join("");
   const valueW = Math.max(...rows.map(([, v]) => cellWidth(v)));
-  const labelW = Math.max(...rows.map(([l]) => cellWidth(text(l))));
+  const labelW = Math.max(...rows.map(([l]) => cellWidth(l)));
   const fixed = valueW === 0 ? 0 : 2 + valueW;
   const cap = maxWidth === undefined ? labelW : Math.max(1, Math.min(labelW, maxWidth - fixed));
-  const body = rows.map(([label, value]) => valueW === 0 ? cutSpans(label, cap) : spansOf(padEndSpans(cutSpans(label, cap), cap), `  ${padStart(value, valueW)}`));
-  const head = venn.title === undefined ? [] : [spansOf([maxWidth === undefined ? venn.title : cut2(venn.title, maxWidth), "bold"])];
+  const body = rows.map(([label, value]) => valueW === 0 ? cut2(label, cap) : `${padEnd(cut2(label, cap), cap)}  ${padStart(value, valueW)}`);
+  const head = venn.title === undefined ? [] : [maxWidth === undefined ? venn.title : cut2(venn.title, maxWidth)];
   return [...head, ...body];
 }
 
@@ -37747,10 +37812,7 @@ var vennFrontEnd = {
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return vennTextSpans(parseVenn(src, opts.heading), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return vennTextSpans(parseVenn(src, opts.heading), maxWidth);
+    return vennTextLines(parseVenn(src, opts.heading), maxWidth);
   },
   json(src, mode, opts) {
     const venn = parseVenn(src, opts.heading);
@@ -37762,39 +37824,26 @@ registerFrontEnd(vennFrontEnd);
 // src/c4/graph.ts
 var WRAP_PX = 200;
 var WRAP_CELLS = 26;
-var wrapCells3 = WRAP_CELLS;
+var wrapCells2 = WRAP_CELLS;
 var MAX_ROW = 4;
 var LANE11 = { id: "_", label: "" };
 var TECH_SEPARATOR = " ";
 function wrap4(text, ruler) {
   const width = (s) => ruler.textWidth(s, "line");
-  const limit = ruler.terminal === true ? wrapCells3 : WRAP_PX;
+  const limit = ruler.terminal === true ? wrapCells2 : WRAP_PX;
   return text.split(`
 `).flatMap((paragraph) => wrapWords(paragraph, limit, width));
 }
-var ROLE_WORDS = { person: "Person", system: "System", container: "Container", component: "Component" };
-var STORE_WORDS = { db: "Database", queue: "Queue" };
-function kindOf2(e) {
-  const word = e.store === undefined ? ROLE_WORDS[e.role] : STORE_WORDS[e.store];
-  return e.external ? `${word} · external` : word;
-}
-function boundaryKindOf(kind) {
-  const m = /^(?:(Enterprise|System|Container)_)?Boundary$/.exec(kind);
-  if (m === null)
-    return kind;
-  return m[1] === undefined ? "Boundary" : `${m[1]} boundary`;
-}
 function compartmentsOf2(e, ruler) {
-  const narrow = ruler.terminal === true && wrapCells3 < WRAP_CELLS;
+  const narrow = ruler.terminal === true && wrapCells2 < WRAP_CELLS;
   const name = e.label.split(`
 `).map((l) => l.trim()).flatMap((l) => narrow ? wrap4(l, ruler) : [l]);
   const tech = e.tech === undefined ? [] : wrap4(e.tech, ruler);
   const descr = e.descr === undefined ? [] : wrap4(e.descr, ruler);
-  const kind = narrow ? wrap4(kindOf2(e), ruler) : [kindOf2(e)];
   return [
     {
-      lines: [...kind, ...name, ...tech, ...descr],
-      lineEmphasis: [...kind.map(() => "tag"), ...name.map(() => "title"), ...tech.map(() => "tag"), ...descr.map(() => "body")],
+      lines: [e.macro, ...name, ...tech, ...descr],
+      lineEmphasis: ["tag", ...name.map(() => "title"), ...tech.map(() => "tag"), ...descr.map(() => "body")],
       align: "center",
       emphasis: "body",
       face: true
@@ -37823,11 +37872,11 @@ function clusterLabel(label, kind, descr) {
   return [label, kind, descr].filter((p) => p !== undefined && p !== "").map((p) => p.replace(/\s*\n\s*/g, " ")).join(" · ");
 }
 function c4Graph(model, ruler, cells = WRAP_CELLS) {
-  wrapCells3 = cells;
+  wrapCells2 = cells;
   try {
     return graphOf(model, ruler);
   } finally {
-    wrapCells3 = WRAP_CELLS;
+    wrapCells2 = WRAP_CELLS;
   }
 }
 function graphOf(model, ruler) {
@@ -37848,7 +37897,7 @@ function graphOf(model, ruler) {
       directCount.set(e.boundary, (directCount.get(e.boundary) ?? 0) + 1);
   const clusters = model.boundaries.map((b) => ({
     id: b.alias,
-    label: clusterLabel(b.label, b.deployment ? b.kind : boundaryKindOf(b.kind), b.descr),
+    label: clusterLabel(b.label, b.kind, b.descr),
     style: "dashed",
     subtitled: true,
     ...directCount.get(b.alias) !== undefined && (directCount.get(b.alias) ?? 0) <= MAX_ROW ? { direction: "LR" } : {},
@@ -37895,6 +37944,9 @@ var LAY = /^Lay_(Up|Down|Left|Right|U|D|L|R)$/;
 var HINTS2 = { U: "up", Up: "up", D: "down", Down: "down", L: "left", Left: "left", R: "right", Right: "right", Neighbor: "right" };
 var IGNORED5 = /^(Update[A-Za-z]*|Add[A-Za-z]*|Rewrite[A-Za-z]*|Lay_[A-Za-z]+|SHOW_[A-Z_]+|HIDE_[A-Z_]+|LAYOUT_[A-Z_]+|Legend[A-Za-z]*|SetPropertyHeader|WithoutPropertyHeader)$/;
 var BREAK3 = /<br\s*\/?>/gi;
+var fail20 = (message, line) => {
+  throw new UrsulaError(message, "syntax", line);
+};
 function splitArgs(text, line) {
   const args = [];
   let cur = "";
@@ -37909,7 +37961,7 @@ function splitArgs(text, line) {
       cur += ch;
   }
   if (quoted)
-    fail2("unclosed quote", line);
+    fail20("unclosed quote", line);
   if (cur.trim() !== "" || args.length > 0)
     args.push(cur.trim());
   return args;
@@ -37943,9 +37995,9 @@ function parseC4(src) {
   let steps = 0;
   const claim = (alias, line) => {
     if (alias === "")
-      fail2("an element needs an alias", line);
+      fail20("an element needs an alias", line);
     if (aliases.has(alias))
-      fail2(`'${alias}' is defined twice`, line);
+      fail20(`'${alias}' is defined twice`, line);
     aliases.add(alias);
   };
   rows.forEach((raw, i) => {
@@ -37960,14 +38012,14 @@ function parseC4(src) {
     if (!headed) {
       const type = HEADERS5[text.split(/[\s;]+/)[0] ?? ""];
       if (type === undefined)
-        fail2(`expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment, got '${text}'`, line);
+        fail20(`expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment, got '${text}'`, line);
       model.type = type;
       headed = true;
       return;
     }
     if (text === "}") {
       if (open.pop() === undefined)
-        fail2("'}' has no boundary to close", line);
+        fail20("'}' has no boundary to close", line);
       return;
     }
     const title = /^title(?:\s*:\s*|\s+)(.*)$/.exec(text);
@@ -37977,7 +38029,7 @@ function parseC4(src) {
     }
     const call = readCall(text, line);
     if (call === undefined)
-      return fail2(`cannot read '${text}'`, line);
+      return fail20(`cannot read '${text}'`, line);
     const { name } = call;
     const parent = open.at(-1)?.alias;
     const place = parent === undefined ? {} : { boundary: parent };
@@ -38002,12 +38054,12 @@ function parseC4(src) {
         line
       });
       if (call.opens)
-        fail2(`'${name}' does not open a boundary`, line);
+        fail20(`'${name}' does not open a boundary`, line);
       return;
     }
     if (BOUNDARY_KINDS.has(name) || NODE2.test(name)) {
       if (!call.opens)
-        fail2(`'${name}' needs a '{' after its arguments`, line);
+        fail20(`'${name}' needs a '{' after its arguments`, line);
       const deployment = NODE2.test(name);
       const [alias = "", label = "", second, third] = positional(call.args);
       claim(alias, line);
@@ -38035,7 +38087,7 @@ function parseC4(src) {
       const [from = "", to = "", label = "", tech] = args;
       for (const end of [from, to])
         if (!aliases.has(end))
-          fail2(`'${end}' is not defined`, line);
+          fail20(`'${end}' is not defined`, line);
       steps += 1;
       const suffix = rel?.[2];
       const heads = rel?.[1] === "BiRel" ? "both" : suffix === "_Back" ? "start" : "end";
@@ -38051,7 +38103,7 @@ function parseC4(src) {
         line
       });
       if (call.opens)
-        fail2(`'${name}' does not open a block`, line);
+        fail20(`'${name}' does not open a block`, line);
       return;
     }
     const lay = LAY.exec(name);
@@ -38059,7 +38111,7 @@ function parseC4(src) {
       const [from = "", to = ""] = positional(call.args);
       for (const end of [from, to])
         if (!aliases.has(end))
-          fail2(`'${end}' is not defined`, line);
+          fail20(`'${end}' is not defined`, line);
       model.lays.push({ from, to, hint: HINTS2[lay[1]], line });
       return;
     }
@@ -38079,7 +38131,7 @@ function parseC4(src) {
       model.ignored.push(name);
       return;
     }
-    fail2(`unknown statement '${name}'`, line);
+    fail20(`unknown statement '${name}'`, line);
   });
   if (!headed)
     throw new UrsulaError("expected C4Context, C4Container, C4Component, C4Dynamic or C4Deployment", "syntax", 1);
@@ -38117,10 +38169,6 @@ registerFrontEnd({
   textLines(src, maxWidth, opts) {
     const { layout: laid, shown } = draw(src, "text", maxWidth);
     return titledLines(renderTextLayout(laid), shown === undefined || shown === "" ? opts.heading : shown, maxWidth);
-  },
-  textSpans(src, maxWidth, opts) {
-    const { layout: laid, shown } = draw(src, "text", maxWidth);
-    return titledSpans(renderTextLayoutSpans(laid), shown === undefined || shown === "" ? opts.heading : shown, maxWidth);
   },
   json(src, mode, opts) {
     return draw(src, mode, opts.maxWidth).layout;
@@ -38529,6 +38577,9 @@ var NUM = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)`;
 var PAIR = String.raw`\[\s*(${NUM})\s*,\s*(${NUM})\s*\]`;
 var DEFAULT_STAGES = ["Genesis", "Custom Built", "Product", "Commodity"];
 var LINK_OP = /\s+(-\.->|-->|->|\+<>|\+<|\+>|\+'[^']*'>)\s+/u;
+function fail21(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 function stripComment8(line) {
   const at = line.indexOf("%%");
   return at < 0 ? line : line.slice(0, at);
@@ -38540,7 +38591,7 @@ function unquote10(text) {
 function unit2(text, what, line) {
   const v = Number(text);
   if (v < 0 || v > 1)
-    fail2(`${what} must be between 0 and 1, got ${text}.`, line);
+    fail21(`${what} must be between 0 and 1, got ${text}.`, line);
   return v;
 }
 function takeName(text, stop, line) {
@@ -38548,26 +38599,26 @@ function takeName(text, stop, line) {
   if (t.startsWith('"')) {
     const end = t.indexOf('"', 1);
     if (end < 0)
-      fail2("A quoted name is not closed.", line);
+      fail21("A quoted name is not closed.", line);
     return { name: t.slice(1, end), rest: t.slice(end + 1) };
   }
   const m = stop.exec(t);
   if (m === null)
-    fail2(`Cannot find where the name ends in "${text.trim()}".`, line);
+    fail21(`Cannot find where the name ends in "${text.trim()}".`, line);
   return { name: t.slice(0, m.index).trim(), rest: t.slice(m.index) };
 }
 function parseStages(rest, line) {
   const parts = rest.split("->").map((p) => p.trim());
   if (parts.length < 2 || parts.some((p) => p === ""))
-    fail2('evolution needs at least two stages joined by "->".', line);
+    fail21('evolution needs at least two stages joined by "->".', line);
   const raw = parts.map((p) => {
     const at = p.lastIndexOf("@");
     const label = (at < 0 ? p : p.slice(0, at)).trim();
     const end = at < 0 ? undefined : Number(p.slice(at + 1));
     if (end !== undefined && (!Number.isFinite(end) || end <= 0 || end > 1))
-      fail2(`A stage boundary must be above 0 and at most 1, got "${p.slice(at + 1)}".`, line);
+      fail21(`A stage boundary must be above 0 and at most 1, got "${p.slice(at + 1)}".`, line);
     if (label === "")
-      fail2("A stage needs a name.", line);
+      fail21("A stage needs a name.", line);
     return { names: label.split("/").map((s) => s.trim()).filter((s) => s !== ""), end };
   });
   const ends = [];
@@ -38578,7 +38629,7 @@ function parseStages(rest, line) {
       j++;
     const stop = j < raw.length ? raw[j]?.end ?? 1 : 1;
     if (stop <= from)
-      fail2("Stage boundaries must increase.", line);
+      fail21("Stage boundaries must increase.", line);
     const gap = j < raw.length ? j - i + 1 : j - i;
     for (let k = 0;k < gap; k++)
       ends.push(from + (stop - from) * (k + 1) / gap);
@@ -38617,7 +38668,7 @@ function parseWardley(src, opts = {}) {
   const find = (name) => map.nodes.find((n) => n.name === name);
   const addNode = (node) => {
     if (find(node.name) !== undefined)
-      fail2(`"${node.name}" is declared twice.`, node.line);
+      fail21(`"${node.name}" is declared twice.`, node.line);
     map.nodes.push(node);
   };
   rows.forEach((raw, index) => {
@@ -38639,7 +38690,7 @@ function parseWardley(src, opts = {}) {
       return;
     if (!headerSeen) {
       if (s !== "wardley-beta" && s !== "wardley")
-        fail2(`Expected "wardley-beta" before "${s}".`, lineNo);
+        fail21(`Expected "wardley-beta" before "${s}".`, lineNo);
       headerSeen = true;
       return;
     }
@@ -38669,11 +38720,11 @@ function parseWardley(src, opts = {}) {
       const child = /^component\s+(.+)$/u.exec(s);
       const parent = find(pipeline.name);
       if (child === null || parent === undefined)
-        fail2(`Expected a "component" inside the pipeline, got "${s}".`, lineNo);
+        fail21(`Expected a "component" inside the pipeline, got "${s}".`, lineNo);
       const { name, rest } = takeName(child[1] ?? "", /\s\[|\[/u, lineNo);
       const m = new RegExp(String.raw`^\s*\[\s*(${NUM})\s*\]\s*$`, "u").exec(rest);
       if (m === null)
-        fail2(`A pipeline component takes only its evolution, like [0.25]; got "${rest.trim()}".`, lineNo);
+        fail21(`A pipeline component takes only its evolution, like [0.25]; got "${rest.trim()}".`, lineNo);
       addNode({
         name,
         kind: "component",
@@ -38700,7 +38751,7 @@ function parseWardley(src, opts = {}) {
       const { name, rest } = takeName(m[2] ?? "", /\s\[|\[/u, lineNo);
       const at = new RegExp(String.raw`^\s*${PAIR}(.*)$`, "u").exec(rest);
       if (at === null)
-        fail2(`Expected "[visibility, evolution]" after "${name}".`, lineNo);
+        fail21(`Expected "[visibility, evolution]" after "${name}".`, lineNo);
       const node = {
         name,
         kind,
@@ -38723,9 +38774,9 @@ function parseWardley(src, opts = {}) {
           else if (word === "build" || word === "buy" || word === "outsource" || word === "market")
             node.sourcing = word;
           else
-            fail2(`Unknown decorator "(${word})"; use inertia, build, buy, outsource or market.`, lineNo);
+            fail21(`Unknown decorator "(${word})"; use inertia, build, buy, outsource or market.`, lineNo);
         } else {
-          fail2(`Unexpected "${tail}" after the position of "${name}".`, lineNo);
+          fail21(`Unexpected "${tail}" after the position of "${name}".`, lineNo);
         }
         tail = tail.slice(t[0].length).trim();
       }
@@ -38733,7 +38784,7 @@ function parseWardley(src, opts = {}) {
     } else if ((m = /^pipeline\s+(.+?)\s*\{\s*$/u.exec(s)) !== null) {
       const name = unquote10(m[1] ?? "");
       if (find(name) === undefined)
-        fail2(`pipeline "${name}" needs a component of that name declared before it.`, lineNo);
+        fail21(`pipeline "${name}" needs a component of that name declared before it.`, lineNo);
       pipeline = { name, children: [], line: lineNo };
       map.pipelines.push(pipeline);
     } else if ((m = new RegExp(String.raw`^evolve\s+(.+?)\s+(${NUM})$`, "u").exec(s)) !== null) {
@@ -38778,25 +38829,25 @@ function parseWardley(src, opts = {}) {
         link.label = label;
       map.links.push(link);
     } else {
-      fail2(`Unrecognised line "${s}".`, lineNo);
+      fail21(`Unrecognised line "${s}".`, lineNo);
     }
   });
   if (!headerSeen)
-    fail2('Missing "wardley-beta" header.', 1);
+    fail21('Missing "wardley-beta" header.', 1);
   if (pipeline !== undefined)
-    fail2(`pipeline "${pipeline.name}" is not closed with "}".`, pipeline.line);
+    fail21(`pipeline "${pipeline.name}" is not closed with "}".`, pipeline.line);
   for (const link of map.links) {
     if (find(link.from) === undefined)
-      fail2(`Unknown component "${link.from}" in a link.`, link.line);
+      fail21(`Unknown component "${link.from}" in a link.`, link.line);
     if (find(link.to) === undefined)
-      fail2(`Unknown component "${link.to}" in a link.`, link.line);
+      fail21(`Unknown component "${link.to}" in a link.`, link.line);
   }
   for (const e of map.evolves)
     if (find(e.name) === undefined)
-      fail2(`Unknown component "${e.name}" in evolve.`, e.line);
+      fail21(`Unknown component "${e.name}" in evolve.`, e.line);
   for (const t of map.trends)
     if (find(t.name) === undefined)
-      fail2(`Unknown component "${t.name}" in a trend.`, t.line);
+      fail21(`Unknown component "${t.name}" in a trend.`, t.line);
   if (acc.title !== undefined && acc.title !== "")
     map.accTitle = acc.title;
   if (accDescr.length > 0)
@@ -38808,15 +38859,14 @@ function parseWardley(src, opts = {}) {
 // src/wardley/text.ts
 var GAP9 = 2;
 var MIN2 = 4;
-function wardleyTextSpans(map, maxWidth) {
+function wardleyTextLines(map, maxWidth) {
   const evolves = new Map(map.evolves.map((e) => [e.name, e.targetText]));
   const rows = map.nodes.map((n) => ({
     name: n.name,
     vis: n.visibilityText,
-    evo: evolves.has(n.name) ? `${n.evolutionText} -> ${evolves.get(n.name)}` : n.evolutionText,
-    from: evolves.has(n.name) ? n.evolutionText : undefined
+    evo: evolves.has(n.name) ? `${n.evolutionText} -> ${evolves.get(n.name)}` : n.evolutionText
   }));
-  const head = { name: "component", vis: "visibility", evo: "evolution", from: undefined };
+  const head = { name: "component", vis: "visibility", evo: "evolution" };
   const all = [head, ...rows];
   const visW = Math.max(...all.map((r) => cellWidth(r.vis)));
   const evoW = Math.max(...all.map((r) => cellWidth(r.evo)));
@@ -38825,15 +38875,9 @@ function wardleyTextSpans(map, maxWidth) {
     nameW = Math.max(MIN2, Math.min(nameW, maxWidth - visW - evoW - 2 * GAP9));
   const lines = [];
   const title = map.title ?? "Wardley map";
-  lines.push(spansOf([maxWidth === undefined ? title : cut2(title, maxWidth), "bold"]));
-  const gap = " ".repeat(GAP9);
-  for (const r of all) {
-    const name = cut2(r.name, nameW);
-    const evo = padStart(r.evo, evoW);
-    const split = r.from === undefined ? evo.length : evo.length - (r.evo.length - r.from.length);
-    const row = r === head ? spansOf([[padEnd(name, nameW), padStart(r.vis, visW), evo].join(gap), "dim"]) : spansOf([name, "bold"], padEnd("", nameW - cellWidth(name)), gap, padStart(r.vis, visW), gap, evo.slice(0, split), [evo.slice(split), "accent"]);
-    lines.push(trimEndSpans(row));
-  }
+  lines.push(maxWidth === undefined ? title : cut2(title, maxWidth));
+  for (const r of all)
+    lines.push([padEnd(cut2(r.name, nameW), nameW), padStart(r.vis, visW), padStart(r.evo, evoW)].join(" ".repeat(GAP9)).trimEnd());
   return lines;
 }
 
@@ -38848,10 +38892,7 @@ registerFrontEnd({
     return withDescription(svg, map.accDescr);
   },
   textLines(src, maxWidth, opts) {
-    return wardleyTextSpans(parseWardley(src, opts), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
-    return wardleyTextSpans(parseWardley(src, opts), maxWidth);
+    return wardleyTextLines(parseWardley(src, opts), maxWidth);
   },
   json(src, _mode, opts) {
     const map = parseWardley(src, opts);
@@ -39323,6 +39364,9 @@ var NUMBER6 = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)`;
 var RANGE = new RegExp(String.raw`^(${NUMBER6})\s*-->\s*(${NUMBER6})$`);
 var VALUE = new RegExp(String.raw`^(${NUMBER6})\s*(?:"([^"]*)")?$`);
 var HEADER2 = /^(xychart-beta|xychart)(?:\s+(horizontal|vertical))?$/;
+function fail22(message, line) {
+  throw new UrsulaError(message, "syntax", line);
+}
 function stripComment9(row) {
   let quoted = false;
   for (let i = 0;i < row.length; i++) {
@@ -39401,7 +39445,7 @@ function readName2(text, line) {
   if (t.startsWith('"')) {
     const close = t.indexOf('"', 1);
     if (close < 0)
-      fail2("A quoted text is not closed.", line);
+      fail22("A quoted text is not closed.", line);
     return { name: t.slice(1, close), rest: t.slice(close + 1) };
   }
   const m = /^[^\s[\]"]+/.exec(t);
@@ -39412,11 +39456,11 @@ function readName2(text, line) {
 function parseRange(text, line) {
   const m = RANGE.exec(text.trim());
   if (!m)
-    fail2(`Expected a range such as "0 --> 100", got "${text.trim()}".`, line);
+    fail22(`Expected a range such as "0 --> 100", got "${text.trim()}".`, line);
   const min = Number(m[1]);
   const max = Number(m[2]);
   if (!(max > min))
-    fail2("The end of an axis range must be greater than its start.", line);
+    fail22("The end of an axis range must be greater than its start.", line);
   return { min, max };
 }
 function parseAxis2(rest, line, categorical) {
@@ -39437,12 +39481,12 @@ function parseAxis2(rest, line, categorical) {
   }
   if (text.startsWith("[")) {
     if (!categorical)
-      fail2("The y-axis takes a range, not a list of names.", line);
+      fail22("The y-axis takes a range, not a list of names.", line);
     if (!text.endsWith("]"))
-      fail2('A list of names is not closed with "]".', line);
+      fail22('A list of names is not closed with "]".', line);
     const items = splitList(text.slice(1, -1)).map(unquote11);
     if (items.some((c) => c === ""))
-      fail2("A list of names has an empty entry.", line);
+      fail22("A list of names has an empty entry.", line);
     out.categories = items;
   } else if (text !== "") {
     out.range = parseRange(text, line);
@@ -39455,24 +39499,24 @@ function parseSeries(kind, rest, line) {
   if (!text.startsWith("[")) {
     const read = readName2(text, line);
     if (!read)
-      fail2(`Expected a list of values after "${kind}".`, line);
+      fail22(`Expected a list of values after "${kind}".`, line);
     name = read.name;
     text = read.rest.trim();
   }
   if (!text.startsWith("[") || !text.endsWith("]"))
-    fail2(`Expected a list of values in brackets after "${kind}".`, line);
+    fail22(`Expected a list of values in brackets after "${kind}".`, line);
   const points = [];
   for (const item of splitList(text.slice(1, -1))) {
     const m = VALUE.exec(item);
     if (!m)
-      fail2(`"${item}" is not a number with an optional quoted label.`, line);
+      fail22(`"${item}" is not a number with an optional quoted label.`, line);
     const point = { value: Number(m[1]), raw: m[1] ?? "" };
     if (m[2] !== undefined)
       point.label = m[2];
     points.push(point);
   }
   if (points.length === 0)
-    fail2(`The ${kind} has no values.`, line);
+    fail22(`The ${kind} has no values.`, line);
   const series = { kind, points, line };
   if (name !== undefined)
     series.name = name;
@@ -39491,7 +39535,7 @@ function parseXychart(src, config, heading) {
     if (!headerSeen) {
       const m = HEADER2.exec(text);
       if (!m)
-        fail2(`Expected "xychart" as the first statement, got "${text}".`, line);
+        fail22(`Expected "xychart" as the first statement, got "${text}".`, line);
       headerSeen = true;
       if (m[2] === "horizontal")
         chart.horizontal = true;
@@ -39502,12 +39546,12 @@ function parseXychart(src, config, heading) {
     const word = /^[A-Za-z-]+/.exec(text)?.[0] ?? "";
     const rest = text.slice(word.length);
     if (rest !== "" && !/^\s/.test(rest) && !rest.startsWith("[") && !rest.startsWith('"'))
-      fail2(`Unknown statement "${text}".`, line);
+      fail22(`Unknown statement "${text}".`, line);
     switch (word) {
       case "title": {
         const title = unquote11(rest.trim());
         if (title === "")
-          fail2("The title is empty.", line);
+          fail22("The title is empty.", line);
         chart.title = title;
         return;
       }
@@ -39534,7 +39578,7 @@ function parseXychart(src, config, heading) {
         chart.series.push(parseSeries(word, rest, line));
         return;
       default:
-        fail2(`Unknown statement "${text}".`, line);
+        fail22(`Unknown statement "${text}".`, line);
     }
   };
   for (let n = 0;n < rows.length; n++) {
@@ -39550,15 +39594,15 @@ function parseXychart(src, config, heading) {
     buffer = "";
   }
   if (buffer !== "")
-    fail2('A list is not closed with "]".', bufferLine);
+    fail22('A list is not closed with "]".', bufferLine);
   if (!headerSeen)
-    fail2('Expected "xychart" as the first statement.', 1);
+    fail22('Expected "xychart" as the first statement.', 1);
   if (chart.series.length === 0)
-    fail2("The chart needs at least one bar or line.", bufferLine || rows.length);
+    fail22("The chart needs at least one bar or line.", bufferLine || rows.length);
   if (chart.categories) {
     for (const s of chart.series) {
       if (s.points.length > chart.categories.length)
-        fail2(`The ${s.kind} has ${s.points.length} values for ${chart.categories.length} names.`, s.line);
+        fail22(`The ${s.kind} has ${s.points.length} values for ${chart.categories.length} names.`, s.line);
     }
   }
   return chart;
@@ -39597,17 +39641,11 @@ function xychartTable(chart, _ruler, maxWidth) {
   let labelW = Math.max(...labels.map(cellWidth), cellWidth(labelHead));
   if (maxWidth !== undefined)
     labelW = Math.max(4, Math.min(labelW, maxWidth - valuesW));
-  const highest = chart.series.map((s) => {
-    if (s.kind !== "bar")
-      return -1;
-    const values = labels.map((_, i) => s.points[i]?.value ?? -Infinity);
-    return values.indexOf(Math.max(...values));
-  });
-  const line = (label, cells, tone) => spansOf([padEnd(cut2(label, labelW), labelW), "dim"], ...cells.flatMap((c, i) => [padEnd("", GAP10 + (widths[i] ?? 0) - cellWidth(c)), [c, tone(i)]]));
-  const out = [spansOf([maxWidth === undefined ? chart.title ?? "xychart" : cut2(chart.title ?? "xychart", maxWidth), "bold"])];
+  const line = (label, cells) => padEnd(cut2(label, labelW), labelW) + cells.map((c, i) => " ".repeat(GAP10) + padStart(c, widths[i] ?? 0)).join("");
+  const out = [maxWidth === undefined ? chart.title ?? "xychart" : cut2(chart.title ?? "xychart", maxWidth)];
   if (header)
-    out.push(line(labelHead, heads, () => "dim"));
-  labels.forEach((l, r) => out.push(line(l, cols.map((c) => c[r] ?? ""), (i) => highest[i] === r ? "accent" : "normal")));
+    out.push(line(labelHead, heads));
+  labels.forEach((l, i) => out.push(line(l, cols.map((c) => c[i] ?? ""))));
   return out;
 }
 
@@ -39624,9 +39662,6 @@ registerFrontEnd({
     return renderThemedScene(layout.scene, opts.title === undefined ? {} : { title: opts.title });
   },
   textLines(src, maxWidth, opts) {
-    return xychartTable(read5(src, opts), cellRuler(), maxWidth).map(joinSpans);
-  },
-  textSpans(src, maxWidth, opts) {
     return xychartTable(read5(src, opts), cellRuler(), maxWidth);
   },
   json(src, mode, opts) {
@@ -39840,6 +39875,9 @@ var CATCH_HEADER = /^catch\b\s*(\(.*\))?\s*\{$/i;
 var FINALLY_HEADER = /^finally\s*\{$/i;
 var IDENT = String.raw`"[^"]+"|[A-Za-z_$][\w$-]*`;
 var DECLARATION3 = new RegExp(String.raw`^(${IDENT})(?:\s+as\s+(.+))?$`, "u");
+function fail23(message, line, code = "syntax") {
+  throw new UrsulaError(message, code, line);
+}
 var unquote12 = (id) => id.startsWith('"') && id.endsWith('"') && id.length >= 2 ? id.slice(1, -1) : id;
 function commentText(raw) {
   return raw.trim().replace(/\*\*(.+?)\*\*/gu, "$1").replace(/`([^`]+)`/gu, "$1").replace(/(^|\s)\*(\S[^*]*?)\*(?=\s|$)/gu, "$1$2");
@@ -39919,7 +39957,7 @@ function parseZenuml(src, heading) {
     flushHeld();
     const top = stack.pop();
     if (!top)
-      fail2("'}' without an open block", line);
+      fail23("'}' without an open block", line);
     if (top.kind === "call")
       closeCall(top, line);
     else {
@@ -39949,7 +39987,7 @@ function parseZenuml(src, heading) {
       continue;
     if (!headerSeen) {
       if (s !== "zenuml")
-        fail2("expected a 'zenuml' header", lineNo, "header");
+        fail23("expected a 'zenuml' header", lineNo, "header");
       headerSeen = true;
       continue;
     }
@@ -39974,7 +40012,7 @@ function parseZenuml(src, heading) {
     if (elseM || catchM || FINALLY_HEADER.test(s)) {
       const want = elseM ? "if" : "try";
       if (held?.family !== want)
-        fail2(`'${s.split(/[\s({]/u)[0] ?? s}' without a matching '${want === "if" ? "if" : "try"}'`, lineNo);
+        fail23(`'${s.split(/[\s({]/u)[0] ?? s}' without a matching '${want === "if" ? "if" : "try"}'`, lineNo);
       const text = elseM ? elseM[1] === undefined ? "else" : inner(elseM[1]) : catchM ? `catch${inner(catchM[1]) === "" ? "" : ` (${inner(catchM[1])})`}` : "finally";
       stack.push(held);
       held = undefined;
@@ -40009,7 +40047,7 @@ function parseZenuml(src, heading) {
       const word = (annotated[1] ?? "").toLowerCase();
       const decl = DECLARATION3.exec((annotated[2] ?? "").trim());
       if (!decl)
-        fail2(`expected a participant name after '@${annotated[1] ?? ""}'`, lineNo);
+        fail23(`expected a participant name after '@${annotated[1] ?? ""}'`, lineNo);
       const core = CORE_KINDS[word];
       const near = NEAREST_KINDS[word];
       place(decl[1] ?? "", decl[2], core ?? near ?? "participant", core ? undefined : `«${annotated[1] ?? ""}»`);
@@ -40023,7 +40061,7 @@ function parseZenuml(src, heading) {
         at--;
       const entry = stack[at];
       if (entry?.kind !== "call")
-        fail2("'return' outside a call", lineNo);
+        fail23("'return' outside a call", lineNo);
       const index = message(entry.owner, entry.caller, (ret[1] ?? "").trim(), { dashed: true, head: "filled" }, false, lineNo);
       entry.returned = true;
       entry.lastReply = at === stack.length - 1 ? index : undefined;
@@ -40056,7 +40094,7 @@ function parseZenuml(src, heading) {
       const body = (create[1] ?? "").trim();
       const target = unquote12(/^(?:"[^"]+"|[^\s(]+)/u.exec(body)?.[0] ?? "");
       if (target === "")
-        fail2("'new' needs a class name", lineNo);
+        fail23("'new' needs a class name", lineNo);
       const from = sender ?? callerFor();
       const label = `${variable === undefined ? "" : `${variable} = `}new ${body}`;
       message(from, target, label, { dashed: false, head: "filled" }, braced, lineNo);
@@ -40071,7 +40109,7 @@ function parseZenuml(src, heading) {
       const to = dot > 0 ? unquote12(head.slice(0, dot)) : owner() ?? callerFor();
       const label = dot > 0 ? call.slice(dot + 1) : call;
       if (label === "" || to === "")
-        fail2(`unsupported syntax '${s}'`, lineNo);
+        fail23(`unsupported syntax '${s}'`, lineNo);
       const from = sender ?? callerFor();
       message(from, to, label, { dashed: false, head: "filled" }, braced, lineNo);
       replyNext = false;
@@ -40091,20 +40129,20 @@ function parseZenuml(src, heading) {
       }
     }
     const shown = s.length > 24 ? `${s.slice(0, 24)}...` : s;
-    fail2(`unsupported syntax '${shown}'`, lineNo);
+    fail23(`unsupported syntax '${shown}'`, lineNo);
   }
   if (!headerSeen)
-    fail2("expected a 'zenuml' header", 1, "header");
+    fail23("expected a 'zenuml' header", 1, "header");
   flushHeld();
   const unclosed = stack[stack.length - 1];
   if (unclosed)
-    fail2(unclosed.kind === "frame" ? "a block is never closed" : "a call block is never closed", unclosed.line);
+    fail23(unclosed.kind === "frame" ? "a block is never closed" : "a call block is never closed", unclosed.line);
   title ??= heading;
   const anchor = [...participants.keys()][0];
   const order = implicitStarter ? [STARTER_ID, ...[...participants.keys()].filter((k) => k !== STARTER_ID)] : [...participants.keys()];
   const first = order[0] ?? anchor;
   if (first === undefined)
-    fail2("the diagram has no participants", 1, "empty");
+    fail23("the diagram has no participants", 1, "empty");
   const resolved = statements.map((st) => st.kind === "note" ? { ...st, anchors: st.anchors.map((a) => a === "" ? first : a) } : st);
   const list = order.map((id) => participants.get(id)).filter((p) => p !== undefined);
   return {
@@ -40622,233 +40660,6 @@ function fixSource(src) {
   }
   return { source, fixes };
 }
-// src/render/html.ts
-function variables(mode) {
-  const colours = Object.entries(COLORS).filter(([name]) => name !== "bg").map(([name, pair]) => `--ursula-${name}:${pair[mode]}`);
-  return [...colours, `--ursula-paper:${PAPER[mode]}`].join(";");
-}
-var BAKE_SOURCE = `function ursulaBake(text, get) {
-  return text.replace(/var\\(--ursula-([a-z0-9-]+)\\s*(?:,[^)]*)?\\)/g, function (_, name) { return get(name); });
-}`;
-function encodeSource(text) {
-  return text.replace(/\\/g, "\\\\").replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
-}
-function fileBase(title) {
-  const slug = (title ?? "").toLowerCase().replace(/[^a-z0-9ㄱ-ㆎ가-힣]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug === "" ? "diagram" : slug;
-}
-var STYLE2 = `
-*{box-sizing:border-box}
-:root{${variables(0)};color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${variables(1)};color-scheme:dark}}
-:root[data-theme="dark"]{${variables(1)};color-scheme:dark}
-body{margin:0;padding:16px;background:var(--ursula-paper);color:var(--ursula-fg);font-family:${FONT_STACK}}
-h1{margin:0 0 8px;font-size:16px;font-weight:600}
-.ursula-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
-.ursula-tools button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);cursor:pointer}
-.ursula-tools button:hover{border-color:var(--ursula-accent)}
-.ursula-tools button:focus-visible,[data-node]:focus-visible{outline:2px solid var(--ursula-accent);outline-offset:2px}
-#ursula-note{font-size:12px;color:var(--ursula-muted)}
-.ursula-viewport{overflow-x:auto}
-.ursula-viewport svg{display:block;max-width:none}
-[data-node]{cursor:pointer}
-svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:.25}
-#ursula-raw{margin:12px 0 0;padding:8px;white-space:pre-wrap;border:1px solid var(--ursula-border);border-radius:6px;background:var(--ursula-surface);color:var(--ursula-fg);font-size:12px}
-@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{${variables(0)};color-scheme:light}.ursula-tools,#ursula-raw,#ursula-note{display:none}svg[data-focus] [data-node]:not([data-on]),svg[data-focus] [data-from]:not([data-on]){opacity:1}}
-`.trim();
-var SCRIPT = `
-(function () {
-  ${BAKE_SOURCE}
-  var root = document.documentElement;
-  var svg = document.querySelector('.ursula-viewport svg');
-  var note = document.getElementById('ursula-note');
-  var base = document.body.getAttribute('data-file') || 'diagram';
-  var links = {};
-  try { links = JSON.parse(document.getElementById('ursula-links').textContent) || {}; } catch (e) {}
-
-  function theme() {
-    var set = root.getAttribute('data-theme');
-    if (set) return set;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  function remember(value) { try { localStorage.setItem('ursula-theme', value); } catch (e) {} }
-  if (root.getAttribute('data-auto') === 'true') {
-    try { var saved = localStorage.getItem('ursula-theme'); if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved); } catch (e) {}
-  }
-  document.getElementById('ursula-theme').addEventListener('click', function () {
-    var next = theme() === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    remember(next);
-  });
-
-  function value(name) {
-    var v = getComputedStyle(root).getPropertyValue('--ursula-' + name).trim();
-    return v === '' ? 'transparent' : v;
-  }
-  function baked() {
-    var copy = svg.cloneNode(true);
-    copy.setAttribute('style', 'font-family:' + getComputedStyle(svg).fontFamily);
-    copy.removeAttribute('data-focus');
-    var all = copy.querySelectorAll('[data-on]');
-    for (var i = 0; i < all.length; i++) all[i].removeAttribute('data-on');
-    return ursulaBake(new XMLSerializer().serializeToString(copy), value);
-  }
-  function fail() {
-    note.textContent = 'Could not save in this browser.';
-    setTimeout(function () { note.textContent = ''; }, 3000);
-  }
-  function download(blob, name) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-  }
-  document.getElementById('ursula-svg').addEventListener('click', function () {
-    try { download(new Blob([baked()], { type: 'image/svg+xml;charset=utf-8' }), base + '.svg'); } catch (e) { fail(); }
-  });
-  document.getElementById('ursula-png').addEventListener('click', function () {
-    try {
-      var box = svg.viewBox.baseVal;
-      var w = box.width, h = box.height;
-      var url = URL.createObjectURL(new Blob([baked()], { type: 'image/svg+xml;charset=utf-8' }));
-      var img = new Image();
-      img.onerror = function () { URL.revokeObjectURL(url); fail(); };
-      img.onload = function () {
-        try {
-          var canvas = document.createElement('canvas');
-          canvas.width = Math.round(w * 2);
-          canvas.height = Math.round(h * 2);
-          var ctx = canvas.getContext('2d');
-          ctx.fillStyle = value('paper');
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          URL.revokeObjectURL(url);
-          canvas.toBlob(function (blob) {
-            if (!blob) { fail(); return; }
-            try { download(blob, base + '.png'); } catch (e) { fail(); }
-          }, 'image/png');
-        } catch (e) { fail(); }
-      };
-      img.src = url;
-    } catch (e) { fail(); }
-  });
-
-  function source() {
-    return decode(document.getElementById('ursula-source').textContent);
-  }
-  function decode(text) { return text.replace(/\\\\([\\\\/!])/g, '$1'); }
-  document.getElementById('ursula-copy').addEventListener('click', function () {
-    var text = source();
-    function spread() {
-      var pre = document.getElementById('ursula-raw');
-      if (!pre) {
-        pre = document.createElement('pre');
-        pre.id = 'ursula-raw';
-        document.body.appendChild(pre);
-      }
-      pre.textContent = text;
-      var range = document.createRange();
-      range.selectNodeContents(pre);
-      var selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    try {
-      if (!navigator.clipboard) { spread(); return; }
-      navigator.clipboard.writeText(text).then(function () {
-        note.textContent = 'Copied.';
-        setTimeout(function () { note.textContent = ''; }, 3000);
-      }, spread);
-    } catch (e) { spread(); }
-  });
-
-  var nodes = svg.querySelectorAll('[data-node]');
-  var current = null;
-  function clear() {
-    current = null;
-    svg.removeAttribute('data-focus');
-    var on = svg.querySelectorAll('[data-on]');
-    for (var i = 0; i < on.length; i++) on[i].removeAttribute('data-on');
-    for (var j = 0; j < nodes.length; j++) nodes[j].setAttribute('aria-pressed', 'false');
-  }
-  function select(id) {
-    if (current === id) { clear(); return; }
-    clear();
-    current = id;
-    svg.setAttribute('data-focus', id);
-    var near = links[id] || [];
-    for (var i = 0; i < nodes.length; i++) {
-      var own = nodes[i].getAttribute('data-node');
-      if (own === id || near.indexOf(own) >= 0) nodes[i].setAttribute('data-on', '');
-      if (own === id) nodes[i].setAttribute('aria-pressed', 'true');
-    }
-    var edges = svg.querySelectorAll('[data-from]');
-    for (var k = 0; k < edges.length; k++) {
-      if (edges[k].getAttribute('data-from') === id || edges[k].getAttribute('data-to') === id) edges[k].setAttribute('data-on', '');
-    }
-  }
-  svg.addEventListener('click', function (event) {
-    var node = event.target.closest ? event.target.closest('[data-node]') : null;
-    if (node) select(node.getAttribute('data-node'));
-    else clear();
-  });
-  svg.addEventListener('keydown', function (event) {
-    var node = event.target.closest ? event.target.closest('[data-node]') : null;
-    if (node && (event.key === 'Enter' || event.key === ' ')) {
-      event.preventDefault();
-      select(node.getAttribute('data-node'));
-    }
-  });
-  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') clear(); });
-  for (var n = 0; n < nodes.length; n++) nodes[n].setAttribute('aria-pressed', 'false');
-  var match = /^#focus=(.+)$/.exec(location.hash);
-  if (match) { try { select(decodeURIComponent(match[1])); } catch (e) {} }
-})();
-`.trim();
-function neighbours2(layout) {
-  const out = {};
-  for (const e of layout?.edges ?? []) {
-    if (e.from === e.to)
-      continue;
-    (out[e.from] ??= []).push(e.to);
-    (out[e.to] ??= []).push(e.from);
-  }
-  for (const [id, list] of Object.entries(out))
-    out[id] = [...new Set(list)].sort();
-  return out;
-}
-function renderHtmlDocument(svg, layout, source, opts = {}) {
-  const title = opts.title ?? "Diagram";
-  const theme = opts.theme ?? "auto";
-  const pressable = svg.replace(/(<g class="[^"]*" )(data-node=)/g, '$1tabindex="0" role="button" $2');
-  const links = JSON.stringify(neighbours2(layout)).replace(/</g, "\\u003c");
-  return [
-    "<!doctype html>",
-    `<html lang="en"${theme === "auto" ? ' data-auto="true"' : ` data-theme="${theme}"`}>`,
-    "<head>",
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<title>${escapeXml(title)}</title>`,
-    `<style>${STYLE2}</style>`,
-    "</head>",
-    `<body data-file="${escapeXml(fileBase(opts.title))}">`,
-    ...opts.title === undefined ? [] : [`<h1>${escapeXml(opts.title)}</h1>`],
-    '<div class="ursula-tools">' + '<button type="button" id="ursula-theme">Theme</button>' + '<button type="button" id="ursula-png">PNG</button>' + '<button type="button" id="ursula-svg">SVG</button>' + '<button type="button" id="ursula-copy">Copy source</button>' + '<span id="ursula-note" role="status"></span></div>',
-    `<div class="ursula-viewport">${pressable}</div>`,
-    `<script type="text/plain" id="ursula-source">${encodeSource(source)}</script>`,
-    `<script type="application/json" id="ursula-links">${links}</script>`,
-    `<script>${SCRIPT}</script>`,
-    "</body>",
-    "</html>",
-    ""
-  ].join(`
-`);
-}
-
 // src/html.ts
 function renderHtml(src, opts = {}) {
   const frontEnd = selectFrontEnd(src);
@@ -40961,12 +40772,12 @@ function graphReport(laid, src, terminal) {
 function checkReport(src, req, terminal = false) {
   const laid = selectFrontEnd(src).json(src, "svg", layoutOptions5(req));
   const lines = "edges" in laid && "diagnostics" in laid ? graphReport(laid, src, terminal) : ("messages" in laid) ? sequenceCheckLines(laid) : ["no checks for this kind of diagram"];
-  const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.filter((n) => typeof n === "string").map((n) => `note: ${n}`) : [];
+  const notes = "notes" in laid && Array.isArray(laid.notes) ? laid.notes.map((n) => `note: ${String(n)}`) : [];
   return `${[...lines, ...notes].join(`
 `)}
 `;
 }
-function terminal3(src, req, width) {
+function terminal2(src, req, width) {
   const frontEnd = selectFrontEnd(src);
   const opts = layoutOptions5(req);
   if (req.format === "text-svg" || req.color && frontEnd.textSpans) {
@@ -40986,7 +40797,7 @@ function fitted(src, req, limit) {
   let drawn;
   let refused;
   try {
-    drawn = terminal3(src, req, limit);
+    drawn = terminal2(src, req, limit);
     if (widestOf(drawn.rows) <= limit)
       return { stdout: drawn.out, stderr: "", code: 0 };
   } catch (err) {
@@ -40994,7 +40805,7 @@ function fitted(src, req, limit) {
       throw err;
     refused = err;
   }
-  const attempt = attemptWith((w) => terminal3(src, req, w).rows);
+  const attempt = attemptWith((w) => terminal2(src, req, w).rows);
   const first = drawn === undefined ? { fits: false, ...refused?.minWidth === undefined ? {} : { minWidth: refused.minWidth } } : { fits: false, widest: widestOf(drawn.rows) };
   const need = neededWidth(limit, first, attempt);
   const head = refused === undefined ? `error: the drawing needs ${need.sure ? "" : "more than "}${need.sure ? need.width : need.width - 1} columns; the limit is ${limit}` : `error: ${refused.message}`;
@@ -41015,9 +40826,17 @@ function drawing(src, req) {
       return renderHtml(src, { ...req.title === undefined ? {} : { title: req.title }, ...width === undefined ? {} : { maxWidth: width }, ...req.theme === undefined ? {} : { theme: req.theme } });
     case "check":
       return checkReport(src, req);
-    case "text":
-    case "text-svg":
-      return terminal3(src, req, width).out;
+    case "text": {
+      const rows = req.color && frontEnd.textSpans ? frontEnd.textSpans(src, width, opts).map(spansToAnsi) : frontEnd.textLines(src, width, opts);
+      return `${rows.join(`
+`)}
+`;
+    }
+    case "text-svg": {
+      const spans = frontEnd.textSpans ? frontEnd.textSpans(src, width, opts) : frontEnd.textLines(src, width, opts).map((text) => [{ text, tone: "normal" }]);
+      return `${renderTextSvg(spans)}
+`;
+    }
     case "json":
       return `${JSON.stringify(frontEnd.json(src, "svg", opts), null, 2)}
 `;

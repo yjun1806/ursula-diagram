@@ -53,9 +53,6 @@ export const COLORS: Record<string, Pair> = {
   's8-tint': ['#efeeed', '#252422'],
 };
 
-/** The page behind a drawing, light and dark: the HTML page and a PNG paint it, an SVG leaves it to its host. */
-export const PAPER: Pair = ['#ffffff', '#16181d'];
-
 /** A rule with each `$name` placeholder filled by the variable of that colour and its value in one colour scheme. */
 export function fillColors(rule: string, mode: 0 | 1): string {
   return rule.replace(/\$([a-z][a-z0-9-]*)/g, (_, name: string) => `var(--ursula-${name},${COLORS[name]?.[mode] ?? 'inherit'})`);

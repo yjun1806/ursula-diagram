@@ -1,7 +1,8 @@
 // A PNG of a drawing. The engine has no rasterizer of its own: the optional package @resvg/resvg-js draws the SVG, and
 // whoever asks for a PNG hands its module in. A PNG cannot follow CSS variables or the viewer's colour scheme, so
 // every colour is fixed to one scheme before it is drawn.
-import { COLORS, PAPER } from './colors.ts';
+import { COLORS } from './colors.ts';
+import { PAPER } from './html.ts';
 
 export type PngTheme = 'light' | 'dark';
 
