@@ -555,9 +555,6 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습�
 }
 ```
 
-<details>
-<summary>색 변수 전체</summary>
-
 | 변수 | 칠하는 것 | 밝은 값 | 어두운 값 |
 | --- | --- | --- | --- |
 | `--ursula-fg` | 이름과 본문 글자 | `#201f1e` | `#efeeec` |
@@ -579,10 +576,22 @@ SVG 그림은 모든 색을 CSS 변수에서 읽고 기본값도 함께 담습�
 | `--ursula-tint-outer` | C4 그림의 가장 바깥 경계 | `#f4f3f1` | `#1e1d1b` |
 | `--ursula-tint-inner` | C4 그림의 가장 안쪽 경계 | `#f6f5f3` | `#1c1b19` |
 | `--ursula-tint-chip` | 경계 면 위의 라벨 칩 | `#ebeae8` | `#262523` |
-| `--ursula-s1` … `--ursula-s8` | 차트의 계열 8개 | | |
-| `--ursula-s1-tint` … `--ursula-s8-tint` | 계열별 옅은 면 | | |
-
-</details>
+| `--ursula-s1` | 차트의 계열 1 | `#82641c` | `#cdad69` |
+| `--ursula-s1-tint` | 계열 1의 옅은 면 | `#f1e7d2` | `#3f3112` |
+| `--ursula-s2` | 차트의 계열 2 | `#007883` | `#5ec3ce` |
+| `--ursula-s2-tint` | 계열 2의 옅은 면 | `#d2eef1` | `#093a3f` |
+| `--ursula-s3` | 차트의 계열 3 | `#98524d` | `#e79a93` |
+| `--ursula-s3-tint` | 계열 3의 옅은 면 | `#fce1de` | `#492826` |
+| `--ursula-s4` | 차트의 계열 4 | `#437746` | `#8bc18c` |
+| `--ursula-s4-tint` | 계열 4의 옅은 면 | `#dceedc` | `#223a23` |
+| `--ursula-s5` | 차트의 계열 5 | `#878685` | `#757472` |
+| `--ursula-s5-tint` | 계열 5의 옅은 면 | `#efeeed` | `#252422` |
+| `--ursula-s6` | 차트의 계열 6 | `#a5a4a3` | `#6a6967` |
+| `--ursula-s6-tint` | 계열 6의 옅은 면 | `#efeeed` | `#252422` |
+| `--ursula-s7` | 차트의 계열 7 | `#5b5b59` | `#b2b1af` |
+| `--ursula-s7-tint` | 계열 7의 옅은 면 | `#efeeed` | `#252422` |
+| `--ursula-s8` | 차트의 계열 8 | `#c8c7c6` | `#434241` |
+| `--ursula-s8-tint` | 계열 8의 옅은 면 | `#efeeed` | `#252422` |
 
 ## 에이전트 스킬
 

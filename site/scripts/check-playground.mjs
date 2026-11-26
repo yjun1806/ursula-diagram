@@ -11,6 +11,7 @@ import { GALLERY_EN, GALLERY_KO } from '../.vitepress/theme/playground/gallery-t
 import { isMermaid } from '../.vitepress/mermaid-fence.mjs';
 import { CARDS } from '../.vitepress/theme/home/agents.js';
 import { INSTALL } from '../.vitepress/theme/home/install.js';
+import { colourRows, markdownTable } from '../.vitepress/theme/colours/colours.mjs';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const context = vm.createContext({});
@@ -132,6 +133,26 @@ if (existsSync(built)) {
   console.log(`ok   ${rendered.length} type pages in each language show every example as SVG and in the terminal`);
   for (const [page, target] of [['gallery.html', '/examples/'], ['ko/gallery.html', '/ko/examples/']]) {
     if (!readFileSync(join(built, page), 'utf8').includes(`url=/ursula-diagram${target}`)) fail(`${page} does not send the visitor to ${target}`);
+  }
+}
+
+// The colour variables: every colour of the engine has a description (colourRows throws otherwise), each README carries
+// the table scripts/colour-table.mjs prints, and each Colours page shows a row with two swatches per colour.
+const colours = colourRows();
+for (const [readme, lang] of [['README.md', 'en'], ['README.ko.md', 'ko']]) {
+  if (!readFileSync(join(site, '..', readme), 'utf8').includes(markdownTable(lang))) {
+    fail(`${readme}: the colour table differs from the engine's; paste the output of node site/scripts/colour-table.mjs ${lang}`);
+  } else console.log(`ok   ${readme}: the colour table lists all ${colours.length} colours`);
+}
+if (existsSync(built)) {
+  for (const page of ['guide/colours.html', 'ko/guide/colours.html']) {
+    const html = readFileSync(join(built, page), 'utf8');
+    const shown = html.split('class="ct-row"').length - 1;
+    const swatches = (html.match(/class="ct-swatch-(colour|clear|none) ct-swatch"/g) ?? []).length;
+    if (shown !== colours.length || swatches !== 2 * colours.length) {
+      fail(`${page} shows ${shown} colour rows and ${swatches} swatches, not ${colours.length} and ${2 * colours.length}`);
+    } else if (html.includes('<details')) fail(`${page} folds its colour table`);
+    else console.log(`ok   ${page}: ${shown} colours, each with a light and a dark swatch`);
   }
 }
 
