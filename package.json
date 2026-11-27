@@ -1,6 +1,6 @@
 {
   "name": "ursula-diagram",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Draws Mermaid text as SVG and as terminal text: every diagram type, the same drawing every time, no browser.",
   "keywords": [
     "mermaid",

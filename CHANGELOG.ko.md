@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+## 0.2.4 (2026-11-27)
+
 ### Fixed
 
 - 에이전트 스킬이 `node …/scripts/ursula.mjs` 명령을 셸 변수에 담지 말고 매번 전부 적으라고 알립니다. zsh는 변수를 단어로 나누지 않아 첫 그림이 실패하던 일이 없어집니다. [#84](https://github.com/yjun1806/ursula-diagram/pull/84)
